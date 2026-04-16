@@ -280,9 +280,9 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${forms.length} نماذج', style: const TextStyle(fontFamily: 'Cairo', fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+                Text('${forms.length} ${AppStrings.totalFormsCount}', style: const TextStyle(fontFamily: 'Cairo', fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
                 const SizedBox(height: 4),
-                Text('إجمالي الإرساليات: $totalAll | $totalQuestions سؤال', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.white70)),
+                Text('${AppStrings.totalWithLabel} $totalAll | $totalQuestions ${AppStrings.questionsCount}', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.white70)),
               ],
             ),
           ),
@@ -574,7 +574,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
             ),
             if (numericStats['total'] != null) ...[
               const SizedBox(height: 6),
-              Text(AppStrings.grandTotal ${numericStats['total']}', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: AppTheme.textHint)),
+              Text('${AppStrings.grandTotal} ${numericStats['total']}', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: AppTheme.textHint)),
             ],
           ] else if (distribution.isNotEmpty && distribution.length <= 15) ...[
             // Distribution bars for select/radio/multiselect fields

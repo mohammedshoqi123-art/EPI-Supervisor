@@ -20,6 +20,14 @@ Future<void> main() async {
     debugPrint('Stack: ${details.stack}');
   };
 
+  // Catch async errors that FlutterError.onError doesn't catch
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Uncaught async error: $error');
+    debugPrint('Stack: $stack');
+    // Return true to indicate the error was handled
+    return true;
+  };
+
   // Set error widget builder BEFORE runApp — catches build errors gracefully
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Directionality(

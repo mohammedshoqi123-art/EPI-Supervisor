@@ -191,4 +191,24 @@ class AppStrings {
   static const String errorValidation = 'يرجى التحقق من البيانات المدخلة.';
   static const String errorGPS = 'تعذر الحصول على موقع GPS. تأكد من تفعيل الموقع.';
   static const String errorCamera = 'تعذر الوصول للكاميرا. يرجى منح الإذن.';
+
+  // ─── Analytics Extras ───────────────────────────────────────────────────
+  static const String activeFilters = 'فلاتر نشطة:';
+  static const String noAnalyticsData = 'لا توجد بيانات تحليلية للنماذج';
+  static const String totalFormsCount = 'نماذج';
+  static const String statusDistribution = 'توزيع الحالات:';
+  static const String questionAnalysis = 'تحليل الأسئلة:';
+  static const String questionsCount = 'أسئلة';
+  static const String grandTotal = 'المجموع الكلي:';
+  static const String mostFrequentAnswers = 'أكثر الإجابات تكراراً:';
+  static const String allForms = 'جميع النماذج';
+  static const String allGovernorates = 'جميع المحافظات';
+  static const String allDistricts = 'جميع المديريات';
+  static const String applyFilters = 'تطبيق الفلاتر';
+  static const String resetFilters = 'إعادة تعيين';
+  static const String performanceIndicator = 'مؤشر الأداء';
+  static const String submissionsCount = 'إرساليات';
+  static const String noAnalyticsForForm = 'لا توجد بيانات تحليلية لهذا النموذج';
+  static const String totalWithLabel = 'إجمالي الإرساليات:';
+  static const String submissionCountLabel = 'إرساليات';
 }

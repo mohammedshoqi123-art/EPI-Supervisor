@@ -206,7 +206,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
         spacing: 8,
         runSpacing: 4,
         children: [
-          const Text('فلاتر نشطة:', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: AppTheme.textSecondary)),
+          const Text(AppStrings.activeFilters, style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: AppTheme.textSecondary)),
           ...chips,
         ],
       ),
@@ -236,7 +236,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
           children: [
             Icon(Icons.description_outlined, size: 64, color: Colors.grey),
             SizedBox(height: 16),
-            Text('لا توجد بيانات تحليلية للنماذج', style: TextStyle(fontFamily: 'Tajawal', color: Colors.grey)),
+            Text(AppStrings.noAnalyticsData, style: TextStyle(fontFamily: 'Tajawal', color: Colors.grey)),
           ],
         ),
       );
@@ -380,7 +380,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
             if (byStatus.isNotEmpty) ...[
               const Align(
                 alignment: Alignment.centerRight,
-                child: Text('توزيع الحالات:', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600, fontSize: 13)),
+                child: Text(AppStrings.statusDistribution, style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600, fontSize: 13)),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -409,7 +409,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('تحليل الأسئلة:', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600, fontSize: 13)),
+                  const Text(AppStrings.questionAnalysis, style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600, fontSize: 13)),
                   Text('${questions.length} أسئلة', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: AppTheme.textHint)),
                 ],
               ),
@@ -574,7 +574,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
             ),
             if (numericStats['total'] != null) ...[
               const SizedBox(height: 6),
-              Text('المجموع الكلي: ${numericStats['total']}', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: AppTheme.textHint)),
+              Text(AppStrings.grandTotal ${numericStats['total']}', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: AppTheme.textHint)),
             ],
           ] else if (distribution.isNotEmpty && distribution.length <= 15) ...[
             // Distribution bars for select/radio/multiselect fields
@@ -613,7 +613,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
               Text('+ ${distribution.length - 10} خيارات أخرى', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 10, color: AppTheme.textHint)),
           ] else if (distribution.isNotEmpty && distribution.length > 15) ...[
             // Too many values — show top 5
-            Text('أكثر الإجابات تكراراً:', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.grey.shade600)),
+            Text(AppStrings.mostFrequentAnswers, style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.grey.shade600)),
             const SizedBox(height: 4),
             ...(() {
               final sorted = distribution.entries.toList()
@@ -681,11 +681,11 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
               child: DropdownButton<String?>(
                 isExpanded: true,
                 value: _selectedFormId,
-                hint: const Text('جميع النماذج', style: TextStyle(fontFamily: 'Tajawal')),
+                hint: const Text(AppStrings.allForms, style: TextStyle(fontFamily: 'Tajawal')),
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('جميع النماذج', style: TextStyle(fontFamily: 'Tajawal')),
+                    child: Text(AppStrings.allForms, style: TextStyle(fontFamily: 'Tajawal')),
                   ),
                   ...forms.map((f) => DropdownMenuItem<String?>(
                     value: f['formId'] as String?,
@@ -712,11 +712,11 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
               child: DropdownButton<String?>(
                 isExpanded: true,
                 value: _selectedGovernorateId,
-                hint: const Text('جميع المحافظات', style: TextStyle(fontFamily: 'Tajawal')),
+                hint: const Text(AppStrings.allGovernorates, style: TextStyle(fontFamily: 'Tajawal')),
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('جميع المحافظات', style: TextStyle(fontFamily: 'Tajawal')),
+                    child: Text(AppStrings.allGovernorates, style: TextStyle(fontFamily: 'Tajawal')),
                   ),
                   ...governorates.map((gov) => DropdownMenuItem<String?>(
                     value: gov['id'] as String?,
@@ -881,11 +881,11 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with SingleTi
         child: DropdownButton<String?>(
           isExpanded: true,
           value: _selectedDistrictId,
-          hint: const Text('جميع المديريات', style: TextStyle(fontFamily: 'Tajawal')),
+          hint: const Text(AppStrings.allDistricts, style: TextStyle(fontFamily: 'Tajawal')),
           items: [
             const DropdownMenuItem<String?>(
               value: null,
-              child: Text('جميع المديريات', style: TextStyle(fontFamily: 'Tajawal')),
+              child: Text(AppStrings.allDistricts, style: TextStyle(fontFamily: 'Tajawal')),
             ),
             ...districts.map((d) => DropdownMenuItem<String?>(
               value: d['id'] as String?,

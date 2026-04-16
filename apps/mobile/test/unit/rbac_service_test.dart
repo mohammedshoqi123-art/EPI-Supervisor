@@ -11,7 +11,6 @@ void main() {
     const govAlpha = 'gov-alpha';
     const govBeta = 'gov-beta';
     const distAlpha = 'dist-alpha';
-    const distBeta = 'dist-beta';
 
     test('admin can access any resource', () {
       expect(

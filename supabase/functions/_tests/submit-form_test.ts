@@ -94,13 +94,15 @@ Deno.test('Payload size: accepts normal payload', () => {
 
 // ─── Helper: Validate form_id format ────────────────────────
 Deno.test('form_id validation: rejects null', () => {
-  const formId: string | null = null;
-  assertEquals(typeof formId === 'string' && formId.length > 0, false);
+  const formId: unknown = null;
+  const isValid = typeof formId === 'string' && (formId as string).length > 0;
+  assertEquals(isValid, false);
 });
 
 Deno.test('form_id validation: rejects empty string', () => {
   const formId = '';
-  assertEquals(typeof formId === 'string' && formId.length > 0, false);
+  const isValid = typeof formId === 'string' && formId.length > 0;
+  assertEquals(isValid, false);
 });
 
 Deno.test('form_id validation: accepts valid UUID', () => {

@@ -37,8 +37,8 @@ Deno.test('extractToken: handles Bearer with extra spaces', () => {
   const header = 'Bearer  token_with_spaces';
   const match = header.match(/^Bearer\s+(.+)$/i);
   assertEquals(match !== null, true);
-  // Note: regex captures everything after "Bearer " including leading space
-  assertEquals(match![1].startsWith(' '), true);
+  // \s+ consumes ALL whitespace, so captured token has no leading space
+  assertEquals(match![1], 'token_with_spaces');
 });
 
 // ─── JWT Structure Validation ───────────────────────────────

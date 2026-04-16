@@ -279,6 +279,41 @@ CREATE OR REPLACE FUNCTION public.cleanup_old_rate_limits()
 RETURNS void LANGUAGE sql SECURITY DEFINER
 AS $$ DELETE FROM rate_limits WHERE window_start < now() - INTERVAL '2 hours'; $$;
 
+-- Ensure profile exists for the current user (safe from race conditions)
+-- Called by the app when handle_new_user trigger may have failed or not fired yet.
+CREATE OR REPLACE FUNCTION public.ensure_profile()
+RETURNS SETOF profiles LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_email TEXT;
+  v_name TEXT;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  -- Return existing profile if found
+  RETURN QUERY SELECT * FROM profiles WHERE id = v_user_id;
+  IF FOUND THEN RETURN; END IF;
+
+  -- Get user info from auth.users
+  SELECT email, COALESCE(raw_user_meta_data->>'full_name', split_part(email, '@', 1))
+  INTO v_email, v_name
+  FROM auth.users WHERE id = v_user_id;
+
+  IF v_email IS NULL THEN
+    RAISE EXCEPTION 'User not found in auth.users';
+  END IF;
+
+  -- Insert with ON CONFLICT to handle race conditions safely
+  RETURN QUERY
+  INSERT INTO profiles (id, email, full_name, role, is_active)
+  VALUES (v_user_id, v_email, v_name, 'data_entry', true)
+  ON CONFLICT (id) DO UPDATE SET updated_at = now()
+  RETURNING *;
+END;
+$$;
+
 -- ============================================================
 -- 6. TRIGGER FUNCTIONS
 -- ============================================================

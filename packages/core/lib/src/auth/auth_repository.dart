@@ -129,41 +129,32 @@ class AuthRepository {
           nationalId: response['national_id'],
         );
       } else {
-        // Profile missing — try to create it
+        // Profile missing — use Edge Function to create (avoids RLS race condition)
+        // The handle_new_user trigger should have created it, but if it didn't,
+        // we use a safe RPC call that runs with SECURITY DEFINER privileges.
         try {
-          await _client!.from('profiles').upsert({
-            'id': userId,
-            'email': user.email,
-            'full_name': user.userMetadata?['full_name'] ??
-                (user.email?.split('@').first ?? 'مستخدم'),
-            'role': 'data_entry',
-            'is_active': true,
-          }, onConflict: 'id').timeout(const Duration(seconds: 10));
+          final rpcResult = await _client!.rpc('ensure_profile').timeout(
+                const Duration(seconds: 10),
+              );
 
-          // Re-fetch after creation
-          final newResponse = await _client!
-              .from('profiles')
-              .select()
-              .eq('id', userId)
-              .maybeSingle()
-              .timeout(const Duration(seconds: 10));
-
-          if (newResponse != null) {
+          if (rpcResult != null) {
+            final profileData = rpcResult as Map<String, dynamic>;
             _currentState = app_auth.AuthState(
               isAuthenticated: true,
               userId: userId,
-              email: newResponse['email'] ?? user.email,
-              role: _parseRole(newResponse['role']),
-              governorateId: newResponse['governorate_id'],
-              districtId: newResponse['district_id'],
-              fullName: newResponse['full_name'],
-              phone: newResponse['phone'],
-              avatarUrl: newResponse['avatar_url'],
-              nationalId: newResponse['national_id'],
+              email: profileData['email'] ?? user.email,
+              role: _parseRole(profileData['role']),
+              governorateId: profileData['governorate_id'],
+              districtId: profileData['district_id'],
+              fullName: profileData['full_name'],
+              phone: profileData['phone'],
+              avatarUrl: profileData['avatar_url'],
+              nationalId: profileData['national_id'],
             );
           }
         } catch (_) {
-          // Profile creation failed — keep the basic auth state
+          // RPC not available (migration not applied) — fall back to basic auth state
+          debugPrint('[AuthRepository] ensure_profile RPC not available');
         }
       }
     } catch (e) {

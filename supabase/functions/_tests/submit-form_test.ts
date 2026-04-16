@@ -69,10 +69,10 @@ Deno.test('Role hierarchy: admin can submit anywhere', () => {
 
 Deno.test('Role hierarchy: data_entry restricted to own area', () => {
   const role = 'data_entry';
-  const userGovId = TEST_GOV_ID;
-  const targetGovId = 'different-gov-id';
+  const userGovId: string = TEST_GOV_ID;
+  const targetGovId: string = 'different-gov-id';
   const canSubmitAnywhere = ['admin', 'central'].includes(role);
-  const isOwnArea = userGovId === targetGovId;
+  const isOwnArea: boolean = userGovId === targetGovId;
   assertEquals(canSubmitAnywhere || isOwnArea, false);
 });
 
@@ -94,7 +94,7 @@ Deno.test('Payload size: accepts normal payload', () => {
 
 // ─── Helper: Validate form_id format ────────────────────────
 Deno.test('form_id validation: rejects null', () => {
-  const formId = null;
+  const formId: string | null = null;
   assertEquals(typeof formId === 'string' && formId.length > 0, false);
 });
 

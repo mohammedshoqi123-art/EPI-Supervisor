@@ -511,12 +511,16 @@ ON CONFLICT (id) DO NOTHING;
 -- Storage policies
 DROP POLICY IF EXISTS "Users can upload own submission photos" ON storage.objects;
 DROP POLICY IF EXISTS "Users can view own submission photos" ON storage.objects;
+DROP POLICY IF EXISTS "Supervisors can view submission photos" ON storage.objects;
 DROP POLICY IF EXISTS "Admins can upload references" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated can view references" ON storage.objects;
 DROP POLICY IF EXISTS "Users can upload own avatar" ON storage.objects;
 DROP POLICY IF EXISTS "Anyone can view avatars" ON storage.objects;
 CREATE POLICY "Users can upload own submission photos" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'submission-photos' AND auth.uid()::text = (storage.foldername(name))[1]);
 CREATE POLICY "Users can view own submission photos" ON storage.objects FOR SELECT USING (bucket_id = 'submission-photos' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Supervisors can view submission photos" ON storage.objects FOR SELECT USING (
+  bucket_id = 'submission-photos' AND public.user_role() IN ('admin', 'central', 'governorate')
+);
 CREATE POLICY "Admins can upload references" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'references' AND public.user_role() = 'admin');
 CREATE POLICY "Authenticated can view references" ON storage.objects FOR SELECT USING (bucket_id = 'references' AND auth.uid() IS NOT NULL);
 CREATE POLICY "Users can upload own avatar" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);

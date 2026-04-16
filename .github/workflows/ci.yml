@@ -80,6 +80,26 @@ jobs:
             exit 1
           }
 
+      - name: Run Edge Function tests
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+        # Run after Deno is available
+      - name: Test Edge Functions
+        run: |
+          echo "=== Running Supabase Edge Function tests ==="
+          cd supabase/functions
+          for test_file in _tests/*_test.ts; do
+            if [ -f "$test_file" ]; then
+              echo "Running: $test_file"
+              deno test --allow-net --allow-env "$test_file" || {
+                echo "::error::Edge Function test failed: $test_file"
+                exit 1
+              }
+            fi
+          done
+          echo "=== All Edge Function tests passed ==="
+
   # ─── Build APK ───────────────────────────────────────────
   build-apk:
     name: Build Android APK

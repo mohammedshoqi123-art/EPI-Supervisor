@@ -26,6 +26,7 @@ class EncryptionService {
   static const int _ivLength = 12; // GCM standard IV length
 
   // ═══ PBKDF2 KEY CACHE ═══
+  static const int _maxKeyCacheSize = 64;
   static final Map<String, enc.Key> _keyCache = {};
 
   late final enc.Key _key;
@@ -84,6 +85,12 @@ class EncryptionService {
     final saltKey = base64Encode(salt);
     final cached = _keyCache[saltKey];
     if (cached != null) return cached;
+
+    // Evict oldest entry if cache is full (LRU-style)
+    if (_keyCache.length >= _maxKeyCacheSize) {
+      final firstKey = _keyCache.keys.first;
+      _keyCache.remove(firstKey);
+    }
 
     final key = _deriveKey(password, salt);
     _keyCache[saltKey] = key;

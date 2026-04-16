@@ -206,7 +206,9 @@ jobs:
             echo "⚠️ SUPABASE_ACCESS_TOKEN not set, skipping function deployment"
             exit 0
           fi
-          supabase functions deploy --project-ref $SUPABASE_PROJECT_REF --no-verify-jwt
+          # JWT verification is handled by each Edge Function's authenticateRequest()
+          # Do NOT use --no-verify-jwt in production — it bypasses auth checks
+          supabase functions deploy --project-ref $SUPABASE_PROJECT_REF
 
   # ─── Create Release ──────────────────────────────────────
   release:

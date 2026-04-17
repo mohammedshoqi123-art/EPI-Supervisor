@@ -75,7 +75,11 @@ jobs:
         working-directory: apps/mobile
         run: |
           echo "=== Running flutter test ==="
-          flutter test --coverage 2>&1
+          flutter test --coverage \
+            --dart-define=ENCRYPTION_KEY=EPI_CI_TEST_KEY_32_CHARS_MINIMUM_X \
+            --dart-define=SUPABASE_URL=https://test.supabase.co \
+            --dart-define=SUPABASE_ANON_KEY=test-anon-key \
+            2>&1
 
   # ─── Build APK ───────────────────────────────────────────
   build-apk:

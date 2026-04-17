@@ -181,8 +181,8 @@ Widget _buildFieldInput({
   switch (type) {
     case 'text':
       return EpiTextField(
-        controller:
-            _getController(textControllers, key, initialValue: formData[key]?.toString()),
+        controller: _getController(textControllers, key,
+            initialValue: formData[key]?.toString()),
         hint: hint,
         onChanged: (v) {
           formData[key] = v;
@@ -195,8 +195,8 @@ Widget _buildFieldInput({
 
     case 'phone':
       return EpiTextField(
-        controller:
-            _getController(textControllers, key, initialValue: formData[key]?.toString()),
+        controller: _getController(textControllers, key,
+            initialValue: formData[key]?.toString()),
         hint: hint ?? '7XXXXXXXX',
         keyboardType: TextInputType.phone,
         onChanged: (v) {
@@ -215,8 +215,8 @@ Widget _buildFieldInput({
 
     case 'textarea':
       return EpiTextField(
-        controller:
-            _getController(textControllers, key, initialValue: formData[key]?.toString()),
+        controller: _getController(textControllers, key,
+            initialValue: formData[key]?.toString()),
         hint: hint,
         maxLines: 4,
         onChanged: (v) {
@@ -230,8 +230,8 @@ Widget _buildFieldInput({
 
     case 'number':
       return EpiTextField(
-        controller:
-            _getController(textControllers, key, initialValue: formData[key]?.toString()),
+        controller: _getController(textControllers, key,
+            initialValue: formData[key]?.toString()),
         hint: hint,
         keyboardType: TextInputType.number,
         onChanged: (v) {
@@ -251,8 +251,7 @@ Widget _buildFieldInput({
         items: options
             .map((o) => DropdownMenuItem(
                 value: o,
-                child:
-                    Text(o, style: const TextStyle(fontFamily: 'Tajawal'))))
+                child: Text(o, style: const TextStyle(fontFamily: 'Tajawal'))))
             .toList(),
         onChanged: (v) => runSetState(() {
           formData[key] = v;
@@ -492,9 +491,7 @@ Widget _buildFieldInput({
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    gpsLat != null
-                        ? 'تم تحديد الموقع ✓'
-                        : 'انقر لتحديد الموقع',
+                    gpsLat != null ? 'تم تحديد الموقع ✓' : 'انقر لتحديد الموقع',
                     style: const TextStyle(fontFamily: 'Tajawal'),
                   ),
                   if (gpsLat != null)
@@ -577,8 +574,8 @@ Widget _buildFieldInput({
 
     default:
       return EpiTextField(
-        controller:
-            _getController(textControllers, key, initialValue: formData[key]?.toString()),
+        controller: _getController(textControllers, key,
+            initialValue: formData[key]?.toString()),
         hint: hint,
         onChanged: (v) {
           formData[key] = v;

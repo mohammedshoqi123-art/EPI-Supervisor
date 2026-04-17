@@ -199,7 +199,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       // Build the correct cache key based on current campaign
       final campaign = ref.read(campaignProvider);
       final filter = SubmissionsFilter(campaignType: campaign.value);
-      final allFilter = SubmissionsFilter(campaignType: campaign.value, limit: 100, offset: 0);
+      final allFilter = SubmissionsFilter(
+          campaignType: campaign.value, limit: 100, offset: 0);
 
       // Try the correct cache key first
       List<Map<String, dynamic>>? cachedSubs =

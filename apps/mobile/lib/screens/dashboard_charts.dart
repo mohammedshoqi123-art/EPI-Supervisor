@@ -123,8 +123,8 @@ class DashboardKPIGrid extends StatelessWidget {
           AppTheme.warningColor, 'محلول'),
       KPIItem('حرج', critical, 0, Icons.local_fire_department_rounded,
           AppTheme.errorColor, critical > 0 ? 'يحتاج تدخل!' : 'لا يوجد'),
-      KPIItem(
-          'الإنجاز', completionRate, 0, Icons.speed_rounded, AppTheme.successColor, '%'),
+      KPIItem('الإنجاز', completionRate, 0, Icons.speed_rounded,
+          AppTheme.successColor, '%'),
     ];
 
     return AnimatedBuilder(
@@ -388,8 +388,8 @@ class DashboardQuickActions extends StatelessWidget {
           const Color(0xFF5C6BC0)),
       QuickAction(Icons.picture_as_pdf_rounded, 'تصدير PDF', '__export_pdf__',
           const Color(0xFFE53935)),
-      QuickAction(Icons.map_outlined, 'الخريطة', '/map',
-          const Color(0xFF1E88E5)),
+      QuickAction(
+          Icons.map_outlined, 'الخريطة', '/map', const Color(0xFF1E88E5)),
       QuickAction(Icons.smart_toy_outlined, 'المساعد الذكي', '/ai',
           const Color(0xFFFF8F00)),
     ];
@@ -694,9 +694,7 @@ class DashboardTrendLine extends StatelessWidget {
               dotData: FlDotData(
                   show: true,
                   getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-                      radius: 3,
-                      color: AppTheme.primaryColor,
-                      strokeWidth: 0)),
+                      radius: 3, color: AppTheme.primaryColor, strokeWidth: 0)),
               belowBarData: BarAreaData(
                   show: true,
                   gradient: LinearGradient(colors: [

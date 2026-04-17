@@ -202,13 +202,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       onGenerate: (type) => DashboardReportExporter.generateAndShare(
         context: context,
         type: type,
-        analyticsData: ref.read(dashboardAnalyticsProvider(
-                AnalyticsFilter(
-                    campaignType: ref.read(campaignProvider).value)))
+        analyticsData: ref
+            .read(dashboardAnalyticsProvider(AnalyticsFilter(
+                campaignType: ref.read(campaignProvider).value)))
             .valueOrNull,
         fetchGovRanking: () async {
           try {
-            return await ref.read(analyticsServiceProvider).getGovernorateRanking();
+            return await ref
+                .read(analyticsServiceProvider)
+                .getGovernorateRanking();
           } catch (_) {
             return null;
           }

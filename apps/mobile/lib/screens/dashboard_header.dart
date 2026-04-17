@@ -23,9 +23,16 @@ class DashboardHeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hour = DateTime.now().hour;
-    final greeting =
-        hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'تصبح على خير';
-    final emoji = hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙';
+    final greeting = hour < 12
+        ? 'صباح الخير'
+        : hour < 17
+            ? 'مساء الخير'
+            : 'تصبح على خير';
+    final emoji = hour < 12
+        ? '☀️'
+        : hour < 17
+            ? '🌤️'
+            : '🌙';
 
     return SlideTransition(
       position: Tween<Offset>(begin: const Offset(0, -0.3), end: Offset.zero)
@@ -144,11 +151,27 @@ class DashboardHeroHeader extends StatelessWidget {
   static String _getDateString() {
     final now = DateTime.now();
     const months = [
-      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+      'يناير',
+      'فبراير',
+      'مارس',
+      'أبريل',
+      'مايو',
+      'يونيو',
+      'يوليو',
+      'أغسطس',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر'
     ];
     const days = [
-      'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'
+      'الاثنين',
+      'الثلاثاء',
+      'الأربعاء',
+      'الخميس',
+      'الجمعة',
+      'السبت',
+      'الأحد'
     ];
     return '${days[now.weekday - 1]}، ${now.day} ${months[now.month - 1]} ${now.year}';
   }

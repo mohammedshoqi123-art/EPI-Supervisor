@@ -44,11 +44,8 @@ class DashboardReportExporter {
                 () => onGenerate('daily')),
             _exportOption(ctx, 'تقرير الإرساليات الأسبوعي',
                 Icons.date_range_rounded, () => onGenerate('weekly')),
-            _exportOption(
-                ctx,
-                'تقرير النواقص والاحتياجات',
-                Icons.warning_amber_rounded,
-                () => onGenerate('shortages')),
+            _exportOption(ctx, 'تقرير النواقص والاحتياجات',
+                Icons.warning_amber_rounded, () => onGenerate('shortages')),
             _exportOption(ctx, 'تقرير أداء المحافظات', Icons.map_rounded,
                 () => onGenerate('governorates')),
             _exportOption(ctx, 'تقرير شامل (كل البيانات)',

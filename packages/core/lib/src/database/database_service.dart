@@ -156,7 +156,9 @@ class DatabaseService {
     String? orderBy,
     bool ascending = false,
   }) async {
-    final filters = <String, dynamic>{};
+    final filters = <String, dynamic>{
+      'deleted_at': ApiClient.isNull, // ← FIX: exclude soft-deleted
+    };
     if (formId != null) filters['form_id'] = formId;
     if (status != null) filters['status'] = status;
     if (governorateId != null) filters['governorate_id'] = governorateId;

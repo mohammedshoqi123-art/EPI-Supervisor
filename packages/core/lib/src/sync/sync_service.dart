@@ -290,6 +290,20 @@ class SyncService {
 
       if (result.synced > 0 || result.duplicates > 0) {
         _offline.updateConnectivity(true);
+
+        // ═══ FIX: Invalidate submissions cache after successful sync ═══
+        // Without this, the UI shows stale data even though sync succeeded.
+        // The next provider read will fetch fresh data from Supabase.
+        try {
+          final cache = _dataCache;
+          if (cache != null) {
+            await cache.invalidateAll();
+            if (kDebugMode)
+              print('[SyncService] Cache invalidated after ${result.synced} synced items');
+          }
+        } catch (e) {
+          if (kDebugMode) print('[SyncService] Cache invalidation failed: $e');
+        }
       }
     } catch (e) {
       if (kDebugMode) print('[SyncService] Cycle error: $e');

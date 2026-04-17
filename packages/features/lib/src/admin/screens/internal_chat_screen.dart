@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'chat_widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:epi_shared/epi_shared.dart';
@@ -36,8 +37,7 @@ class InternalChatScreen extends ConsumerStatefulWidget {
   const InternalChatScreen({super.key, this.channelId, this.channelName});
 
   @override
-  ConsumerState<InternalChatScreen> =>
-      _InternalChatScreenState();
+  ConsumerState<InternalChatScreen> createState() => _InternalChatScreenState();
 }
 
 class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
@@ -102,9 +102,8 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F7FA),
-        body: _activeChannelId == null
-            ? _buildChannelsView()
-            : _buildChatView(),
+        body:
+            _activeChannelId == null ? _buildChannelsView() : _buildChatView(),
       ),
     );
   }
@@ -126,7 +125,8 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
               onPressed: () => _showCreateChannelDialog(),
               icon: const Icon(Icons.add_rounded, size: 20),
               label: const Text('إنشاء قناة جديدة',
-                  style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+                  style: TextStyle(
+                      fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00897B),
                 foregroundColor: Colors.white,
@@ -166,7 +166,8 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                   if (channels.isEmpty) return _channelsEmpty();
 
                   return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     itemCount: channels.length,
                     itemBuilder: (context, index) {
                       final ch = channels[index];
@@ -206,7 +207,8 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
               color: Colors.white.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.forum_rounded, color: Colors.white, size: 24),
+            child:
+                const Icon(Icons.forum_rounded, color: Colors.white, size: 24),
           ),
           const SizedBox(width: 14),
           const Expanded(
@@ -510,7 +512,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                 ),
                 const Row(
                   children: [
-                    _ChatPulseDot(),
+                    ChatPulseDot(),
                     SizedBox(width: 6),
                     Text(
                       'متصل',
@@ -556,9 +558,8 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
             DateTime.tryParse(messages[i - 1]['created_at'] ?? '') ??
                 DateTime.now(),
           )) {
-        final date =
-            DateTime.tryParse(messages[i]['created_at'] ?? '') ??
-                DateTime.now();
+        final date = DateTime.tryParse(messages[i]['created_at'] ?? '') ??
+            DateTime.now();
         items.add(_dateSeparator(_dateLabel(date)));
       }
 
@@ -566,8 +567,8 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
       final isMe = msg['sender_id'] == currentUserId;
       final showAvatar = i == messages.length - 1 ||
           messages[i + 1]['sender_id'] != msg['sender_id'];
-      final showName = i == 0 ||
-          messages[i - 1]['sender_id'] != msg['sender_id'];
+      final showName =
+          i == 0 || messages[i - 1]['sender_id'] != msg['sender_id'];
 
       items.add(_messageBubble(msg, isMe, showAvatar, showName));
     }
@@ -588,8 +589,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
                 color: const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(20),
@@ -665,9 +665,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isMe
-                          ? const Color(0xFF00897B)
-                          : Colors.white,
+                      color: isMe ? const Color(0xFF00897B) : Colors.white,
                       borderRadius: BorderRadius.only(
                         topLeft: Radius.circular(isMe ? 16 : 4),
                         topRight: Radius.circular(isMe ? 4 : 16),
@@ -692,9 +690,8 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                             fontFamily: 'Tajawal',
                             fontSize: 14.5,
                             height: 1.5,
-                            color: isMe
-                                ? Colors.white
-                                : const Color(0xFF1A2332),
+                            color:
+                                isMe ? Colors.white : const Color(0xFF1A2332),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -707,8 +704,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                                 fontFamily: 'Tajawal',
                                 fontSize: 10,
                                 color: isMe
-                                    ? Colors.white
-                                        .withValues(alpha: 0.65)
+                                    ? Colors.white.withValues(alpha: 0.65)
                                     : const Color(0xFF9CA3AF),
                               ),
                             ),
@@ -721,8 +717,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                                 size: 14,
                                 color: msg['is_read'] == true
                                     ? Colors.lightBlueAccent
-                                    : Colors.white
-                                        .withValues(alpha: 0.65),
+                                    : Colors.white.withValues(alpha: 0.65),
                               ),
                             ],
                           ],
@@ -872,10 +867,9 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                       )
                     : Icon(
                         Icons.send_rounded,
-                        color:
-                            _messageController.text.trim().isNotEmpty
-                                ? Colors.white
-                                : const Color(0xFF9CA3AF),
+                        color: _messageController.text.trim().isNotEmpty
+                            ? Colors.white
+                            : const Color(0xFF9CA3AF),
                         size: 22,
                       ),
               ),
@@ -957,8 +951,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
               children: [
                 Icon(Icons.error_outline, color: Colors.white, size: 20),
                 SizedBox(width: 8),
-                Text('فشل الإرسال',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                Text('فشل الإرسال', style: TextStyle(fontFamily: 'Tajawal')),
               ],
             ),
             backgroundColor: const Color(0xFFEF4444),
@@ -1003,8 +996,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
               title: const Text('نسخ الرسالة',
                   style: TextStyle(fontFamily: 'Tajawal', fontSize: 14)),
               onTap: () {
-                Clipboard.setData(
-                    ClipboardData(text: msg['content'] ?? ''));
+                Clipboard.setData(ClipboardData(text: msg['content'] ?? ''));
                 Navigator.pop(context);
               },
             ),
@@ -1086,8 +1078,8 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                     ),
                     child: SwitchListTile(
                       title: const Text('قناة إعلانات (قراءة فقط)',
-                          style: TextStyle(
-                              fontFamily: 'Tajawal', fontSize: 13)),
+                          style:
+                              TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
                       secondary: const Icon(Icons.campaign_outlined,
                           color: Color(0xFFF59E0B), size: 22),
                       value: isAnnouncement,
@@ -1105,8 +1097,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                   onPressed: () => Navigator.pop(ctx),
                   child: const Text('إلغاء',
                       style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          color: Color(0xFF6B7280))),
+                          fontFamily: 'Tajawal', color: Color(0xFF6B7280))),
                 ),
                 ElevatedButton(
                   onPressed: () async {
@@ -1132,8 +1123,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('فشل: $e',
-                                style: const TextStyle(
-                                    fontFamily: 'Tajawal')),
+                                style: const TextStyle(fontFamily: 'Tajawal')),
                             backgroundColor: const Color(0xFFEF4444),
                           ),
                         );
@@ -1181,8 +1171,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
             const SizedBox(height: 20),
             const Row(
               children: [
-                Icon(Icons.people_rounded,
-                    color: Color(0xFF00897B), size: 24),
+                Icon(Icons.people_rounded, color: Color(0xFF00897B), size: 24),
                 SizedBox(width: 10),
                 Text('أعضاء القناة',
                     style: TextStyle(
@@ -1233,8 +1222,7 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                 ),
                 child: const Text('إغلاق',
                     style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        color: Color(0xFF6B7280))),
+                        fontFamily: 'Tajawal', color: Color(0xFF6B7280))),
               ),
             ),
           ],
@@ -1245,68 +1233,3 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
 }
 
 // ─── Pulse Dot ─────────────────────────────────────────────────────────────
-
-class _ChatPulseDot extends StatefulWidget {
-  const _ChatPulseDot();
-
-  @override
-  State<_ChatPulseDot> createState() => _ChatPulseDotState();
-}
-
-class _ChatPulseDotState extends State<_ChatPulseDot>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        return Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: const Color(0xFF10B981),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF10B981)
-                    .withValues(alpha: 0.4 * _controller.value),
-                blurRadius: 6 * _controller.value,
-                spreadRadius: 2 * _controller.value,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class AnimatedBuilder extends AnimatedWidget {
-  final Widget Function(BuildContext context, Widget? child) builder;
-
-  const AnimatedBuilder({
-    super.key,
-    required super.listenable,
-    required this.builder,
-  });
-
-  @override
-  Widget build(BuildContext context) => builder(context, null);
-}

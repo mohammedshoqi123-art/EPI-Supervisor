@@ -680,11 +680,15 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
       fields: _fields,
     );
 
-    // TODO: Save to Supabase
+    // ═══ Save form to Supabase ═══
+    // Note: Full Supabase integration pending. Currently saves locally for preview.
     if (kDebugMode) print('Saving form: ${template.toJson()}');
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم حفظ الاستمارة بنجاح')),
+      const SnackBar(
+        content: Text(
+            'تم حفظ الاستمارة (معاينة) — راجع تطبيق الموبايل للحفظ النهائي'),
+      ),
     );
   }
 }

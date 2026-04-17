@@ -4,8 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 
-enum _ChatMode { suggestions, reports, guide }
-
 class ChatMsg {
   final String role;
   final String content;
@@ -275,7 +273,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
               controller: _tabCtrl,
               indicatorColor: cs.onPrimary,
               labelColor: cs.onPrimary,
-              unselectedColor: cs.onPrimary.withValues(alpha: 0.6),
+              unselectedLabelColor: cs.onPrimary.withValues(alpha: 0.6),
               indicatorSize: TabBarIndicatorSize.tab,
               labelStyle: const TextStyle(
                 fontFamily: 'Tajawal',

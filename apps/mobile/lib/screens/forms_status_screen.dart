@@ -171,7 +171,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   /// FIX: Use cached data only — no Supabase calls that can hang.
   /// Stats come from local offline storage, NOT from server.
   Future<Map<String, int>> _loadStats() async {
-    int drafts = 0, pending = 0, total = 0;
+    int drafts = 0, pending = 0, submitted = 0, total = 0;
     try {
       final offline = await ref.read(offlineManagerProvider.future).timeout(
             const Duration(seconds: 5),
@@ -183,13 +183,44 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       final draftIds = offline.getDraftFormIds();
       drafts = draftIds.length;
 
-      // Count cached submissions if available
+      // ═══ FIX: Use correct cache key that matches submissionsProvider ═══
+      // The submissionsProvider uses SubmissionsFilter.cacheKey which includes
+      // campaign type, not just 'submissions'. We must match that format.
       final cache = await ref.read(offlineDataCacheProvider.future).timeout(
             const Duration(seconds: 3),
             onTimeout: () => throw Exception('Cache init timeout'),
           );
-      final cachedSubs = cache.getCachedDataList('submissions');
-      total = drafts + pending + (cachedSubs?.length ?? 0);
+
+      // Try multiple cache keys to find submissions data
+      // The provider caches under keys like 'submissions_camp_polio_campaign_limit_20_off_0'
+      final debugInfo = cache.getDebugInfo();
+      final cachedKeys = debugInfo['keys'] as List? ?? [];
+
+      // Build the correct cache key based on current campaign
+      final campaign = ref.read(campaignProvider);
+      final filter = SubmissionsFilter(campaignType: campaign.value);
+      final allFilter = SubmissionsFilter(campaignType: campaign.value, limit: 100, offset: 0);
+
+      // Try the correct cache key first
+      List<Map<String, dynamic>>? cachedSubs =
+          cache.getCachedDataList(allFilter.cacheKey);
+      // Fallback: try without offset/limit specifics
+      cachedSubs ??= cache.getCachedDataList(filter.cacheKey);
+      // Fallback: try generic key
+      cachedSubs ??= cache.getCachedDataList('submissions');
+
+      if (cachedSubs != null && cachedSubs.isNotEmpty) {
+        // ═══ FIX: Count ACTUAL submitted items, don't derive from formula ═══
+        submitted = cachedSubs
+            .where((s) =>
+                s['status'] == 'submitted' ||
+                s['status'] == 'reviewed' ||
+                s['status'] == 'approved' ||
+                s['status'] == 'rejected')
+            .length;
+      }
+
+      total = drafts + pending + submitted;
     } catch (e) {
       debugPrint('[FormsStatusScreen] Stats load error: $e');
     }
@@ -197,7 +228,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     return {
       'drafts': drafts,
       'pending': pending,
-      'submitted': total > 0 ? total - drafts - pending : 0,
+      'submitted': submitted,
       'total': total,
     };
   }

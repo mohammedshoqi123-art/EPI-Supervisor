@@ -125,10 +125,11 @@ final syncPendingCountProvider = StreamProvider<int>((ref) async* {
   final offline = await ref.watch(offlineManagerProvider.future);
   // Emit current count immediately
   yield offline.pendingCount;
-  // ═══ FIX: Poll every 60s instead of 30s — reduces PBKDF2 decrypt overhead ═══
-  // The count is not time-critical; 60s is responsive enough for UI badges
+  // ═══ FIX: Poll every 120s instead of 60s — reduces PBKDF2 decrypt overhead ═══
+  // PBKDF2 with 100k iterations is expensive; 120s is responsive enough for badges
+  // and avoids UI stutter caused by frequent decryption
   yield* Stream.periodic(
-      const Duration(seconds: 60), (_) => offline.pendingCount);
+      const Duration(seconds: 120), (_) => offline.pendingCount);
 });
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

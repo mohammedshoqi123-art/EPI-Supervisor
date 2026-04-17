@@ -54,7 +54,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   void initState() {
     super.initState();
     _loadForm();
-    _autoSaveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // ═══ FIX: Auto-save every 60s instead of 30s — reduces Hive encryption overhead ═══
+    // PBKDF2 encryption is expensive; 60s still protects against data loss
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (_hasUnsavedChanges && _formData.isNotEmpty) {
         _autoSave(showFeedback: false);
       }

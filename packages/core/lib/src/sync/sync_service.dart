@@ -288,8 +288,30 @@ class SyncService {
         }
       }
 
+      // ═══ FIX: Invalidate submissions cache after successful sync ═══
+      // Without this, the UI shows stale data for up to 2 hours (cache maxAge).
       if (result.synced > 0 || result.duplicates > 0) {
         _offline.updateConnectivity(true);
+
+        // Invalidate all submission-related caches so UI fetches fresh data
+        final cache = _dataCache;
+        if (cache != null) {
+          // Invalidate common submission cache key patterns
+          await cache.invalidate('submissions');
+          // Invalidate all keys starting with 'submissions_' (dynamic cache keys)
+          final debugInfo = cache.getDebugInfo();
+          final keys = debugInfo['keys'] as List? ?? [];
+          for (final key in keys) {
+            final keyStr = key.toString();
+            if (keyStr.startsWith('submissions')) {
+              await cache.invalidate(keyStr);
+              if (kDebugMode) print('[SyncService] Invalidated cache: $keyStr');
+            }
+          }
+          if (kDebugMode)
+            print(
+                '[SyncService] Submissions cache invalidated after ${result.synced} synced');
+        }
       }
     } catch (e) {
       if (kDebugMode) print('[SyncService] Cycle error: $e');

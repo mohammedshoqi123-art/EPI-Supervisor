@@ -197,7 +197,7 @@ Widget _buildFieldInput({
       return EpiTextField(
         controller:
             _getController(textControllers, key, initialValue: formData[key]?.toString()),
-        hint: hint ?? '07XXXXXXXXX',
+        hint: hint ?? '7XXXXXXXX',
         keyboardType: TextInputType.phone,
         onChanged: (v) {
           formData[key] = v;
@@ -206,8 +206,8 @@ Widget _buildFieldInput({
         validator: isRequired
             ? (v) {
                 if (v == null || v.isEmpty) return AppStrings.required;
-                if (!RegExp(r'^07\d{9}$').hasMatch(v))
-                  return 'رقم الجوال غير صحيح';
+                if (!RegExp(r'^7\d{8}$').hasMatch(v))
+                  return 'رقم الجوال غير صحيح — يجب أن يبدأ بـ 7 ويتكون من 9 أرقام';
                 return null;
               }
             : null,

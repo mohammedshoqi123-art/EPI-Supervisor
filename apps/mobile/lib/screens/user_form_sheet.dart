@@ -174,8 +174,8 @@ class _UserFormSheetState extends State<_UserFormSheet> {
                   validator: (v) {
                     if (v != null &&
                         v.isNotEmpty &&
-                        !RegExp(r'^07\d{9}$').hasMatch(v))
-                      return 'رقم غير صحيح (07XXXXXXXXX)';
+                        !RegExp(r'^7\d{8}$').hasMatch(v))
+                      return 'رقم غير صحيح — يجب أن يبدأ بـ 7 (9 أرقام)';
                     return null;
                   },
                   style: const TextStyle(fontFamily: 'Tajawal'),

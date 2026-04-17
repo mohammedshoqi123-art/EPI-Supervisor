@@ -19,14 +19,14 @@ class GroqService {
   DateTime _windowStart = DateTime.now();
 
   GroqService(this._apiKey, {http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client();
+      : _httpClient = httpClient ?? http.Client();
 
   bool get isAvailable => _apiKey.isNotEmpty;
 
   Map<String, String> get _headers => {
-    'Authorization': 'Bearer $_apiKey',
-    'Content-Type': 'application/json',
-  };
+        'Authorization': 'Bearer $_apiKey',
+        'Content-Type': 'application/json',
+      };
 
   // ═══════════════════════════════════════════════════════════
   // CHAT
@@ -100,7 +100,7 @@ class GroqService {
       final data = jsonDecode(resp.body);
       final content = data['choices']?[0]?['message']['content'] ?? '';
       final usage = data['usage'];
-      if (usage != null) _tokensUsed += usage['total_tokens'] ?? 0;
+      if (usage != null) _tokensUsed += (usage['total_tokens'] as int?) ?? 0;
 
       _history.add({'role': 'user', 'content': message});
       _history.add({'role': 'assistant', 'content': content});

@@ -67,7 +67,7 @@ class FunctionCallingEngine {
   Future<FunctionCallResult?> analyzeAndCall(
     String userMessage,
     Future<dynamic> Function(String query, Map<String, dynamic> params)
-    executor,
+        executor,
   ) async {
     // Step 1: Classify intent
     final intentResult = await _hf.getTopIntent(userMessage);
@@ -202,8 +202,7 @@ class FunctionCallingEngine {
     if (msg.contains('مرفوض') || msg.contains('رفض')) return 'rejected';
     if (msg.contains('مقبول') ||
         msg.contains('موافقة') ||
-        msg.contains('معتمد'))
-      return 'approved';
+        msg.contains('معتمد')) return 'approved';
     if (msg.contains('قيد المراجعة') || msg.contains('مراجعة'))
       return 'reviewed';
     if (msg.contains('مرسل') || msg.contains('إرسال')) return 'submitted';

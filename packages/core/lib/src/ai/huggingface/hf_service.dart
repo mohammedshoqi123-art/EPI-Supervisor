@@ -23,7 +23,7 @@ class HuggingFaceService {
   static const Duration _cacheTTL = Duration(minutes: 5);
 
   HuggingFaceService(this._apiToken, {http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client();
+      : _httpClient = httpClient ?? http.Client();
 
   /// Check if the service is available
   Future<bool> isAvailable() async {
@@ -39,9 +39,9 @@ class HuggingFaceService {
   }
 
   Map<String, String> get _headers => {
-    'Authorization': 'Bearer $_apiToken',
-    'Content-Type': 'application/json',
-  };
+        'Authorization': 'Bearer $_apiToken',
+        'Content-Type': 'application/json',
+      };
 
   /// Rate-limited request with caching
   Future<dynamic> _request(
@@ -100,8 +100,7 @@ class HuggingFaceService {
       _windowStart = now;
     }
     if (_requestCount >= _maxRequestsPerMinute) {
-      final waitMs =
-          _rateWindowSeconds * 1000 -
+      final waitMs = _rateWindowSeconds * 1000 -
           now.difference(_windowStart).inMilliseconds;
       if (waitMs > 0) {
         await Future.delayed(Duration(milliseconds: waitMs + 100));

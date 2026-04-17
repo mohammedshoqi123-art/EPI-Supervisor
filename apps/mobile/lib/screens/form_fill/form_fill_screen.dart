@@ -122,8 +122,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         },
       );
       final draft = offline.getDraft(widget.formId);
-      if (draft != null && draft['data'] != null) {
-        final draftData = Map<String, dynamic>.from(draft['data']);
+      if (draft != null && draft.isNotEmpty) {
+        // getDraft() returns the inner data directly (not wrapped in 'data' key)
+        // Handle both: direct data map, or legacy wrapper with 'data' key
+        final draftData = draft.containsKey('data') && draft['data'] is Map
+            ? Map<String, dynamic>.from(draft['data'])
+            : Map<String, dynamic>.from(draft);
         setState(() {
           _formData.addAll(draftData);
           _hasUnsavedChanges = false;

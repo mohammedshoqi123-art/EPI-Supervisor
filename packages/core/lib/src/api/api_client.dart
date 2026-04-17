@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 import '../config/sentry_config.dart';
@@ -340,6 +342,60 @@ class ApiClient {
     }
 
     return channelObj.subscribe();
+  }
+
+
+
+  /// Stream Edge Function response token by token (SSE)
+  Stream<String> callFunctionStream(
+    String functionName,
+    Map<String, dynamic> body,
+  ) async* {
+    try {
+      await _ensureFreshSession();
+      final session = _safeClient.auth.currentSession;
+      if (session == null) throw const UnauthorizedException();
+
+      final url = '${SupabaseConfig.url}/functions/v1/$functionName';
+      final httpClient = http.Client();
+      final request = http.Request('POST', Uri.parse(url))
+        ..headers.addAll({
+          'Authorization': 'Bearer ${session.accessToken}',
+          'Content-Type': 'application/json',
+        })
+        ..body = jsonEncode(body);
+
+      final streamed = await httpClient.send(request);
+      final decoder = const Utf8Decoder();
+      String buffer = '';
+
+      await for (final chunk in streamed.stream.transform(decoder)) {
+        buffer += chunk;
+        final lines = buffer.split('
+');
+        buffer = lines.removeLast();
+
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          final data = trimmed.substring(6);
+          if (data == '[DONE]') {
+            httpClient.close();
+            return;
+          }
+          try {
+            final json = jsonDecode(data);
+            final text = json['text'];
+            if (text != null && text.isNotEmpty) {
+              yield text as String;
+            }
+          } catch (_) {}
+        }
+      }
+      httpClient.close();
+    } catch (e, stack) {
+      _reportUnexpectedError(e, stack, context: 'callFunctionStream($functionName)');
+    }
   }
 
   // ===== Error helpers =====

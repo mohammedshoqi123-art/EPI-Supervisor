@@ -17,6 +17,7 @@ dependencies:
   epi_shared:
     path: ../../packages/shared
 
+  http: ^1.2.1
   # State Management
   flutter_riverpod: ^2.5.1
   riverpod_annotation: ^2.3.5

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:epi_shared/epi_shared.dart';
 
-class _UserFormSheet extends StatefulWidget {
+class UserFormSheet extends StatefulWidget {
   final List<Map<String, dynamic>> governorates;
   final List<Map<String, dynamic>> districts;
   final String title;
   final Map<String, dynamic>? existingUser;
 
-  const _UserFormSheet({
+  const UserFormSheet({
     required this.governorates,
     required this.districts,
     required this.title,
@@ -15,10 +15,10 @@ class _UserFormSheet extends StatefulWidget {
   });
 
   @override
-  State<_UserFormSheet> createState() => _UserFormSheetState();
+  State<UserFormSheet> createState() => UserFormSheetState();
 }
 
-class _UserFormSheetState extends State<_UserFormSheet> {
+class UserFormSheetState extends State<UserFormSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();

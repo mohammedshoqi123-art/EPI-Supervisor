@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:epi_core/epi_core.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'governorate_dropdown.dart';
 import 'district_dropdown.dart';
@@ -19,7 +19,7 @@ List<Widget> buildFormSections({
   required VoidCallback getLocation,
   required void Function(VoidCallback) runSetState,
   required Map<String, dynamic>? formSchema,
-  required List<dynamic> pickedPhotos,
+  required List<XFile> pickedPhotos,
 }) {
   final widgets = <Widget>[];
 
@@ -103,7 +103,7 @@ Widget buildFormField({
   required VoidCallback getLocation,
   required void Function(VoidCallback) runSetState,
   required Map<String, dynamic>? formSchema,
-  required List<dynamic> pickedPhotos,
+  required List<XFile> pickedPhotos,
 }) {
   final key = field['key'] as String? ?? '';
   final type = field['type'] as String? ?? 'text';
@@ -176,7 +176,7 @@ Widget _buildFieldInput({
   required VoidCallback getLocation,
   required void Function(VoidCallback) runSetState,
   required Map<String, dynamic>? formSchema,
-  required List<dynamic> pickedPhotos,
+  required List<XFile> pickedPhotos,
 }) {
   switch (type) {
     case 'text':

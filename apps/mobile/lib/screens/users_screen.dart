@@ -91,7 +91,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => _UserFormSheet(
+      builder: (ctx) => UserFormSheet(
         governorates: _governorates,
         districts: _districts,
         title: 'إضافة مستخدم جديد',
@@ -144,7 +144,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => _UserFormSheet(
+      builder: (ctx) => UserFormSheet(
         governorates: _governorates,
         districts: _districts,
         title: 'تعديل المستخدم',

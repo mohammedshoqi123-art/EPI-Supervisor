@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:epi_core/epi_core.dart';
-import 'package:epi_shared/epi_shared.dart';
 
 /// Animated hero header with greeting, campaign label, and notification bell.
 class DashboardHeroHeader extends StatelessWidget {

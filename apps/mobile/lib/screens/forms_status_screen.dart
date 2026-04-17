@@ -194,7 +194,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       // Try multiple cache keys to find submissions data
       // The provider caches under keys like 'submissions_camp_polio_campaign_limit_20_off_0'
       final debugInfo = cache.getDebugInfo();
-      final cachedKeys = debugInfo['keys'] as List? ?? [];
+      // Debug: check available cache keys
+      // final cachedKeys = debugInfo['keys'] as List? ?? [];
 
       // Build the correct cache key based on current campaign
       final campaign = ref.read(campaignProvider);

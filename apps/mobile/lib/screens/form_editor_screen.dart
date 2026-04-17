@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
 
 class FormEditorScreen extends StatefulWidget {

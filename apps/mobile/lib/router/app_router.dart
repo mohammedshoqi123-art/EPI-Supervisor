@@ -11,7 +11,7 @@ import '../screens/login_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/forms_screen.dart';
 import '../screens/map_screen.dart';
-import '../screens/ai_chat_screen.dart';
+import '../screens/ai_chat_screen_v2.dart';
 import '../screens/submission_detail_screen.dart';
 import '../screens/form_fill/form_fill_screen.dart';
 import '../screens/forms_status_screen.dart';
@@ -116,7 +116,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/ai',
-            builder: (context, state) => const AiChatScreen(),
+            builder: (context, state) => const AiChatScreenV2(),
           ),
           GoRoute(
             path: '/references',

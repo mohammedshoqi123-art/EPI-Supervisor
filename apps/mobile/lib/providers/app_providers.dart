@@ -495,3 +495,33 @@ final aiSystemStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async 
   final router = await ref.watch(aiRouterProvider.future);
   return router.systemStatus;
 });
+
+// ═══════════════════════════════════════════════════════════════
+// AI v3: Groq + HuggingFace + MiMo Unified
+// ═══════════════════════════════════════════════════════════════
+
+/// Groq Service — ultra-fast LLM
+final groqServiceProvider = Provider<GroqService?>((ref) {
+  const key = String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
+  if (key.isEmpty) return null;
+  final service = GroqService(key);
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+/// Unified AI Provider — combines all AI services
+final unifiedAIProviderProvider = FutureProvider<UnifiedAIProvider>((ref) async {
+  final groq = ref.watch(groqServiceProvider);
+  final hf = ref.watch(huggingFaceServiceProvider);
+  final rag = await ref.watch(ragPipelineProvider.future);
+  final fnCall = ref.watch(functionCallingEngineProvider);
+  final offline = await ref.watch(offlineManagerProvider.future);
+
+  return UnifiedAIProvider(
+    groq: groq,
+    hf: hf,
+    rag: rag,
+    fnCall: fnCall,
+    offline: offline,
+  );
+});

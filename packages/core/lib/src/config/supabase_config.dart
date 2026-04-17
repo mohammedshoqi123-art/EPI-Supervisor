@@ -82,3 +82,12 @@ extension SupabaseConfigAI on SupabaseConfig {
   
   static bool get hasHuggingFace => hfToken.isNotEmpty;
 }
+
+// ═══ Groq Configuration ═══
+extension SupabaseConfigGroq on SupabaseConfig {
+  static const String _compileGroqKey = String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
+  static String _envGroqKey = '';
+  static void setGroqKey(String key) => _envGroqKey = key;
+  static String get groqApiKey => _compileGroqKey.isNotEmpty ? _compileGroqKey : _envGroqKey;
+  static bool get hasGroq => groqApiKey.isNotEmpty;
+}

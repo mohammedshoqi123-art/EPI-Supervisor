@@ -139,12 +139,17 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           # Release signing (decoded by Gradle in build.gradle)
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          GROQ_FLAG=""
+          if [ "$GROQ_API_KEY" != "NOT_SET" ] && [ -n "$GROQ_API_KEY" ]; then
+            GROQ_FLAG="--dart-define=GROQ_API_KEY=$GROQ_API_KEY"
+          fi
           HF_FLAG=""
           if [ "$HF_API_TOKEN" != "NOT_SET" ] && [ -n "$HF_API_TOKEN" ]; then
             HF_FLAG="--dart-define=HF_API_TOKEN=$HF_API_TOKEN"
@@ -159,6 +164,7 @@ jobs:
             --dart-define=ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }} \
             --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }} \
             --dart-define=HF_API_TOKEN=${{ secrets.HF_API_TOKEN }} \
+            $GROQ_FLAG \
             $GEMINI_FLAG
 
       - name: Upload APK artifact

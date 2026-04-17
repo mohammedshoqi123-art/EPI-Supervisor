@@ -1,0 +1,320 @@
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
+import { createClient } from 'npm:@supabase/supabase-js'
+import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
+import { authenticateRequest, createUserClient } from '../_shared/auth.ts'
+
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+
+const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions'
+const HF_API = 'https://router.huggingface.co/hf-inference/models'
+const MIMO_API = 'https://api.xiaomimimo.com/v1/chat/completions'
+
+const HF_MODELS = {
+  embeddings: 'intfloat/multilingual-e5-large',
+  classifier: 'facebook/bart-large-mnli',
+  qa: 'deepset/xlm-roberta-base-squad2',
+}
+
+// ═══════════════════════════════════════════════════════════
+// KNOWLEDGE BASE
+// ═══════════════════════════════════════════════════════════
+
+const SYSTEM_PROMPT = `أنت "مساعد EPI" — متخصص في برنامج التطعيم الموسع في اليمن ومنصة مشرف EPI.
+
+== التطعيمات ==
+• BCG (ولادة), OPV/IPV (شلل), Penta (خماسي), PCV (رئوي), Rotavirus, MR (حصبة), HepB
+• الجدول: ولادة→BCG+OPV0+HepB. 6 أسابيع→Penta1+OPV1+PCV1+Rota1. 10 أسابيع→Penta2. 14 أسبوع→Penta3+IPV. 9 أشهر→MR
+• المؤشرات: Penta3=وصول, Dropout=(Penta1-Penta3)/Penta1×100, الحصبة=حماية جماعية
+• Health Score: 80+=ممتاز, 50-79=متوسط, <50=ضعيف
+
+== المنصة ==
+• Flutter + Supabase + Groq/HF/MiMo AI. Offline-first.
+• 5 أدوار: admin(5)>central(4)>governorate(3)>district(2)>data_entry(1)
+• نماذج ديناميكية, تقارير PDF, خرائط تفاعلية, مزامنة ذكية
+
+== قواعد ==
+• مختصر (≤100 كلمة). أرقام من البيانات. توصيات عملية. العربية.
+• لا تختلق أرقام. إذا لا توجد بيانات قل ذلك.`
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+
+async function hfCall(model: string, body: any, token: string) {
+  const r = await fetch(`${HF_API}/${model}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return r.ok ? r.json() : null
+}
+
+async function groqChat(messages: any[], key: string, opts: any = {}) {
+  const r = await fetch(GROQ_API, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: opts.model || 'llama-3.3-70b-versatile',
+      messages,
+      max_tokens: opts.maxTokens || 800,
+      temperature: opts.temperature ?? 0.4,
+      ...(opts.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+      ...(opts.stream ? { stream: true } : {}),
+    }),
+  })
+  if (!r.ok) { console.error('Groq error:', r.status, await r.text()); return null }
+  return opts.stream ? r : r.json()
+}
+
+async function mimoChat(messages: any[], key: string, stream = false) {
+  const r = await fetch(MIMO_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify({ model: 'mimo-v2-pro', messages, max_tokens: 800, temperature: 0.4, stream }),
+  })
+  if (!r.ok) return null
+  return stream ? r : r.json()
+}
+
+// ═══════════════════════════════════════════════════════════
+// INTENT + FUNCTION CALLING
+// ═══════════════════════════════════════════════════════════
+
+const INTENT_LABELS = ['query_submissions','query_shortages','query_analytics','generate_report','query_governorates','query_users','ask_guide','analyze_trend','compare_data','query_health','general_question']
+
+const QUERY_MAP: Record<string, string> = {
+  query_submissions: 'submissions', query_shortages: 'shortages',
+  query_analytics: 'analytics', query_governorates: 'governorates', query_users: 'users',
+}
+
+async function classifyIntent(text: string, hfToken: string) {
+  try {
+    const r = await hfCall(HF_MODELS.classifier, { inputs: text, parameters: { candidate_labels: INTENT_LABELS } }, hfToken)
+    if (Array.isArray(r) && r[0]?.labels) return { intent: r[0].labels[0], confidence: r[0].scores[0] }
+  } catch {}
+  return { intent: 'general_question', confidence: 0 }
+}
+
+// Alternative: Groq-based intent (faster, no HF needed)
+async function classifyIntentGroq(text: string, groqKey: string) {
+  try {
+    const r = await groqChat([
+      { role: 'system', content: 'Extract intent from Arabic EPI message. Return ONLY the intent name from: query_submissions, query_shortages, query_analytics, generate_report, query_governorates, query_users, ask_guide, analyze_trend, compare_data, query_health, general_question' },
+      { role: 'user', content: text },
+    ], groqKey, { model: 'llama-3.1-8b-instant', maxTokens: 20, temperature: 0 })
+    const intent = r?.choices?.[0]?.message?.content?.trim() || 'general_question'
+    return { intent: INTENT_LABELS.includes(intent) ? intent : 'general_question', confidence: 0.8 }
+  } catch { return { intent: 'general_question', confidence: 0 } }
+}
+
+async function dbQuery(supa: any, type: string) {
+  try {
+    switch (type) {
+      case 'submissions': {
+        const { data } = await supa.from('form_submissions').select('status').is('deleted_at', null)
+        const by: Record<string, number> = {}
+        data?.forEach((s: any) => { by[s.status] = (by[s.status] ?? 0) + 1 })
+        return { total: data?.length ?? 0, byStatus: by }
+      }
+      case 'shortages': {
+        const { data } = await supa.from('supply_shortages').select('severity,is_resolved').is('deleted_at', null)
+        const by: Record<string, number> = {}
+        data?.forEach((s: any) => { by[s.severity] = (by[s.severity] ?? 0) + 1 })
+        return { total: data?.length ?? 0, resolved: data?.filter((s: any) => s.is_resolved).length ?? 0, bySeverity: by }
+      }
+      case 'analytics': {
+        const [s, sh, u] = await Promise.all([
+          supa.from('form_submissions').select('id', { count: 'exact' }).is('deleted_at', null),
+          supa.from('supply_shortages').select('id', { count: 'exact' }).is('deleted_at', null).eq('is_resolved', false),
+          supa.from('profiles').select('id', { count: 'exact' }).eq('is_active', true),
+        ])
+        return { total_submissions: s.count, active_shortages: sh.count, active_users: u.count }
+      }
+      default: return null
+    }
+  } catch { return null }
+}
+
+function formatResult(intent: string, data: any): string {
+  if (intent === 'query_submissions' && data?.byStatus) {
+    return `📊 الإرساليات:\n• الإجمالي: ${data.total}\n• معتمدة: ${data.byStatus.approved ?? 0}\n• مرفوضة: ${data.byStatus.rejected ?? 0}\n• قيد المراجعة: ${data.byStatus.submitted ?? 0}`
+  }
+  if (intent === 'query_shortages') {
+    return `⚠️ النواقص:\n• الإجمالي: ${data.total}\n• حرجة: ${data.bySeverity?.critical ?? 0} 🔴\n• محلولة: ${data.resolved}`
+  }
+  if (intent === 'query_analytics') {
+    return `📈 إحصائيات:\n• إرساليات: ${data.total_submissions}\n• نواقص نشطة: ${data.active_shortages}\n• مستخدمين: ${data.active_users}`
+  }
+  return JSON.stringify(data)
+}
+
+function compressCtx(ctx: any) {
+  const s = ctx?.submissions ?? {}, sh = ctx?.shortages ?? {}
+  return `إرسالات: كلي=${s.total ?? '?'} اليوم=${s.today ?? '?'}\nنواقص: كلي=${sh.total ?? '?'} محلول=${sh.resolved ?? '?'}`
+}
+
+// ═══════════════════════════════════════════════════════════
+// STREAMING HELPER
+// ═══════════════════════════════════════════════════════════
+
+async function handleStream(resp: Response, origin: string | null) {
+  const reader = resp.body?.getReader()
+  if (!reader) return jsonResponse({ error: 'No stream' }, 500, origin)
+  const { readable, writable } = new TransformStream()
+  const writer = writable.getWriter()
+  const enc = new TextEncoder()
+  const dec = new TextDecoder()
+  ;(async () => {
+    try {
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines) {
+          const t = line.trim()
+          if (!t.startsWith('data: ') || t === 'data: [DONE]') continue
+          try {
+            const p = JSON.parse(t.slice(6))
+            const text = p.choices?.[0]?.delta?.content
+            if (text) await writer.write(enc.encode(`data: ${JSON.stringify({ text })}\n\n`))
+          } catch {}
+        }
+      }
+      await writer.write(enc.encode('data: [DONE]\n\n'))
+    } catch (e) { console.error('Stream:', e) }
+    finally { await writer.close() }
+  })()
+  return new Response(readable, { status: 200, headers: { ...corsHeaders(origin), 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' } })
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════
+
+serve(async (req) => {
+  const origin = req.headers.get('Origin')
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(origin) })
+
+  try {
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
+    const supabase = createUserClient(authHeader)
+    const auth = await authenticateRequest(supabase, authHeader)
+    if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
+
+    // Rate limit
+    try {
+      const { data } = await supabase.rpc('check_and_increment_rate_limit', { p_user_id: auth.userId, p_endpoint: 'ai-chat-v3', p_window_seconds: 60, p_max_requests: 25 })
+      if (!data?.[0]?.allowed) return jsonResponse({ error: 'Rate limit' }, 429, origin)
+    } catch { return jsonResponse({ error: 'Rate limit check failed' }, 429, origin) }
+
+    const { message, history = [], context, mode, template, stream = false } = await req.json()
+    if (!message && !template) return jsonResponse({ error: 'Message required' }, 400, origin)
+
+    const groqKey = Deno.env.get('GROQ_API_KEY')
+    const hfToken = Deno.env.get('HF_API_TOKEN')
+    const mimoKey = Deno.env.get('MIMO_API_KEY') ?? Deno.env.get('GEMINI_API_KEY')
+
+    // ─── MODE: Suggestions ───
+    if (mode === 'suggestions') {
+      const key = groqKey || mimoKey
+      if (key) {
+        const useGroq = !!groqKey
+        const chatFn = useGroq ? groqChat : mimoChat
+        const r = await chatFn([
+          { role: 'system', content: 'اقترح 5 اقتراحات متنوعة لمستخدم منصة مشرف EPI اليمن. سطر واحد لكل اقتراح بدون ترقيم.' },
+          { role: 'user', content: 'اقتراحات' },
+        ], key, useGroq ? { model: 'llama-3.1-8b-instant', maxTokens: 200 } : false)
+        const text = r?.choices?.[0]?.message?.content ?? ''
+        return jsonResponse({ suggestions: text.split('\n').filter((s: string) => s.trim().length > 5).slice(0, 5) }, 200, origin)
+      }
+      return jsonResponse({ suggestions: ['📊 ما حالة الإرساليات؟', '⚠️ أين النواقص الحرجة؟', '📈 اعرض تقرير أسبوعي', '🗺️ أي المحافظات تحتاج دعم؟', '💉 ما تغطية التطعيم؟'] }, 200, origin)
+    }
+
+    // ─── STEP 1: Intent ───
+    let intent = 'general_question'
+    let dbResult = null
+
+    if (message) {
+      if (groqKey) {
+        const classified = await classifyIntentGroq(message, groqKey)
+        intent = classified.intent
+      } else if (hfToken) {
+        const classified = await classifyIntent(message, hfToken)
+        intent = classified.intent
+      }
+
+      // ─── STEP 2: Function Calling ───
+      const qt = QUERY_MAP[intent]
+      if (qt) dbResult = await dbQuery(supabase, qt)
+    }
+
+    // Return DB result immediately if found
+    if (dbResult && intent !== 'general_question') {
+      return jsonResponse({ reply: formatResult(intent, dbResult), source: 'function_call', intent, data: dbResult }, 200, origin)
+    }
+
+    // ─── STEP 3: RAG context ───
+    let rag = ''
+    if (message?.includes('تطعيم') || message?.includes('لقاح')) {
+      rag = 'جدول التطعيم: ولادة→BCG+OPV0+HepB. 6 أسابيع→Penta1+OPV1+PCV1+Rota1. 10 أسابيع→Penta2. 14 أسبوع→Penta3+IPV. 9 أشهر→MR'
+    }
+    if (message?.includes('مؤشر') || message?.includes('تغطية')) {
+      rag += '\nPenta3=وصول, Dropout=(Penta1-Penta3)/Penta1×100, 80+=ممتاز'
+    }
+
+    // ─── STEP 4: LLM Response ───
+    const messages: any[] = []
+    let sys = SYSTEM_PROMPT
+    if (context) sys += `\n\n${compressCtx(context)}`
+    if (rag) sys += `\n\n${rag}`
+    if (template) {
+      const T: Record<string, string> = {
+        daily: 'أنشئ تقريراً يومياً: ملخص الإرساليات، النواقص الحرجة، 3 توصيات.',
+        weekly: 'حلل اتجاه الأسبوع.',
+        governorate: 'رتب المحافظات بالأداء.',
+        shortages: 'حلل النواقص حسب الخطورة.',
+        quality: 'حلل جودة الإدخال.',
+        coverage: 'حلل تغطية التطعيم.',
+      }
+      sys += `\n\nمهمة: ${T[template] ?? 'أنشئ تقريراً.'}`
+    }
+    if (mode === 'guide') sys += '\n\nاشرح بخطوات مختصرة (3-5).'
+
+    messages.push({ role: 'system', content: sys })
+    for (const m of history.slice(-6)) messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content).slice(0, 1200) })
+    messages.push({ role: 'user', content: message ?? template })
+
+    // Priority: Groq → MiMo → fallback
+    if (groqKey) {
+      if (stream) {
+        const resp = await groqChat(messages, groqKey, { stream: true, model: 'llama-3.1-8b-instant' })
+        if (resp) return handleStream(resp as Response, origin)
+      }
+      const r = await groqChat(messages, groqKey, { model: 'llama-3.3-70b-versatile' })
+      const text = r?.choices?.[0]?.message?.content ?? ''
+      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', intent }, 200, origin)
+    }
+
+    if (mimoKey) {
+      if (stream) {
+        const resp = await mimoChat(messages, mimoKey, true)
+        if (resp) return handleStream(resp as Response, origin)
+      }
+      const r = await mimoChat(messages, mimoKey)
+      const text = r?.choices?.[0]?.message?.content ?? ''
+      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', intent }, 200, origin)
+    }
+
+    return jsonResponse({ reply: 'خدمة AI غير مُعدّة.', source: 'fallback' }, 200, origin)
+
+  } catch (error) {
+    console.error('AI error:', error)
+    return jsonResponse({ reply: 'حدث خطأ.', source: 'error' }, 500, origin)
+  }
+})

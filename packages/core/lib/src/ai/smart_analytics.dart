@@ -3,7 +3,6 @@ import '../analytics/local_analytics_engine.dart';
 
 /// Advanced analytics with forecasting, clustering, and anomaly detection
 class SmartAnalytics {
-
   // ═══════════════════════════════════════════════════════════
   // FORECASTING
   // ═══════════════════════════════════════════════════════════
@@ -52,7 +51,9 @@ class SmartAnalytics {
     int forecastDays = 7,
   }) {
     if (data.length < windowSize) {
-      final avg = data.isEmpty ? 0.0 : data.reduce((a, b) => a + b) / data.length;
+      final avg = data.isEmpty
+          ? 0.0
+          : data.reduce((a, b) => a + b) / data.length;
       return List.filled(forecastDays, avg);
     }
 
@@ -69,9 +70,9 @@ class SmartAnalytics {
 
   /// Simple K-Means clustering for governorates
   static List<GovernorateCluster> clusterGovernorates(
-    List<Map<String, dynamic>> governorateData,
-    {int k = 3}
-  ) {
+    List<Map<String, dynamic>> governorateData, {
+    int k = 3,
+  }) {
     if (governorateData.isEmpty) return [];
 
     // Extract features: submission_count, approval_rate, shortage_count
@@ -99,24 +100,34 @@ class SmartAnalytics {
 
       if (indices.isEmpty) continue;
 
-      final names = indices.map((i) => governorateData[i]['name_ar'] as String? ?? '').toList();
-      final avgApproval = indices
-          .map((i) => (governorateData[i]['approval_rate'] as num?)?.toDouble() ?? 0)
-          .reduce((a, b) => a + b) / indices.length;
+      final names = indices
+          .map((i) => governorateData[i]['name_ar'] as String? ?? '')
+          .toList();
+      final avgApproval =
+          indices
+              .map(
+                (i) =>
+                    (governorateData[i]['approval_rate'] as num?)?.toDouble() ??
+                    0,
+              )
+              .reduce((a, b) => a + b) /
+          indices.length;
 
       final label = avgApproval >= 80
           ? 'ممتاز'
           : avgApproval >= 50
-              ? 'متوسط'
-              : 'يحتاج دعم';
+          ? 'متوسط'
+          : 'يحتاج دعم';
 
-      clusters.add(GovernorateCluster(
-        clusterId: c,
-        label: label,
-        governorates: names,
-        avgApprovalRate: avgApproval,
-        count: indices.length,
-      ));
+      clusters.add(
+        GovernorateCluster(
+          clusterId: c,
+          label: label,
+          governorates: names,
+          avgApprovalRate: avgApproval,
+          count: indices.length,
+        ),
+      );
     }
 
     return clusters;
@@ -144,7 +155,11 @@ class SmartAnalytics {
     }).toList();
   }
 
-  static List<int> _kMeans(List<List<double>> data, {required int k, int maxIter = 20}) {
+  static List<int> _kMeans(
+    List<List<double>> data, {
+    required int k,
+    int maxIter = 20,
+  }) {
     if (data.isEmpty) return [];
     final n = data.length;
     final dims = data[0].length;
@@ -191,9 +206,9 @@ class SmartAnalytics {
         if (members.isEmpty) continue;
 
         for (int d = 0; d < dims; d++) {
-          centroids[c][d] = members
-              .map((i) => data[i][d])
-              .reduce((a, b) => a + b) / members.length;
+          centroids[c][d] =
+              members.map((i) => data[i][d]).reduce((a, b) => a + b) /
+              members.length;
         }
       }
     }
@@ -209,9 +224,7 @@ class SmartAnalytics {
   static List<AnomalyPoint> detectSubmissionAnomalies(
     List<Map<String, dynamic>> dailyData,
   ) {
-    final counts = dailyData
-        .map<num>((d) => d['count'] as num? ?? 0)
-        .toList();
+    final counts = dailyData.map<num>((d) => d['count'] as num? ?? 0).toList();
 
     if (counts.length < 3) return [];
 
@@ -220,15 +233,17 @@ class SmartAnalytics {
 
     final anomalies = <AnomalyPoint>[];
     for (final idx in anomalyIndices) {
-      anomalies.add(AnomalyPoint(
-        date: dailyData[idx]['date']?.toString() ?? '',
-        value: counts[idx].toDouble(),
-        expectedValue: LocalAnalyticsEngine.mean(counts),
-        type: counts[idx] > LocalAnalyticsEngine.mean(counts)
-            ? AnomalyType.spike
-            : AnomalyType.drop,
-        severity: _calculateAnomalySeverity(counts[idx], counts),
-      ));
+      anomalies.add(
+        AnomalyPoint(
+          date: dailyData[idx]['date']?.toString() ?? '',
+          value: counts[idx].toDouble(),
+          expectedValue: LocalAnalyticsEngine.mean(counts),
+          type: counts[idx] > LocalAnalyticsEngine.mean(counts)
+              ? AnomalyType.spike
+              : AnomalyType.drop,
+          severity: _calculateAnomalySeverity(counts[idx], counts),
+        ),
+      );
     }
 
     return anomalies;
@@ -267,7 +282,10 @@ class SmartAnalytics {
     final healthScore = LocalAnalyticsEngine.healthScore(
       totalShortages: shorts['total'] as int? ?? 0,
       resolvedShortages: shorts['resolved'] as int? ?? 0,
-      criticalShortages: (shorts['bySeverity'] as Map<String, dynamic>?)?['critical'] as int? ?? 0,
+      criticalShortages:
+          (shorts['bySeverity'] as Map<String, dynamic>?)?['critical']
+              as int? ??
+          0,
       totalSubmissions: subs['total'] as int? ?? 0,
     );
 
@@ -277,12 +295,16 @@ class SmartAnalytics {
         'next_7_days': forecasts,
         'method': 'exponential_smoothing',
       },
-      'anomalies': anomalies.map((a) => {
-        'date': a.date,
-        'value': a.value,
-        'type': a.type.name,
-        'severity': a.severity.name,
-      }).toList(),
+      'anomalies': anomalies
+          .map(
+            (a) => {
+              'date': a.date,
+              'value': a.value,
+              'type': a.type.name,
+              'severity': a.severity.name,
+            },
+          )
+          .toList(),
       'summary': LocalAnalyticsEngine.generateInsights(currentData),
       'generated_at': DateTime.now().toIso8601String(),
     };
@@ -310,6 +332,7 @@ class GovernorateCluster {
 }
 
 enum AnomalyType { spike, drop }
+
 enum AnomalySeverity { low, medium, high }
 
 class AnomalyPoint {

@@ -7,10 +7,10 @@ import '../errors/app_exceptions.dart';
 /// Models: llama-3.3-70b (best), llama-3.1-8b (fastest), allam-2-7b (Arabic)
 class GroqService {
   static const String _baseUrl = 'https://api.groq.com/openai/v1';
-  
+
   final String _apiKey;
   final http.Client _httpClient;
-  
+
   final List<Map<String, String>> _history = [];
   static const int _maxHistory = 10;
 
@@ -19,7 +19,7 @@ class GroqService {
   DateTime _windowStart = DateTime.now();
 
   GroqService(this._apiKey, {http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   bool get isAvailable => _apiKey.isNotEmpty;
 
@@ -46,14 +46,17 @@ class GroqService {
     if (clearHistory) _history.clear();
 
     final messages = <Map<String, String>>[];
-    
+
     if (systemPrompt != null) {
       messages.add({'role': 'system', 'content': systemPrompt});
     }
 
     // Add context as system message
     if (context != null) {
-      messages.add({'role': 'system', 'content': 'البيانات الحالية:\n${_formatContext(context)}'});
+      messages.add({
+        'role': 'system',
+        'content': 'البيانات الحالية:\n${_formatContext(context)}',
+      });
     }
 
     // History
@@ -72,15 +75,22 @@ class GroqService {
     }
 
     try {
-      final resp = await _httpClient.post(
-        Uri.parse('$_baseUrl/chat/completions'),
-        headers: _headers,
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 30));
+      final resp = await _httpClient
+          .post(
+            Uri.parse('$_baseUrl/chat/completions'),
+            headers: _headers,
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (resp.statusCode == 429) {
         await Future.delayed(const Duration(seconds: 2));
-        return chat(message, systemPrompt: systemPrompt, context: context, model: model);
+        return chat(
+          message,
+          systemPrompt: systemPrompt,
+          context: context,
+          model: model,
+        );
       }
 
       if (resp.statusCode != 200) {
@@ -177,9 +187,10 @@ class GroqService {
       'stream': true,
     });
 
-    final request = http.Request('POST', Uri.parse('$_baseUrl/chat/completions'))
-      ..headers.addAll(_headers)
-      ..body = body;
+    final request =
+        http.Request('POST', Uri.parse('$_baseUrl/chat/completions'))
+          ..headers.addAll(_headers)
+          ..body = body;
 
     try {
       final streamed = await _httpClient.send(request);
@@ -219,7 +230,8 @@ class GroqService {
   Future<Map<String, dynamic>> extractIntent(String message) async {
     return chatJson(
       message,
-      systemPrompt: '''Extract intent and entities from the Arabic message about EPI vaccination system.
+      systemPrompt:
+          '''Extract intent and entities from the Arabic message about EPI vaccination system.
 Return JSON with:
 - intent: one of [query_submissions, query_shortages, query_analytics, generate_report, query_governorates, query_users, ask_guide, analyze_trend, compare_data, query_health, general_question]
 - entities: {governorate?, district?, status?, severity?, date_range?, period?}
@@ -238,7 +250,8 @@ Return JSON with:
     required Map<String, dynamic> data,
   }) async {
     final prompts = {
-      'daily': 'أنشئ تقريراً يومياً مفصلاً: ملخص الإرساليات، النواقص الحرجة، 3 توصيات عملية.',
+      'daily':
+          'أنشئ تقريراً يومياً مفصلاً: ملخص الإرساليات، النواقص الحرجة، 3 توصيات عملية.',
       'weekly': 'حلل اتجاه الأسبوع: هل الإرساليات في تحسن؟ ما الأسباب؟ توصيات.',
       'governorate': 'رتب المحافظات بالأداء. الأفضل والأسوأ. نسب وسبب التفاوت.',
       'shortages': 'حلل النواقص: حسب الخطورة والموقع. أولويات المعالجة.',
@@ -264,12 +277,16 @@ Return JSON with:
       parts.add('إرسالات: كلي=${s['total']} اليوم=${s['today']}');
       if (s['byStatus'] != null) {
         final by = s['byStatus'] as Map;
-        parts.add('حالات: ${by.entries.map((e) => '${e.key}=${e.value}').join(' ')}');
+        parts.add(
+          'حالات: ${by.entries.map((e) => '${e.key}=${e.value}').join(' ')}',
+        );
       }
     }
     if (ctx['shortages'] != null) {
       final s = ctx['shortages'] as Map;
-      parts.add('نواقص: كلي=${s['total']} محلول=${s['resolved']} معلق=${s['pending']}');
+      parts.add(
+        'نواقص: كلي=${s['total']} محلول=${s['resolved']} معلق=${s['pending']}',
+      );
     }
     return parts.join('\n');
   }

@@ -17,7 +17,7 @@ class AIFunction {
     required this.queryType,
     required this.parameters,
     required this.buildQuery,
-});
+  });
 }
 
 class FunctionParameter {
@@ -31,7 +31,7 @@ class FunctionParameter {
     required this.type,
     required this.descriptionAr,
     this.required = false,
-});
+  });
 }
 
 /// Result from a function call
@@ -50,7 +50,7 @@ class FunctionCallResult {
     this.data,
     required this.success,
     this.error,
-});
+  });
 }
 
 /// Function Calling Engine
@@ -66,7 +66,8 @@ class FunctionCallingEngine {
   /// Analyze a user message and determine the best function to call
   Future<FunctionCallResult?> analyzeAndCall(
     String userMessage,
-    Future<dynamic> Function(String query, Map<String, params) executor,
+    Future<dynamic> Function(String query, Map<String, dynamic> params)
+    executor,
   ) async {
     // Step 1: Classify intent
     final intentResult = await _hf.getTopIntent(userMessage);
@@ -134,10 +135,27 @@ class FunctionCallingEngine {
 
   String? _extractGovernorate(String msg) {
     final governorates = [
-      'صنعاء', 'عدن', 'تعز', 'الحديدة', 'إب', 'ذمار', 'حجة',
-      'المحويت', 'الجوف', 'مأرب', 'البيضاء', 'أبين', 'شبوة',
-      'لحج', 'الضالع', 'حضرموت', 'المهرة', 'سقطرى', 'عمران',
-      'صعدة', 'ريمة'
+      'صنعاء',
+      'عدن',
+      'تعز',
+      'الحديدة',
+      'إب',
+      'ذمار',
+      'حجة',
+      'المحويت',
+      'الجوف',
+      'مأرب',
+      'البيضاء',
+      'أبين',
+      'شبوة',
+      'لحج',
+      'الضالع',
+      'حضرموت',
+      'المهرة',
+      'سقطرى',
+      'عمران',
+      'صعدة',
+      'ريمة',
     ];
     for (final gov in governorates) {
       if (msg.contains(gov)) return gov;
@@ -182,8 +200,12 @@ class FunctionCallingEngine {
 
   String? _extractStatus(String msg) {
     if (msg.contains('مرفوض') || msg.contains('رفض')) return 'rejected';
-    if (msg.contains('مقبول') || msg.contains('موافقة') || msg.contains('معتمد')) return 'approved';
-    if (msg.contains('قيد المراجعة') || msg.contains('مراجعة')) return 'reviewed';
+    if (msg.contains('مقبول') ||
+        msg.contains('موافقة') ||
+        msg.contains('معتمد'))
+      return 'approved';
+    if (msg.contains('قيد المراجعة') || msg.contains('مراجعة'))
+      return 'reviewed';
     if (msg.contains('مرسل') || msg.contains('إرسال')) return 'submitted';
     if (msg.contains('مسودة')) return 'draft';
     return null;
@@ -210,15 +232,27 @@ class FunctionCallingEngine {
         descriptionEn: 'Count form submissions',
         queryType: 'submissions',
         parameters: [
-          FunctionParameter(name: 'governorate', type: 'string', descriptionAr: 'اسم المحافظة'),
-          FunctionParameter(name: 'status', type: 'string', descriptionAr: 'حالة الإرسالية'),
-          FunctionParameter(name: 'date_range', type: 'map', descriptionAr: 'الفترة الزمنية'),
+          FunctionParameter(
+            name: 'governorate',
+            type: 'string',
+            descriptionAr: 'اسم المحافظة',
+          ),
+          FunctionParameter(
+            name: 'status',
+            type: 'string',
+            descriptionAr: 'حالة الإرسالية',
+          ),
+          FunctionParameter(
+            name: 'date_range',
+            type: 'map',
+            descriptionAr: 'الفترة الزمنية',
+          ),
         ],
         buildQuery: (p) {
           final conditions = <String>['deleted_at IS NULL'];
           if (p['governorate'] != null) {
             conditions.add(
-              "governorate_id IN (SELECT id FROM governorates WHERE name_ar = '\${p['governorate']}')"
+              "governorate_id IN (SELECT id FROM governorates WHERE name_ar = '\${p['governorate']}')",
             );
           }
           if (p['status'] != null) {
@@ -239,7 +273,11 @@ class FunctionCallingEngine {
         descriptionEn: 'Submissions grouped by governorate',
         queryType: 'submissions',
         parameters: [
-          FunctionParameter(name: 'date_range', type: 'map', descriptionAr: 'الفترة الزمنية'),
+          FunctionParameter(
+            name: 'date_range',
+            type: 'map',
+            descriptionAr: 'الفترة الزمنية',
+          ),
         ],
         buildQuery: (_) => '''
           SELECT g.name_ar, COUNT(fs.id) as total,
@@ -260,8 +298,16 @@ class FunctionCallingEngine {
         descriptionEn: 'Count supply shortages',
         queryType: 'shortages',
         parameters: [
-          FunctionParameter(name: 'severity', type: 'string', descriptionAr: 'مستوى الخطورة'),
-          FunctionParameter(name: 'governorate', type: 'string', descriptionAr: 'المحافظة'),
+          FunctionParameter(
+            name: 'severity',
+            type: 'string',
+            descriptionAr: 'مستوى الخطورة',
+          ),
+          FunctionParameter(
+            name: 'governorate',
+            type: 'string',
+            descriptionAr: 'المحافظة',
+          ),
         ],
         buildQuery: (p) {
           final conditions = <String>['deleted_at IS NULL'];
@@ -270,7 +316,7 @@ class FunctionCallingEngine {
           }
           if (p['governorate'] != null) {
             conditions.add(
-              "governorate_id IN (SELECT id FROM governorates WHERE name_ar = '\${p['governorate']}')"
+              "governorate_id IN (SELECT id FROM governorates WHERE name_ar = '\${p['governorate']}')",
             );
           }
           final where = conditions.join(' AND ');

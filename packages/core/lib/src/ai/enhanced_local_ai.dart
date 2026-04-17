@@ -26,15 +26,27 @@ class EnhancedLocalAI {
   ) {
     // Pattern matching with confidence scores
     final patterns = <String, double Function()>{
-      'submissions': () => _matchPattern(query, ['إرساليات', 'إرسال', 'استمارة', 'كم عدد', 'كم إرسالية']),
-      'shortages': () => _matchPattern(query, ['نقص', 'نواقص', 'احتياج', 'مفقود']),
-      'trend': () => _matchPattern(query, ['اتجاه', 'تطور', 'مقارنة', 'تحسن', 'تراجع']),
-      'performance': () => _matchPattern(query, ['أداء', 'محافظ', 'أفضل', 'أسوأ', 'ترتيب']),
+      'submissions': () => _matchPattern(query, [
+        'إرساليات',
+        'إرسال',
+        'استمارة',
+        'كم عدد',
+        'كم إرسالية',
+      ]),
+      'shortages': () =>
+          _matchPattern(query, ['نقص', 'نواقص', 'احتياج', 'مفقود']),
+      'trend': () =>
+          _matchPattern(query, ['اتجاه', 'تطور', 'مقارنة', 'تحسن', 'تراجع']),
+      'performance': () =>
+          _matchPattern(query, ['أداء', 'محافظ', 'أفضل', 'أسوأ', 'ترتيب']),
       'quality': () => _matchPattern(query, ['جودة', 'رفض', 'خطأ', 'اكتمال']),
-      'coverage': () => _matchPattern(query, ['تغطية', 'تطعيم', 'لقاح', 'وصول', 'انسحاب']),
-      'recommend': () => _matchPattern(query, ['توصي', 'نصيحة', 'اقتراح', 'ماذا أفعل']),
+      'coverage': () =>
+          _matchPattern(query, ['تغطية', 'تطعيم', 'لقاح', 'وصول', 'انسحاب']),
+      'recommend': () =>
+          _matchPattern(query, ['توصي', 'نصيحة', 'اقتراح', 'ماذا أفعل']),
       'summary': () => _matchPattern(query, ['ملخص', 'نظرة عامة', 'ماذا يحدث']),
-      'users': () => _matchPattern(query, ['مستخدم', 'فريق', 'مشرف', 'مدخل بيانات']),
+      'users': () =>
+          _matchPattern(query, ['مستخدم', 'فريق', 'مشرف', 'مدخل بيانات']),
     };
 
     // Find best match
@@ -101,7 +113,9 @@ class EnhancedLocalAI {
     if (rejected > 0 && total > 0) {
       final rejectRate = (rejected / total * 100);
       if (rejectRate > 15) {
-        buffer.writeln('\n⚠️ نسبة الرفض مرتفعة (${rejectRate.toStringAsFixed(1)}%) — يحتاج تحسين جودة الإدخال');
+        buffer.writeln(
+          '\n⚠️ نسبة الرفض مرتفعة (${rejectRate.toStringAsFixed(1)}%) — يحتاج تحسين جودة الإدخال',
+        );
       }
     }
 
@@ -174,7 +188,9 @@ class EnhancedLocalAI {
     final predictions = LocalAnalyticsEngine.predictNext(counts, 3);
     buffer.writeln('\n🔮 التوقعات (3 أيام):');
     for (int i = 0; i < predictions.length; i++) {
-      final predicted = predictions[i].clamp(0, double.infinity).toStringAsFixed(0);
+      final predicted = predictions[i]
+          .clamp(0, double.infinity)
+          .toStringAsFixed(0);
       buffer.writeln('  اليوم ${i + 1}: ~$predicted إرسالية');
     }
 
@@ -278,7 +294,8 @@ class EnhancedLocalAI {
     }
 
     final shorts = d['shortages'] as Map<String, dynamic>? ?? {};
-    final critical = (shorts['bySeverity'] as Map<String, dynamic>?)?['critical'] ?? 0;
+    final critical =
+        (shorts['bySeverity'] as Map<String, dynamic>?)?['critical'] ?? 0;
     if (critical > 0) {
       buffer.writeln('\n• عالج النواقص الحرجة ($critical) أولاً');
     }
@@ -311,7 +328,9 @@ class EnhancedLocalAI {
     buffer.writeln('\n🏆 الأكثر نشاطاً:');
     for (int i = 0; i < topUsers.length; i++) {
       final u = topUsers[i];
-      buffer.writeln('  ${i + 1}. ${u['full_name']}: ${u['submissions_count'] ?? 0} إرسالية');
+      buffer.writeln(
+        '  ${i + 1}. ${u['full_name']}: ${u['submissions_count'] ?? 0} إرسالية',
+      );
     }
 
     return buffer.toString();

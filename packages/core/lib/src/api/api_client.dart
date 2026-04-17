@@ -74,8 +74,10 @@ class ApiClient {
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'select($table)');
       if (_isNetworkError(e)) throw const NetworkException();
-      throw ApiException('Unexpected error in select: ${e.runtimeType}',
-          code: 'unknown');
+      throw ApiException(
+        'Unexpected error in select: ${e.runtimeType}',
+        code: 'unknown',
+      );
     }
   }
 
@@ -103,8 +105,10 @@ class ApiClient {
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'selectOne($table)');
       if (_isNetworkError(e)) throw const NetworkException();
-      throw ApiException('Unexpected error in selectOne: ${e.runtimeType}',
-          code: 'unknown');
+      throw ApiException(
+        'Unexpected error in selectOne: ${e.runtimeType}',
+        code: 'unknown',
+      );
     }
   }
 
@@ -114,16 +118,21 @@ class ApiClient {
     String select = '*',
   }) async {
     try {
-      final result =
-          await _safeClient.from(table).insert(data).select(select).single();
+      final result = await _safeClient
+          .from(table)
+          .insert(data)
+          .select(select)
+          .single();
       return result;
     } on PostgrestException catch (e) {
       throw _mapPostgrestException(e);
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'insert($table)');
       if (_isNetworkError(e)) throw const NetworkException();
-      throw ApiException('Unexpected error in insert: ${e.runtimeType}',
-          code: 'unknown');
+      throw ApiException(
+        'Unexpected error in insert: ${e.runtimeType}',
+        code: 'unknown',
+      );
     }
   }
 
@@ -145,8 +154,10 @@ class ApiClient {
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'update($table)');
       if (_isNetworkError(e)) throw const NetworkException();
-      throw ApiException('Unexpected error in update: ${e.runtimeType}',
-          code: 'unknown');
+      throw ApiException(
+        'Unexpected error in update: ${e.runtimeType}',
+        code: 'unknown',
+      );
     }
   }
 
@@ -165,8 +176,10 @@ class ApiClient {
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'delete($table)');
       if (_isNetworkError(e)) throw const NetworkException();
-      throw ApiException('Unexpected error in delete: ${e.runtimeType}',
-          code: 'unknown');
+      throw ApiException(
+        'Unexpected error in delete: ${e.runtimeType}',
+        code: 'unknown',
+      );
     }
   }
 
@@ -174,8 +187,9 @@ class ApiClient {
     String table, {
     required Map<String, dynamic> filters,
   }) async {
-    await update(table, {'deleted_at': DateTime.now().toIso8601String()},
-        filters: filters);
+    await update(table, {
+      'deleted_at': DateTime.now().toIso8601String(),
+    }, filters: filters);
   }
 
   // ===== Edge Function calls =====
@@ -190,14 +204,12 @@ class ApiClient {
 
       // Add timeout to prevent hanging (30 seconds)
       final response = await _safeClient.functions
-          .invoke(
-            functionName,
-            body: body,
-          )
+          .invoke(functionName, body: body)
           .timeout(
             const Duration(seconds: 30),
             onTimeout: () => throw TimeoutException(
-                'Function $functionName timed out after 30s'),
+              'Function $functionName timed out after 30s',
+            ),
           );
       final responseData = response.data;
       if (responseData is List) {
@@ -206,21 +218,20 @@ class ApiClient {
       return Map<String, dynamic>.from(responseData);
     } on TimeoutException {
       throw NetworkException(
-          'Request timed out. Please check your internet connection and try again.');
+        'Request timed out. Please check your internet connection and try again.',
+      );
     } on FunctionException catch (e) {
       // If 401, try refreshing the token ONCE and retry
       if (e.status == 401) {
         try {
           await _forceRefreshSession();
           final response = await _safeClient.functions
-              .invoke(
-                functionName,
-                body: body,
-              )
+              .invoke(functionName, body: body)
               .timeout(
                 const Duration(seconds: 30),
                 onTimeout: () => throw TimeoutException(
-                    'Function $functionName timed out after 30s'),
+                  'Function $functionName timed out after 30s',
+                ),
               );
           final retryData = response.data;
           if (retryData is List) {
@@ -229,7 +240,8 @@ class ApiClient {
           return Map<String, dynamic>.from(retryData);
         } on TimeoutException {
           throw NetworkException(
-              'Request timed out after retry. Please try again.');
+            'Request timed out after retry. Please try again.',
+          );
         } on FunctionException catch (retryError) {
           throw _mapFunctionException(retryError);
         } catch (retryError) {
@@ -241,8 +253,9 @@ class ApiClient {
       _reportUnexpectedError(e, stack, context: 'callFunction($functionName)');
       if (_isNetworkError(e)) throw const NetworkException();
       throw ApiException(
-          'Unexpected error calling $functionName: ${e.runtimeType}',
-          code: 'unknown');
+        'Unexpected error calling $functionName: ${e.runtimeType}',
+        code: 'unknown',
+      );
     }
   }
 
@@ -253,19 +266,21 @@ class ApiClient {
       final session = _safeClient.auth.currentSession;
       if (session == null) return;
 
-      final expiresAt =
-          DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000);
+      final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+        session.expiresAt! * 1000,
+      );
       final now = DateTime.now();
 
       // Refresh if token expires within 5 minutes
       if (expiresAt.difference(now).inMinutes < 5) {
         try {
           await _safeClient.auth.refreshSession().timeout(
-                const Duration(seconds: 10),
-              );
+            const Duration(seconds: 10),
+          );
         } on TimeoutException {
           debugPrint(
-              '[ApiClient] Session refresh timed out, proceeding with current token');
+            '[ApiClient] Session refresh timed out, proceeding with current token',
+          );
         }
       }
     } catch (_) {
@@ -281,10 +296,9 @@ class ApiClient {
 
     try {
       final result = await _safeClient.auth.refreshSession().timeout(
-            const Duration(seconds: 10),
-            onTimeout: () =>
-                throw TimeoutException('Session refresh timed out'),
-          );
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Session refresh timed out'),
+      );
       if (result.session == null) throw const UnauthorizedException();
     } on TimeoutException {
       throw const UnauthorizedException();
@@ -302,7 +316,9 @@ class ApiClient {
     String contentType = 'image/jpeg',
   }) async {
     try {
-      await _safeClient.storage.from(bucket).uploadBinary(
+      await _safeClient.storage
+          .from(bucket)
+          .uploadBinary(
             path,
             Uint8List.fromList(bytes),
             fileOptions: FileOptions(contentType: contentType),
@@ -344,8 +360,6 @@ class ApiClient {
     return channelObj.subscribe();
   }
 
-
-
   /// Stream Edge Function response token by token (SSE)
   Stream<String> callFunctionStream(
     String functionName,
@@ -371,8 +385,7 @@ class ApiClient {
 
       await for (final chunk in streamed.stream.transform(decoder)) {
         buffer += chunk;
-        final lines = buffer.split('
-');
+        final lines = buffer.split('\n');
         buffer = lines.removeLast();
 
         for (final line in lines) {
@@ -394,7 +407,11 @@ class ApiClient {
       }
       httpClient.close();
     } catch (e, stack) {
-      _reportUnexpectedError(e, stack, context: 'callFunctionStream($functionName)');
+      _reportUnexpectedError(
+        e,
+        stack,
+        context: 'callFunctionStream($functionName)',
+      );
     }
   }
 
@@ -418,19 +435,26 @@ class ApiClient {
       case '23505':
         return ConflictException('Duplicate entry: ${e.message}');
       case '23503':
-        return ValidationException('Related record not found',
-            fieldErrors: {'reference': e.message});
+        return ValidationException(
+          'Related record not found',
+          fieldErrors: {'reference': e.message},
+        );
       case '42501':
         return PermissionException(e.message);
       case '22P02':
-        return ValidationException('Invalid data format',
-            fieldErrors: {'format': e.message});
+        return ValidationException(
+          'Invalid data format',
+          fieldErrors: {'format': e.message},
+        );
       default:
         if (e.code != null && e.code!.startsWith('5')) {
           return ServerException(e.message);
         }
-        return ApiException(e.message,
-            code: e.code, details: {'postgres': true});
+        return ApiException(
+          e.message,
+          code: e.code,
+          details: {'postgres': true},
+        );
     }
   }
 
@@ -444,13 +468,18 @@ class ApiClient {
     if (status >= 500) {
       return ServerException('Edge function error: ${e.details}');
     }
-    return ApiException('Function error: ${e.details}',
-        code: 'function_$status');
+    return ApiException(
+      'Function error: ${e.details}',
+      code: 'function_$status',
+    );
   }
 
   /// Report unexpected errors via Sentry (if configured) and debug print.
-  void _reportUnexpectedError(dynamic error, StackTrace stack,
-      {String? context}) {
+  void _reportUnexpectedError(
+    dynamic error,
+    StackTrace stack, {
+    String? context,
+  }) {
     SentryConfig.captureError(error, stack, context: context);
     assert(() {
       // ignore: avoid_print

@@ -42,12 +42,12 @@ class UnifiedAIProvider {
     RagPipeline? rag,
     FunctionCallingEngine? fnCall,
     OfflineManager? offline,
-  })  : _groq = groq,
-        _hf = hf,
-        _rag = rag,
-        _fnCall = fnCall,
-        _local = EnhancedLocalAI(),
-        _offline = offline ?? OfflineManager();
+  }) : _groq = groq,
+       _hf = hf,
+       _rag = rag,
+       _fnCall = fnCall,
+       _local = EnhancedLocalAI(),
+       _offline = offline ?? OfflineManager();
 
   bool get isOnline => _offline.isOnline;
   bool get hasGroq => _groq?.isAvailable ?? false;
@@ -83,7 +83,13 @@ class UnifiedAIProvider {
 
     // ONLINE: Full pipeline
     try {
-      return await _handleOnline(message, data: data, dbExecutor: dbExecutor, mode: mode, template: template);
+      return await _handleOnline(
+        message,
+        data: data,
+        dbExecutor: dbExecutor,
+        mode: mode,
+        template: template,
+      );
     } catch (e) {
       // Fallback to local on any error
       return _handleOffline(message, data);
@@ -107,9 +113,7 @@ class UnifiedAIProvider {
       );
     }
     // No streaming available, return single response as stream
-    return Stream.fromFuture(
-      query(message, data: data).then((r) => r.text),
-    );
+    return Stream.fromFuture(query(message, data: data).then((r) => r.text));
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -129,7 +133,10 @@ class UnifiedAIProvider {
   }
 
   /// Generate report
-  Future<String> generateReport(String templateType, Map<String, dynamic> data) async {
+  Future<String> generateReport(
+    String templateType,
+    Map<String, dynamic> data,
+  ) async {
     if (hasGroq) {
       return _groq!.generateReport(templateType: templateType, data: data);
     }
@@ -146,7 +153,11 @@ class UnifiedAIProvider {
         maxTokens: 200,
         clearHistory: true,
       );
-      return resp.split('\n').where((s) => s.trim().length > 5).take(5).toList();
+      return resp
+          .split('\n')
+          .where((s) => s.trim().length > 5)
+          .take(5)
+          .toList();
     }
     return _defaultSuggestions();
   }
@@ -199,7 +210,9 @@ class UnifiedAIProvider {
         message,
         systemPrompt: systemPrompt,
         context: data,
-        model: mode == 'suggestions' ? 'llama-3.1-8b-instant' : 'llama-3.3-70b-versatile',
+        model: mode == 'suggestions'
+            ? 'llama-3.1-8b-instant'
+            : 'llama-3.3-70b-versatile',
         maxTokens: template != null ? 1000 : 800,
       );
 
@@ -212,7 +225,9 @@ class UnifiedAIProvider {
 
       // Cache
       _cache['${message.hashCode}_${data?.hashCode ?? 0}'] = _CacheEntry(
-        resp, AIProvider.groq, DateTime.now(),
+        resp,
+        AIProvider.groq,
+        DateTime.now(),
       );
 
       return response;
@@ -244,7 +259,8 @@ class UnifiedAIProvider {
   }
 
   String _buildSystemPrompt({String ragContext = ''}) {
-    var prompt = '''أنت "مساعد EPI" — متخصص في برنامج التطعيم الموسع في اليمن ومنصة مشرف EPI.
+    var prompt =
+        '''أنت "مساعد EPI" — متخصص في برنامج التطعيم الموسع في اليمن ومنصة مشرف EPI.
 
 التطعيمات: BCG, OPV/IPV, Penta, PCV, Rotavirus, MR, HepB.
 المؤشرات: Penta3=وصول, Dropout=استمرارية, الحصبة=حماية جماعية.
@@ -261,8 +277,11 @@ Health Score: 80+=ممتاز, 50-79=متوسط, <50=ضعيف.
   }
 
   bool _isDataQuery(String intent) => [
-    'query_submissions', 'query_shortages', 'query_analytics',
-    'query_governorates', 'query_users',
+    'query_submissions',
+    'query_shortages',
+    'query_analytics',
+    'query_governorates',
+    'query_users',
   ].contains(intent);
 
   String? _intentToQueryType(String intent) => {

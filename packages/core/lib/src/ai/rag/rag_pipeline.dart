@@ -19,11 +19,11 @@ class KnowledgeDocument {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'content': content,
-        'category': category,
-        'metadata': metadata,
-      };
+    'id': id,
+    'content': content,
+    'category': category,
+    'metadata': metadata,
+  };
 
   factory KnowledgeDocument.fromJson(Map<String, dynamic> json) =>
       KnowledgeDocument(
@@ -100,8 +100,10 @@ class RagPipeline {
     buffer.writeln('== معلومات ذات صلة من قاعدة المعرفة ==');
 
     for (final result in results) {
-      buffer.writeln('\n[${result.document.category}] '
-          '(صلة: ${(result.score * 100).toStringAsFixed(0)}%)');
+      buffer.writeln(
+        '\n[${result.document.category}] '
+        '(صلة: ${(result.score * 100).toStringAsFixed(0)}%)',
+      );
       buffer.writeln(result.document.content);
     }
 
@@ -137,32 +139,38 @@ class RagPipeline {
 
     // Convert submissions to searchable documents
     for (final sub in submissions) {
-      newDocs.add(KnowledgeDocument(
-        id: 'sub_${sub['id']}',
-        content: _submissionToText(sub),
-        category: 'submission',
-        metadata: sub,
-      ));
+      newDocs.add(
+        KnowledgeDocument(
+          id: 'sub_${sub['id']}',
+          content: _submissionToText(sub),
+          category: 'submission',
+          metadata: sub,
+        ),
+      );
     }
 
     // Convert shortages
     for (final short in shortages) {
-      newDocs.add(KnowledgeDocument(
-        id: 'short_${short['id']}',
-        content: _shortageToText(short),
-        category: 'shortage',
-        metadata: short,
-      ));
+      newDocs.add(
+        KnowledgeDocument(
+          id: 'short_${short['id']}',
+          content: _shortageToText(short),
+          category: 'shortage',
+          metadata: short,
+        ),
+      );
     }
 
     // Convert governorates
     for (final gov in governorates) {
-      newDocs.add(KnowledgeDocument(
-        id: 'gov_${gov['id']}',
-        content: _governorateToText(gov),
-        category: 'governorate',
-        metadata: gov,
-      ));
+      newDocs.add(
+        KnowledgeDocument(
+          id: 'gov_${gov['id']}',
+          content: _governorateToText(gov),
+          category: 'governorate',
+          metadata: gov,
+        ),
+      );
     }
 
     if (newDocs.isNotEmpty) {
@@ -204,9 +212,10 @@ class RagPipeline {
 
   void _addEpiKnowledge() {
     // Vaccination schedule
-    _documents.add(KnowledgeDocument(
-      id: 'epi_schedule',
-      content: '''
+    _documents.add(
+      KnowledgeDocument(
+        id: 'epi_schedule',
+        content: '''
 جدول التطعيم اليمن:
 - الولادة: BCG + OPV0 + HepB ولادي
 - 6 أسابيع: Penta1 + OPV1 + PCV1 + Rota1
@@ -216,13 +225,15 @@ class RagPipeline {
 - 18 شهر: MR الجرعة الثانية
 - 5 سنوات: DPT booster
 ''',
-      category: 'vaccination',
-    ));
+        category: 'vaccination',
+      ),
+    );
 
     // EPI indicators
-    _documents.add(KnowledgeDocument(
-      id: 'epi_indicators',
-      content: '''
+    _documents.add(
+      KnowledgeDocument(
+        id: 'epi_indicators',
+        content: '''
 مؤشرات EPI الرئيسية:
 - Penta3 coverage (تغطية اللقاح الثلاثي): مؤشر الوصول. الهدف >90%
 - Dropout rate (نسبة الانسحاب): Penta1 إلى Penta3. المقبول <10%
@@ -231,13 +242,15 @@ class RagPipeline {
 - Health Score: 80+=ممتاز, 50-79=متوسط, <50=ضعيف
 - معدل الرفض: <5%=جيد, 5-15%=يحتاج تدريب, >15%=مشكلة خطيرة
 ''',
-      category: 'indicators',
-    ));
+        category: 'indicators',
+      ),
+    );
 
     // Platform features
-    _documents.add(KnowledgeDocument(
-      id: 'platform_features',
-      content: '''
+    _documents.add(
+      KnowledgeDocument(
+        id: 'platform_features',
+        content: '''
 ميزات منصة مشرف EPI:
 - نماذج ديناميكية: 10 أنواع حقول (نص، رقم، اختيار، GPS، صورة)
 - عمل بدون إنترنت: حفظ محلي + مزامنة تلقائية
@@ -247,13 +260,15 @@ class RagPipeline {
 - 5 أدوار: مدير النظام > مركزي > محافظة > مديرية > إدخال بيانات
 - نظام مزامنة: Priority Queue + Exponential Backoff + Smart Merge
 ''',
-      category: 'platform',
-    ));
+        category: 'platform',
+      ),
+    );
 
     // Challenges
-    _documents.add(KnowledgeDocument(
-      id: 'epi_challenges',
-      content: '''
+    _documents.add(
+      KnowledgeDocument(
+        id: 'epi_challenges',
+        content: '''
 تحديات التطعيم في اليمن:
 - 27% من الأطفال غير مطعمين بالكامل
 - ظهور حالات شلل الأطفال 2020-2021
@@ -263,18 +278,21 @@ class RagPipeline {
 - نقص الكوادر الصحية المدربة
 - صعوبة الوصول للمناطق النائية
 ''',
-      category: 'challenges',
-    ));
+        category: 'challenges',
+      ),
+    );
 
     // Governorate info
-    _documents.add(KnowledgeDocument(
-      id: 'yemen_governorates',
-      content: '''
+    _documents.add(
+      KnowledgeDocument(
+        id: 'yemen_governorates',
+        content: '''
 محافظات اليمن (22 محافظة):
 صنعاء، عدن، تعز، الحديدة، إب، ذمار، حجة، المحويت، الجوف، مأرب، البيضاء، أبين، شبوة، لحج، الضالع، حضرموت، المهرة، سقطرى، عمران، صعدة، ريمة، אמנ
 ''',
-      category: 'governorate',
-    ));
+        category: 'governorate',
+      ),
+    );
   }
 
   String _submissionToText(Map<String, dynamic> sub) {

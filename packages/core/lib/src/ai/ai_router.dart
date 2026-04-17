@@ -26,11 +26,11 @@ class AIRouter {
     RagPipeline? rag,
     FunctionCallingEngine? fnCall,
     OfflineManager? offline,
-  })  : _hf = hf,
-        _rag = rag,
-        _fnCall = fnCall,
-        _localAI = EnhancedLocalAI(),
-        _offline = offline ?? OfflineManager();
+  }) : _hf = hf,
+       _rag = rag,
+       _fnCall = fnCall,
+       _localAI = EnhancedLocalAI(),
+       _offline = offline ?? OfflineManager();
 
   /// Initialize the AI system
   Future<void> init() async {
@@ -49,7 +49,7 @@ class AIRouter {
     String message, {
     Map<String, dynamic>? data,
     Future<dynamic> Function(String query, Map<String, dynamic> params)?
-        dbExecutor,
+    dbExecutor,
   }) async {
     final isOnline = _hf != null;
     final hasRAG = _rag?.isReady ?? false;
@@ -100,7 +100,7 @@ class AIRouter {
     String message, {
     Map<String, dynamic>? data,
     Future<dynamic> Function(String query, Map<String, dynamic> params)?
-        dbExecutor,
+    dbExecutor,
     required bool hasRAG,
     required bool hasFnCall,
   }) async {
@@ -229,7 +229,10 @@ class AIRouter {
     return parts.join('\n');
   }
 
-  String _formatFunctionResult(FunctionCallResult result, String originalQuery) {
+  String _formatFunctionResult(
+    FunctionCallResult result,
+    String originalQuery,
+  ) {
     final data = result.data;
 
     if (data is List && data.isNotEmpty) {
@@ -294,13 +297,13 @@ class AIRouter {
 
   /// Get system status
   Map<String, dynamic> get systemStatus => {
-        'online': _hf != null,
-        'rag_ready': _rag?.isReady ?? false,
-        'rag_documents': _rag?.documentCount ?? 0,
-        'function_calls': _fnCall?.availableFunctions.length ?? 0,
-        'memory_size': _memory.length,
-        'mode': currentMode,
-      };
+    'online': _hf != null,
+    'rag_ready': _rag?.isReady ?? false,
+    'rag_documents': _rag?.documentCount ?? 0,
+    'function_calls': _fnCall?.availableFunctions.length ?? 0,
+    'memory_size': _memory.length,
+    'mode': currentMode,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -308,11 +311,11 @@ class AIRouter {
 // ═══════════════════════════════════════════════════════════
 
 enum AIResponseSource {
-  local,         // Pure offline AI
-  rag,           // RAG knowledge base
-  functionCall,  // Database query
-  hybrid,        // Online + local
-  huggingface,   // Direct HF model
+  local, // Pure offline AI
+  rag, // RAG knowledge base
+  functionCall, // Database query
+  hybrid, // Online + local
+  huggingface, // Direct HF model
 }
 
 class AIResponse {

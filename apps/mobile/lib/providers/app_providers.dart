@@ -6,8 +6,9 @@ import 'package:epi_core/epi_core.dart';
 // ─── Core Services ────────────────────────────────────────────────────────────
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
-final encryptionServiceProvider =
-    Provider<EncryptionService>((ref) => EncryptionService());
+final encryptionServiceProvider = Provider<EncryptionService>(
+  (ref) => EncryptionService(),
+);
 
 final databaseServiceProvider = Provider<DatabaseService>(
   (ref) => DatabaseService(ref.read(apiClientProvider)),
@@ -106,15 +107,17 @@ final manualSyncProvider = Provider<Future<SyncCycleResult> Function()>((ref) {
 
 /// ═══ Force-refresh helper: clears specific cache key then invalidates provider ═══
 /// Use for pull-to-refresh to ensure fresh data from server.
-final forceRefreshProvider =
-    Provider<Future<void> Function(String cacheKey)>((ref) {
+final forceRefreshProvider = Provider<Future<void> Function(String cacheKey)>((
+  ref,
+) {
   return (String cacheKey) async {
     try {
       final cache = await ref.read(offlineDataCacheProvider.future);
       await cache.forceInvalidate(cacheKey);
     } catch (e) {
       debugPrint(
-          '[forceRefreshProvider] Error clearing cache for $cacheKey: $e');
+        '[forceRefreshProvider] Error clearing cache for $cacheKey: $e',
+      );
     }
   };
 });
@@ -129,7 +132,9 @@ final syncPendingCountProvider = StreamProvider<int>((ref) async* {
   // PBKDF2 with 100k iterations is expensive; 120s is responsive enough for badges
   // and avoids UI stutter caused by frequent decryption
   yield* Stream.periodic(
-      const Duration(seconds: 120), (_) => offline.pendingCount);
+    const Duration(seconds: 120),
+    (_) => offline.pendingCount,
+  );
 });
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -180,7 +185,14 @@ class SubmissionsFilter {
 
   @override
   int get hashCode => Object.hash(
-      status, formId, governorateId, districtId, campaignType, limit, offset);
+    status,
+    formId,
+    governorateId,
+    districtId,
+    campaignType,
+    limit,
+    offset,
+  );
 
   String get cacheKey {
     final parts = <String>['submissions'];
@@ -204,8 +216,9 @@ class SubmissionsFilter {
 //   4. If offline: return cached data (even stale)
 //   5. If offline + no cache: show empty with retry option
 
-final governoratesProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final governoratesProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
   return cache.getList(
     'governorates',
@@ -215,35 +228,38 @@ final governoratesProvider =
 });
 
 final districtsProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String?>(
-  (ref, governorateId) async {
-    final cache = await ref.watch(offlineDataCacheProvider.future);
-    final cacheKey =
-        governorateId != null ? 'districts_$governorateId' : 'districts_all';
-    return cache.getList(
-      cacheKey,
-      () => ref
-          .read(databaseServiceProvider)
-          .getDistricts(governorateId: governorateId),
-      maxAge: const Duration(hours: 24),
-    );
-  },
-);
+    FutureProvider.family<List<Map<String, dynamic>>, String?>((
+      ref,
+      governorateId,
+    ) async {
+      final cache = await ref.watch(offlineDataCacheProvider.future);
+      final cacheKey = governorateId != null
+          ? 'districts_$governorateId'
+          : 'districts_all';
+      return cache.getList(
+        cacheKey,
+        () => ref
+            .read(databaseServiceProvider)
+            .getDistricts(governorateId: governorateId),
+        maxAge: const Duration(hours: 24),
+      );
+    });
 
 final healthFacilitiesProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String?>(
-  (ref, districtId) async {
-    if (districtId == null) return [];
-    final cache = await ref.watch(offlineDataCacheProvider.future);
-    return cache.getList(
-      'facilities_$districtId',
-      () => ref
-          .read(databaseServiceProvider)
-          .getHealthFacilities(districtId: districtId),
-      maxAge: const Duration(hours: 24),
-    );
-  },
-);
+    FutureProvider.family<List<Map<String, dynamic>>, String?>((
+      ref,
+      districtId,
+    ) async {
+      if (districtId == null) return [];
+      final cache = await ref.watch(offlineDataCacheProvider.future);
+      return cache.getList(
+        'facilities_$districtId',
+        () => ref
+            .read(databaseServiceProvider)
+            .getHealthFacilities(districtId: districtId),
+        maxAge: const Duration(hours: 24),
+      );
+    });
 
 // ─── Campaign / Activity Selection ──────────────────────────────────────────
 
@@ -259,17 +275,14 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
   Future<void> _load() async {
     try {
       final cache = await _ref.read(offlineDataCacheProvider.future);
-      final cached = await cache.getMap(
-        'active_campaign',
-        () async {
-          final db = _ref.read(databaseServiceProvider);
-          final result = await db.getActiveCampaign();
-          return {'campaign': result};
-        },
-        maxAge: const Duration(days: 30),
-      );
+      final cached = await cache.getMap('active_campaign', () async {
+        final db = _ref.read(databaseServiceProvider);
+        final result = await db.getActiveCampaign();
+        return {'campaign': result};
+      }, maxAge: const Duration(days: 30));
       state = CampaignType.fromString(
-          cached['campaign'] as String? ?? 'polio_campaign');
+        cached['campaign'] as String? ?? 'polio_campaign',
+      );
     } catch (_) {
       // Default to polio campaign if loading fails
     }
@@ -318,25 +331,29 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
 });
 
 final submissionsProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, SubmissionsFilter>(
-  (ref, filter) async {
-    final cache = await ref.watch(offlineDataCacheProvider.future);
-    return cache.getList(
-      filter.cacheKey,
-      () => ref.read(databaseServiceProvider).getSubmissions(
-            formId: filter.formId,
-            status: filter.status,
-            governorateId: filter.governorateId,
-            districtId: filter.districtId,
-            campaignType: filter.campaignType,
-            limit: filter.limit,
-            offset: filter.offset,
-          ),
-      maxAge:
-          const Duration(hours: 2), // Submissions cached 2h for offline access
-    );
-  },
-);
+    FutureProvider.family<List<Map<String, dynamic>>, SubmissionsFilter>((
+      ref,
+      filter,
+    ) async {
+      final cache = await ref.watch(offlineDataCacheProvider.future);
+      return cache.getList(
+        filter.cacheKey,
+        () => ref
+            .read(databaseServiceProvider)
+            .getSubmissions(
+              formId: filter.formId,
+              status: filter.status,
+              governorateId: filter.governorateId,
+              districtId: filter.districtId,
+              campaignType: filter.campaignType,
+              limit: filter.limit,
+              offset: filter.offset,
+            ),
+        maxAge: const Duration(
+          hours: 2,
+        ), // Submissions cached 2h for offline access
+      );
+    });
 
 /// Analytics filter for passing governorate/district/date/form filters to the provider.
 class AnalyticsFilter {
@@ -370,7 +387,13 @@ class AnalyticsFilter {
 
   @override
   int get hashCode => Object.hash(
-      governorateId, districtId, formId, campaignType, startDate, endDate);
+    governorateId,
+    districtId,
+    formId,
+    campaignType,
+    startDate,
+    endDate,
+  );
 
   String get cacheKey {
     final parts = ['dashboard_analytics'];
@@ -385,26 +408,30 @@ class AnalyticsFilter {
 }
 
 final dashboardAnalyticsProvider =
-    FutureProvider.family<Map<String, dynamic>, AnalyticsFilter>(
-  (ref, filter) async {
-    final cache = await ref.watch(offlineDataCacheProvider.future);
-    return cache.getMap(
-      filter.cacheKey,
-      () => ref.read(analyticsServiceProvider).getAnalytics(
-            governorateId: filter.governorateId,
-            districtId: filter.districtId,
-            formId: filter.formId,
-            campaignType: filter.campaignType,
-            startDate: filter.startDate,
-            endDate: filter.endDate,
-          ),
-      maxAge: const Duration(hours: 2), // Analytics cached 2h for offline
-    );
-  },
-);
+    FutureProvider.family<Map<String, dynamic>, AnalyticsFilter>((
+      ref,
+      filter,
+    ) async {
+      final cache = await ref.watch(offlineDataCacheProvider.future);
+      return cache.getMap(
+        filter.cacheKey,
+        () => ref
+            .read(analyticsServiceProvider)
+            .getAnalytics(
+              governorateId: filter.governorateId,
+              districtId: filter.districtId,
+              formId: filter.formId,
+              campaignType: filter.campaignType,
+              startDate: filter.startDate,
+              endDate: filter.endDate,
+            ),
+        maxAge: const Duration(hours: 2), // Analytics cached 2h for offline
+      );
+    });
 
-final shortagesProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final shortagesProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
   return cache.getList(
     'shortages',
@@ -415,16 +442,17 @@ final shortagesProvider =
 
 final submissionTrendProvider =
     FutureProvider.family<List<Map<String, dynamic>>, int>((ref, days) async {
-  final cache = await ref.watch(offlineDataCacheProvider.future);
-  return cache.getList(
-    'submission_trend_$days',
-    () => ref.read(analyticsServiceProvider).getSubmissionTrend(days: days),
-    maxAge: const Duration(hours: 1),
-  );
-});
+      final cache = await ref.watch(offlineDataCacheProvider.future);
+      return cache.getList(
+        'submission_trend_$days',
+        () => ref.read(analyticsServiceProvider).getSubmissionTrend(days: days),
+        maxAge: const Duration(hours: 1),
+      );
+    });
 
-final governorateRankingProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final governorateRankingProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
   return cache.getList(
     'governorate_ranking',
@@ -479,19 +507,16 @@ final aiRouterProvider = FutureProvider<AIRouter>((ref) async {
 
   final offline = await ref.watch(offlineManagerProvider.future);
 
-  final router = AIRouter(
-    hf: hf,
-    rag: rag,
-    fnCall: fnCall,
-    offline: offline,
-  );
+  final router = AIRouter(hf: hf, rag: rag, fnCall: fnCall, offline: offline);
 
   await router.init();
   return router;
 });
 
 /// AI System Status — for diagnostics UI
-final aiSystemStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+final aiSystemStatusProvider = FutureProvider<Map<String, dynamic>>((
+  ref,
+) async {
   final router = await ref.watch(aiRouterProvider.future);
   return router.systemStatus;
 });
@@ -510,7 +535,9 @@ final groqServiceProvider = Provider<GroqService?>((ref) {
 });
 
 /// Unified AI Provider — combines all AI services
-final unifiedAIProviderProvider = FutureProvider<UnifiedAIProvider>((ref) async {
+final unifiedAIProviderProvider = FutureProvider<UnifiedAIProvider>((
+  ref,
+) async {
   final groq = ref.watch(groqServiceProvider);
   final hf = ref.watch(huggingFaceServiceProvider);
   final rag = await ref.watch(ragPipelineProvider.future);

@@ -23,7 +23,7 @@ class HuggingFaceService {
   static const Duration _cacheTTL = Duration(minutes: 5);
 
   HuggingFaceService(this._apiToken, {http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   /// Check if the service is available
   Future<bool> isAvailable() async {
@@ -39,9 +39,9 @@ class HuggingFaceService {
   }
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $_apiToken',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $_apiToken',
+    'Content-Type': 'application/json',
+  };
 
   /// Rate-limited request with caching
   Future<dynamic> _request(
@@ -62,11 +62,7 @@ class HuggingFaceService {
     final url = '$_baseUrl/$modelId';
     try {
       final response = await _httpClient
-          .post(
-            Uri.parse(url),
-            headers: _headers,
-            body: jsonEncode(body),
-          )
+          .post(Uri.parse(url), headers: _headers, body: jsonEncode(body))
           .timeout(timeout);
 
       _requestCount++;
@@ -79,7 +75,8 @@ class HuggingFaceService {
 
       if (response.statusCode != 200) {
         throw AIException(
-            'HF API error ${response.statusCode}: ${response.body}');
+          'HF API error ${response.statusCode}: ${response.body}',
+        );
       }
 
       final data = jsonDecode(response.body);
@@ -121,15 +118,16 @@ class HuggingFaceService {
   /// Generate embeddings for a list of texts
   /// Uses intfloat/multilingual-e5-large (1024-dim, multilingual including Arabic)
   Future<List<List<double>>> generateEmbeddings(List<String> texts) async {
-    final result = await _request(
-      'intfloat/multilingual-e5-large',
-      {'inputs': texts},
-    );
+    final result = await _request('intfloat/multilingual-e5-large', {
+      'inputs': texts,
+    });
 
     if (result is List) {
       return result
           .map<List<double>>(
-              (e) => (e as List).map<double>((v) => (v as num).toDouble()).toList())
+            (e) =>
+                (e as List).map<double>((v) => (v as num).toDouble()).toList(),
+          )
           .toList();
     }
     throw AIException('Unexpected embeddings response format');
@@ -143,15 +141,14 @@ class HuggingFaceService {
 
   /// Generate fast embeddings using BGE (768-dim, faster)
   Future<List<List<double>>> generateFastEmbeddings(List<String> texts) async {
-    final result = await _request(
-      'BAAI/bge-base-en-v1.5',
-      {'inputs': texts},
-    );
+    final result = await _request('BAAI/bge-base-en-v1.5', {'inputs': texts});
 
     if (result is List) {
       return result
           .map<List<double>>(
-              (e) => (e as List).map<double>((v) => (v as num).toDouble()).toList())
+            (e) =>
+                (e as List).map<double>((v) => (v as num).toDouble()).toList(),
+          )
           .toList();
     }
     throw AIException('Unexpected fast embeddings response format');
@@ -168,13 +165,10 @@ class HuggingFaceService {
   }) async {
     final labels = customLabels ?? IntentLabels.defaultLabels;
 
-    final result = await _request(
-      'facebook/bart-large-mnli',
-      {
-        'inputs': text,
-        'parameters': {'candidate_labels': labels},
-      },
-    );
+    final result = await _request('facebook/bart-large-mnli', {
+      'inputs': text,
+      'parameters': {'candidate_labels': labels},
+    });
 
     if (result is List && result.isNotEmpty) {
       final item = result.first;
@@ -192,9 +186,7 @@ class HuggingFaceService {
   }
 
   /// Get the top intent with confidence
-  Future<({String intent, double confidence})> getTopIntent(
-    String text,
-  ) async {
+  Future<({String intent, double confidence})> getTopIntent(String text) async {
     final scores = await classifyIntent(text);
     final sorted = scores.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
@@ -210,15 +202,9 @@ class HuggingFaceService {
     String question,
     String context,
   ) async {
-    final result = await _request(
-      'deepset/xlm-roberta-base-squad2',
-      {
-        'inputs': {
-          'question': question,
-          'context': context,
-        }
-      },
-    );
+    final result = await _request('deepset/xlm-roberta-base-squad2', {
+      'inputs': {'question': question, 'context': context},
+    });
 
     if (result is Map) {
       return (
@@ -236,16 +222,10 @@ class HuggingFaceService {
 
   /// Summarize text
   Future<String> summarize(String text, {int maxLength = 150}) async {
-    final result = await _request(
-      'facebook/bart-large-cnn',
-      {
-        'inputs': text,
-        'parameters': {
-          'max_length': maxLength,
-          'min_length': 30,
-        }
-      },
-    );
+    final result = await _request('facebook/bart-large-cnn', {
+      'inputs': text,
+      'parameters': {'max_length': maxLength, 'min_length': 30},
+    });
 
     if (result is List && result.isNotEmpty) {
       return result.first['summary_text'] as String? ?? text;
@@ -289,17 +269,17 @@ class HuggingFaceService {
 
 class IntentLabels {
   static const List<String> defaultLabels = [
-    'query_submissions',     // سؤال عن الإرساليات
-    'query_shortages',       // سؤال عن النواقص
-    'query_analytics',       // سؤال عن التحليلات
-    'generate_report',       // طلب تقرير
-    'query_governorates',    // سؤال عن المحافظات
-    'query_users',           // سؤال عن المستخدمين
-    'ask_guide',             // سؤال عن كيفية الاستخدام
-    'analyze_trend',         // تحليل اتجاه
-    'compare_data',          // مقارنة بيانات
-    'query_health',          // سؤال عن التطعيمات
-    'general_question',      // سؤال عام
+    'query_submissions', // سؤال عن الإرساليات
+    'query_shortages', // سؤال عن النواقص
+    'query_analytics', // سؤال عن التحليلات
+    'generate_report', // طلب تقرير
+    'query_governorates', // سؤال عن المحافظات
+    'query_users', // سؤال عن المستخدمين
+    'ask_guide', // سؤال عن كيفية الاستخدام
+    'analyze_trend', // تحليل اتجاه
+    'compare_data', // مقارنة بيانات
+    'query_health', // سؤال عن التطعيمات
+    'general_question', // سؤال عام
   ];
 
   /// Map intent to database query type

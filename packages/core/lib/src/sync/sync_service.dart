@@ -288,29 +288,41 @@ class SyncService {
         }
       }
 
-      // ═══ FIX: Invalidate submissions cache after successful sync ═══
+      // ═══ FIX: Invalidate submissions + analytics caches after successful sync ═══
       // Without this, the UI shows stale data for up to 2 hours (cache maxAge).
+      // Memory cache only — persistent cache (Hive) stays intact for offline fallback.
       if (result.synced > 0 || result.duplicates > 0) {
         _offline.updateConnectivity(true);
 
-        // Invalidate all submission-related caches so UI fetches fresh data
         final cache = _dataCache;
         if (cache != null) {
-          // Invalidate common submission cache key patterns
-          await cache.invalidate('submissions');
-          // Invalidate all keys starting with 'submissions_' (dynamic cache keys)
           final debugInfo = cache.getDebugInfo();
           final keys = debugInfo['keys'] as List? ?? [];
+
+          // Invalidate all submission + analytics + shortages + trend + ranking caches
+          const prefixes = [
+            'submissions',
+            'dashboard_analytics',
+            'shortages',
+            'submission_trend',
+            'governorate_ranking',
+          ];
+
+          int invalidated = 0;
           for (final key in keys) {
             final keyStr = key.toString();
-            if (keyStr.startsWith('submissions')) {
-              await cache.invalidate(keyStr);
-              if (kDebugMode) print('[SyncService] Invalidated cache: $keyStr');
+            for (final prefix in prefixes) {
+              if (keyStr.startsWith(prefix)) {
+                await cache.invalidate(keyStr);
+                invalidated++;
+                break;
+              }
             }
           }
-          if (kDebugMode)
+
+          if (kDebugMode && invalidated > 0)
             print(
-                '[SyncService] Submissions cache invalidated after ${result.synced} synced');
+                '[SyncService] Invalidated $invalidated caches (submissions + analytics)');
         }
       }
     } catch (e) {

@@ -156,51 +156,6 @@ class DatabaseService {
     String? orderBy,
     bool ascending = false,
   }) async {
-    // ═══ FIX: Resolve campaign form IDs first, then filter server-side ═══
-    if (campaignType != null && formId == null) {
-      final campaignForms = await getForms(campaignType: campaignType);
-      if (campaignForms.isEmpty) return []; // No forms for this campaign
-      final formIds = campaignForms.map((f) => f['id'] as String).toList();
-
-      // Build filters including form_id IN list via multiple queries combined
-      // Since ApiClient.select only supports .eq, fetch each form's submissions
-      // and merge results, then sort + paginate
-      final allResults = <Map<String, dynamic>>[];
-      for (final fid in formIds) {
-        final filters = <String, dynamic>{'form_id': fid};
-        if (status != null) filters['status'] = status;
-        if (governorateId != null) filters['governorate_id'] = governorateId;
-        if (districtId != null) filters['district_id'] = districtId;
-        if (submittedBy != null) filters['submitted_by'] = submittedBy;
-
-        final results = await _api.select(
-          'form_submissions',
-          select:
-              '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
-          filters: filters,
-          orderBy: orderBy ?? 'created_at',
-          ascending: ascending,
-          limit: limit,
-          offset: offset,
-        );
-        allResults.addAll(results);
-      }
-
-      // Sort merged results by the requested order
-      final sortKey = orderBy ?? 'created_at';
-      allResults.sort((a, b) {
-        final aVal = a[sortKey]?.toString() ?? '';
-        final bVal = b[sortKey]?.toString() ?? '';
-        return ascending ? aVal.compareTo(bVal) : bVal.compareTo(aVal);
-      });
-
-      // Apply final limit
-      if (limit != null && allResults.length > limit) {
-        return allResults.sublist(0, limit);
-      }
-      return allResults;
-    }
-
     final filters = <String, dynamic>{};
     if (formId != null) filters['form_id'] = formId;
     if (status != null) filters['status'] = status;
@@ -208,11 +163,21 @@ class DatabaseService {
     if (districtId != null) filters['district_id'] = districtId;
     if (submittedBy != null) filters['submitted_by'] = submittedBy;
 
+    // ═══ FIX: Use inFilter for campaign form IDs — single query instead of N ═══
+    Map<String, List<dynamic>>? inFilters;
+    if (campaignType != null && formId == null) {
+      final campaignForms = await getForms(campaignType: campaignType);
+      if (campaignForms.isEmpty) return [];
+      final formIds = campaignForms.map((f) => f['id'] as String).toList();
+      inFilters = {'form_id': formIds};
+    }
+
     return _api.select(
       'form_submissions',
       select:
           '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
       filters: filters,
+      inFilters: inFilters,
       orderBy: orderBy ?? 'created_at',
       ascending: ascending,
       limit: limit,
@@ -259,45 +224,44 @@ class DatabaseService {
     int? limit,
     int? offset,
   }) async {
-    // ═══ FIX: Filter shortages by campaign via resolved form IDs — server-side per form ═══
+    final filters = <String, dynamic>{};
+    if (governorateId != null) filters['governorate_id'] = governorateId;
+    if (districtId != null) filters['district_id'] = districtId;
+    if (severity != null) filters['severity'] = severity;
+    if (isResolved != null) filters['is_resolved'] = isResolved;
+
+    // ═══ FIX: Use inFilter for campaign filtering — lighter query for IDs only ═══
     if (campaignType != null) {
       final campaignForms = await getForms(campaignType: campaignType);
       if (campaignForms.isEmpty) return [];
       final formIds = campaignForms.map((f) => f['id'] as String).toList();
 
-      // Get submission IDs for these forms (limited scan)
+      // Get only submission IDs (not full rows) — much lighter
       final submissions = await _api.select(
         'form_submissions',
-        select: 'id, form_id',
-        filters: {},
+        select: 'id',
+        inFilters: {'form_id': formIds},
         limit: 5000,
       );
       final submissionIds = submissions
-          .where((s) => formIds.contains(s['form_id']))
           .map((s) => s['id'] as String)
-          .toSet();
+          .toList();
 
       if (submissionIds.isEmpty) return [];
 
-      // Fetch shortages and filter by submission_id match
-      final baseFilters = <String, dynamic>{};
-      if (governorateId != null) baseFilters['governorate_id'] = governorateId;
-      if (districtId != null) baseFilters['district_id'] = districtId;
-      if (severity != null) baseFilters['severity'] = severity;
-      if (isResolved != null) baseFilters['is_resolved'] = isResolved;
-
+      // Fetch shortages matching these submission IDs (or without submission_id)
       final allShortages = await _api.select(
         'supply_shortages',
         select:
             '*, governorates(name_ar), districts(name_ar), profiles!reported_by(full_name)',
-        filters: baseFilters,
+        filters: filters,
         orderBy: 'created_at',
         ascending: false,
         limit: limit ?? 50,
         offset: offset,
       );
 
-      // Filter: keep shortages whose submission_id matches campaign forms, or shortages without submission_id
+      // Filter: keep shortages whose submission_id matches campaign, or without submission_id
       var filtered = allShortages.where((s) {
         final subId = s['submission_id'] as String?;
         return subId == null || submissionIds.contains(subId);
@@ -308,12 +272,6 @@ class DatabaseService {
       }
       return filtered;
     }
-
-    final filters = <String, dynamic>{};
-    if (governorateId != null) filters['governorate_id'] = governorateId;
-    if (districtId != null) filters['district_id'] = districtId;
-    if (severity != null) filters['severity'] = severity;
-    if (isResolved != null) filters['is_resolved'] = isResolved;
 
     return _api.select(
       'supply_shortages',

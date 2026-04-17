@@ -36,6 +36,7 @@ class ApiClient {
     String table, {
     String select = '*',
     Map<String, dynamic>? filters,
+    Map<String, List<dynamic>>? inFilters,
     String? orderBy,
     bool ascending = true,
     int? limit,
@@ -50,6 +51,14 @@ class ApiClient {
             query = query.isFilter(key, null);
           } else if (filters[key] != null) {
             query = query.eq(key, filters[key]);
+          }
+        }
+      }
+
+      if (inFilters != null) {
+        for (final entry in inFilters.entries) {
+          if (entry.value.isNotEmpty) {
+            query = query.inFilter(entry.key, entry.value);
           }
         }
       }

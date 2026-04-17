@@ -14,12 +14,31 @@ export 'sync_models.dart' show OfflineSyncStatus, OfflineSyncResult;
 
 /// Manages offline data storage, sync queue, drafts, and cache.
 /// Handles conflict resolution and retry logic for reliable offline-first operation.
+///
+/// ═══ v2.1 — Per-key storage ═══
+/// - Cache: each entry stored as Hive["cache_&lt;key&gt;"] (was single blob)
+/// - Drafts: each draft stored as Hive["draft_&lt;formId&gt;"] (was single blob)
+/// - Write locks: per-key instead of global (allows parallel writes to different keys)
+/// - Migration: old single-blob format auto-migrated on first init
 class OfflineManager {
   static const String _boxName = 'epi_offline';
   static const String _syncQueueKey = 'sync_queue';
-  static const String _draftsKey = 'drafts';
-  static const String _cacheKey = 'cache';
   static const String _conflictsKey = 'sync_conflicts';
+
+  // ─── Per-key prefixes ───
+  static const String _cachePrefix = 'cache_';
+  static const String _draftPrefix = 'draft_';
+
+  // ─── Legacy keys (old single-blob format — for migration) ───
+  static const String _legacyCacheKey = 'cache';
+  static const String _legacyDraftsKey = 'drafts';
+
+  // ─── Index keys (plain-text lists of keys for fast lookup) ───
+  static const String _cacheIndexKey = 'cache_index';
+  static const String _draftsIndexKey = 'drafts_index';
+
+  // ─── Migration marker ───
+  static const String _migrationDoneKey = '_migration_v2_done';
 
   static const int _maxRetries = 3;
   static const int _maxPayloadSize = 1024 * 1024; // 1MB
@@ -88,6 +107,9 @@ class OfflineManager {
       rethrow;
     }
 
+    // ═══ Migrate old single-blob format to per-key (one-time) ═══
+    await _migrateOldFormat();
+
     // ═══ FIX: Recover stuck items from previous crashes ═══
     await _recoverStuckSyncingItems();
 
@@ -97,13 +119,106 @@ class OfflineManager {
           '[OfflineManager] Initialized. Pending items: ${_getQueue().length}');
   }
 
-  // ═══ FIX: Serialize write operations to prevent race conditions ═══
-  final _lockQueue = <Completer<void>>[];
+  // ═══════════════════════════════════════════════════════════════════════
+  // MIGRATION: Old single-blob → per-key format (one-time, non-destructive)
+  // ═══════════════════════════════════════════════════════════════════════
 
-  Future<T> _withWriteLock<T>(Future<T> Function() action) async {
-    final prevLock = _lockQueue.isNotEmpty ? _lockQueue.last : null;
+  Future<void> _migrateOldFormat() async {
+    if (_safeBox.get(_migrationDoneKey) == '1') {
+      if (kDebugMode) print('[OfflineManager] Migration already done, skipping');
+      return;
+    }
+
+    int migrated = 0;
+
+    // Migrate old cache blob → per-key entries
+    try {
+      final oldCacheRaw = _safeBox.get(_legacyCacheKey);
+      if (oldCacheRaw != null && oldCacheRaw.isNotEmpty) {
+        Map<String, dynamic> oldCache;
+        try {
+          final decrypted = _encryption.decrypt(oldCacheRaw);
+          oldCache = Map<String, dynamic>.from(jsonDecode(decrypted));
+        } catch (_) {
+          // Might be unencrypted legacy data
+          try {
+            oldCache = Map<String, dynamic>.from(jsonDecode(oldCacheRaw));
+          } catch (_) {
+            oldCache = {};
+          }
+        }
+
+        if (oldCache.isNotEmpty) {
+          final index = <String>[];
+          for (final entry in oldCache.entries) {
+            final hiveKey = '$_cachePrefix${entry.key}';
+            final value = entry.value;
+            final encrypted = _encryption.encrypt(jsonEncode(value));
+            await _safeBox.put(hiveKey, encrypted);
+            index.add(entry.key);
+            migrated++;
+          }
+          await _safeBox.put(_cacheIndexKey, jsonEncode(index));
+          await _safeBox.delete(_legacyCacheKey);
+          if (kDebugMode)
+            print('[OfflineManager] Migrated ${oldCache.length} cache entries');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print('[OfflineManager] Cache migration error: $e');
+    }
+
+    // Migrate old drafts blob → per-key entries
+    try {
+      final oldDraftsRaw = _safeBox.get(_legacyDraftsKey);
+      if (oldDraftsRaw != null && oldDraftsRaw.isNotEmpty) {
+        Map<String, dynamic> oldDrafts;
+        try {
+          final decrypted = _encryption.decrypt(oldDraftsRaw);
+          oldDrafts = Map<String, dynamic>.from(jsonDecode(decrypted));
+        } catch (_) {
+          try {
+            oldDrafts = Map<String, dynamic>.from(jsonDecode(oldDraftsRaw));
+          } catch (_) {
+            oldDrafts = {};
+          }
+        }
+
+        if (oldDrafts.isNotEmpty) {
+          final index = <String>[];
+          for (final entry in oldDrafts.entries) {
+            final hiveKey = '$_draftPrefix${entry.key}';
+            final value = entry.value;
+            final encrypted = _encryption.encrypt(jsonEncode(value));
+            await _safeBox.put(hiveKey, encrypted);
+            index.add(entry.key);
+            migrated++;
+          }
+          await _safeBox.put(_draftsIndexKey, jsonEncode(index));
+          await _safeBox.delete(_legacyDraftsKey);
+          if (kDebugMode)
+            print('[OfflineManager] Migrated ${oldDrafts.length} drafts');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print('[OfflineManager] Drafts migration error: $e');
+    }
+
+    await _safeBox.put(_migrationDoneKey, '1');
+    if (kDebugMode && migrated > 0)
+      print('[OfflineManager] Migration complete: $ migrated items');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PER-KEY WRITE LOCKS (allows parallel writes to different keys)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  final Map<String, Completer<void>> _keyLocks = {};
+
+  Future<T> _withKeyLock<T>(String key, Future<T> Function() action) async {
+    final prevLock = _keyLocks[key];
     final myLock = Completer<void>();
-    _lockQueue.add(myLock);
+    _keyLocks[key] = myLock;
 
     if (prevLock != null) {
       await prevLock.future;
@@ -113,11 +228,16 @@ class OfflineManager {
       return await action();
     } finally {
       myLock.complete();
-      _lockQueue.remove(myLock);
+      if (_keyLocks[key] == myLock) {
+        _keyLocks.remove(key);
+      }
     }
   }
 
-  // ═══ FIX: Recover items stuck in "syncing" state from previous crashes/restarts ═══
+  // ═══════════════════════════════════════════════════════════════════════
+  // CRASH RECOVERY
+  // ═══════════════════════════════════════════════════════════════════════
+
   Future<void> _recoverStuckSyncingItems() async {
     if (_box == null || !_box!.isOpen) return;
 
@@ -132,8 +252,6 @@ class OfflineManager {
       for (int i = 0; i < queue.length; i++) {
         final item = queue[i];
         if (item['_syncing'] == true) {
-          // Reset stuck items: remove the _syncing flag, reset retry count
-          // so they get picked up on next sync attempt
           queue[i] = Map<String, dynamic>.from(item);
           queue[i].remove('_syncing');
           queue[i]['retry_count'] = (item['retry_count'] ?? 0);
@@ -153,18 +271,31 @@ class OfflineManager {
     }
   }
 
-  // ===== SUBMISSIONS QUEUE =====
+  // ═══════════════════════════════════════════════════════════════════════
+  // SAFE BOX ACCESS
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Box<String> get _safeBox {
+    final b = _box;
+    if (b == null || !b.isOpen) {
+      throw StateError('OfflineManager not initialized. Call init() first.');
+    }
+    return b;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // SUBMISSIONS QUEUE (unchanged — single blob is fine for queue)
+  // ═══════════════════════════════════════════════════════════════════════
 
   /// Add a submission to the offline sync queue with a unique idempotency key.
   Future<String> addToSyncQueue(Map<String, dynamic> submission) async {
-    return _withWriteLock(() async {
+    return _withKeyLock('sync_queue', () async {
       final offlineId = _uuid.v4();
       submission['offline_id'] = offlineId;
       submission['idempotency_key'] = offlineId;
       submission['created_at'] = DateTime.now().toIso8601String();
       submission['retry_count'] = 0;
 
-      // Validate payload size
       final payloadSize = jsonEncode(submission).length;
       if (payloadSize > _maxPayloadSize) {
         throw ValidationException(
@@ -179,15 +310,6 @@ class OfflineManager {
 
       return offlineId;
     });
-  }
-
-  /// Safe box access — throws if not initialized
-  Box<String> get _safeBox {
-    final b = _box;
-    if (b == null || !b.isOpen) {
-      throw StateError('OfflineManager not initialized. Call init() first.');
-    }
-    return b;
   }
 
   List<Map<String, dynamic>> _getQueue() {
@@ -212,10 +334,12 @@ class OfflineManager {
   }
 
   Future<void> removeFromQueue(String offlineId) async {
-    final queue = _getQueue();
-    queue.removeWhere((item) => item['offline_id'] == offlineId);
-    await _saveQueue(queue);
-    _invalidatePendingCount();
+    return _withKeyLock('sync_queue', () async {
+      final queue = _getQueue();
+      queue.removeWhere((item) => item['offline_id'] == offlineId);
+      await _saveQueue(queue);
+      _invalidatePendingCount();
+    });
   }
 
   Future<void> clearQueue() async {
@@ -232,13 +356,11 @@ class OfflineManager {
     return _cachedPendingCount;
   }
 
-  /// Force recalculate count (call after queue changes)
   void _invalidatePendingCount() {
     _cachedPendingCount = -1;
   }
 
   /// Sync all pending items with retry logic and conflict handling.
-  /// ═══ FIX: Process in-memory, save ONCE at end — prevents data loss on crash ═══
   Future<List<OfflineSyncResult>> syncPendingItems(
       Future<Map<String, dynamic>> Function(Map<String, dynamic>)
           submitFn) async {
@@ -247,17 +369,13 @@ class OfflineManager {
 
     final results = <OfflineSyncResult>[];
     final remaining = <Map<String, dynamic>>[];
-    final successfullySynced = <String>[];
 
-    // ═══ FIX: Mark items as _syncing to prevent duplicate processing ═══
-    // If we crash during sync, _recoverStuckSyncingItems will reset them on next init
     for (final item in pending) {
       item['_syncing'] = true;
     }
 
     for (final item in pending) {
       try {
-        // Add sync metadata
         final payload = Map<String, dynamic>.from(item);
         payload.remove('_syncing');
         payload.remove('_recovered');
@@ -270,31 +388,21 @@ class OfflineManager {
         final response = await submitFn(payload);
 
         if (response['status'] == 'duplicate') {
-          successfullySynced.add(item['offline_id']);
           results
               .add(OfflineSyncResult.duplicate(item['offline_id'], response));
         } else if (response['conflict'] == true) {
           await _saveConflict(item, response);
-          successfullySynced.add(item['offline_id']);
           results.add(OfflineSyncResult.conflict(item['offline_id'], response));
         } else if (response['success'] == true) {
-          successfullySynced.add(item['offline_id']);
           results.add(OfflineSyncResult.success(item['offline_id'], response));
         } else {
           final retryCount = (item['retry_count'] ?? 0) as int;
-          if (retryCount < _maxRetries) {
-            item['retry_count'] = retryCount + 1;
-            item['last_retry_at'] = DateTime.now().toIso8601String();
-            item.remove('_syncing');
-            remaining.add(item);
-            results.add(OfflineSyncResult.error(
-                item['offline_id'], 'Unexpected server response'));
-          } else {
-            item.remove('_syncing');
-            remaining.add(item);
-            results.add(OfflineSyncResult.error(
-                item['offline_id'], 'Unexpected server response'));
-          }
+          item['retry_count'] = retryCount + 1;
+          item['last_retry_at'] = DateTime.now().toIso8601String();
+          item.remove('_syncing');
+          remaining.add(item);
+          results.add(OfflineSyncResult.error(
+              item['offline_id'], 'Unexpected server response'));
         }
       } on ApiException catch (e) {
         final retryCount = (item['retry_count'] ?? 0) as int;
@@ -306,20 +414,17 @@ class OfflineManager {
           results.add(OfflineSyncResult.error(item['offline_id'],
               'RETRY_${retryCount + 1}/$_maxRetries: ${e.message}'));
         } else {
-          await _logSyncError(item, e);
           item.remove('_syncing');
-          remaining.add(item); // Keep for manual review
+          remaining.add(item);
           results.add(OfflineSyncResult.error(item['offline_id'], e.message));
         }
       } catch (e) {
-        await _logSyncError(item, e);
         item.remove('_syncing');
         remaining.add(item);
         results.add(OfflineSyncResult.error(item['offline_id'], e.toString()));
       }
     }
 
-    // ═══ FIX: Save ONCE — remaining items only. No intermediate writes. ═══
     await _saveQueue(remaining);
     _invalidatePendingCount();
 
@@ -337,10 +442,10 @@ class OfflineManager {
         code == 'ECONNREFUSED';
   }
 
-  // ===== CONFLICTS =====
+  // ═══════════════════════════════════════════════════════════════════════
+  // CONFLICTS (unchanged)
+  // ═══════════════════════════════════════════════════════════════════════
 
-  /// Save a conflict between local and server data for manual resolution.
-  /// Public method so SyncService can record conflicts during batch sync.
   Future<void> saveConflict(
       Map<String, dynamic> local, Map<String, dynamic> server) async {
     try {
@@ -394,10 +499,6 @@ class OfflineManager {
     }
   }
 
-  Future<void> _logSyncError(Map<String, dynamic> item, dynamic error) async {
-    if (kDebugMode) print('Sync error for ${item['offline_id']}: $error');
-  }
-
   void _logSyncSummary(List<OfflineSyncResult> results) {
     if (kDebugMode && results.isNotEmpty) {
       final success = results.where((r) => r.isSuccess).length;
@@ -409,129 +510,165 @@ class OfflineManager {
     }
   }
 
-  // ===== DRAFTS =====
+  // ═══════════════════════════════════════════════════════════════════════
+  // DRAFTS — per-key storage (each draft = separate Hive entry)
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<void> saveDraft(String formId, Map<String, dynamic> data) async {
-    return _withWriteLock(() async {
-      final drafts = _getDrafts();
-      drafts[formId] = {
+    return _withKeyLock('draft_$formId', () async {
+      final entry = {
         'data': data,
         'saved_at': DateTime.now().toIso8601String(),
       };
-      final encrypted = _encryption.encrypt(jsonEncode(drafts));
-      await _safeBox.put(_draftsKey, encrypted);
-    });
-  }
+      final encrypted = _encryption.encrypt(jsonEncode(entry));
+      await _safeBox.put('$_draftPrefix$formId', encrypted);
 
-  Map<String, dynamic> _getDrafts() {
-    final data = _safeBox.get(_draftsKey);
-    if (data == null || data.isEmpty) return {};
-    try {
-      return Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
-    } catch (e) {
-      if (kDebugMode) print('[OfflineManager] Drafts decrypt error: $e');
-      return {};
-    }
+      // Update index
+      final index = _getDraftIndex();
+      if (!index.contains(formId)) {
+        index.add(formId);
+        await _safeBox.put(_draftsIndexKey, jsonEncode(index));
+      }
+    });
   }
 
   Map<String, dynamic>? getDraft(String formId) {
-    final drafts = _getDrafts();
-    return drafts[formId];
+    final raw = _safeBox.get('$_draftPrefix$formId');
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(_encryption.decrypt(raw));
+      return Map<String, dynamic>.from(decoded['data'] ?? decoded);
+    } catch (e) {
+      if (kDebugMode) print('[OfflineManager] Draft decrypt error ($formId): $e');
+      return null;
+    }
   }
 
   Set<String> getDraftFormIds() {
-    return _getDrafts().keys.toSet();
+    return _getDraftIndex().toSet();
   }
 
   Future<void> removeDraft(String formId) async {
-    return _withWriteLock(() async {
-      final drafts = _getDrafts();
-      drafts.remove(formId);
-      final encrypted = _encryption.encrypt(jsonEncode(drafts));
-      await _safeBox.put(_draftsKey, encrypted);
+    return _withKeyLock('draft_$formId', () async {
+      await _safeBox.delete('$_draftPrefix$formId');
+      final index = _getDraftIndex();
+      index.remove(formId);
+      await _safeBox.put(_draftsIndexKey, jsonEncode(index));
     });
   }
 
-  // ===== CACHE =====
+  List<String> _getDraftIndex() {
+    final raw = _safeBox.get(_draftsIndexKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      return List<String>.from(jsonDecode(raw));
+    } catch (_) {
+      return [];
+    }
+  }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // CACHE — per-key storage (each cache entry = separate Hive entry)
+  //
+  // Offline behavior PRESERVED:
+  //   - getCachedData() checks normal expiry (24h) when online
+  //   - getCachedData(offlineOverride: true) → returns data up to 30 days old
+  //   - When offline → data is NEVER discarded (up to 30 days)
+  //   - 30-day limit = AppConfig.maxOfflineRetention
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Save data to persistent cache. Each key gets its own Hive entry.
   Future<void> cacheData(String key, Map<String, dynamic> data) async {
-    return _withWriteLock(() async {
-      final cache = _getCache();
-      cache[key] = {
+    return _withKeyLock('cache_$key', () async {
+      final entry = {
         'data': data,
         'cached_at': DateTime.now().toIso8601String(),
       };
-      final encrypted = _encryption.encrypt(jsonEncode(cache));
-      await _safeBox.put(_cacheKey, encrypted);
-    });
-  }
+      final encrypted = _encryption.encrypt(jsonEncode(entry));
+      await _safeBox.put('$_cachePrefix$key', encrypted);
 
-  Map<String, dynamic> _getCache() {
-    final data = _safeBox.get(_cacheKey);
-    if (data == null || data.isEmpty) return {};
-    try {
-      final decrypted = _encryption.decrypt(data);
-      return Map<String, dynamic>.from(jsonDecode(decrypted));
-    } catch (_) {
-      try {
-        return Map<String, dynamic>.from(jsonDecode(data));
-      } catch (_) {
-        return {};
+      // Update index
+      final index = _getCacheIndex();
+      if (!index.contains(key)) {
+        index.add(key);
+        await _safeBox.put(_cacheIndexKey, jsonEncode(index));
       }
-    }
+    });
   }
 
   /// Get cached data by key.
   ///
-  /// When [forceStale] is true (used for offline fallback), returns cached data
-  /// regardless of age — up to [AppConfig.maxOfflineRetention] (30 days).
-  /// When offline, cached data is NEVER discarded due to staleness.
-  ///
-  /// [offlineOverride] — if true, ignores normal cacheExpiry and uses maxOfflineRetention.
+  /// Offline behavior (UNCHANGED):
+  ///   - When offline or [offlineOverride]=true: returns data up to 30 days old
+  ///   - When online: returns data only if younger than [AppConfig.cacheExpiry] (24h)
+  ///   - 30-day limit = [AppConfig.maxOfflineRetention]
   Map<String, dynamic>? getCachedData(String key,
       {bool offlineOverride = false}) {
-    final cache = _getCache();
-    final entry = cache[key];
-    if (entry == null) return null;
+    final raw = _safeBox.get('$_cachePrefix$key');
+    if (raw == null || raw.isEmpty) return null;
 
-    final cachedAt = DateTime.tryParse(entry['cached_at'] ?? '');
-    if (cachedAt != null) {
-      final age = DateTime.now().difference(cachedAt);
+    try {
+      final entry = jsonDecode(_encryption.decrypt(raw));
+      final cachedAt = DateTime.tryParse(entry['cached_at'] ?? '');
+      if (cachedAt != null) {
+        final age = DateTime.now().difference(cachedAt);
 
-      // When offline or forceStale: allow data up to 30 days old
-      if (offlineOverride || !_isOnline) {
-        if (age > AppConfig.maxOfflineRetention) {
-          if (kDebugMode)
-            print(
-                '[OfflineManager] Cache expired (>${AppConfig.maxOfflineRetention.inDays} days) for $key');
+        // Offline or override: allow data up to 30 days old
+        if (offlineOverride || !_isOnline) {
+          if (age > AppConfig.maxOfflineRetention) {
+            if (kDebugMode)
+              print(
+                  '[OfflineManager] Cache expired (>${AppConfig.maxOfflineRetention.inDays} days) for $key');
+            return null;
+          }
+          return entry['data'];
+        }
+
+        // Online: normal expiry check
+        if (age > AppConfig.cacheExpiry) {
           return null;
         }
-        // Return stale data when offline — stale is better than nothing
-        return entry['data'];
       }
 
-      // Online: normal expiry check
-      if (age > AppConfig.cacheExpiry) {
-        return null;
-      }
+      return entry['data'];
+    } catch (_) {
+      return null;
     }
-
-    return entry['data'];
   }
 
+  /// Clear all cached data (all cache_ prefixed keys).
   Future<void> clearCache() async {
-    await _safeBox.delete(_cacheKey);
+    final index = _getCacheIndex();
+    for (final key in index) {
+      await _safeBox.delete('$_cachePrefix$key');
+    }
+    // Safety: also clean any orphaned cache_ keys not in index
+    for (final hiveKey in _safeBox.keys) {
+      if (hiveKey is String && hiveKey.startsWith(_cachePrefix)) {
+        await _safeBox.delete(hiveKey);
+      }
+    }
+    await _safeBox.delete(_cacheIndexKey);
   }
 
   /// Remove a specific key from the persistent cache.
-  /// Used for force-refresh on pull-to-refresh.
   Future<void> removeCacheKey(String key) async {
-    return _withWriteLock(() async {
-      final cache = _getCache();
-      cache.remove(key);
-      final encrypted = _encryption.encrypt(jsonEncode(cache));
-      await _safeBox.put(_cacheKey, encrypted);
+    return _withKeyLock('cache_$key', () async {
+      await _safeBox.delete('$_cachePrefix$key');
+      final index = _getCacheIndex();
+      index.remove(key);
+      await _safeBox.put(_cacheIndexKey, jsonEncode(index));
     });
+  }
+
+  List<String> _getCacheIndex() {
+    final raw = _safeBox.get(_cacheIndexKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      return List<String>.from(jsonDecode(raw));
+    } catch (_) {
+      return [];
+    }
   }
 
   void dispose() {

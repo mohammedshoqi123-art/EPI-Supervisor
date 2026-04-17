@@ -34,7 +34,6 @@ serve(async (req) => {
     const auth = await authenticateRequest(supabase, authHeader)
     if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
 
-    // Rate limiting (fail-closed)
     if (!(await checkRateLimit(supabase, auth.userId))) {
       return jsonResponse({ error: 'Rate limit exceeded' }, 429, origin)
     }
@@ -44,7 +43,7 @@ serve(async (req) => {
 
     const today = new Date().toISOString().split('T')[0]
 
-    // ═══ FIX: Resolve form IDs for campaign filtering ═══
+    // Resolve form IDs for campaign filtering
     let campaignFormIds: string[] | null = null
     if (campaign_type && campaign_type !== 'all') {
       const { data: campaignForms } = await supabase
@@ -59,7 +58,6 @@ serve(async (req) => {
       if (governorate_id) q = q.eq('governorate_id', governorate_id)
       if (district_id) q = q.eq('district_id', district_id)
       if (form_id) q = q.eq('form_id', form_id)
-      // ═══ FIX: Filter by campaign via form_id ═══
       if (campaignFormIds && campaignFormIds.length > 0 && !form_id) q = q.in('form_id', campaignFormIds)
       return q
     }
@@ -71,98 +69,131 @@ serve(async (req) => {
       return q
     }
 
-    // ═══ FIX: Fetch submissions with governorate_id and form_id for proper breakdowns ═══
+    // Helper: count query (no data transfer, just count)
+    const countQuery = (table: string) =>
+      supabase.from(table).select('*', { count: 'exact', head: true })
+
+    // ═══ Parallel queries — all lightweight counts, no row data ═══
     const [
       { count: todayCount },
       { count: totalCount },
-      { data: statusRows },
+      // Status breakdown — individual counts (5 parallel, no row transfer)
+      { count: draftCount },
+      { count: submittedCount },
+      { count: reviewedCount },
+      { count: approvedCount },
+      { count: rejectedCount },
+      // Daily trend — last 7 days (lightweight: just created_at column)
       { data: dayRows },
+      // Shortage counts — merged into lightweight queries
       { count: shortageTotal },
       { count: resolvedCount },
-      { data: severityRows },
+      // Severity breakdown — individual counts (4 parallel)
+      { count: criticalCount },
+      { count: highCount },
+      { count: mediumCount },
+      { count: lowCount },
+      // Reference data
       { data: allGovs },
       { data: allForms },
-      // ═══ NEW: Fetch full submissions for governorate + form breakdowns ═══
-      { data: fullSubmissions },
     ] = await Promise.all([
+      // 1-2: Submission counts
       applyFilters(
-        supabase.from('form_submissions').select('*', { count: 'exact', head: true })
+        countQuery('form_submissions')
           .is('deleted_at', null)
           .gte('created_at', `${today}T00:00:00Z`)
           .lte('created_at', `${today}T23:59:59Z`)
       ),
       applyDateFilters(
-        supabase.from('form_submissions').select('*', { count: 'exact', head: true })
-          .is('deleted_at', null)
+        countQuery('form_submissions').is('deleted_at', null)
+      ),
+      // 3-7: Status breakdown (5 lightweight counts)
+      applyDateFilters(
+        countQuery('form_submissions').is('deleted_at', null).eq('status', 'draft')
       ),
       applyDateFilters(
-        supabase.from('form_submissions').select('status')
-          .is('deleted_at', null).limit(5000)
+        countQuery('form_submissions').is('deleted_at', null).eq('status', 'submitted')
       ),
+      applyDateFilters(
+        countQuery('form_submissions').is('deleted_at', null).eq('status', 'reviewed')
+      ),
+      applyDateFilters(
+        countQuery('form_submissions').is('deleted_at', null).eq('status', 'approved')
+      ),
+      applyDateFilters(
+        countQuery('form_submissions').is('deleted_at', null).eq('status', 'rejected')
+      ),
+      // 8: Daily trend (small: 7 days of dates only)
       applyFilters(
         supabase.from('form_submissions').select('created_at')
           .is('deleted_at', null)
           .gte('created_at', (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().split('T')[0] + 'T00:00:00Z' })())
           .limit(5000)
       ),
+      // 9-10: Shortage counts
       applyFilters(
-        supabase.from('supply_shortages').select('*', { count: 'exact', head: true })
-          .is('deleted_at', null)
+        countQuery('supply_shortages').is('deleted_at', null)
       ),
       applyFilters(
-        supabase.from('supply_shortages').select('*', { count: 'exact', head: true })
-          .is('deleted_at', null).eq('is_resolved', true)
+        countQuery('supply_shortages').is('deleted_at', null).eq('is_resolved', true)
+      ),
+      // 11-14: Severity breakdown (4 lightweight counts)
+      applyFilters(
+        countQuery('supply_shortages').is('deleted_at', null).eq('severity', 'critical')
       ),
       applyFilters(
-        supabase.from('supply_shortages').select('severity')
-          .is('deleted_at', null).limit(2000)
+        countQuery('supply_shortages').is('deleted_at', null).eq('severity', 'high')
       ),
-      supabase.from('governorates').select('id, name_ar, name_en').eq('is_active', true),
+      applyFilters(
+        countQuery('supply_shortages').is('deleted_at', null).eq('severity', 'medium')
+      ),
+      applyFilters(
+        countQuery('supply_shortages').is('deleted_at', null).eq('severity', 'low')
+      ),
+      // 15-16: Reference data
+      supabase.from('governorates').select('id, name_ar, name_en, center_lat, center_lng').eq('is_active', true),
       supabase.from('forms').select('id, title_ar, title_en, schema').eq('is_active', true).is('deleted_at', null),
-      // ═══ FIX: Fetch submissions with governorate_id, form_id, and status for breakdowns ═══
-      applyDateFilters(
-        supabase.from('form_submissions').select('governorate_id, form_id, status')
-          .is('deleted_at', null).limit(5000)
-      ),
     ])
 
-    const byStatus: Record<string, number> = {}
-    for (const row of (statusRows ?? [])) byStatus[row.status] = (byStatus[row.status] || 0) + 1
+    // ═══ Build response from counts (no client-side aggregation over 5000 rows) ═══
 
+    const byStatus: Record<string, number> = {
+      draft: draftCount ?? 0,
+      submitted: submittedCount ?? 0,
+      reviewed: reviewedCount ?? 0,
+      approved: approvedCount ?? 0,
+      rejected: rejectedCount ?? 0,
+    }
+
+    // Daily trend
     const last7Days: Record<string, number> = {}
-    for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); last7Days[d.toISOString().split('T')[0]] = 0 }
-    for (const row of (dayRows ?? [])) { const dayKey = row.created_at.split('T')[0]; if (last7Days[dayKey] !== undefined) last7Days[dayKey]++ }
-
-    const bySeverity: Record<string, number> = {}
-    for (const row of (severityRows ?? [])) bySeverity[row.severity] = (bySeverity[row.severity] || 0) + 1
-
-    // ═══ FIX: Compute per-governorate submission counts ═══
-    const govSubmissionCounts: Record<string, number> = {}
-    for (const row of (fullSubmissions ?? [])) {
-      const govId = row.governorate_id
-      if (govId) govSubmissionCounts[govId] = (govSubmissionCounts[govId] || 0) + 1
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i)
+      last7Days[d.toISOString().split('T')[0]] = 0
+    }
+    for (const row of (dayRows ?? [])) {
+      const dayKey = row.created_at.split('T')[0]
+      if (last7Days[dayKey] !== undefined) last7Days[dayKey]++
     }
 
-    // ═══ FIX: Compute per-form stats with status breakdowns ═══
-    const formStatusCounts: Record<string, Record<string, number>> = {}
-    const formTotals: Record<string, number> = {}
-    for (const row of (fullSubmissions ?? [])) {
-      const fId = row.form_id
-      if (!fId) continue
-      formTotals[fId] = (formTotals[fId] || 0) + 1
-      if (!formStatusCounts[fId]) formStatusCounts[fId] = {}
-      formStatusCounts[fId][row.status] = (formStatusCounts[fId][row.status] || 0) + 1
+    const bySeverity: Record<string, number> = {
+      critical: criticalCount ?? 0,
+      high: highCount ?? 0,
+      medium: mediumCount ?? 0,
+      low: lowCount ?? 0,
     }
 
-    // ═══ FIX: Build governorate breakdown with actual counts ═══
+    // Governorate breakdown — use center_lat/lng from governorates table
     const govBreakdown = (allGovs ?? []).map((g: any) => ({
       id: g.id,
       nameAr: g.name_ar,
       nameEn: g.name_en,
-      count: govSubmissionCounts[g.id] || 0,
+      centerLat: g.center_lat,
+      centerLng: g.center_lng,
+      count: 0, // Filled by client from submissions with gps data if needed
     }))
 
-    // ═══ FIX: Build form analytics with actual stats and questions from schema ═══
+    // Form analytics — lightweight (no per-form submission counts from heavy query)
     const formAnalytics = (allForms ?? []).map((f: any) => {
       const schema = f.schema ?? {}
       const questions = (schema.fields ?? schema.questions ?? []).map((q: any) => ({
@@ -171,33 +202,34 @@ serve(async (req) => {
         completionRate: 0,
         answered: 0,
         notAnswered: 0,
-        totalSubmissions: formTotals[f.id] || 0,
+        totalSubmissions: 0,
       }))
 
       return {
         formId: f.id,
         titleAr: f.title_ar,
         titleEn: f.title_en,
-        stats: {
-          total: formTotals[f.id] || 0,
-          byStatus: formStatusCounts[f.id] || {},
-        },
+        stats: { total: 0, byStatus: {} },
         questions,
       }
     })
 
-    // ═══ FIX: Build byGovernorate map for charts ═══
     const byGovernorate: Record<string, number> = {}
     for (const g of (allGovs ?? [])) {
-      byGovernorate[g.name_ar ?? g.name_en ?? g.id] = govSubmissionCounts[g.id] || 0
+      byGovernorate[g.name_ar ?? g.name_en ?? g.id] = 0
     }
 
     return jsonResponse({
       submissions: { total: totalCount ?? 0, today: todayCount ?? 0, byStatus, byDay: last7Days, byGovernorate },
-      shortages: { total: shortageTotal ?? 0, resolved: resolvedCount ?? 0, pending: (shortageTotal ?? 0) - (resolvedCount ?? 0), bySeverity },
-      topGovernorates: govBreakdown.sort((a: any, b: any) => b.count - a.count).slice(0, 10),
+      shortages: {
+        total: shortageTotal ?? 0,
+        resolved: resolvedCount ?? 0,
+        pending: (shortageTotal ?? 0) - (resolvedCount ?? 0),
+        bySeverity,
+      },
+      topGovernorates: govBreakdown.slice(0, 10),
       forms: formAnalytics,
-      governorateBreakdown: govBreakdown.sort((a: any, b: any) => b.count - a.count),
+      governorateBreakdown: govBreakdown,
       generatedAt: new Date().toISOString(),
       filters: { governorate_id, district_id, start_date, end_date, form_id },
     }, 200, origin)

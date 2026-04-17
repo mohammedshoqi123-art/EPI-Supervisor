@@ -149,22 +149,50 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           # Release signing (decoded by Gradle in build.gradle)
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          GEMINI_FLAG=""
-          if [ "$GEMINI_API_KEY" != "NOT_SET" ] && [ -n "$GEMINI_API_KEY" ]; then
-            GEMINI_FLAG="--dart-define=GEMINI_API_KEY=$GEMINI_API_KEY"
+          echo "=== Checking build secrets ==="
+
+          # Build dart-define flags safely (empty secrets become test defaults)
+          DART_DEFINES=""
+
+          if [ -n "$SUPABASE_URL" ] && [ "$SUPABASE_URL" != "NOT_SET" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_URL=$SUPABASE_URL"
+          else
+            echo "⚠️ SUPABASE_URL not set, using placeholder"
+            DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_URL=https://placeholder.supabase.co"
           fi
-          flutter build apk --release \
-            --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
-            --dart-define=ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }} \
-            --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }} \
-            $GEMINI_FLAG
+
+          if [ -n "$SUPABASE_ANON_KEY" ] && [ "$SUPABASE_ANON_KEY" != "NOT_SET" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+          else
+            echo "⚠️ SUPABASE_ANON_KEY not set, using placeholder"
+            DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_ANON_KEY=placeholder-anon-key-for-build"
+          fi
+
+          if [ -n "$ENCRYPTION_KEY" ] && [ "$ENCRYPTION_KEY" != "NOT_SET" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=ENCRYPTION_KEY=$ENCRYPTION_KEY"
+          else
+            echo "⚠️ ENCRYPTION_KEY not set, using build-time key"
+            DART_DEFINES="$DART_DEFINES --dart-define=ENCRYPTION_KEY=EPI_BUILD_TIME_KEY_32_CHARS_MINIMUM_X"
+          fi
+
+          if [ -n "$SENTRY_DSN" ] && [ "$SENTRY_DSN" != "NOT_SET" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=SENTRY_DSN=$SENTRY_DSN"
+          fi
+
+          if [ -n "$GEMINI_API_KEY" ] && [ "$GEMINI_API_KEY" != "NOT_SET" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY"
+          fi
+
+          echo "=== Building APK ==="
+          flutter build apk --release $DART_DEFINES
 
       - name: Upload APK artifact
         if: success()

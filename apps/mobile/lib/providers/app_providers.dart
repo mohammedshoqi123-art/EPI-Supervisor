@@ -432,3 +432,66 @@ final governorateRankingProvider =
     maxAge: const Duration(hours: 1),
   );
 });
+
+// ═══════════════════════════════════════════════════════════════
+// AI v2: HuggingFace + RAG + Function Calling + Enhanced Local
+// ═══════════════════════════════════════════════════════════════
+
+/// HuggingFace Service — optional, requires HF_API_TOKEN
+final huggingFaceServiceProvider = Provider<HuggingFaceService?>((ref) {
+  const hfToken = String.fromEnvironment('HF_API_TOKEN', defaultValue: '');
+  if (hfToken.isEmpty) return null;
+  final service = HuggingFaceService(hfToken);
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+/// RAG Pipeline — builds knowledge base on init
+final ragPipelineProvider = FutureProvider<RagPipeline?>((ref) async {
+  final hf = ref.watch(huggingFaceServiceProvider);
+  if (hf == null) return null;
+  final rag = RagPipeline(hf);
+  try {
+    await rag.buildKnowledgeBase().timeout(const Duration(seconds: 30));
+  } catch (e) {
+    debugPrint('[RAG] Build failed: $e');
+  }
+  return rag;
+});
+
+/// Function Calling Engine
+final functionCallingEngineProvider = Provider<FunctionCallingEngine?>((ref) {
+  final hf = ref.watch(huggingFaceServiceProvider);
+  if (hf == null) return null;
+  return FunctionCallingEngine(hf);
+});
+
+/// Enhanced Local AI — always available offline
+final enhancedLocalAIProvider = Provider<EnhancedLocalAI>((ref) {
+  return EnhancedLocalAI();
+});
+
+/// Unified AI Router — the main entry point for all AI queries
+final aiRouterProvider = FutureProvider<AIRouter>((ref) async {
+  final hf = ref.watch(huggingFaceServiceProvider);
+  final rag = await ref.watch(ragPipelineProvider.future);
+  final fnCall = ref.watch(functionCallingEngineProvider);
+
+  final offline = await ref.watch(offlineManagerProvider.future);
+
+  final router = AIRouter(
+    hf: hf,
+    rag: rag,
+    fnCall: fnCall,
+    offline: offline,
+  );
+
+  await router.init();
+  return router;
+});
+
+/// AI System Status — for diagnostics UI
+final aiSystemStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  final router = await ref.watch(aiRouterProvider.future);
+  return router.systemStatus;
+});

@@ -64,3 +64,21 @@ class SupabaseConfig {
   static const String channelSubmissions = 'submissions';
   static const String channelShortages = 'shortages';
 }
+
+// ═══ AI v2 Configuration ═══
+extension SupabaseConfigAI on SupabaseConfig {
+  static const String fnAiChatV2 = 'ai-chat-v2';
+  
+  static const String _compileHfToken = String.fromEnvironment(
+    'HF_API_TOKEN',
+    defaultValue: '',
+  );
+  
+  static String _envHfToken = '';
+  
+  static void setHfToken(String token) => _envHfToken = token;
+  
+  static String get hfToken => _compileHfToken.isNotEmpty ? _compileHfToken : _envHfToken;
+  
+  static bool get hasHuggingFace => hfToken.isNotEmpty;
+}

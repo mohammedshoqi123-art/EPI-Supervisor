@@ -34,3 +34,10 @@ export 'src/utils/connectivity_utils.dart';
 export 'src/utils/date_utils.dart';
 export 'src/utils/geo_utils.dart';
 export 'src/models/campaign_type.dart';
+// ═══ AI v2: HuggingFace + RAG + Function Calling ═══
+export 'src/ai/huggingface/hf_service.dart';
+export 'src/ai/rag/rag_pipeline.dart';
+export 'src/ai/function_calling/function_calling_engine.dart';
+export 'src/ai/enhanced_local_ai.dart';
+export 'src/ai/smart_analytics.dart';
+export 'src/ai/ai_router.dart';

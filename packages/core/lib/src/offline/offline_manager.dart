@@ -206,7 +206,7 @@ class OfflineManager {
 
     await _safeBox.put(_migrationDoneKey, '1');
     if (kDebugMode && migrated > 0)
-      print('[OfflineManager] Migration complete: $ migrated items');
+      print('[OfflineManager] Migration complete: $migrated migrated items');
   }
 
   // ═══════════════════════════════════════════════════════════════════════

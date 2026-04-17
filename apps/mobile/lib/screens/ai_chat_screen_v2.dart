@@ -682,9 +682,8 @@ class _MsgBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
@@ -701,9 +700,8 @@ class _MsgBubble extends StatelessWidget {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isUser
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -767,13 +765,13 @@ class _MsgBubble extends StatelessWidget {
   }
 
   String _sourceLabel(String s) => switch (s) {
-    'groq' => '⚡ Groq',
-    'mimo' => '🤖 MiMo',
-    'function_call' => '📊 من قاعدة البيانات',
-    'rag' => '📚 من قاعدة المعرفة',
-    'streaming' => '⚡ جارٍ الكتابة...',
-    _ => '',
-  };
+        'groq' => '⚡ Groq',
+        'mimo' => '🤖 MiMo',
+        'function_call' => '📊 من قاعدة البيانات',
+        'rag' => '📚 من قاعدة المعرفة',
+        'streaming' => '⚡ جارٍ الكتابة...',
+        _ => '',
+      };
 }
 
 class _SuggestionTile extends StatelessWidget {

@@ -26,7 +26,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _listenForSyncCompletion();
   }
 
@@ -34,8 +34,11 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   void _listenForSyncCompletion() {
     ref.read(syncServiceProvider.future).then((service) {
       _syncSub = service.syncState.listen((state) {
-        // When sync finishes (isSyncing goes false after a sync), refresh stats
+        // When sync finishes (isSyncing goes false after a sync), refresh everything
         if (!state.isSyncing && mounted) {
+          // Invalidate cached providers so fresh data is fetched
+          ref.invalidate(submissionsProvider);
+          ref.invalidate(formsProvider);
           setState(() => _refreshKey++);
         }
       });
@@ -107,7 +110,6 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                 Tab(text: 'المسودات'),
                 Tab(text: 'قيد المزامنة'),
                 Tab(text: 'المرسلة'),
-                Tab(text: 'الكل'),
               ],
             ),
           ),
@@ -120,7 +122,6 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                 _DraftsTab(),
                 _PendingSyncTab(),
                 _SubmittedTab(),
-                _AllTab(),
               ],
             ),
           ),
@@ -693,150 +694,6 @@ class _SubmittedTab extends ConsumerWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ALL TAB
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _AllTab extends ConsumerStatefulWidget {
-  @override
-  ConsumerState<_AllTab> createState() => _AllTabState();
-}
-
-class _AllTabState extends ConsumerState<_AllTab> {
-  String? _statusFilter;
-
-  @override
-  Widget build(BuildContext context) {
-    final submissions = ref.watch(
-      submissionsProvider(
-        SubmissionsFilter(
-          status: _statusFilter,
-          campaignType: ref.read(campaignProvider).value,
-        ),
-      ),
-    );
-
-    return Column(
-      children: [
-        // Filter chips
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              _FilterChip(
-                label: 'الكل',
-                value: null,
-                current: _statusFilter,
-                onSelected: _onFilter,
-              ),
-              const SizedBox(width: 8),
-              _FilterChip(
-                label: 'مسودة',
-                value: 'draft',
-                current: _statusFilter,
-                onSelected: _onFilter,
-              ),
-              const SizedBox(width: 8),
-              _FilterChip(
-                label: 'مُرسل',
-                value: 'submitted',
-                current: _statusFilter,
-                onSelected: _onFilter,
-              ),
-              const SizedBox(width: 8),
-              _FilterChip(
-                label: 'قيد المراجعة',
-                value: 'reviewed',
-                current: _statusFilter,
-                onSelected: _onFilter,
-              ),
-              const SizedBox(width: 8),
-              _FilterChip(
-                label: 'معتمد',
-                value: 'approved',
-                current: _statusFilter,
-                onSelected: _onFilter,
-              ),
-              const SizedBox(width: 8),
-              _FilterChip(
-                label: 'مرفوض',
-                value: 'rejected',
-                current: _statusFilter,
-                onSelected: _onFilter,
-              ),
-            ],
-          ),
-        ),
-        // List
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () async => ref.invalidate(
-              submissionsProvider(
-                SubmissionsFilter(
-                  status: _statusFilter,
-                  campaignType: ref.read(campaignProvider).value,
-                ),
-              ),
-            ),
-            child: submissions.when(
-              loading: () => const EpiLoading.shimmer(),
-              error: (e, _) => EpiErrorWidget(
-                message: e.toString(),
-                onRetry: () => ref.invalidate(
-                  submissionsProvider(
-                    SubmissionsFilter(
-                      status: _statusFilter,
-                      campaignType: ref.read(campaignProvider).value,
-                    ),
-                  ),
-                ),
-              ),
-              data: (data) {
-                if (data.isEmpty) {
-                  return ListView(
-                    children: const [
-                      SizedBox(height: 120),
-                      EpiEmptyState(
-                        icon: Icons.folder_open,
-                        title: 'لا توجد استمارات',
-                        subtitle: 'لم يتم إنشاء أو إرسال أي استمارات بعد',
-                      ),
-                    ],
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: data.length,
-                  itemBuilder: (context, index) {
-                    final sub = data[index];
-                    return _SubmittedTile(
-                      title: sub['forms']?['title_ar'] ?? 'نموذج',
-                      status: sub['status'] ?? 'draft',
-                      date: sub['submitted_at'] ?? sub['created_at'],
-                      userName: sub['profiles']?['full_name'],
-                      isOffline: sub['is_offline'] == true,
-                      onTap: () =>
-                          context.go('/forms/status/submission/${sub['id']}'),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _onFilter(String? value) {
-    setState(() => _statusFilter = value);
-    ref.invalidate(submissionsProvider(SubmissionsFilter(status: value)));
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // WIDGETS
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1345,40 +1202,5 @@ class _SubmittedTile extends StatelessWidget {
     final d = DateTime.tryParse(dateStr);
     if (d == null) return dateStr;
     return '${d.day}/${d.month}/${d.year} - ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final String? value;
-  final String? current;
-  final ValueChanged<String?> onSelected;
-
-  const _FilterChip({
-    required this.label,
-    required this.value,
-    required this.current,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = current == value;
-    return ChoiceChip(
-      label: Text(
-        label,
-        style: TextStyle(
-          fontFamily: 'Tajawal',
-          fontSize: 12,
-          color: isSelected ? Colors.white : AppTheme.textSecondary,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-        ),
-      ),
-      selected: isSelected,
-      selectedColor: AppTheme.primaryColor,
-      backgroundColor: AppTheme.backgroundLight,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      onSelected: (_) => onSelected(value),
-    );
   }
 }

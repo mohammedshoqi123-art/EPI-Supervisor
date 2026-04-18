@@ -86,6 +86,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'max_photos': result['max_photos'] ?? 5,
         'allowed_roles': result['allowed_roles'] ??
             ['data_entry', 'district', 'governorate', 'central', 'admin'],
+        'campaign_type': result['campaign_type'] ?? 'polio_campaign',
         'is_active': true,
         'created_by': user?.id,
       });
@@ -127,7 +128,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'requires_gps': result['requires_gps'],
         'requires_photo': result['requires_photo'],
         'max_photos': result['max_photos'],
+        'allowed_roles': result['allowed_roles'] ?? form['allowed_roles'],
+        'campaign_type': result['campaign_type'] ?? form['campaign_type'] ?? 'polio_campaign',
         'version': (form['version'] as int? ?? 1) + 1,
+        'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', form['id']);
       _loadData();
       if (mounted) {

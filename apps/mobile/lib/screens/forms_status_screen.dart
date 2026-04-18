@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,15 +20,31 @@ class FormsStatusScreen extends ConsumerStatefulWidget {
 class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  StreamSubscription? _syncSub;
+  int _refreshKey = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _listenForSyncCompletion();
+  }
+
+  /// Auto-refresh stats when sync completes — so submitted forms appear immediately.
+  void _listenForSyncCompletion() {
+    ref.read(syncServiceProvider.future).then((service) {
+      _syncSub = service.syncState.listen((state) {
+        // When sync finishes (isSyncing goes false after a sync), refresh stats
+        if (!state.isSyncing && mounted) {
+          setState(() => _refreshKey++);
+        }
+      });
+    }).catchError((_) {});
   }
 
   @override
   void dispose() {
+    _syncSub?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -106,6 +123,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
 
   Widget _buildStatsSection() {
     return FutureBuilder<Map<String, int>>(
+      key: ValueKey('stats_$_refreshKey'),
       future: _loadStats(),
       builder: (context, snapshot) {
         final stats = snapshot.data ??

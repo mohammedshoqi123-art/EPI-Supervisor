@@ -26,8 +26,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    // Show splash for at least 1.5 seconds
-    await Future.delayed(const Duration(milliseconds: 1500));
+    // Minimal splash time — just enough for the logo to render
+    await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted || _hasNavigated) return;
 
     // Check if Supabase is properly configured

@@ -286,11 +286,12 @@ class OfflineDataCache {
   // INVALIDATION
   // ═══════════════════════════════════════════════════════════════════════
 
-  /// Invalidate a specific cache key
+  /// Invalidate a specific cache key — clears BOTH memory and persistent cache.
+  /// This ensures the next read fetches fresh data from server.
   Future<void> invalidate(String key) async {
     _memoryCache.remove(key);
-    // Note: persistent cache will expire naturally, or we can clear it
-    if (kDebugMode) print('[OfflineDataCache] Invalidated cache for $key');
+    await _offline.removeCacheKey(key);
+    if (kDebugMode) print('[OfflineDataCache] Invalidated cache for $key (memory + persistent)');
   }
 
   /// Invalidate all cached data

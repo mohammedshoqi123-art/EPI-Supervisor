@@ -53,7 +53,7 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
 
       // Load settings
       final settingsResp =
-          await client.from('app_settings').select('key, value').in_('key', [
+          await client.from('app_settings').select('key, value').inFilter('key', [
         'ai_enabled',
         'ai_default_model',
         'ai_fallback_enabled',

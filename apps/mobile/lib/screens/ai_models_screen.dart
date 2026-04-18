@@ -52,22 +52,25 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
           .limit(30);
 
       // Load settings
-      final settingsResp =
-          await client.from('app_settings').select('key, value').inFilter('key', [
-        'ai_enabled',
-        'ai_default_model',
-        'ai_fallback_enabled',
-        'ai_stream_enabled',
-        'ai_max_history',
-        'ai_rate_limit',
-      ]);
+      final settingsResp = await client
+          .from('app_settings')
+          .select('key, value')
+          .inFilter('key', [
+            'ai_enabled',
+            'ai_default_model',
+            'ai_fallback_enabled',
+            'ai_stream_enabled',
+            'ai_max_history',
+            'ai_rate_limit',
+          ]);
 
       // Also get model status via Edge Function
       Map<String, dynamic>? statusResp;
       try {
-        final resp = await client.functions.invoke('ai-chat-v3', body: {
-          'mode': 'model_status',
-        });
+        final resp = await client.functions.invoke(
+          'ai-chat-v3',
+          body: {'mode': 'model_status'},
+        );
         if (resp.status == 200) {
           statusResp = Map<String, dynamic>.from(resp.data);
         }
@@ -77,11 +80,13 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
       setState(() {
         _models = List<Map<String, dynamic>>.from(modelsResp);
         _recentUsage = List<Map<String, dynamic>>.from(usageResp);
-        _currentConfig =
-            _parseSettings(List<Map<String, dynamic>>.from(settingsResp));
+        _currentConfig = _parseSettings(
+          List<Map<String, dynamic>>.from(settingsResp),
+        );
         if (statusResp != null) {
-          _availableKeys =
-              Map<String, dynamic>.from(statusResp['availableKeys'] ?? {});
+          _availableKeys = Map<String, dynamic>.from(
+            statusResp['availableKeys'] ?? {},
+          );
         }
         _loading = false;
       });
@@ -108,16 +113,22 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
       final client = Supabase.instance.client;
 
       // Clear all defaults
-      await client.from('ai_models').update({
-        'is_default': false,
-        'updated_at': DateTime.now().toIso8601String()
-      }).neq('id', '');
+      await client
+          .from('ai_models')
+          .update({
+            'is_default': false,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .neq('id', '');
 
       // Set new default
-      await client.from('ai_models').update({
-        'is_default': true,
-        'updated_at': DateTime.now().toIso8601String()
-      }).eq('id', modelId);
+      await client
+          .from('ai_models')
+          .update({
+            'is_default': true,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', modelId);
 
       // Update app_settings too
       await client.from('app_settings').upsert({
@@ -129,8 +140,10 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم تغيير النموذج الافتراضي ✅',
-                style: TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'تم تغيير النموذج الافتراضي ✅',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -147,10 +160,13 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
   Future<void> _toggleModel(String modelId, bool isActive) async {
     HapticFeedback.lightImpact();
     try {
-      await Supabase.instance.client.from('ai_models').update({
-        'is_active': isActive,
-        'updated_at': DateTime.now().toIso8601String()
-      }).eq('id', modelId);
+      await Supabase.instance.client
+          .from('ai_models')
+          .update({
+            'is_active': isActive,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', modelId);
 
       await _loadData();
     } catch (e) {
@@ -185,8 +201,10 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إدارة النماذج الذكية',
-            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+        title: const Text(
+          'إدارة النماذج الذكية',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -198,26 +216,26 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _buildError(cs)
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildStatusCard(cs),
-                        const SizedBox(height: 16),
-                        _buildGlobalSettings(cs),
-                        const SizedBox(height: 16),
-                        _buildModelsList(cs),
-                        const SizedBox(height: 16),
-                        _buildUsageStats(cs),
-                      ],
-                    ),
-                  ),
+          ? _buildError(cs)
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStatusCard(cs),
+                    const SizedBox(height: 16),
+                    _buildGlobalSettings(cs),
+                    const SizedBox(height: 16),
+                    _buildModelsList(cs),
+                    const SizedBox(height: 16),
+                    _buildUsageStats(cs),
+                  ],
                 ),
+              ),
+            ),
     );
   }
 
@@ -230,12 +248,16 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
           children: [
             Icon(Icons.error_outline_rounded, size: 48, color: cs.error),
             const SizedBox(height: 16),
-            Text(_error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontFamily: 'Tajawal', color: cs.error)),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Tajawal', color: cs.error),
+            ),
             const SizedBox(height: 16),
             ElevatedButton(
-                onPressed: _loadData, child: const Text('إعادة المحاولة')),
+              onPressed: _loadData,
+              child: const Text('إعادة المحاولة'),
+            ),
           ],
         ),
       ),
@@ -248,10 +270,13 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
 
   Widget _buildStatusCard(ColorScheme cs) {
     final enabledModels = _models.where((m) => m['is_active'] == true).length;
-    final defaultModel =
-        _models.where((m) => m['is_default'] == true).firstOrNull;
+    final defaultModel = _models
+        .where((m) => m['is_default'] == true)
+        .firstOrNull;
     final totalUsage = _models.fold<int>(
-        0, (sum, m) => sum + ((m['usage_count'] as int?) ?? 0));
+      0,
+      (sum, m) => sum + ((m['usage_count'] as int?) ?? 0),
+    );
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -264,9 +289,10 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: cs.primary.withOpacity(0.2),
-              blurRadius: 16,
-              offset: const Offset(0, 4)),
+            color: cs.primary.withOpacity(0.2),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -280,26 +306,35 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
                   color: cs.onPrimary.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.auto_awesome_rounded,
-                    color: cs.onPrimary, size: 28),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: cs.onPrimary,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('حالة النظام الذكي',
-                        style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: cs.onPrimary)),
+                    Text(
+                      'حالة النظام الذكي',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onPrimary,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text('$enabledModels نموذج نشط • $totalUsage استخدام',
-                        style: TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 12,
-                            color: cs.onPrimary.withOpacity(0.8))),
+                    Text(
+                      '$enabledModels نموذج نشط • $totalUsage استخدام',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 12,
+                        color: cs.onPrimary.withOpacity(0.8),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -316,15 +351,21 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle_rounded,
-                      color: cs.onPrimary, size: 16),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: cs.onPrimary,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
-                  Text('الافتراضي: ${defaultModel['name_ar']}',
-                      style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onPrimary)),
+                  Text(
+                    'الافتراضي: ${defaultModel['name_ar']}',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onPrimary,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -365,16 +406,20 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
           Icon(
             available ? Icons.check_circle_rounded : Icons.cancel_rounded,
             size: 12,
-            color:
-                available ? Colors.greenAccent : cs.onPrimary.withOpacity(0.5),
+            color: available
+                ? Colors.greenAccent
+                : cs.onPrimary.withOpacity(0.5),
           ),
           const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 11,
-                  color: cs.onPrimary,
-                  fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontSize: 11,
+              color: cs.onPrimary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -406,12 +451,15 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
               children: [
                 Icon(Icons.tune_rounded, color: cs.primary, size: 20),
                 const SizedBox(width: 8),
-                Text('إعدادات عامة',
-                    style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface)),
+                Text(
+                  'إعدادات عامة',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
               ],
             ),
           ),
@@ -463,22 +511,22 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style:
-                        const TextStyle(fontFamily: 'Tajawal', fontSize: 14)),
-                Text(subtitle,
-                    style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 11,
-                        color: cs.onSurfaceVariant)),
+                Text(
+                  title,
+                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 11,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
           ),
-          Switch(
-            value: value,
-            activeColor: cs.primary,
-            onChanged: onChanged,
-          ),
+          Switch(value: value, activeColor: cs.primary, onChanged: onChanged),
         ],
       ),
     );
@@ -506,12 +554,15 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
               children: [
                 Icon(Icons.psychology_rounded, color: cs.primary, size: 20),
                 const SizedBox(width: 8),
-                Text('النماذج المتاحة',
-                    style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface)),
+                Text(
+                  'النماذج المتاحة',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
               ],
             ),
           ),
@@ -590,54 +641,71 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(model['name_ar'] ?? '',
-                            style: TextStyle(
-                                fontFamily: 'Tajawal',
-                                fontSize: 14,
-                                fontWeight: isDefault
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color: isActive
-                                    ? cs.onSurface
-                                    : cs.onSurfaceVariant)),
+                        child: Text(
+                          model['name_ar'] ?? '',
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 14,
+                            fontWeight: isDefault
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isActive
+                                ? cs.onSurface
+                                : cs.onSurfaceVariant,
+                          ),
+                        ),
                       ),
                       if (isDefault)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: cs.primary,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Text('افتراضي',
-                              style: TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontSize: 10,
-                                  color: cs.onPrimary,
-                                  fontWeight: FontWeight.w600)),
+                          child: Text(
+                            'افتراضي',
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 10,
+                              color: cs.onPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                     ],
                   ),
                   const SizedBox(height: 3),
-                  Text(model['model_id'] ?? '',
-                      style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 11,
-                          color: cs.onSurfaceVariant)),
+                  Text(
+                    model['model_id'] ?? '',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
                   if (usageCount > 0)
-                    Text('$usageCount استخدام',
-                        style: TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 10,
-                            color: cs.primary)),
+                    Text(
+                      '$usageCount استخدام',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 10,
+                        color: cs.primary,
+                      ),
+                    ),
                 ],
               ),
             ),
             // Actions
             if (!isDefault && isActive)
               IconButton(
-                icon: Icon(Icons.radio_button_unchecked_rounded,
-                    color: cs.outline, size: 22),
+                icon: Icon(
+                  Icons.radio_button_unchecked_rounded,
+                  color: cs.outline,
+                  size: 22,
+                ),
                 onPressed: () => _setDefaultModel(model['id']),
                 tooltip: 'تعيين كافتراضي',
               ),
@@ -676,11 +744,14 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Text(model['name_ar'] ?? '',
-                      style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700)),
+                  child: Text(
+                    model['name_ar'] ?? '',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded),
@@ -688,11 +759,14 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
                 ),
               ],
             ),
-            Text(model['name'] ?? '',
-                style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 13,
-                    color: cs.onSurfaceVariant)),
+            Text(
+              model['name'] ?? '',
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 13,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: 16),
             _detailRow('المعرّف', model['id'] ?? '', cs),
             _detailRow('المزود', model['provider'] ?? '', cs),
@@ -703,41 +777,56 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
             _detailRow('الاستخدامات', '${model['usage_count'] ?? 0}', cs),
             if (model['description_ar'] != null) ...[
               const SizedBox(height: 8),
-              Text('الوصف:',
-                  style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurfaceVariant)),
-              Text(model['description_ar'],
-                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+              Text(
+                'الوصف:',
+                style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                model['description_ar'],
+                style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+              ),
             ],
             if (caps.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text('القدرات:',
-                  style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurfaceVariant)),
+              Text(
+                'القدرات:',
+                style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
                 children: caps
-                    .map((c) => Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer,
-                            borderRadius: BorderRadius.circular(8),
+                    .map(
+                      (c) => Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          c,
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 11,
+                            color: cs.onPrimaryContainer,
                           ),
-                          child: Text(c,
-                              style: TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontSize: 11,
-                                  color: cs.onPrimaryContainer)),
-                        ))
+                        ),
+                      ),
+                    )
                     .toList(),
               ),
             ],
@@ -751,8 +840,10 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
                     Navigator.pop(ctx);
                   },
                   icon: const Icon(Icons.check_rounded),
-                  label: const Text('تعيين كافتراضي',
-                      style: TextStyle(fontFamily: 'Tajawal')),
+                  label: const Text(
+                    'تعيين كافتراضي',
+                    style: TextStyle(fontFamily: 'Tajawal'),
+                  ),
                 ),
               ),
           ],
@@ -768,18 +859,24 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
         children: [
           SizedBox(
             width: 100,
-            child: Text(label,
-                style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 12,
-                    color: cs.onSurfaceVariant)),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500)),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
@@ -819,12 +916,15 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
             children: [
               Icon(Icons.bar_chart_rounded, color: cs.primary, size: 20),
               const SizedBox(width: 8),
-              Text('آخر ${_recentUsage.length} طلبات',
-                  style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: cs.onSurface)),
+              Text(
+                'آخر ${_recentUsage.length} طلبات',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -853,18 +953,24 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
         ),
         child: Column(
           children: [
-            Text(value,
-                style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: color)),
+            Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
             const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 10,
-                    color: cs.onSurfaceVariant)),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 10,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ),

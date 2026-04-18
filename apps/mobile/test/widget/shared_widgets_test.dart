@@ -43,10 +43,9 @@ void main() {
 
     testWidgets('does not call onPressed when loading', (tester) async {
       bool wasPressed = false;
-      await tester.pumpWidget(buildButton(
-        isLoading: true,
-        onPressed: () => wasPressed = true,
-      ));
+      await tester.pumpWidget(
+        buildButton(isLoading: true, onPressed: () => wasPressed = true),
+      );
 
       await tester.tap(find.byType(EpiButton));
       expect(wasPressed, isFalse);
@@ -58,10 +57,7 @@ void main() {
       return ProviderScope(
         child: MaterialApp(
           home: Scaffold(
-            body: EpiCard(
-              onTap: onTap,
-              child: const Text('محتوى البطاقة'),
-            ),
+            body: EpiCard(onTap: onTap, child: const Text('محتوى البطاقة')),
           ),
         ),
       );
@@ -86,9 +82,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
-            home: Scaffold(
-              body: EpiStatusChip(status: 'approved'),
-            ),
+            home: Scaffold(body: EpiStatusChip(status: 'approved')),
           ),
         ),
       );
@@ -100,9 +94,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
-            home: Scaffold(
-              body: EpiStatusChip(status: 'rejected'),
-            ),
+            home: Scaffold(body: EpiStatusChip(status: 'rejected')),
           ),
         ),
       );
@@ -114,9 +106,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
-            home: Scaffold(
-              body: EpiStatusChip(status: 'submitted'),
-            ),
+            home: Scaffold(body: EpiStatusChip(status: 'submitted')),
           ),
         ),
       );
@@ -128,9 +118,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
-            home: Scaffold(
-              body: EpiStatusChip(status: 'custom_status'),
-            ),
+            home: Scaffold(body: EpiStatusChip(status: 'custom_status')),
           ),
         ),
       );
@@ -145,10 +133,7 @@ void main() {
         ProviderScope(
           child: const MaterialApp(
             home: Scaffold(
-              body: EpiEmptyState(
-                icon: Icons.inbox,
-                title: 'لا توجد بيانات',
-              ),
+              body: EpiEmptyState(icon: Icons.inbox, title: 'لا توجد بيانات'),
             ),
           ),
         ),
@@ -182,11 +167,7 @@ void main() {
     testWidgets('renders shimmer loading', (tester) async {
       await tester.pumpWidget(
         const ProviderScope(
-          child: MaterialApp(
-            home: Scaffold(
-              body: EpiLoading.shimmer(),
-            ),
-          ),
+          child: MaterialApp(home: Scaffold(body: EpiLoading.shimmer())),
         ),
       );
 

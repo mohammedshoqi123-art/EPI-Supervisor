@@ -9,7 +9,7 @@ import 'package:epi_core/src/security/encryption_service.dart';
 /// Simple mock encryption that passes data through (for testing only).
 class MockEncryptionService extends EncryptionService {
   MockEncryptionService()
-      : super(overrideKey: 'MOCK_TEST_KEY_32_CHARS_MINIMUM________');
+    : super(overrideKey: 'MOCK_TEST_KEY_32_CHARS_MINIMUM________');
 
   @override
   String encrypt(String plaintext) => 'enc:$plaintext';
@@ -35,7 +35,7 @@ void main() {
         type: 'form_submission',
         payload: {
           'form_id': 'f1',
-          'data': {'name': 'test'}
+          'data': {'name': 'test'},
         },
         priority: SyncPriority.critical,
         status: QueueItemStatus.retrying,
@@ -157,11 +157,11 @@ void main() {
         entityId: 'id-1',
         localData: {
           'name': 'local-value',
-          'updated_at': '2026-04-14T12:00:00Z'
+          'updated_at': '2026-04-14T12:00:00Z',
         },
         serverData: {
           'name': 'server-value',
-          'updated_at': '2026-04-14T11:00:00Z'
+          'updated_at': '2026-04-14T11:00:00Z',
         },
         localBaseTimestamp: DateTime.parse('2026-04-14T09:00:00Z'),
       );
@@ -180,8 +180,10 @@ void main() {
         detectedAt: DateTime.now(),
       );
 
-      final resolved =
-          ConflictResolver.resolve(conflict, ConflictStrategy.serverWins);
+      final resolved = ConflictResolver.resolve(
+        conflict,
+        ConflictStrategy.serverWins,
+      );
       expect(resolved['name'], equals('server'));
       expect(resolved['status'], equals('approved'));
     });
@@ -196,53 +198,59 @@ void main() {
         detectedAt: DateTime.now(),
       );
 
-      final resolved =
-          ConflictResolver.resolve(conflict, ConflictStrategy.localWins);
+      final resolved = ConflictResolver.resolve(
+        conflict,
+        ConflictStrategy.localWins,
+      );
       expect(resolved['name'], equals('local'));
       expect(resolved['status'], equals('submitted'));
     });
 
-    test('smartMerge keeps admin fields from server, field data from local',
-        () {
-      final conflict = DataConflictV2(
-        id: 'c1',
-        entityType: 'form_submission',
-        entityId: 'e1',
-        localData: {
-          'data': {'patient': 'Ahmed'},
-          'gps_lat': 33.3,
-          'status': 'submitted', // local changed this
-          'notes': 'field note',
-          'photos': ['img1.jpg'],
-        },
-        serverData: {
-          'data': {'patient': 'Ahmed Updated'}, // admin changed
-          'gps_lat': 33.3,
-          'status': 'approved', // server approved
-          'notes': 'field note',
-          'photos': ['img1.jpg'],
-          'reviewed_by': 'admin-1',
-          'reviewed_at': '2026-04-14T12:00:00Z',
-        },
-        detectedAt: DateTime.now(),
-      );
+    test(
+      'smartMerge keeps admin fields from server, field data from local',
+      () {
+        final conflict = DataConflictV2(
+          id: 'c1',
+          entityType: 'form_submission',
+          entityId: 'e1',
+          localData: {
+            'data': {'patient': 'Ahmed'},
+            'gps_lat': 33.3,
+            'status': 'submitted', // local changed this
+            'notes': 'field note',
+            'photos': ['img1.jpg'],
+          },
+          serverData: {
+            'data': {'patient': 'Ahmed Updated'}, // admin changed
+            'gps_lat': 33.3,
+            'status': 'approved', // server approved
+            'notes': 'field note',
+            'photos': ['img1.jpg'],
+            'reviewed_by': 'admin-1',
+            'reviewed_at': '2026-04-14T12:00:00Z',
+          },
+          detectedAt: DateTime.now(),
+        );
 
-      final resolved =
-          ConflictResolver.resolve(conflict, ConflictStrategy.smartMerge);
+        final resolved = ConflictResolver.resolve(
+          conflict,
+          ConflictStrategy.smartMerge,
+        );
 
-      // Field data should come from LOCAL
-      expect(resolved['data'], equals({'patient': 'Ahmed'}));
-      expect(resolved['gps_lat'], equals(33.3));
-      expect(resolved['notes'], equals('field note'));
+        // Field data should come from LOCAL
+        expect(resolved['data'], equals({'patient': 'Ahmed'}));
+        expect(resolved['gps_lat'], equals(33.3));
+        expect(resolved['notes'], equals('field note'));
 
-      // Admin fields should come from SERVER
-      expect(resolved['status'], equals('approved'));
-      expect(resolved['reviewed_by'], equals('admin-1'));
+        // Admin fields should come from SERVER
+        expect(resolved['status'], equals('approved'));
+        expect(resolved['reviewed_by'], equals('admin-1'));
 
-      // Merge metadata should be present
-      expect(resolved['_conflict_resolved'], isTrue);
-      expect(resolved['_resolution_strategy'], equals('smart_merge'));
-    });
+        // Merge metadata should be present
+        expect(resolved['_conflict_resolved'], isTrue);
+        expect(resolved['_resolution_strategy'], equals('smart_merge'));
+      },
+    );
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -256,8 +264,10 @@ void main() {
         equals('🟢'),
       );
       expect(
-        const NetworkSnapshot(status: NetworkStatus.online, pendingItems: 5)
-            .indicator,
+        const NetworkSnapshot(
+          status: NetworkStatus.online,
+          pendingItems: 5,
+        ).indicator,
         equals('🟡'),
       );
       expect(
@@ -297,15 +307,15 @@ void main() {
     test('Scenario 1: Network drops during sync — items remain in queue', () {
       // Simulate: 5 items in queue, network drops mid-sync
       final entries = List.generate(
-          5,
-          (i) => SyncQueueEntry(
-                id: 'item-$i',
-                type: 'form_submission',
-                payload: {'data': 'test-$i'},
-                createdAt: DateTime.now().subtract(Duration(seconds: 5 - i)),
-                status:
-                    i < 2 ? QueueItemStatus.syncing : QueueItemStatus.pending,
-              ));
+        5,
+        (i) => SyncQueueEntry(
+          id: 'item-$i',
+          type: 'form_submission',
+          payload: {'data': 'test-$i'},
+          createdAt: DateTime.now().subtract(Duration(seconds: 5 - i)),
+          status: i < 2 ? QueueItemStatus.syncing : QueueItemStatus.pending,
+        ),
+      );
 
       // After network drop, syncing items should be back to retrying
       // (this is handled by the manager, but the model supports it)
@@ -341,8 +351,10 @@ void main() {
       expect(conflict!.differingFields, contains('data'));
 
       // Smart merge resolves it
-      final resolved =
-          ConflictResolver.resolve(conflict, ConflictStrategy.smartMerge);
+      final resolved = ConflictResolver.resolve(
+        conflict,
+        ConflictStrategy.smartMerge,
+      );
       expect(resolved, isNotNull);
     });
 
@@ -352,16 +364,18 @@ void main() {
         final priority = i % 3 == 0
             ? SyncPriority.critical
             : i % 3 == 1
-                ? SyncPriority.high
-                : SyncPriority.normal;
-        items.add(SyncQueueEntry(
-          id: 'item-$i',
-          type: 'form_submission',
-          payload: {'index': i},
-          priority: priority,
-          createdAt: DateTime.now().subtract(Duration(seconds: 200 - i)),
-          status: QueueItemStatus.pending,
-        ));
+            ? SyncPriority.high
+            : SyncPriority.normal;
+        items.add(
+          SyncQueueEntry(
+            id: 'item-$i',
+            type: 'form_submission',
+            payload: {'index': i},
+            priority: priority,
+            createdAt: DateTime.now().subtract(Duration(seconds: 200 - i)),
+            status: QueueItemStatus.pending,
+          ),
+        );
       }
 
       // Sort as the queue would
@@ -375,53 +389,57 @@ void main() {
       expect(items.first.priority, equals(SyncPriority.critical));
 
       // Critical items should come before normal
-      final firstNormal =
-          items.indexWhere((e) => e.priority == SyncPriority.normal);
-      final lastCritical =
-          items.lastIndexWhere((e) => e.priority == SyncPriority.critical);
+      final firstNormal = items.indexWhere(
+        (e) => e.priority == SyncPriority.normal,
+      );
+      final lastCritical = items.lastIndexWhere(
+        (e) => e.priority == SyncPriority.critical,
+      );
       expect(lastCritical, lessThan(firstNormal));
     });
 
-    test('Scenario 4: Max retries exceeded — item marked as permanently failed',
-        () {
-      var entry = SyncQueueEntry(
-        id: 'flaky-item',
-        type: 'form_submission',
-        payload: {'data': 'important health data'},
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        status: QueueItemStatus.pending,
-      );
-
-      // Simulate 5 failures
-      for (int i = 0; i < 5; i++) {
-        entry = entry.copyWith(
-          retryCount: entry.retryCount + 1,
-          status: entry.retryCount + 1 >= 5
-              ? QueueItemStatus.failed
-              : QueueItemStatus.retrying,
-          lastError: 'Server error 500',
-          lastAttemptAt: DateTime.now(),
+    test(
+      'Scenario 4: Max retries exceeded — item marked as permanently failed',
+      () {
+        var entry = SyncQueueEntry(
+          id: 'flaky-item',
+          type: 'form_submission',
+          payload: {'data': 'important health data'},
+          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+          status: QueueItemStatus.pending,
         );
-      }
 
-      expect(entry.hasFailed, isTrue);
-      expect(entry.status, equals(QueueItemStatus.failed));
-      expect(entry.retryCount, equals(5));
-    });
+        // Simulate 5 failures
+        for (int i = 0; i < 5; i++) {
+          entry = entry.copyWith(
+            retryCount: entry.retryCount + 1,
+            status: entry.retryCount + 1 >= 5
+                ? QueueItemStatus.failed
+                : QueueItemStatus.retrying,
+            lastError: 'Server error 500',
+            lastAttemptAt: DateTime.now(),
+          );
+        }
+
+        expect(entry.hasFailed, isTrue);
+        expect(entry.status, equals(QueueItemStatus.failed));
+        expect(entry.retryCount, equals(5));
+      },
+    );
 
     test('Scenario 5: Offline for hours then reconnect — immediate sync', () {
       // Simulate: user works offline for 3 hours, collects 20 records
       final offlineRecords = List.generate(
-          20,
-          (i) => SyncQueueEntry(
-                id: 'offline-$i',
-                type: 'form_submission',
-                payload: {'patient': 'patient-$i', 'vaccine': 'OPV'},
-                priority: SyncPriority.critical,
-                createdAt:
-                    DateTime.now().subtract(Duration(minutes: 180 - i * 9)),
-                status: QueueItemStatus.pending,
-              ));
+        20,
+        (i) => SyncQueueEntry(
+          id: 'offline-$i',
+          type: 'form_submission',
+          payload: {'patient': 'patient-$i', 'vaccine': 'OPV'},
+          priority: SyncPriority.critical,
+          createdAt: DateTime.now().subtract(Duration(minutes: 180 - i * 9)),
+          status: QueueItemStatus.pending,
+        ),
+      );
 
       // All records should be ready
       final ready = offlineRecords.where((e) => e.isReadyForRetry).toList();
@@ -455,14 +473,15 @@ void main() {
   group('Data Optimization', () {
     test('batch submission groups items correctly', () {
       final items = List.generate(
-          75,
-          (i) => SyncQueueEntry(
-                id: 'item-$i',
-                type: 'form_submission',
-                payload: {'data': 'x' * 100},
-                createdAt: DateTime.now(),
-                status: QueueItemStatus.pending,
-              ));
+        75,
+        (i) => SyncQueueEntry(
+          id: 'item-$i',
+          type: 'form_submission',
+          payload: {'data': 'x' * 100},
+          createdAt: DateTime.now(),
+          status: QueueItemStatus.pending,
+        ),
+      );
 
       const batchSize = 50;
       final batch1 = items.take(batchSize).toList();
@@ -542,10 +561,16 @@ void main() {
         // Simulate the error (error scenario for this test case)
 
         // Verify: data is safe regardless of error type
-        expect(queue.length, equals(1),
-            reason: 'Data should survive $scenario');
-        expect(queue.first['data']['scenario'], equals(scenario),
-            reason: 'Data content should be intact after $scenario');
+        expect(
+          queue.length,
+          equals(1),
+          reason: 'Data should survive $scenario',
+        );
+        expect(
+          queue.first['data']['scenario'],
+          equals(scenario),
+          reason: 'Data content should be intact after $scenario',
+        );
       }
     });
 

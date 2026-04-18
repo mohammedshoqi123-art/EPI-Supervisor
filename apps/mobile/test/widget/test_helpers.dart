@@ -7,10 +7,7 @@ import 'package:epi_shared/epi_shared.dart';
 Widget testWrapper(Widget child) {
   return ProviderScope(
     child: MaterialApp(
-      home: Directionality(
-        textDirection: TextDirection.rtl,
-        child: child,
-      ),
+      home: Directionality(textDirection: TextDirection.rtl, child: child),
       // Use a simple theme for tests
       theme: ThemeData(
         fontFamily: 'Tajawal',

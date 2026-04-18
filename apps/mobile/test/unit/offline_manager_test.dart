@@ -43,7 +43,7 @@ void main() {
       // This test verifies the offline_id is used as idempotency key
       final submission = {
         'form_id': 'test',
-        'data': {'field': 'value'}
+        'data': {'field': 'value'},
       };
 
       // Simulate what addToSyncQueue does

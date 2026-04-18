@@ -8,7 +8,8 @@ void main() {
 
     setUp(() {
       service = EncryptionService(
-          overrideKey: 'EPI_SUPERVISOR_TEST_KEY_32_CHARS_MINIMUM');
+        overrideKey: 'EPI_SUPERVISOR_TEST_KEY_32_CHARS_MINIMUM',
+      );
     });
 
     test('encrypt produces non-empty base64 output', () {
@@ -61,10 +62,7 @@ void main() {
         bytes[bytes.length - 5] = bytes[bytes.length - 5] ^ 0xFF;
       }
       final tampered = base64Encode(bytes);
-      expect(
-        () => service.decrypt(tampered),
-        throwsA(isA<Exception>()),
-      );
+      expect(() => service.decrypt(tampered), throwsA(isA<Exception>()));
     });
 
     test('truncated ciphertext throws exception', () {
@@ -72,10 +70,7 @@ void main() {
       final bytes = base64Decode(encrypted);
       // Truncate to half
       final truncated = base64Encode(bytes.sublist(0, bytes.length ~/ 2));
-      expect(
-        () => service.decrypt(truncated),
-        throwsA(isA<Exception>()),
-      );
+      expect(() => service.decrypt(truncated), throwsA(isA<Exception>()));
     });
 
     test('invalid base64 throws exception', () {

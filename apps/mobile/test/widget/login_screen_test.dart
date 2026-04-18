@@ -15,8 +15,9 @@ void main() {
       );
     }
 
-    testWidgets('renders login form with email and password fields',
-        (tester) async {
+    testWidgets('renders login form with email and password fields', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildLoginScreen());
       await tester.pumpAndSettle();
 
@@ -44,8 +45,9 @@ void main() {
       expect(formState.validate(), isFalse);
     });
 
-    testWidgets('shows validation error for invalid email format',
-        (tester) async {
+    testWidgets('shows validation error for invalid email format', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildLoginScreen());
       await tester.pumpAndSettle();
 
@@ -111,8 +113,9 @@ void main() {
       expect(find.byIcon(Icons.visibility), findsOneWidget);
     });
 
-    testWidgets('displays Supabase warning when not configured',
-        (tester) async {
+    testWidgets('displays Supabase warning when not configured', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildLoginScreen());
       await tester.pumpAndSettle();
 

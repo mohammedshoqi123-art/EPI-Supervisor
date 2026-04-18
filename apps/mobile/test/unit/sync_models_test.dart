@@ -41,7 +41,10 @@ void main() {
       entry = SyncQueueEntry(
         id: 'test-123',
         type: 'form_submission',
-        payload: {'form_id': 'abc', 'data': {'field1': 'value1'}},
+        payload: {
+          'form_id': 'abc',
+          'data': {'field1': 'value1'},
+        },
         priority: SyncPriority.critical,
         createdAt: DateTime.now(),
       );
@@ -117,7 +120,10 @@ void main() {
       expect(modified.id, equals(entry.id));
       expect(modified.status, equals(QueueItemStatus.syncing));
       expect(modified.retryCount, equals(2));
-      expect(entry.status, equals(QueueItemStatus.pending)); // Original unchanged
+      expect(
+        entry.status,
+        equals(QueueItemStatus.pending),
+      ); // Original unchanged
     });
 
     test('toJson and fromJson roundtrip', () {

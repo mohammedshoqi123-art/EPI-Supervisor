@@ -11,10 +11,7 @@ void main() {
 
     test('validate throws when Supabase is not configured', () {
       // In test env without --dart-define, validate should throw
-      expect(
-        () => EnvValidator.validate(),
-        throwsA(isA<Exception>()),
-      );
+      expect(() => EnvValidator.validate(), throwsA(isA<Exception>()));
     });
   });
 }

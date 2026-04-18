@@ -207,33 +207,90 @@ void main() {
     });
 
     test('manageUsers requires central+ (level 4+)', () {
-      expect(RBACService.canPerformAction(UserRole.central, RBACAction.manageUsers), isTrue);
-      expect(RBACService.canPerformAction(UserRole.governorate, RBACAction.manageUsers), isFalse);
-      expect(RBACService.canPerformAction(UserRole.district, RBACAction.manageUsers), isFalse);
-      expect(RBACService.canPerformAction(UserRole.data_entry, RBACAction.manageUsers), isFalse);
+      expect(
+        RBACService.canPerformAction(UserRole.central, RBACAction.manageUsers),
+        isTrue,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.governorate,
+          RBACAction.manageUsers,
+        ),
+        isFalse,
+      );
+      expect(
+        RBACService.canPerformAction(UserRole.district, RBACAction.manageUsers),
+        isFalse,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.data_entry,
+          RBACAction.manageUsers,
+        ),
+        isFalse,
+      );
     });
 
     test('manageForms requires central+ (level 4+)', () {
-      expect(RBACService.canPerformAction(UserRole.central, RBACAction.manageForms), isTrue);
-      expect(RBACService.canPerformAction(UserRole.governorate, RBACAction.manageForms), isFalse);
+      expect(
+        RBACService.canPerformAction(UserRole.central, RBACAction.manageForms),
+        isTrue,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.governorate,
+          RBACAction.manageForms,
+        ),
+        isFalse,
+      );
     });
 
     test('approveSubmissions requires governorate+ (level 3+)', () {
-      expect(RBACService.canPerformAction(UserRole.central, RBACAction.approveSubmissions), isTrue);
-      expect(RBACService.canPerformAction(UserRole.governorate, RBACAction.approveSubmissions), isTrue);
-      expect(RBACService.canPerformAction(UserRole.district, RBACAction.approveSubmissions), isFalse);
-      expect(RBACService.canPerformAction(UserRole.data_entry, RBACAction.approveSubmissions), isFalse);
+      expect(
+        RBACService.canPerformAction(
+          UserRole.central,
+          RBACAction.approveSubmissions,
+        ),
+        isTrue,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.governorate,
+          RBACAction.approveSubmissions,
+        ),
+        isTrue,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.district,
+          RBACAction.approveSubmissions,
+        ),
+        isFalse,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.data_entry,
+          RBACAction.approveSubmissions,
+        ),
+        isFalse,
+      );
     });
 
     test('all roles can export data', () {
       for (final role in UserRole.values) {
-        expect(RBACService.canPerformAction(role, RBACAction.exportData), isTrue);
+        expect(
+          RBACService.canPerformAction(role, RBACAction.exportData),
+          isTrue,
+        );
       }
     });
 
     test('all roles can submit forms', () {
       for (final role in UserRole.values) {
-        expect(RBACService.canPerformAction(role, RBACAction.submitForms), isTrue);
+        expect(
+          RBACService.canPerformAction(role, RBACAction.submitForms),
+          isTrue,
+        );
       }
     });
 
@@ -244,19 +301,61 @@ void main() {
     });
 
     test('manageGovernorates is admin-only', () {
-      expect(RBACService.canPerformAction(UserRole.admin, RBACAction.manageGovernorates), isTrue);
-      expect(RBACService.canPerformAction(UserRole.central, RBACAction.manageGovernorates), isFalse);
-      expect(RBACService.canPerformAction(UserRole.governorate, RBACAction.manageGovernorates), isFalse);
+      expect(
+        RBACService.canPerformAction(
+          UserRole.admin,
+          RBACAction.manageGovernorates,
+        ),
+        isTrue,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.central,
+          RBACAction.manageGovernorates,
+        ),
+        isFalse,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.governorate,
+          RBACAction.manageGovernorates,
+        ),
+        isFalse,
+      );
     });
 
     test('manageDistricts is admin-only', () {
-      expect(RBACService.canPerformAction(UserRole.admin, RBACAction.manageDistricts), isTrue);
-      expect(RBACService.canPerformAction(UserRole.central, RBACAction.manageDistricts), isFalse);
+      expect(
+        RBACService.canPerformAction(
+          UserRole.admin,
+          RBACAction.manageDistricts,
+        ),
+        isTrue,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.central,
+          RBACAction.manageDistricts,
+        ),
+        isFalse,
+      );
     });
 
     test('viewAuditLogs requires central+ (level 4+)', () {
-      expect(RBACService.canPerformAction(UserRole.central, RBACAction.viewAuditLogs), isTrue);
-      expect(RBACService.canPerformAction(UserRole.governorate, RBACAction.viewAuditLogs), isFalse);
+      expect(
+        RBACService.canPerformAction(
+          UserRole.central,
+          RBACAction.viewAuditLogs,
+        ),
+        isTrue,
+      );
+      expect(
+        RBACService.canPerformAction(
+          UserRole.governorate,
+          RBACAction.viewAuditLogs,
+        ),
+        isFalse,
+      );
     });
   });
 
@@ -269,7 +368,14 @@ void main() {
 
     test('central can assign governorate, district, data_entry', () {
       final roles = RBACService.assignableRoles(UserRole.central);
-      expect(roles, containsAll([UserRole.governorate, UserRole.district, UserRole.data_entry]));
+      expect(
+        roles,
+        containsAll([
+          UserRole.governorate,
+          UserRole.district,
+          UserRole.data_entry,
+        ]),
+      );
       expect(roles, isNot(contains(UserRole.admin)));
       expect(roles, isNot(contains(UserRole.central)));
     });
@@ -296,14 +402,20 @@ void main() {
   group('RBACService — enforcePermission', () {
     test('throws PermissionException when insufficient permissions', () {
       expect(
-        () => RBACService.enforcePermission(UserRole.data_entry, RBACAction.manageUsers),
+        () => RBACService.enforcePermission(
+          UserRole.data_entry,
+          RBACAction.manageUsers,
+        ),
         throwsA(isA<PermissionException>()),
       );
     });
 
     test('does not throw when permissions are sufficient', () {
       expect(
-        () => RBACService.enforcePermission(UserRole.admin, RBACAction.manageUsers),
+        () => RBACService.enforcePermission(
+          UserRole.admin,
+          RBACAction.manageUsers,
+        ),
         returnsNormally,
       );
     });

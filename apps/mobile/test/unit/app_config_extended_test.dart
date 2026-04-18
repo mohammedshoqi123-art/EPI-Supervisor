@@ -11,7 +11,10 @@ void main() {
 
     test('pagination limits are sensible', () {
       expect(AppConfig.defaultPageSize, greaterThan(0));
-      expect(AppConfig.maxPageSize, greaterThanOrEqualTo(AppConfig.defaultPageSize));
+      expect(
+        AppConfig.maxPageSize,
+        greaterThanOrEqualTo(AppConfig.defaultPageSize),
+      );
     });
 
     test('cache expiry is positive', () {

@@ -56,7 +56,11 @@ void main() {
 
   group('GeoUtils — Formatting', () {
     test('formatCoordinates produces expected output', () {
-      final formatted = GeoUtils.formatCoordinates(15.3694, 44.1910, decimals: 4);
+      final formatted = GeoUtils.formatCoordinates(
+        15.3694,
+        44.1910,
+        decimals: 4,
+      );
       expect(formatted, equals('15.3694, 44.1910'));
     });
 

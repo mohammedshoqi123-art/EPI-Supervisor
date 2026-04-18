@@ -219,6 +219,46 @@ function compressCtx(ctx: any) {
   return `إرسالات: كلي=${s.total ?? '?'} اليوم=${s.today ?? '?'}\nنواقص: كلي=${sh.total ?? '?'} محلول=${sh.resolved ?? '?'}`
 }
 
+// ═══ RAG Helpers ═══
+
+// Arabic stop words to filter out
+const STOP_WORDS = new Set([
+  'في', 'من', 'على', 'إلى', 'هل', 'ما', 'هذا', 'هذه', 'ذلك', 'التي',
+  'الذي', 'كيف', 'لماذا', 'متى', 'أين', 'كم', 'ماذا', 'هل', 'لا',
+  'نعم', 'أو', 'و', 'ثم', 'أن', 'إن', 'كان', 'كانت', 'يكون', 'تكون',
+  'هو', 'هي', 'هم', 'نحن', 'أنت', 'أنا', 'عند', 'بعد', 'قبل', 'بين',
+  'حتى', 'عبر', 'حول', 'ضد', 'مع', 'بدون', 'خلال', 'نحو', 'لدى',
+])
+
+function extractKeywords(text: string): string[] {
+  const words = text
+    .replace(/[^\u0600-\u06FF\u0750-\u07FF\s]/g, ' ') // Arabic chars only
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w))
+
+  // Also extract important EPI-specific terms
+  const epiTerms = ['تطعيم', 'لقاح', 'تغطية', 'تغطية', 'نواقص', 'إرساليات',
+    'محافظة', 'district', 'Penta', 'OPV', 'BCG', 'MR', 'IPV', 'PCV',
+    'سل', 'شلل', 'حصبة', 'خماسي', 'رئوي', 'روتا', 'كبد',
+    'تحصين', 'حملة', 'جرعة', 'ولادة', 'تبريد', 'مخزون',
+    '.dropout', 'انسحاب', 'تقرير', 'تحليل', 'أداء', 'جودة']
+
+  const found = epiTerms.filter(t => text.includes(t))
+  return [...new Set([...words.slice(0, 5), ...found])].slice(0, 8)
+}
+
+function scoreChunk(content: string, keywords: string[]): number {
+  const lower = content.toLowerCase()
+  let score = 0
+  for (const kw of keywords) {
+    const count = (lower.match(new RegExp(kw.toLowerCase(), 'g')) || []).length
+    score += count
+  }
+  // Bonus for shorter chunks (more focused)
+  if (content.length < 500) score *= 1.5
+  return score
+}
+
 // ═══════════════════════════════════════════════════════════
 // STREAMING HELPER
 // ═══════════════════════════════════════════════════════════
@@ -316,6 +356,26 @@ serve(async (req) => {
       return jsonResponse({ suggestions: ['📊 ما حالة الإرساليات؟', '⚠️ أين النواقص الحرجة؟', '📈 اعرض تقرير أسبوعي', '🗺️ أي المحافظات تحتاج دعم؟', '💉 ما تغطية التطعيم؟'] }, 200, origin)
     }
 
+    // ─── MODE: Knowledge base status (for admin) ───
+    if (mode === 'knowledge_status') {
+      const { data: docs } = await supa
+        .from('ai_documents')
+        .select('id, title, doc_type, total_chunks, is_indexed, created_at')
+        .order('created_at', { ascending: false })
+
+      const { data: chunkCount } = await supa
+        .from('ai_chunks')
+        .select('id', { count: 'exact', head: true })
+
+      return jsonResponse({
+        documents: docs || [],
+        totalChunks: chunkCount || 0,
+        searchable: true,
+        searchMethod: 'keyword_matching',
+        note: 'HuggingFace embeddings pending — using keyword search',
+      }, 200, origin)
+    }
+
     // ─── MODE: Model status (for admin) ───
     if (mode === 'model_status') {
       const { data: models } = await supabase
@@ -369,13 +429,69 @@ serve(async (req) => {
       return jsonResponse({ reply: formatResult(intent, dbResult), source: 'function_call', intent, data: dbResult }, 200, origin)
     }
 
-    // ─── STEP 3: RAG context ───
+    // ─── STEP 3: RAG — Knowledge Base Search ───
     let rag = ''
-    if (message?.includes('تطعيم') || message?.includes('لقاح')) {
-      rag = 'جدول التطعيم: ولادة→BCG+OPV0+HepB. 6 أسابيع→Penta1+OPV1+PCV1+Rota1. 10 أسابيع→Penta2. 14 أسبوع→Penta3+IPV. 9 أشهر→MR'
-    }
-    if (message?.includes('مؤشر') || message?.includes('تغطية')) {
-      rag += '\nPenta3=وصول, Dropout=(Penta1-Penta3)/Penta1×100, 80+=ممتاز'
+    let ragDocs: any[] = []
+
+    if (message) {
+      try {
+        // Search ai_chunks using keyword matching + relevance scoring
+        const keywords = extractKeywords(message)
+        if (keywords.length > 0) {
+          // Build search conditions for each keyword
+          const conditions = keywords.map((kw: string) =>
+            `content ILIKE '%${kw.replace(/'/g, "''")}%'`
+          ).slice(0, 5) // Max 5 keyword conditions
+
+          const { data: chunkResults } = await supa
+            .from('ai_chunks')
+            .select('id, document_id, content, metadata')
+            .or(conditions.join(','))
+            .limit(5)
+
+          if (chunkResults && chunkResults.length > 0) {
+            // Score and rank results
+            const scored = chunkResults.map((c: any) => ({
+              ...c,
+              score: scoreChunk(c.content, keywords)
+            })).sort((a: any, b: any) => b.score - a.score).slice(0, 3)
+
+            ragDocs = scored
+            rag = scored.map((c: any) =>
+              `[${c.metadata?.section || c.metadata?.source || c.document_id}]\n${c.content.slice(0, 800)}`
+            ).join('\n\n---\n\n')
+          }
+        }
+
+        // Also check if query matches specific data patterns
+        if (message.includes('تغطية') || message.includes('coverage')) {
+          const { data: covData } = await supa
+            .from('ai_chunks')
+            .select('content, metadata')
+            .eq('document_id', 'coverage_dec2025')
+            .limit(1)
+          if (covData?.[0]) {
+            rag += '\n\n[بيانات التغطية]\n' + covData[0].content.slice(0, 800)
+          }
+        }
+
+        if (message.includes('معدل الجلسة') || message.includes('session')) {
+          const { data: sessData } = await supa
+            .from('ai_chunks')
+            .select('content, metadata')
+            .eq('document_id', 'session_rate_2026')
+            .limit(1)
+          if (sessData?.[0]) {
+            rag += '\n\n[معدل الجلسة 2026]\n' + sessData[0].content.slice(0, 800)
+          }
+        }
+      } catch (e) {
+        console.error('RAG search failed:', e)
+        // Fallback: basic keyword context
+        if (message.includes('تطعيم') || message.includes('لقاح')) {
+          rag = 'جدول التطعيم: ولادة→BCG+OPV0+HepB. 6 أسابيع→Penta1+OPV1+PCV1+Rota1. 10 أسابيع→Penta2. 14 أسبوع→Penta3+IPV. 9 أشهر→MR'
+        }
+      }
     }
 
     // ─── STEP 4: LLM Response ───

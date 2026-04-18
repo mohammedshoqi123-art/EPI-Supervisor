@@ -38,29 +38,52 @@ double_confirm_changes = false
 enable_confirmations = false
 
 # Edge Functions
+# ═══ SECURITY: All functions require valid JWT by default.
+# Functions already validate JWTs manually via _shared/auth.ts.
+# verify_jwt = true adds defense-in-depth at the Edge proxy layer.
+# ═══
+
 [functions.submit-form]
-verify_jwt = false
+verify_jwt = true
 
 [functions.sync-offline]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-analytics]
-verify_jwt = false
+verify_jwt = true
 
-[functions.ai-chat]
-verify_jwt = false
+[functions.ai-chat-v3]
+verify_jwt = true
 
 [functions.create-admin]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-actions]
-verify_jwt = false
+verify_jwt = true
+
+[functions.manage-data]
+verify_jwt = true
+
+[functions.manage-notifications]
+verify_jwt = true
+
+[functions.get-admin-dashboard]
+verify_jwt = true
 
 [functions.get-dashboard-stats]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-governorate-report]
-verify_jwt = false
+verify_jwt = true
+
+[functions.get-advanced-reports]
+verify_jwt = true
+
+[functions.export-data]
+verify_jwt = true
+
+[functions.system-monitor]
+verify_jwt = true
 
 # Analytics
 [analytics]

@@ -59,7 +59,7 @@ export function AIChatWidget() {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
-      const { data } = await supabase.functions.invoke('ai-chat', {
+      const { data } = await supabase.functions.invoke('ai-chat-v3', {
         body: { message: '', mode: 'suggestions', history: [] },
       })
       if (data?.suggestions) setSuggestions(data.suggestions)
@@ -97,7 +97,7 @@ export function AIChatWidget() {
         content: m.content,
       }))
 
-      const { data, error } = await supabase.functions.invoke('ai-chat', {
+      const { data, error } = await supabase.functions.invoke('ai-chat-v3', {
         body: {
           message: text || '',
           template: template || undefined,

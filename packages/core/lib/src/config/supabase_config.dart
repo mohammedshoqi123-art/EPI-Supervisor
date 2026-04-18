@@ -52,7 +52,7 @@ class SupabaseConfig {
   static const String fnSubmitForm = 'submit-form';
   static const String fnSyncOffline = 'sync-offline';
   static const String fnGetAnalytics = 'get-analytics';
-  static const String fnAiChat = 'ai-chat';
+  static const String fnAiChat = 'ai-chat-v3';
   static const String fnCreateAdmin = 'create-admin';
   static const String fnAdminActions = 'admin-actions';
 
@@ -65,10 +65,8 @@ class SupabaseConfig {
   static const String channelShortages = 'shortages';
 }
 
-// ═══ AI v2 Configuration ═══
+// ═══ AI Configuration ═══
 extension SupabaseConfigAI on SupabaseConfig {
-  static const String fnAiChatV2 = 'ai-chat-v2';
-  
   static const String _compileHfToken = String.fromEnvironment(
     'HF_API_TOKEN',
     defaultValue: '',

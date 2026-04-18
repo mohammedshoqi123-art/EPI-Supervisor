@@ -43,3 +43,42 @@
 
 ### 9. CI Uses `--no-fatal-infos` But May Have Warnings
 - Already handled with flag
+
+---
+
+# Security Audit Fixes — 2026-04-18
+
+## 🔴 Critical
+
+### 10. verify_jwt = false on All Edge Functions
+- **Problem**: All Edge Functions had `verify_jwt = false` in `supabase/config.toml`, meaning JWT verification was skipped at the Edge proxy layer
+- **Impact**: Defense-in-depth was missing — if a code bug skipped manual JWT validation, requests bypassed auth
+- **Fix**: Set `verify_jwt = true` for all 15 Edge Functions + added comments explaining the security rationale
+
+### 11. CI Deploys Functions with `--no-verify-jwt`
+- **Problem**: `ci.yml` deployed all functions with `--no-verify-jwt` flag, overriding config.toml
+- **Fix**: Removed `--no-verify-jwt` from deploy command; functions now respect config.toml per-function settings
+
+### 12. Dead AI Chat Versions (v1, v2)
+- **Problem**: Three AI chat versions existed: `ai-chat/`, `ai-chat-v2/`, `ai-chat-v3/`. Only v3 was active but old versions still deployed
+- **Fix**: 
+  - Updated `AIChatWidget.tsx` (admin web) to use `ai-chat-v3` instead of `ai-chat`
+  - Updated `SupabaseConfig.fnAiChat` to point to `ai-chat-v3`
+  - Removed `fnAiChatV2` constant
+  - Deleted `supabase/functions/ai-chat/` and `supabase/functions/ai-chat-v2/`
+  - Removed old function entries from `config.toml`
+
+### 13. Export Data Without Rate Limiting
+- **Problem**: `export-data` Edge Function had no rate limiting, unlike other functions
+- **Impact**: Valid credentials could spam unlimited export requests
+- **Fix**: Added `checkExportRateLimit()` with DB-backed rate limiting (5 exports per minute, fail-closed)
+
+## 🟡 Medium
+
+### 14. CI: build_runner with `|| true` (Error Swallowing)
+- **Problem**: Two places in `ci.yml` used `|| true` to suppress build_runner failures, allowing stale generated code to ship
+- **Fix**: Removed `|| true` from both locations — CI now fails if code generation fails
+
+### 15. .gitignore Duplicates & Contradictions
+- **Problem**: Bottom of `.gitignore` had duplicate entries (`.dart_tool/`, `build/`, `.env`, `*.freezed.dart`) and a contradictory `*.g.dart` entry
+- **Fix**: Cleaned up duplicates; removed `*.g.dart` from ignore list (as the comment at top says these should be committed)

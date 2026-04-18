@@ -60,8 +60,7 @@ jobs:
 
       - name: Generate code (shared)
         working-directory: packages/shared
-        run: |
-          dart run build_runner build --delete-conflicting-outputs || true
+        run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Check formatting
         working-directory: apps/mobile
@@ -112,7 +111,7 @@ jobs:
       - name: Setup project
         run: |
           cd packages/core && flutter pub get
-          cd $GITHUB_WORKSPACE/packages/shared && flutter pub get && dart run build_runner build --delete-conflicting-outputs || true
+          cd $GITHUB_WORKSPACE/packages/shared && flutter pub get && dart run build_runner build --delete-conflicting-outputs
           cd $GITHUB_WORKSPACE/packages/features && flutter pub get
           cd $GITHUB_WORKSPACE/apps/mobile && flutter pub get
 
@@ -215,7 +214,8 @@ jobs:
             echo "⚠️ SUPABASE_ACCESS_TOKEN not set, skipping function deployment"
             exit 0
           fi
-          supabase functions deploy --project-ref $SUPABASE_PROJECT_REF --no-verify-jwt
+          # Deploy functions — JWT verification is controlled by supabase/config.toml per function
+          supabase functions deploy --project-ref $SUPABASE_PROJECT_REF
 
   # ─── Create Release ──────────────────────────────────────
   release:

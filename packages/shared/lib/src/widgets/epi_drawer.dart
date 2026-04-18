@@ -222,6 +222,9 @@ class EpiDrawer extends StatelessWidget {
                   _SectionLabel(label: 'الذكاء الاصطناعي'),
                   _buildItem(context, Icons.auto_awesome_rounded,
                       'المساعد الذكي', '/ai'),
+                  if (userRoleLevel >= 5)
+                    _buildItem(context, Icons.psychology_rounded,
+                        'إدارة النماذج الذكية', '/ai-models'),
 
                   // Admin-only sections
                   if (userRoleLevel >= 4) ...[

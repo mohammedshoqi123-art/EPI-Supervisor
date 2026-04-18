@@ -488,10 +488,13 @@ final notificationCountProvider = StreamProvider<int>((ref) async* {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// AI v2: HuggingFace + RAG + Function Calling + Enhanced Local
+// AI Services
 // ═══════════════════════════════════════════════════════════════
+//
+// The mobile app uses ai-chat-v3 Edge Function for all AI queries.
+// These providers are used only for offline fallback (HF intent).
 
-/// HuggingFace Service — optional, requires HF_API_TOKEN
+/// HuggingFace Service — used for offline intent classification fallback
 final huggingFaceServiceProvider = Provider<HuggingFaceService?>((ref) {
   const hfToken = String.fromEnvironment('HF_API_TOKEN', defaultValue: '');
   if (hfToken.isEmpty) return null;
@@ -500,81 +503,7 @@ final huggingFaceServiceProvider = Provider<HuggingFaceService?>((ref) {
   return service;
 });
 
-/// RAG Pipeline — builds knowledge base on init
-final ragPipelineProvider = FutureProvider<RagPipeline?>((ref) async {
-  final hf = ref.watch(huggingFaceServiceProvider);
-  if (hf == null) return null;
-  final rag = RagPipeline(hf);
-  try {
-    await rag.buildKnowledgeBase().timeout(const Duration(seconds: 30));
-  } catch (e) {
-    debugPrint('[RAG] Build failed: $e');
-  }
-  return rag;
-});
-
-/// Function Calling Engine
-final functionCallingEngineProvider = Provider<FunctionCallingEngine?>((ref) {
-  final hf = ref.watch(huggingFaceServiceProvider);
-  if (hf == null) return null;
-  return FunctionCallingEngine(hf);
-});
-
 /// Enhanced Local AI — always available offline
 final enhancedLocalAIProvider = Provider<EnhancedLocalAI>((ref) {
   return EnhancedLocalAI();
-});
-
-/// Unified AI Router — the main entry point for all AI queries
-final aiRouterProvider = FutureProvider<AIRouter>((ref) async {
-  final hf = ref.watch(huggingFaceServiceProvider);
-  final rag = await ref.watch(ragPipelineProvider.future);
-  final fnCall = ref.watch(functionCallingEngineProvider);
-
-  final offline = await ref.watch(offlineManagerProvider.future);
-
-  final router = AIRouter(hf: hf, rag: rag, fnCall: fnCall, offline: offline);
-
-  await router.init();
-  return router;
-});
-
-/// AI System Status — for diagnostics UI
-final aiSystemStatusProvider = FutureProvider<Map<String, dynamic>>((
-  ref,
-) async {
-  final router = await ref.watch(aiRouterProvider.future);
-  return router.systemStatus;
-});
-
-// ═══════════════════════════════════════════════════════════════
-// AI v3: Groq + HuggingFace + MiMo Unified
-// ═══════════════════════════════════════════════════════════════
-
-/// Groq Service — ultra-fast LLM
-final groqServiceProvider = Provider<GroqService?>((ref) {
-  const key = String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
-  if (key.isEmpty) return null;
-  final service = GroqService(key);
-  ref.onDispose(service.dispose);
-  return service;
-});
-
-/// Unified AI Provider — combines all AI services
-final unifiedAIProviderProvider = FutureProvider<UnifiedAIProvider>((
-  ref,
-) async {
-  final groq = ref.watch(groqServiceProvider);
-  final hf = ref.watch(huggingFaceServiceProvider);
-  final rag = await ref.watch(ragPipelineProvider.future);
-  final fnCall = ref.watch(functionCallingEngineProvider);
-  final offline = await ref.watch(offlineManagerProvider.future);
-
-  return UnifiedAIProvider(
-    groq: groq,
-    hf: hf,
-    rag: rag,
-    fnCall: fnCall,
-    offline: offline,
-  );
 });

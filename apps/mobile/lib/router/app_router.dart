@@ -22,6 +22,7 @@ import '../screens/profile_screen.dart';
 import '../screens/users_screen.dart';
 import '../screens/forms_management_screen.dart';
 import '../screens/references_management_screen.dart';
+import '../screens/ai_models_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authAsync = ref.watch(authStateProvider);
@@ -138,6 +139,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/references-management',
             builder: (context, state) => const ReferencesManagementScreen(),
+          ),
+          GoRoute(
+            path: '/ai-models',
+            builder: (context, state) => const AiModelsScreen(),
           ),
         ],
       ),

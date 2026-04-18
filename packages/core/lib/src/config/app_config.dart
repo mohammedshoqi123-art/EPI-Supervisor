@@ -53,10 +53,12 @@ class AppConfig {
   static const Duration realtimeHeartbeat = Duration(seconds: 30);
 
   // ─── AI ──────────────────────────────────────────────────────────────────
-  static const String aiModel = 'mimo-v2-pro';
-  static const String aiProvider = 'xiaomi-mimo';
-  static const int maxChatHistory = 20;
-  static const int aiMaxTokens = 2048;
+  // Note: Actual model is configured in DB (ai_models table).
+  // These are fallback defaults for offline/initial state.
+  static const String aiModel = 'llama-3.3-70b-versatile';
+  static const String aiProvider = 'groq';
+  static const int maxChatHistory = 6;
+  static const int aiMaxTokens = 800;
 
   // ─── Environment ─────────────────────────────────────────────────────────
   static const String environment = String.fromEnvironment(

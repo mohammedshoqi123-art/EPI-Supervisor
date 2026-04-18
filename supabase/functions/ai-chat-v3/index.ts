@@ -17,6 +17,70 @@ const HF_MODELS = {
   qa: 'deepset/xlm-roberta-base-squad2',
 }
 
+// Cache for DB model config (refreshed every 5 min)
+let _modelConfigCache: { data: any; ts: number } | null = null
+const MODEL_CONFIG_TTL = 5 * 60 * 1000
+
+async function getModelConfig(supa: any) {
+  const now = Date.now()
+  if (_modelConfigCache && (now - _modelConfigCache.ts) < MODEL_CONFIG_TTL) {
+    return _modelConfigCache.data
+  }
+  try {
+    // Get active model from ai_models table
+    const { data: model } = await supa
+      .from('ai_models')
+      .select('*')
+      .eq('is_default', true)
+      .eq('is_active', true)
+      .single()
+
+    // Get AI settings from app_settings
+    const { data: settings } = await supa
+      .from('app_settings')
+      .select('key, value')
+      .in('key', ['ai_enabled', 'ai_default_model', 'ai_fallback_enabled', 'ai_stream_enabled', 'ai_max_history', 'ai_rate_limit'])
+
+    const settingsMap: Record<string, any> = {}
+    settings?.forEach((s: any) => { settingsMap[s.key] = s.value })
+
+    const config = {
+      defaultModel: model,
+      enabled: settingsMap.ai_enabled !== false,
+      fallbackEnabled: settingsMap.ai_fallback_enabled !== false,
+      streamEnabled: settingsMap.ai_stream_enabled !== false,
+      maxHistory: Number(settingsMap.ai_max_history) || 6,
+      rateLimit: Number(settingsMap.ai_rate_limit) || 25,
+    }
+
+    _modelConfigCache = { data: config, ts: now }
+    return config
+  } catch (e) {
+    console.error('Failed to load model config:', e)
+    // Fallback defaults
+    return {
+      defaultModel: null,
+      enabled: true,
+      fallbackEnabled: true,
+      streamEnabled: true,
+      maxHistory: 6,
+      rateLimit: 25,
+    }
+  }
+}
+
+async function logUsage(supa: any, modelId: string, tokens: number, latencyMs: number, success: boolean, error?: string) {
+  try {
+    await supa.rpc('log_ai_usage', {
+      p_model_id: modelId,
+      p_tokens: tokens,
+      p_latency_ms: latencyMs,
+      p_success: success,
+      p_error: error || null,
+    })
+  } catch { /* non-critical */ }
+}
+
 // ═══════════════════════════════════════════════════════════
 // KNOWLEDGE BASE
 // ═══════════════════════════════════════════════════════════
@@ -213,6 +277,13 @@ serve(async (req) => {
       if (!data?.[0]?.allowed) return jsonResponse({ error: 'Rate limit' }, 429, origin)
     } catch { return jsonResponse({ error: 'Rate limit check failed' }, 429, origin) }
 
+    // Load model config from database
+    const modelConfig = await getModelConfig(supabase)
+
+    if (!modelConfig.enabled) {
+      return jsonResponse({ error: 'AI service is disabled', source: 'disabled' }, 503, origin)
+    }
+
     const { message, history = [], context, mode, template, stream = false } = await req.json()
     if (!message && !template) return jsonResponse({ error: 'Message required' }, 400, origin)
 
@@ -220,20 +291,59 @@ serve(async (req) => {
     const hfToken = Deno.env.get('HF_API_TOKEN')
     const mimoKey = Deno.env.get('MIMO_API_KEY') ?? Deno.env.get('GEMINI_API_KEY')
 
+    // Determine which model/provider to use from DB config
+    const dbModel = modelConfig.defaultModel
+    const dbProvider = dbModel?.provider
+    const dbModelId = dbModel?.model_id
+    const dbMaxTokens = dbModel?.max_tokens || 800
+    const dbTemperature = Number(dbModel?.temperature) || 0.4
+
     // ─── MODE: Suggestions ───
     if (mode === 'suggestions') {
       const key = groqKey || mimoKey
       if (key) {
         const useGroq = !!groqKey
         const chatFn = useGroq ? groqChat : mimoChat
+        const startMs = Date.now()
         const r = await chatFn([
           { role: 'system', content: 'اقترح 5 اقتراحات متنوعة لمستخدم منصة مشرف EPI اليمن. سطر واحد لكل اقتراح بدون ترقيم.' },
           { role: 'user', content: 'اقتراحات' },
         ], key, useGroq ? { model: 'llama-3.1-8b-instant', maxTokens: 200 } : false)
         const text = r?.choices?.[0]?.message?.content ?? ''
+        await logUsage(supabase, useGroq ? 'groq-8b' : 'mimo-v2', r?.usage?.total_tokens || 0, Date.now() - startMs, true)
         return jsonResponse({ suggestions: text.split('\n').filter((s: string) => s.trim().length > 5).slice(0, 5) }, 200, origin)
       }
       return jsonResponse({ suggestions: ['📊 ما حالة الإرساليات؟', '⚠️ أين النواقص الحرجة؟', '📈 اعرض تقرير أسبوعي', '🗺️ أي المحافظات تحتاج دعم؟', '💉 ما تغطية التطعيم؟'] }, 200, origin)
+    }
+
+    // ─── MODE: Model status (for admin) ───
+    if (mode === 'model_status') {
+      const { data: models } = await supabase
+        .from('ai_models')
+        .select('id, name, name_ar, provider, model_id, is_active, is_default, priority, usage_count, last_used_at, capabilities')
+        .order('priority')
+
+      const { data: recentUsage } = await supabase
+        .from('ai_model_usage')
+        .select('model_id, success, latency_ms, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      return jsonResponse({
+        models: models || [],
+        recentUsage: recentUsage || [],
+        currentConfig: {
+          defaultModel: dbModel?.id,
+          enabled: modelConfig.enabled,
+          fallbackEnabled: modelConfig.fallbackEnabled,
+          streamEnabled: modelConfig.streamEnabled,
+        },
+        availableKeys: {
+          groq: !!groqKey,
+          mimo: !!mimoKey,
+          huggingface: !!hfToken,
+        },
+      }, 200, origin)
     }
 
     // ─── STEP 1: Intent ───
@@ -287,31 +397,65 @@ serve(async (req) => {
     if (mode === 'guide') sys += '\n\nاشرح بخطوات مختصرة (3-5).'
 
     messages.push({ role: 'system', content: sys })
-    for (const m of history.slice(-6)) messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content).slice(0, 1200) })
+    for (const m of history.slice(-modelConfig.maxHistory)) messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content).slice(0, 1200) })
     messages.push({ role: 'user', content: message ?? template })
 
-    // Priority: Groq → MiMo → fallback
-    if (groqKey) {
-      if (stream) {
-        const resp = await groqChat(messages, groqKey, { stream: true, model: 'llama-3.1-8b-instant' })
+    // ═══ Model selection: DB config → provider fallback ═══
+    const startMs = Date.now()
+
+    // If DB config specifies Groq
+    if (dbProvider === 'groq' && groqKey) {
+      const useStream = stream && modelConfig.streamEnabled
+      if (useStream) {
+        const resp = await groqChat(messages, groqKey, { stream: true, model: dbModelId, maxTokens: dbMaxTokens, temperature: dbTemperature })
         if (resp) return handleStream(resp as Response, origin)
       }
-      const r = await groqChat(messages, groqKey, { model: 'llama-3.3-70b-versatile' })
+      const r = await groqChat(messages, groqKey, { model: dbModelId, maxTokens: dbMaxTokens, temperature: dbTemperature })
       const text = r?.choices?.[0]?.message?.content ?? ''
-      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', intent }, 200, origin)
+      const tokens = r?.usage?.total_tokens || 0
+      await logUsage(supabase, dbModel?.id || 'groq-70b', tokens, Date.now() - startMs, !!text)
+      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', model: dbModelId, intent }, 200, origin)
     }
 
-    if (mimoKey) {
-      if (stream) {
+    // If DB config specifies MiMo
+    if (dbProvider === 'mimo' && mimoKey) {
+      const useStream = stream && modelConfig.streamEnabled
+      if (useStream) {
         const resp = await mimoChat(messages, mimoKey, true)
         if (resp) return handleStream(resp as Response, origin)
       }
       const r = await mimoChat(messages, mimoKey)
       const text = r?.choices?.[0]?.message?.content ?? ''
-      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', intent }, 200, origin)
+      await logUsage(supabase, dbModel?.id || 'mimo-v2', 0, Date.now() - startMs, !!text)
+      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', model: dbModelId, intent }, 200, origin)
     }
 
-    return jsonResponse({ reply: 'خدمة AI غير مُعدّة.', source: 'fallback' }, 200, origin)
+    // ═══ Default priority fallback: Groq → MiMo → error ═══
+    if (groqKey && modelConfig.fallbackEnabled) {
+      if (stream && modelConfig.streamEnabled) {
+        const resp = await groqChat(messages, groqKey, { stream: true, model: 'llama-3.1-8b-instant', maxTokens: dbMaxTokens })
+        if (resp) return handleStream(resp as Response, origin)
+      }
+      const r = await groqChat(messages, groqKey, { model: 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens, temperature: dbTemperature })
+      const text = r?.choices?.[0]?.message?.content ?? ''
+      const tokens = r?.usage?.total_tokens || 0
+      await logUsage(supabase, 'groq-70b', tokens, Date.now() - startMs, !!text)
+      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', model: 'llama-3.3-70b-versatile', intent }, 200, origin)
+    }
+
+    if (mimoKey && modelConfig.fallbackEnabled) {
+      if (stream && modelConfig.streamEnabled) {
+        const resp = await mimoChat(messages, mimoKey, true)
+        if (resp) return handleStream(resp as Response, origin)
+      }
+      const r = await mimoChat(messages, mimoKey)
+      const text = r?.choices?.[0]?.message?.content ?? ''
+      await logUsage(supabase, 'mimo-v2', 0, Date.now() - startMs, !!text)
+      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', model: 'mimo-v2-pro', intent }, 200, origin)
+    }
+
+    await logUsage(supabase, 'local-ai', 0, Date.now() - startMs, false, 'No AI provider available')
+    return jsonResponse({ reply: 'خدمة AI غير مُعدّة. تأكد من إعداد مفتاح API.', source: 'fallback' }, 200, origin)
 
   } catch (error) {
     console.error('AI error:', error)

@@ -27,6 +27,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -36,34 +37,44 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       final forms = await client
           .from('forms')
           .select('*')
+          .isFilter('deleted_at', null)
           .order('created_at', ascending: false);
       _forms = (forms as List<dynamic>).cast<Map<String, dynamic>>();
 
       final Map<String, Map<String, int>> stats = {};
       for (final f in _forms) {
         final fid = f['id'] as String;
-        final subs = await client
-            .from('form_submissions')
-            .select('id, status')
-            .eq('form_id', fid);
-        final subList = subs as List<dynamic>;
-        final counts = <String, int>{'total': subList.length};
-        for (final s in subList) {
-          final st = s['status'] ?? 'draft';
-          counts[st] = (counts[st] ?? 0) + 1;
+        try {
+          final subs = await client
+              .from('form_submissions')
+              .select('id, status')
+              .eq('form_id', fid);
+          final subList = subs as List<dynamic>;
+          final counts = <String, int>{'total': subList.length};
+          for (final s in subList) {
+            final st = s['status'] ?? 'draft';
+            counts[st] = (counts[st] ?? 0) + 1;
+          }
+          stats[fid] = counts;
+        } catch (_) {
+          stats[fid] = {'total': 0};
         }
-        stats[fid] = counts;
       }
 
-      setState(() {
-        _stats = stats;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _stats = stats;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      debugPrint('[FormsManagement] Load error: $e');
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -77,11 +88,12 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     try {
       final client = Supabase.instance.client;
       final user = client.auth.currentUser;
-      await client.from('forms').insert({
+
+      final insertData = <String, dynamic>{
         'title_ar': result['title_ar'],
         'title_en': result['title_en'] ?? result['title_ar'],
         'description_ar': result['description_ar'],
-        'schema': result['schema'] ?? {'fields': [], 'sections': []},
+        'schema': result['schema'] ?? {'fields': []},
         'requires_gps': result['requires_gps'] ?? false,
         'requires_photo': result['requires_photo'] ?? false,
         'max_photos': result['max_photos'] ?? 5,
@@ -90,15 +102,22 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'campaign_type': result['campaign_type'] ?? 'polio_campaign',
         'is_active': true,
         'created_by': user?.id,
-      });
-      // FIX: Invalidate forms cache so UI shows fresh data
+      };
+
+      await client.from('forms').insert(insertData);
+
+      // Invalidate caches
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
         final campaign = ref.read(campaignProvider);
         await cache.invalidate('forms_${campaign.value}');
+        await cache.invalidate('forms_all');
       } catch (_) {}
       ref.invalidate(formsProvider);
-      _loadData();
+
+      await Future.delayed(const Duration(milliseconds: 300));
+      await _loadData();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -111,14 +130,16 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         );
       }
     } catch (e) {
+      debugPrint('[FormsManagement] Add error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'فشل الإضافة: $e',
+              'فشل الإضافة: ${e.toString()}',
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
             backgroundColor: AppTheme.errorColor,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -134,29 +155,39 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
 
     try {
       final client = Supabase.instance.client;
-      await client.from('forms').update({
+
+      // ═══ FIX: Build update map with safe defaults ═══
+      final updateData = <String, dynamic>{
         'title_ar': result['title_ar'],
-        'title_en': result['title_en'] ?? result['title_ar'],
+        'title_en': result['title_en'] ?? form['title_en'] ?? '',
         'description_ar': result['description_ar'],
         'schema': result['schema'],
-        'requires_gps': result['requires_gps'],
-        'requires_photo': result['requires_photo'],
-        'max_photos': result['max_photos'],
-        'allowed_roles': result['allowed_roles'] ?? form['allowed_roles'],
+        'requires_gps': result['requires_gps'] ?? false,
+        'requires_photo': result['requires_photo'] ?? false,
+        'max_photos': result['max_photos'] ?? 5,
+        'allowed_roles':
+            result['allowed_roles'] ?? form['allowed_roles'] ?? ['data_entry'],
         'campaign_type': result['campaign_type'] ??
             form['campaign_type'] ??
             'polio_campaign',
         'version': (form['version'] as int? ?? 1) + 1,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', form['id']);
-      // FIX: Invalidate forms cache so UI shows fresh data
+      };
+
+      await client.from('forms').update(updateData).eq('id', form['id']);
+
+      // ═══ FIX: Invalidate BOTH local cache and Riverpod providers ═══
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
         final campaign = ref.read(campaignProvider);
         await cache.invalidate('forms_${campaign.value}');
+        await cache.invalidate('forms_all');
       } catch (_) {}
       ref.invalidate(formsProvider);
-      _loadData();
+
+      // ═══ FIX: Reload with small delay to ensure Supabase consistency ═══
+      await Future.delayed(const Duration(milliseconds: 300));
+      await _loadData();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -169,14 +200,16 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         );
       }
     } catch (e) {
+      debugPrint('[FormsManagement] Edit error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'فشل التحديث: $e',
+              'فشل التحديث: ${e.toString()}',
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
             backgroundColor: AppTheme.errorColor,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -236,14 +269,18 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'deleted_at': DateTime.now().toIso8601String(),
         'is_active': false,
       }).eq('id', form['id']);
-      // FIX: Invalidate forms cache
+
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
         final campaign = ref.read(campaignProvider);
         await cache.invalidate('forms_${campaign.value}');
+        await cache.invalidate('forms_all');
       } catch (_) {}
       ref.invalidate(formsProvider);
-      _loadData();
+
+      await Future.delayed(const Duration(milliseconds: 300));
+      await _loadData();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -256,11 +293,12 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         );
       }
     } catch (e) {
+      debugPrint('[FormsManagement] Delete error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'فشل الحذف: $e',
+              'فشل الحذف: ${e.toString()}',
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
             backgroundColor: AppTheme.errorColor,
@@ -277,14 +315,18 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       await client
           .from('forms')
           .update({'is_active': newStatus}).eq('id', form['id']);
-      // FIX: Invalidate forms cache
+
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
         final campaign = ref.read(campaignProvider);
         await cache.invalidate('forms_${campaign.value}');
+        await cache.invalidate('forms_all');
       } catch (_) {}
       ref.invalidate(formsProvider);
-      _loadData();
+
+      await Future.delayed(const Duration(milliseconds: 200));
+      await _loadData();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -296,11 +338,12 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         );
       }
     } catch (e) {
+      debugPrint('[FormsManagement] Toggle error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'خطأ: $e',
+              'خطأ: ${e.toString()}',
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
             backgroundColor: Colors.red,

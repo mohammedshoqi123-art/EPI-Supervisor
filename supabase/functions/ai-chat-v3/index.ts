@@ -232,31 +232,39 @@ const STOP_WORDS = new Set([
 
 function extractKeywords(text: string): string[] {
   const words = text
-    .replace(/[^\u0600-\u06FF\u0750-\u07FF\s]/g, ' ') // Arabic chars only
+    .replace(/[^\u0600-\u06FF\u0750-\u07FF\s]/g, ' ')
     .split(/\s+/)
     .filter(w => w.length > 2 && !STOP_WORDS.has(w))
 
-  // Also extract important EPI-specific terms
-  const epiTerms = ['تطعيم', 'لقاح', 'تغطية', 'تغطية', 'نواقص', 'إرساليات',
-    'محافظة', 'district', 'Penta', 'OPV', 'BCG', 'MR', 'IPV', 'PCV',
+  const epiTerms = ['تطعيم', 'لقاح', 'تغطية', 'نواقص', 'إرساليات',
+    'محافظة', 'Penta', 'OPV', 'BCG', 'MR', 'IPV', 'PCV',
     'سل', 'شلل', 'حصبة', 'خماسي', 'رئوي', 'روتا', 'كبد',
     'تحصين', 'حملة', 'جرعة', 'ولادة', 'تبريد', 'مخزون',
-    '.dropout', 'انسحاب', 'تقرير', 'تحليل', 'أداء', 'جودة']
+    'dropout', 'انسحاب', 'تقرير', 'تحليل', 'أداء', 'جودة']
 
   const found = epiTerms.filter(t => text.includes(t))
   return [...new Set([...words.slice(0, 5), ...found])].slice(0, 8)
 }
 
-function scoreChunk(content: string, keywords: string[]): number {
-  const lower = content.toLowerCase()
-  let score = 0
-  for (const kw of keywords) {
-    const count = (lower.match(new RegExp(kw.toLowerCase(), 'g')) || []).length
-    score += count
-  }
-  // Bonus for shorter chunks (more focused)
-  if (content.length < 500) score *= 1.5
-  return score
+async function keywordSearch(supa: any, message: string): Promise<string> {
+  const keywords = extractKeywords(message)
+  if (keywords.length === 0) return ''
+
+  const conditions = keywords.map(kw =>
+    `content.ilike.%${kw}%`
+  ).slice(0, 5)
+
+  const { data } = await supa
+    .from('ai_chunks')
+    .select('content, metadata')
+    .or(conditions.join(','))
+    .limit(3)
+
+  if (!data?.length) return ''
+
+  return data.map((c: any) =>
+    `[${c.metadata?.section || c.metadata?.source || 'مرجع'}]\n${c.content.slice(0, 800)}`
+  ).join('\n\n---\n\n')
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -429,69 +437,50 @@ serve(async (req) => {
       return jsonResponse({ reply: formatResult(intent, dbResult), source: 'function_call', intent, data: dbResult }, 200, origin)
     }
 
-    // ─── STEP 3: RAG — Knowledge Base Search ───
+    // ─── STEP 3: RAG — Semantic Knowledge Search ───
     let rag = ''
-    let ragDocs: any[] = []
+    let ragSource = 'none'
 
-    if (message) {
+    if (message && hfToken) {
       try {
-        // Search ai_chunks using keyword matching + relevance scoring
-        const keywords = extractKeywords(message)
-        if (keywords.length > 0) {
-          // Build search conditions for each keyword
-          const conditions = keywords.map((kw: string) =>
-            `content ILIKE '%${kw.replace(/'/g, "''")}%'`
-          ).slice(0, 5) // Max 5 keyword conditions
+        // Generate query embedding
+        const queryEmb = await hfCall(
+          HF_MODELS.embeddings,
+          { inputs: [`query: ${message.slice(0, 512)}`] },
+          hfToken
+        )
 
-          const { data: chunkResults } = await supa
-            .from('ai_chunks')
-            .select('id, document_id, content, metadata')
-            .or(conditions.join(','))
-            .limit(5)
+        if (queryEmb && Array.isArray(queryEmb) && queryEmb[0]?.length === 1024) {
+          // Semantic search using pgvector
+          const embStr = `[${queryEmb[0].join(',')}]`
+          const { data: results } = await supa.rpc('search_knowledge', {
+            query_embedding: embStr,
+            match_count: 3,
+            similarity_threshold: 0.4,
+          })
 
-          if (chunkResults && chunkResults.length > 0) {
-            // Score and rank results
-            const scored = chunkResults.map((c: any) => ({
-              ...c,
-              score: scoreChunk(c.content, keywords)
-            })).sort((a: any, b: any) => b.score - a.score).slice(0, 3)
-
-            ragDocs = scored
-            rag = scored.map((c: any) =>
-              `[${c.metadata?.section || c.metadata?.source || c.document_id}]\n${c.content.slice(0, 800)}`
+          if (results && results.length > 0) {
+            rag = results.map((r: any) =>
+              `[${r.doc_title} - ${r.metadata?.section || r.doc_type}]\n${r.content.slice(0, 800)}`
             ).join('\n\n---\n\n')
+            ragSource = 'semantic'
           }
         }
 
-        // Also check if query matches specific data patterns
-        if (message.includes('تغطية') || message.includes('coverage')) {
-          const { data: covData } = await supa
-            .from('ai_chunks')
-            .select('content, metadata')
-            .eq('document_id', 'coverage_dec2025')
-            .limit(1)
-          if (covData?.[0]) {
-            rag += '\n\n[بيانات التغطية]\n' + covData[0].content.slice(0, 800)
-          }
-        }
-
-        if (message.includes('معدل الجلسة') || message.includes('session')) {
-          const { data: sessData } = await supa
-            .from('ai_chunks')
-            .select('content, metadata')
-            .eq('document_id', 'session_rate_2026')
-            .limit(1)
-          if (sessData?.[0]) {
-            rag += '\n\n[معدل الجلسة 2026]\n' + sessData[0].content.slice(0, 800)
-          }
+        // Fallback to keyword if semantic found nothing
+        if (!rag) {
+          rag = await keywordSearch(supa, message)
+          if (rag) ragSource = 'keyword'
         }
       } catch (e) {
         console.error('RAG search failed:', e)
-        // Fallback: basic keyword context
-        if (message.includes('تطعيم') || message.includes('لقاح')) {
-          rag = 'جدول التطعيم: ولادة→BCG+OPV0+HepB. 6 أسابيع→Penta1+OPV1+PCV1+Rota1. 10 أسابيع→Penta2. 14 أسبوع→Penta3+IPV. 9 أشهر→MR'
-        }
+        rag = await keywordSearch(supa, message).catch(() => '')
+        if (rag) ragSource = 'keyword_fallback'
       }
+    } else if (message) {
+      // No HF token — keyword only
+      rag = await keywordSearch(supa, message).catch(() => '')
+      if (rag) ragSource = 'keyword'
     }
 
     // ─── STEP 4: LLM Response ───

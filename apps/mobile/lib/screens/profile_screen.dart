@@ -434,13 +434,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 backgroundImage: _pickedImageBytes != null
                                     ? MemoryImage(_pickedImageBytes!)
                                     : (authState.avatarUrl != null
-                                              ? NetworkImage(
-                                                  authState.avatarUrl!,
-                                                )
-                                              : null)
-                                          as ImageProvider?,
-                                child:
-                                    (_pickedImageBytes == null &&
+                                        ? NetworkImage(
+                                            authState.avatarUrl!,
+                                          )
+                                        : null) as ImageProvider?,
+                                child: (_pickedImageBytes == null &&
                                         authState.avatarUrl == null)
                                     ? Text(
                                         _getInitials(authState.fullName ?? ''),
@@ -746,8 +744,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final color = role.hierarchyLevel >= 4
         ? AppTheme.errorColor
         : role.hierarchyLevel >= 3
-        ? AppTheme.warningColor
-        : AppTheme.infoColor;
+            ? AppTheme.warningColor
+            : AppTheme.infoColor;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

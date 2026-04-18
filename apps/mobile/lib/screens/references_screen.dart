@@ -73,27 +73,27 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
             child: _isLoading
                 ? const EpiLoading()
                 : _filtered.isEmpty
-                ? const EpiEmptyState(
-                    icon: Icons.menu_book_outlined,
-                    title: 'لا توجد مراجع متاحة حالياً',
-                  )
-                : RefreshIndicator(
-                    onRefresh: _loadReferences,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _filtered.length,
-                      itemBuilder: (context, index) {
-                        final ref = _filtered[index];
-                        return _ReferenceCard(
-                          title: ref['title_ar'] ?? '',
-                          description: ref['description_ar'] ?? '',
-                          category: ref['category'] ?? '',
-                          fileUrl: ref['file_url'],
-                          icon: _getCategoryIcon(ref['category']),
-                        );
-                      },
-                    ),
-                  ),
+                    ? const EpiEmptyState(
+                        icon: Icons.menu_book_outlined,
+                        title: 'لا توجد مراجع متاحة حالياً',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _loadReferences,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: _filtered.length,
+                          itemBuilder: (context, index) {
+                            final ref = _filtered[index];
+                            return _ReferenceCard(
+                              title: ref['title_ar'] ?? '',
+                              description: ref['description_ar'] ?? '',
+                              category: ref['category'] ?? '',
+                              fileUrl: ref['file_url'],
+                              icon: _getCategoryIcon(ref['category']),
+                            );
+                          },
+                        ),
+                      ),
           ),
         ],
       ),

@@ -304,13 +304,13 @@ class DashboardHealthRing extends StatelessWidget {
     final color = score >= 80
         ? AppTheme.successColor
         : score >= 50
-        ? AppTheme.warningColor
-        : AppTheme.errorColor;
+            ? AppTheme.warningColor
+            : AppTheme.errorColor;
     final label = score >= 80
         ? 'أداء ممتاز'
         : score >= 50
-        ? 'أداء متوسط'
-        : 'يحتاج تحسين';
+            ? 'أداء متوسط'
+            : 'يحتاج تحسين';
     final insights = LocalAnalyticsEngine.generateInsights(data);
 
     return Container(
@@ -502,9 +502,8 @@ class DashboardQuickActions extends StatelessWidget {
               width: 82,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? a.color.withValues(alpha: 0.12)
-                    : Colors.white,
+                color:
+                    isSelected ? a.color.withValues(alpha: 0.12) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: isSelected
@@ -538,9 +537,8 @@ class DashboardQuickActions extends StatelessWidget {
                     style: TextStyle(
                       fontFamily: 'Tajawal',
                       fontSize: 10,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w500,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w500,
                       color: a.color,
                     ),
                     textAlign: TextAlign.center,
@@ -737,9 +735,8 @@ class DashboardTrendLine extends StatelessWidget {
     }
 
     final entries = dayData.entries.toList();
-    final maxY = entries
-        .fold<num>(1, (m, e) => e.value > m ? e.value : m)
-        .toDouble();
+    final maxY =
+        entries.fold<num>(1, (m, e) => e.value > m ? e.value : m).toDouble();
 
     return Container(
       height: 200,

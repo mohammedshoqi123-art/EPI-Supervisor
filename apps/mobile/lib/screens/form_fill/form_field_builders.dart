@@ -280,9 +280,8 @@ Widget _buildFieldInput({
           formData[key] = v;
           markChanged();
         }),
-        validator: isRequired
-            ? (v) => v == null ? AppStrings.required : null
-            : null,
+        validator:
+            isRequired ? (v) => v == null ? AppStrings.required : null : null,
       );
 
     case 'multiselect':

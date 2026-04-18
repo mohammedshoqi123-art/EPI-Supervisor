@@ -254,9 +254,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
   }
 
   Widget _modeChip(String mode, String label, IconData icon) {
-    final isActive = mode == 'heatmap'
-        ? _showHeatmap
-        : _mapMode == mode && !_showHeatmap;
+    final isActive =
+        mode == 'heatmap' ? _showHeatmap : _mapMode == mode && !_showHeatmap;
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -445,8 +444,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
         child: _showHeatmap
             ? _heatmapLegend()
             : _mapMode == 'submissions'
-            ? _submissionLegend()
-            : _shortageLegend(),
+                ? _submissionLegend()
+                : _shortageLegend(),
       ),
     );
   }
@@ -920,85 +919,83 @@ class _MapScreenState extends ConsumerState<MapScreen>
         final markers = governorates
             .where((g) => g['center_lat'] != null && g['center_lng'] != null)
             .map((gov) {
-              final lat = (gov['center_lat'] as num).toDouble();
-              final lng = (gov['center_lng'] as num).toDouble();
-              final name = gov['name_ar'] ?? '';
-              final count = (gov['submission_count'] as num?)?.toInt() ?? 0;
-              final color = severityMode
-                  ? const Color(0xFFF97316)
-                  : const Color(0xFF00897B);
+          final lat = (gov['center_lat'] as num).toDouble();
+          final lng = (gov['center_lng'] as num).toDouble();
+          final name = gov['name_ar'] ?? '';
+          final count = (gov['submission_count'] as num?)?.toInt() ?? 0;
+          final color =
+              severityMode ? const Color(0xFFF97316) : const Color(0xFF00897B);
 
-              return Marker(
-                point: LatLng(lat, lng),
-                width: 100,
-                height: 70,
-                child: GestureDetector(
-                  onTap: () => _showGovernorateInfo(gov),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Label
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
+          return Marker(
+            point: LatLng(lat, lng),
+            width: 100,
+            height: 70,
+            child: GestureDetector(
+              onTap: () => _showGovernorateInfo(gov),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Label
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
                         ),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                              color: color.withValues(alpha: 0.3),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 11,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (count > 0) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1,
                             ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              name,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '$count',
                               style: const TextStyle(
-                                fontFamily: 'Tajawal',
-                                fontSize: 11,
+                                fontFamily: 'Cairo',
+                                fontSize: 9,
                                 color: Colors.white,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                            if (count > 0) ...[
-                              const SizedBox(width: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.25),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  '$count',
-                                  style: const TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 9,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      // Pin
-                      Icon(Icons.location_on_rounded, color: color, size: 28),
-                    ],
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            })
-            .toList();
+                  // Pin
+                  Icon(Icons.location_on_rounded, color: color, size: 28),
+                ],
+              ),
+            ),
+          );
+        }).toList();
 
         return MarkerLayer(markers: markers);
       },

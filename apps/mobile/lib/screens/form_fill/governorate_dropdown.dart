@@ -38,9 +38,8 @@ class GovernorateDropdown extends ConsumerWidget {
             );
           }).toList(),
           onChanged: onChanged,
-          validator: isRequired
-              ? (v) => v == null ? AppStrings.required : null
-              : null,
+          validator:
+              isRequired ? (v) => v == null ? AppStrings.required : null : null,
         );
       },
     );

@@ -68,87 +68,87 @@ class _SubmissionDetailScreenState
       body: _isLoading
           ? const EpiLoading()
           : _submission == null
-          ? const EpiErrorWidget(message: 'الإرسالية غير موجودة')
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header with PDF button
-                  _buildHeader(),
-                  const SizedBox(height: 20),
+              ? const EpiErrorWidget(message: 'الإرسالية غير موجودة')
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header with PDF button
+                      _buildHeader(),
+                      const SizedBox(height: 20),
 
-                  // Status
-                  _buildSection('الحالة', [
-                    Row(
-                      children: [
-                        EpiStatusChip(
-                          status: _submission!['status'] ?? 'draft',
-                        ),
-                        const Spacer(),
-                        if (_submission!['submitted_at'] != null)
-                          Text(
-                            _formatDate(_submission!['submitted_at']),
-                            style: const TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
+                      // Status
+                      _buildSection('الحالة', [
+                        Row(
+                          children: [
+                            EpiStatusChip(
+                              status: _submission!['status'] ?? 'draft',
                             ),
+                            const Spacer(),
+                            if (_submission!['submitted_at'] != null)
+                              Text(
+                                _formatDate(_submission!['submitted_at']),
+                                style: const TextStyle(
+                                  fontFamily: 'Tajawal',
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ]),
+                      const SizedBox(height: 16),
+
+                      // Submitter info
+                      _buildSection('المُرسل', [
+                        _infoRow(
+                          'الاسم',
+                          _submission!['profiles']?['full_name'] ?? '-',
+                        ),
+                        _infoRow(
+                          'البريد',
+                          _submission!['profiles']?['email'] ?? '-',
+                        ),
+                      ]),
+                      const SizedBox(height: 16),
+
+                      // Location
+                      if (_submission!['gps_lat'] != null)
+                        _buildSection('الموقع', [
+                          _infoRow('خط العرض', '${_submission!['gps_lat']}'),
+                          _infoRow('خط الطول', '${_submission!['gps_lng']}'),
+                        ]),
+                      const SizedBox(height: 16),
+
+                      // Form data
+                      _buildSection('بيانات النموذج', _buildFormData()),
+                      const SizedBox(height: 16),
+
+                      // Review info
+                      if (_submission!['reviewed_by'] != null)
+                        _buildSection('المراجعة', [
+                          _infoRow(
+                            'راجع بواسطة',
+                            _submission!['profiles']?['full_name'] ?? '-',
                           ),
-                      ],
-                    ),
-                  ]),
-                  const SizedBox(height: 16),
+                          _infoRow(
+                            'تاريخ المراجعة',
+                            _formatDate(_submission!['reviewed_at']),
+                          ),
+                          if (_submission!['review_notes'] != null)
+                            _infoRow('ملاحظات', _submission!['review_notes']),
+                        ]),
 
-                  // Submitter info
-                  _buildSection('المُرسل', [
-                    _infoRow(
-                      'الاسم',
-                      _submission!['profiles']?['full_name'] ?? '-',
-                    ),
-                    _infoRow(
-                      'البريد',
-                      _submission!['profiles']?['email'] ?? '-',
-                    ),
-                  ]),
-                  const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                  // Location
-                  if (_submission!['gps_lat'] != null)
-                    _buildSection('الموقع', [
-                      _infoRow('خط العرض', '${_submission!['gps_lat']}'),
-                      _infoRow('خط الطول', '${_submission!['gps_lng']}'),
-                    ]),
-                  const SizedBox(height: 16),
+                      // ═══ PDF Download Button (prominent) ═══
+                      if (_canGeneratePdf) _buildPdfButton(),
 
-                  // Form data
-                  _buildSection('بيانات النموذج', _buildFormData()),
-                  const SizedBox(height: 16),
-
-                  // Review info
-                  if (_submission!['reviewed_by'] != null)
-                    _buildSection('المراجعة', [
-                      _infoRow(
-                        'راجع بواسطة',
-                        _submission!['profiles']?['full_name'] ?? '-',
-                      ),
-                      _infoRow(
-                        'تاريخ المراجعة',
-                        _formatDate(_submission!['reviewed_at']),
-                      ),
-                      if (_submission!['review_notes'] != null)
-                        _infoRow('ملاحظات', _submission!['review_notes']),
-                    ]),
-
-                  const SizedBox(height: 16),
-
-                  // ═══ PDF Download Button (prominent) ═══
-                  if (_canGeneratePdf) _buildPdfButton(),
-
-                  const SizedBox(height: 100),
-                ],
-              ),
-            ),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
     );
   }
 

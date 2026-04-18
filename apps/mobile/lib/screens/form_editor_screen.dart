@@ -96,14 +96,12 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
 
       if (sections.isNotEmpty) {
         _useSections = true;
-        _sections = sections
-            .map((s) => Map<String, dynamic>.from(s as Map))
-            .toList();
+        _sections =
+            sections.map((s) => Map<String, dynamic>.from(s as Map)).toList();
       } else {
         _useSections = false;
-        _fields = flatFields
-            .map((f) => Map<String, dynamic>.from(f as Map))
-            .toList();
+        _fields =
+            flatFields.map((f) => Map<String, dynamic>.from(f as Map)).toList();
       }
     }
   }
@@ -194,9 +192,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     Map<String, dynamic>? existingField;
     if (isEdit) {
       if (sectionIndex != null) {
-        existingField =
-            (_sections[sectionIndex]['fields'] as List)[fieldIndex]
-                as Map<String, dynamic>;
+        existingField = (_sections[sectionIndex]['fields'] as List)[fieldIndex]
+            as Map<String, dynamic>;
       } else {
         existingField = _fields[fieldIndex];
       }
@@ -395,37 +392,38 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                     ),
                     const SizedBox(height: 8),
                     ...options.asMap().entries.map(
-                      (entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: TextEditingController(
-                                  text: entry.value,
+                          (entry) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: TextEditingController(
+                                      text: entry.value,
+                                    ),
+                                    decoration: InputDecoration(
+                                      labelText: 'خيار ${entry.key + 1}',
+                                      border: const OutlineInputBorder(),
+                                      isDense: true,
+                                    ),
+                                    style:
+                                        const TextStyle(fontFamily: 'Tajawal'),
+                                    onChanged: (v) => options[entry.key] = v,
+                                  ),
                                 ),
-                                decoration: InputDecoration(
-                                  labelText: 'خيار ${entry.key + 1}',
-                                  border: const OutlineInputBorder(),
-                                  isDense: true,
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.remove_circle_outline,
+                                    color: AppTheme.errorColor,
+                                  ),
+                                  onPressed: () => setModalState(
+                                    () => options.removeAt(entry.key),
+                                  ),
                                 ),
-                                style: const TextStyle(fontFamily: 'Tajawal'),
-                                onChanged: (v) => options[entry.key] = v,
-                              ),
+                              ],
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.remove_circle_outline,
-                                color: AppTheme.errorColor,
-                              ),
-                              onPressed: () => setModalState(
-                                () => options.removeAt(entry.key),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
                     OutlinedButton.icon(
                       onPressed: () => setModalState(() => options.add('')),
                       icon: const Icon(Icons.add_rounded),
@@ -863,8 +861,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
               _sectionTitle('📂 الأقسام (${_sections.length})'),
               const SizedBox(height: 8),
               ..._sections.asMap().entries.map(
-                (entry) => _buildSectionCard(entry.key, entry.value),
-              ),
+                    (entry) => _buildSectionCard(entry.key, entry.value),
+                  ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _addSection,

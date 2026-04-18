@@ -555,9 +555,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen>
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
@@ -714,18 +713,16 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen>
             ),
             const SizedBox(width: 8),
             CircleAvatar(
-              backgroundColor: _isLoading
-                  ? Colors.grey
-                  : AppTheme.secondaryColor,
+              backgroundColor:
+                  _isLoading ? Colors.grey : AppTheme.secondaryColor,
               child: IconButton(
                 icon: const Icon(
                   Icons.send_rounded,
                   color: Colors.white,
                   size: 20,
                 ),
-                onPressed: _isLoading
-                    ? null
-                    : () => _sendMessage(_controller.text),
+                onPressed:
+                    _isLoading ? null : () => _sendMessage(_controller.text),
               ),
             ),
           ],

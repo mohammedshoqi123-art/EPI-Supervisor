@@ -47,14 +47,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     _pulseAnim.repeat(reverse: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(syncServiceProvider.future)
-          .then((service) {
-            if (service.currentState.pendingCount > 0) {
-              service.sync().catchError((_) => SyncCycleResult.empty());
-            }
-          })
-          .catchError((_) => null);
+      ref.read(syncServiceProvider.future).then((service) {
+        if (service.currentState.pendingCount > 0) {
+          service.sync().catchError((_) => SyncCycleResult.empty());
+        }
+      }).catchError((_) => null);
     });
   }
 
@@ -106,9 +103,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               SliverToBoxAdapter(
                 child: DashboardSyncBanner(
                   pendingCount: pendingCount,
-                  onSyncTap: () => ref
-                      .read(syncServiceProvider.future)
-                      .then(
+                  onSyncTap: () => ref.read(syncServiceProvider.future).then(
                         (s) =>
                             s.sync().catchError((_) => SyncCycleResult.empty()),
                       ),
@@ -157,9 +152,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final resolved = shortages['resolved'] as int? ?? 0;
     final bySeverity = shortages['bySeverity'] as Map<String, dynamic>? ?? {};
     final critical = bySeverity['critical'] as int? ?? 0;
-    final completionRate = totalShortages > 0
-        ? ((resolved / totalShortages) * 100).round()
-        : 0;
+    final completionRate =
+        totalShortages > 0 ? ((resolved / totalShortages) * 100).round() : 0;
 
     return SliverList(
       delegate: SliverChildListDelegate([

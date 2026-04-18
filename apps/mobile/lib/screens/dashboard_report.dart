@@ -228,9 +228,8 @@ class DashboardReportExporter {
         period: reportInfo['period']!,
         analyticsData: analyticsData,
         governorateData: govData,
-        shortagesData: type == 'shortages' || type == 'full'
-            ? shortagesData
-            : null,
+        shortagesData:
+            type == 'shortages' || type == 'full' ? shortagesData : null,
       );
 
       if (!context.mounted) return;

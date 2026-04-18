@@ -219,9 +219,7 @@ class EpiDrawer extends StatelessWidget {
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Divider(height: 1),
                   ),
-                  _SectionLabel(label: 'التحليلات والذكاء'),
-                  _buildItem(context, Icons.bar_chart_rounded, 'لوحة التحليلات',
-                      '/analytics'),
+                  _SectionLabel(label: 'الذكاء الاصطناعي'),
                   _buildItem(context, Icons.auto_awesome_rounded,
                       'المساعد الذكي', '/ai'),
 

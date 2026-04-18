@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  // ─── Brand Colors ─────────────────────────────────────────────────────────
+  // ─── Brand Colors — Premium Teal ═══════════════════════════════════════════
   static const Color primaryColor = Color(0xFF00897B); // Teal 600
   static const Color primaryDark = Color(0xFF00695C); // Teal 800
+  static const Color primaryDarker = Color(0xFF004D40); // Teal 900
   static const Color primaryLight = Color(0xFF4DB6AC); // Teal 300
   static const Color primarySurface = Color(0xFFE0F2F1); // Teal 50
 
@@ -14,28 +15,38 @@ class AppTheme {
   static const Color secondaryDark = Color(0xFF3949AB); // Indigo 600
   static const Color secondaryLight = Color(0xFF9FA8DA); // Indigo 200
 
-  // ─── Semantic Colors ──────────────────────────────────────────────────────
-  static const Color successColor = Color(0xFF43A047);
-  static const Color warningColor = Color(0xFFFB8C00);
-  static const Color errorColor = Color(0xFFE53935);
-  static const Color infoColor = Color(0xFF1E88E5);
+  // ─── Accent Colors ═══════════════════════════════════════════════════════
+  static const Color accentAmber = Color(0xFFFF8F00); // Amber 800
+  static const Color accentCoral = Color(0xFFFF6B6B);
+  static const Color accentMint = Color(0xFF00E5A0);
 
-  // ─── Severity Colors ──────────────────────────────────────────────────────
+  // ─── Semantic Colors ═════════════════════════════════════════════════════
+  static const Color successColor = Color(0xFF2E7D32);
+  static const Color successLight = Color(0xFFE8F5E9);
+  static const Color warningColor = Color(0xFFE65100);
+  static const Color warningLight = Color(0xFFFFF3E0);
+  static const Color errorColor = Color(0xFFC62828);
+  static const Color errorLight = Color(0xFFFFEBEE);
+  static const Color infoColor = Color(0xFF1565C0);
+  static const Color infoLight = Color(0xFFE3F2FD);
+
+  // ─── Severity Colors ═════════════════════════════════════════════════════
   static const Color criticalColor = Color(0xFFB71C1C);
   static const Color highColor = Color(0xFFE53935);
   static const Color mediumColor = Color(0xFFFB8C00);
   static const Color lowColor = Color(0xFF43A047);
 
-  // ─── Neutral Colors ───────────────────────────────────────────────────────
-  static const Color backgroundLight = Color(0xFFF5F7FA);
+  // ─── Neutral Colors ══════════════════════════════════════════════════════
+  static const Color backgroundLight = Color(0xFFF8FAFB);
   static const Color surfaceLight = Color(0xFFFFFFFF);
-  static const Color borderLight = Color(0xFFE0E0E0);
-  static const Color textPrimary = Color(0xFF1A2332);
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textHint = Color(0xFF9CA3AF);
-  static const Color dividerColor = Color(0xFFF0F0F0);
+  static const Color surfaceWarm = Color(0xFFFAFAF8);
+  static const Color borderLight = Color(0xFFE2E8F0);
+  static const Color textPrimary = Color(0xFF0F172A);
+  static const Color textSecondary = Color(0xFF64748B);
+  static const Color textHint = Color(0xFF94A3B8);
+  static const Color dividerColor = Color(0xFFF1F5F9);
 
-  // ─── Gradients ────────────────────────────────────────────────────────────
+  // ─── Gradients ═══════════════════════════════════════════════════════════
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [primaryColor, primaryDark],
     begin: Alignment.topLeft,
@@ -48,26 +59,56 @@ class AppTheme {
     end: Alignment.bottomCenter,
   );
 
-  static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFFE0F2F1), Color(0xFFFFFFFF)],
+  static const LinearGradient premiumGradient = LinearGradient(
+    colors: [Color(0xFF00897B), Color(0xFF5C6BC0)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // ─── Shadows ──────────────────────────────────────────────────────────────
+  static const LinearGradient cardGradient = LinearGradient(
+    colors: [Color(0xFFF0FDFA), Color(0xFFFFFFFF)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient warmGradient = LinearGradient(
+    colors: [Color(0xFFFFF8E1), Color(0xFFFFFFFF)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+
+  // ─── Shadows ════════════════════════════════════════════════════════════
   static List<BoxShadow> get cardShadow => [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.06),
+          color: const Color(0xFF0F172A).withValues(alpha: 0.04),
           blurRadius: 16,
           offset: const Offset(0, 4),
+        ),
+        BoxShadow(
+          color: const Color(0xFF0F172A).withValues(alpha: 0.02),
+          blurRadius: 4,
+          offset: const Offset(0, 1),
         ),
       ];
 
   static List<BoxShadow> get elevatedShadow => [
         BoxShadow(
-          color: primaryColor.withValues(alpha: 0.2),
+          color: primaryColor.withValues(alpha: 0.15),
           blurRadius: 24,
           offset: const Offset(0, 8),
+        ),
+        BoxShadow(
+          color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ];
+
+  static List<BoxShadow> get subtleShadow => [
+        BoxShadow(
+          color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
         ),
       ];
 
@@ -163,7 +204,7 @@ class AppTheme {
     color: textHint,
   );
 
-  // ─── Theme Data ───────────────────────────────────────────────────────────
+  // ─── Theme Data ═══════════════════════════════════════════════════════════
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
@@ -172,8 +213,11 @@ class AppTheme {
         brightness: Brightness.light,
         primary: primaryColor,
         secondary: secondaryColor,
+        tertiary: const Color(0xFF5C6BC0),
         error: errorColor,
         surface: surfaceLight,
+        surfaceContainerLow: const Color(0xFFF8FAFB),
+        surfaceContainerHigh: const Color(0xFFF1F5F9),
       ),
       fontFamily: fontSecondary,
       scaffoldBackgroundColor: backgroundLight,
@@ -209,6 +253,18 @@ class AppTheme {
           minimumSize: const Size(double.infinity, 48),
         ),
       ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryColor,
+          side: const BorderSide(color: borderLight),
+          shape: RoundedRectangleBorder(borderRadius: radiusMedium),
+          textStyle: const TextStyle(
+            fontFamily: fontPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: backgroundLight,
@@ -242,6 +298,8 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(borderRadius: radiusSmall),
+        backgroundColor: surfaceWarm,
+        selectedColor: primarySurface,
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: surfaceLight,
@@ -254,6 +312,11 @@ class AppTheme {
           fontFamily: fontSecondary,
           fontSize: 11,
         ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: radiusMedium),
+        backgroundColor: textPrimary,
       ),
     );
   }

@@ -76,22 +76,42 @@ async function logUsage(supa: any, modelId: string, tokens: number, latencyMs: n
 // KNOWLEDGE BASE — SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════
 
-const SYSTEM_PROMPT = `أنت "مساعد EPI" — متخصص في برنامج التطعيم الموسع في اليمن ومنصة مشرف EPI.
+const SYSTEM_PROMPT = `أنت "مساعد EPI الذكي" — متخصص في برنامج التطعيم الموسع (EPI) في اليمن ومنصة مشرف EPI. تتحدث العربية بطلاقة وتهتم بالصحة العامة.
 
-== التطعيمات ==
-• BCG (ولادة), OPV/IPV (شلل), Penta (خماسي), PCV (رئوي), Rotavirus, MR (حصبة), HepB
-• الجدول: ولادة→BCG+OPV0+HepB. 6 أسابيع→Penta1+OPV1+PCV1+Rota1. 10 أسابيع→Penta2. 14 أسبوع→Penta3+IPV. 9 أشهر→MR
-• المؤشرات: Penta3=وصول, Dropout=(Penta1-Penta3)/Penta1×100, الحصبة=حماية جماعية
-• Health Score: 80+=ممتاز, 50-79=متوسط, <50=ضعيف
+== شخصيتك ==
+• خبير صحة عامة ومحلل بيانات ميدانية
+• تقدم رؤى عملية وقابلة للتنفيذ
+• تستخدم أسلوب ودي واحترافي
+• تركز على الأرقام والحقائق من البيانات المتاحة
+
+== التطعيمات (جدول EPI اليمني) ==
+• BCG (سل, عند الولادة)
+• OPV0/HepB (شلل فموي/التهاب كبدي ب, عند الولادة)
+• OPV1/Penta1/PCV1/Rota1 (عمر 6 أسابيع)
+• OPV2/Penta2/PCV2/Rota2 (عمر 10 أسابيع)
+• OPV3/Penta3/IPV (عمر 14 أسبوع)
+• MR (حصبة-ألمانية, عمر 9 أشهر)
+
+== المؤشرات الرئيسية ==
+• Penta3覆盖率 = مؤشر الوصول (ترشيح الأطفال)
+• Dropout = (Penta1 - Penta3) / Penta1 × 100 (نسبة الانسحاب)
+• تغطية الحصبة = الحماية الجماعية ضد وباء الحصبة
+• Health Score: 80+ ممتاز, 50-79 متوسط, <50 ضعيف
 
 == المنصة ==
-• Flutter + Supabase + Groq/HF/MiMo AI. Offline-first.
-• 5 أدوار: admin(5)>central(4)>governorate(3)>district(2)>data_entry(1)
+• Flutter + Supabase + Groq/MiMo AI. عمل بدون إنترنت (Offline-first).
+• 5 أدوار: admin(5) > central(4) > governorate(3) > district(2) > data_entry(1)
 • نماذج ديناميكية, تقارير PDF, خرائط تفاعلية, مزامنة ذكية
 
-== قواعد ==
-• مختصر (≤100 كلمة). أرقام من البيانات. توصيات عملية. العربية.
-• لا تختلق أرقام. إذا لا توجد بيانات قل ذلك.`
+== أسلوب الإجابة ==
+• مختصر وعملي (≤150 كلمة عادة, ≤300 للتقارير)
+• استخدم أرقام من البيانات المتاحة — لا تختلق أرقام
+• قدم توصيات عملية قابلة للتنفيذ
+• استخدم الرموز التعبيرية بذكاء (📊⚠️✅💡🚨)
+• إذا لا توجد بيانات، قل ذلك بوضوح واقترح ما يمكن فعله
+• للتقارير: استخدم تنظيماً واضحاً مع عناوين فرعية
+• للتحليل: ابدأ بالخلاصة ثم التفاصيل
+• استخدم العربية الفصحى المبسطة`
 
 // ═══════════════════════════════════════════════════════════
 // HELPERS
@@ -423,26 +443,63 @@ async function dbQuery(supa: any, type: string) {
 
 function formatResult(intent: string, data: any): string {
   if (intent === 'query_submissions' && data?.byStatus) {
-    return `📊 الإرساليات:\n• الإجمالي: ${data.total}\n• معتمدة: ${data.byStatus.approved ?? 0}\n• مرفوضة: ${data.byStatus.rejected ?? 0}\n• قيد المراجعة: ${data.byStatus.submitted ?? 0}\n• مسودات: ${data.byStatus.draft ?? 0}`
+    const total = data.total ?? 0
+    const approved = data.byStatus.approved ?? 0
+    const rejected = data.byStatus.rejected ?? 0
+    const submitted = data.byStatus.submitted ?? 0
+    const draft = data.byStatus.draft ?? 0
+    const approvalRate = total > 0 ? ((approved / total) * 100).toFixed(1) : '0'
+    const rejectRate = total > 0 ? ((rejected / total) * 100).toFixed(1) : '0'
+
+    let analysis = ''
+    if (Number(rejectRate) > 15) {
+      analysis = '\n🚨 تحذير: نسبة الرفض مرتفعة! يُنصح بمراجعة جودة الإدخال.'
+    } else if (Number(approvalRate) > 80) {
+      analysis = '\n✅ أداء ممتاز في نسبة الاعتماد!'
+    }
+
+    return `📊 تقرير الإرساليات:\n━━━━━━━━━━━━━━\n• الإجمالي: ${total} إرسالية\n• ✅ معتمدة: ${approved} (${approvalRate}%)\n• ❌ مرفوضة: ${rejected} (${rejectRate}%)\n• ⏳ قيد المراجعة: ${submitted}\n• 📝 مسودات: ${draft}${analysis}`
   }
   if (intent === 'query_shortages') {
-    return `⚠️ النواقص:\n• الإجمالي: ${data.total}\n• حرجة: ${data.bySeverity?.critical ?? 0} 🔴\n• عالية: ${data.bySeverity?.high ?? 0}\n• محلولة: ${data.resolved}`
+    const critical = data.bySeverity?.critical ?? 0
+    const high = data.bySeverity?.high ?? 0
+    const total = data.total ?? 0
+    const resolved = data.resolved ?? 0
+    const resolveRate = total > 0 ? ((resolved / total) * 100).toFixed(0) : '0'
+
+    let alert = ''
+    if (critical > 0) {
+      alert = `\n\n🚨 يوجد ${critical} نواقص حرجة تتطلب معالجة فورية!`
+    }
+
+    return `⚠️ تقرير النواقص الميدانية:\n━━━━━━━━━━━━━━\n• الإجمالي: ${total} نقص\n• 🔴 حرجة: ${critical}\n• 🟠 عالية: ${high}\n• ✅ تم حلها: ${resolved} (${resolveRate}%)${alert}`
   }
   if (intent === 'query_analytics') {
-    return `📈 إحصائيات:\n• إرساليات: ${data.total_submissions}\n• نواقص نشطة: ${data.active_shortages}\n• مستخدمين: ${data.active_users}`
+    return `📈 لوحة المؤشرات:\n━━━━━━━━━━━━━━\n• 📋 إجمالي الإرساليات: ${data.total_submissions}\n• ⚠️ نواقص نشطة: ${data.active_shortages}\n• 👥 مستخدمين نشطين: ${data.active_users}\n\n💡 استخدم أوامر مثل "أين النواقص الحرجة؟" أو "أي المحافظات تحتاج دعم؟" للتفاصيل.`
   }
   if (intent === 'query_governorates' && Array.isArray(data)) {
-    const top = data.slice(0, 10).map((g: any, i: number) => 
-      `${i + 1}. ${g.name}: ${g.submissions} إرسالية (${g.approved} معتمدة)`
-    ).join('\n')
-    return `🏛️ أداء المحافظات:\n${top}`
+    const top = data.slice(0, 10).map((g: any, i: number) => {
+      const emoji = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '•'
+      return `${emoji} ${g.name}: ${g.submissions} إرسالية (${g.approved} معتمدة)`
+    }).join('\n')
+    const best = data[0]?.name ?? '—'
+    const worst = data[data.length - 1]?.name ?? '—'
+    return `🏛️ ترتيب المحافظات:\n━━━━━━━━━━━━━━\n${top}\n\n💡 ${best} الأعلى إنتاجية. ${worst} تحتاج دعم إضافي.`
   }
   if (intent === 'query_users' && data?.byRole) {
-    const roles = Object.entries(data.byRole).map(([r, c]) => `• ${r}: ${c}`).join('\n')
-    return `👥 المستخدمين:\n• الإجمالي: ${data.total}\n• نشط: ${data.active}\n${roles}`
+    const roleNames: Record<string, string> = {
+      admin: 'مدير النظام', central: 'مركزي', governorate: 'محافظة',
+      district: 'مديرية', data_entry: 'مدخل بيانات'
+    }
+    const roles = Object.entries(data.byRole)
+      .map(([r, c]) => `• ${roleNames[r] ?? r}: ${c}`)
+      .join('\n')
+    return `👥 فريق العمل:\n━━━━━━━━━━━━━━\n• الإجمالي: ${data.total} عضو\n• نشط حالياً: ${data.active}\n\n${roles}`
   }
   if (intent === 'query_health' || intent === 'query_coverage') {
-    return data?.coverage_data ? `💉 بيانات التغطية:\n${data.coverage_data}` : 'لا توجد بيانات تغطية متاحة حالياً'
+    return data?.coverage_data
+      ? `💉 بيانات التغطية:\n━━━━━━━━━━━━━━\n${data.coverage_data}`
+      : '💉 لا توجد بيانات تغطية تفصيلية متاحة حالياً.\n\n💡 يمكنك إدخال بيانات التغطية من خلال نماذج التطعيم.'
   }
   return JSON.stringify(data)
 }

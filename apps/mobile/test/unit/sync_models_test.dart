@@ -164,7 +164,7 @@ void main() {
       final result = OfflineSyncResult.error('item-2', 'Network timeout');
       expect(result.isError, isTrue);
       expect(result.isSuccess, isFalse);
-      expect(result.error, equals('Network timeout'));
+      expect(result.errorMessage, equals('Network timeout'));
     });
 
     test('conflict factory creates conflict result', () {

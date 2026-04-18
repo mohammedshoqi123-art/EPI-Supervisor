@@ -39,8 +39,9 @@ class _ChatPulseDotState extends State<ChatPulseDot>
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF10B981)
-                    .withValues(alpha: 0.4 * _controller.value),
+                color: const Color(
+                  0xFF10B981,
+                ).withValues(alpha: 0.4 * _controller.value),
                 blurRadius: 6 * _controller.value,
                 spreadRadius: 2 * _controller.value,
               ),

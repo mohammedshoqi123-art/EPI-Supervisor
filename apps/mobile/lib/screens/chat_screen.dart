@@ -45,7 +45,8 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final client = Supabase.instance.client;
       _currentUserId = client.auth.currentUser?.id;
-      _currentUserName = client.auth.currentUser?.userMetadata?['full_name'] ??
+      _currentUserName =
+          client.auth.currentUser?.userMetadata?['full_name'] ??
           client.auth.currentUser?.email?.split('@').first ??
           'مستخدم';
     } catch (_) {
@@ -177,9 +178,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _shouldShowDateSeparator(int index) {
     if (index == 0) return true;
-    final current = DateTime.tryParse(_messages[index]['created_at'] ?? '') ??
+    final current =
+        DateTime.tryParse(_messages[index]['created_at'] ?? '') ??
         DateTime.now();
-    final prev = DateTime.tryParse(_messages[index - 1]['created_at'] ?? '') ??
+    final prev =
+        DateTime.tryParse(_messages[index - 1]['created_at'] ?? '') ??
         DateTime.now();
     return !_isSameDay(current, prev);
   }
@@ -204,8 +207,8 @@ class _ChatScreenState extends State<ChatScreen> {
           child: _isLoading
               ? _buildLoadingState()
               : _messages.isEmpty
-                  ? _buildEmptyState()
-                  : _buildMessagesList(),
+              ? _buildEmptyState()
+              : _buildMessagesList(),
         ),
 
         // Input
@@ -311,7 +314,8 @@ class _ChatScreenState extends State<ChatScreen> {
     for (int i = 0; i < _messages.length; i++) {
       // Date separator
       if (_shouldShowDateSeparator(i)) {
-        final date = DateTime.tryParse(_messages[i]['created_at'] ?? '') ??
+        final date =
+            DateTime.tryParse(_messages[i]['created_at'] ?? '') ??
             DateTime.now();
         items.add(_dateSeparator(_dateLabel(date)));
       }
@@ -385,8 +389,9 @@ class _ChatScreenState extends State<ChatScreen> {
         right: isMe ? 0 : 48,
       ),
       child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Other user avatar
@@ -400,8 +405,9 @@ class _ChatScreenState extends State<ChatScreen> {
           // Bubble
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 // Sender name
                 if (!isMe && showName)
@@ -453,8 +459,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             fontFamily: 'Tajawal',
                             fontSize: 14.5,
                             height: 1.5,
-                            color:
-                                isMe ? Colors.white : const Color(0xFF1A2332),
+                            color: isMe
+                                ? Colors.white
+                                : const Color(0xFF1A2332),
                           ),
                         ),
                         const SizedBox(height: 4),

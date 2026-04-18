@@ -52,8 +52,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       }
       if (_filterRole != null) query = query.eq('role', _filterRole!);
       if (_filterActive != null) query = query.eq('is_active', _filterActive!);
-      final response =
-          await query.order('created_at', ascending: false).limit(200);
+      final response = await query
+          .order('created_at', ascending: false)
+          .limit(200);
 
       // Load governorates for the form
       final govs = await client
@@ -258,8 +259,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       // Soft delete
       await client
           .from('profiles')
-          .update({'deleted_at': DateTime.now().toIso8601String()}).eq(
-              'id', user['id']);
+          .update({'deleted_at': DateTime.now().toIso8601String()})
+          .eq('id', user['id']);
       _loadAll();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -296,7 +297,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       final newStatus = !(user['is_active'] as bool? ?? true);
       await client
           .from('profiles')
-          .update({'is_active': newStatus}).eq('id', user['id']);
+          .update({'is_active': newStatus})
+          .eq('id', user['id']);
       _loadAll();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -742,28 +744,29 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
-              children: [
-                null,
-                'admin',
-                'central',
-                'governorate',
-                'district',
-                'data_entry',
-              ].map((r) {
-                final selected = _filterRole == r;
-                return ChoiceChip(
-                  label: Text(
-                    r == null ? 'الكل' : _roleNameAr(r),
-                    style: const TextStyle(fontFamily: 'Tajawal'),
-                  ),
-                  selected: selected,
-                  onSelected: (_) {
-                    setState(() => _filterRole = r);
-                    Navigator.pop(ctx);
-                    _loadAll();
-                  },
-                );
-              }).toList(),
+              children:
+                  [
+                    null,
+                    'admin',
+                    'central',
+                    'governorate',
+                    'district',
+                    'data_entry',
+                  ].map((r) {
+                    final selected = _filterRole == r;
+                    return ChoiceChip(
+                      label: Text(
+                        r == null ? 'الكل' : _roleNameAr(r),
+                        style: const TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                      selected: selected,
+                      onSelected: (_) {
+                        setState(() => _filterRole = r);
+                        Navigator.pop(ctx);
+                        _loadAll();
+                      },
+                    );
+                  }).toList(),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -783,8 +786,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                     v == null
                         ? 'الكل'
                         : v
-                            ? 'مفعل'
-                            : 'معطل',
+                        ? 'مفعل'
+                        : 'معطل',
                     style: const TextStyle(fontFamily: 'Tajawal'),
                   ),
                   selected: selected,

@@ -56,55 +56,51 @@ class AppTheme {
 
   // ─── Shadows ──────────────────────────────────────────────────────────────
   static List<BoxShadow> get cardShadow => [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.06),
-          blurRadius: 16,
-          offset: const Offset(0, 4),
-        ),
-      ];
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.06),
+      blurRadius: 16,
+      offset: const Offset(0, 4),
+    ),
+  ];
 
   static List<BoxShadow> get elevatedShadow => [
-        BoxShadow(
-          color: primaryColor.withValues(alpha: 0.2),
-          blurRadius: 24,
-          offset: const Offset(0, 8),
-        ),
-      ];
+    BoxShadow(
+      color: primaryColor.withValues(alpha: 0.2),
+      blurRadius: 24,
+      offset: const Offset(0, 8),
+    ),
+  ];
 
   // ─── Border Radius ────────────────────────────────────────────────────────
   static const BorderRadius radiusSmall = BorderRadius.all(Radius.circular(8));
-  static const BorderRadius radiusMedium =
-      BorderRadius.all(Radius.circular(12));
+  static const BorderRadius radiusMedium = BorderRadius.all(
+    Radius.circular(12),
+  );
   static const BorderRadius radiusLarge = BorderRadius.all(Radius.circular(16));
   static const BorderRadius radiusXL = BorderRadius.all(Radius.circular(24));
-  static const BorderRadius radiusCircle =
-      BorderRadius.all(Radius.circular(1000));
+  static const BorderRadius radiusCircle = BorderRadius.all(
+    Radius.circular(1000),
+  );
 
   // ─── Glassmorphism ────────────────────────────────────────────────────────
   static BoxDecoration get glassmorphism => BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: radiusLarge,
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.25),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            spreadRadius: -2,
-          ),
-        ],
-      );
+    color: Colors.white.withValues(alpha: 0.15),
+    borderRadius: radiusLarge,
+    border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.08),
+        blurRadius: 20,
+        spreadRadius: -2,
+      ),
+    ],
+  );
 
   static BoxDecoration get glassmorphismDark => BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.2),
-        borderRadius: radiusLarge,
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-          width: 1,
-        ),
-      );
+    color: Colors.black.withValues(alpha: 0.2),
+    borderRadius: radiusLarge,
+    border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
+  );
 
   // ─── Text Styles ──────────────────────────────────────────────────────────
   static const String fontPrimary = 'Cairo';
@@ -232,8 +228,10 @@ class AppTheme {
         ),
         labelStyle: labelM,
         hintStyle: const TextStyle(fontFamily: fontSecondary, color: textHint),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
       dividerTheme: const DividerThemeData(
         color: dividerColor,
@@ -250,8 +248,10 @@ class AppTheme {
         type: BottomNavigationBarType.fixed,
         elevation: 8,
         selectedLabelStyle: TextStyle(fontFamily: fontSecondary, fontSize: 11),
-        unselectedLabelStyle:
-            TextStyle(fontFamily: fontSecondary, fontSize: 11),
+        unselectedLabelStyle: TextStyle(
+          fontFamily: fontSecondary,
+          fontSize: 11,
+        ),
       ),
     );
   }

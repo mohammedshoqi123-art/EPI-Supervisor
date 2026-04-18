@@ -4,10 +4,14 @@ import '../config/app_config.dart';
 /// Sentry initialization and helper utilities for crash reporting.
 /// Configure via SENTRY_DSN environment variable.
 class SentryConfig {
-  static const String _dsn =
-      String.fromEnvironment('SENTRY_DSN', defaultValue: '');
-  static const String _environment =
-      String.fromEnvironment('ENV', defaultValue: 'development');
+  static const String _dsn = String.fromEnvironment(
+    'SENTRY_DSN',
+    defaultValue: '',
+  );
+  static const String _environment = String.fromEnvironment(
+    'ENV',
+    defaultValue: 'development',
+  );
 
   static bool get isEnabled => _dsn.isNotEmpty;
 
@@ -18,25 +22,18 @@ class SentryConfig {
       return;
     }
 
-    await SentryFlutter.init(
-      (options) {
-        options.dsn = _dsn;
-        options.environment = _environment;
-        options.release = 'epi-supervisor@${AppConfig.appVersion}';
-        options.tracesSampleRate = _environment == 'production' ? 0.2 : 1.0;
-        options.enableAutoPerformanceTracing = true;
-        options.attachStacktrace = true;
-      },
-      appRunner: appRunner,
-    );
+    await SentryFlutter.init((options) {
+      options.dsn = _dsn;
+      options.environment = _environment;
+      options.release = 'epi-supervisor@${AppConfig.appVersion}';
+      options.tracesSampleRate = _environment == 'production' ? 0.2 : 1.0;
+      options.enableAutoPerformanceTracing = true;
+      options.attachStacktrace = true;
+    }, appRunner: appRunner);
   }
 
   /// Capture an exception with context
-  static void captureError(
-    Object error,
-    StackTrace stack, {
-    String? context,
-  }) {
+  static void captureError(Object error, StackTrace stack, {String? context}) {
     if (!isEnabled) return;
     Sentry.captureException(
       error,

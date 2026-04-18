@@ -10,8 +10,9 @@ import 'package:epi_shared/epi_shared.dart';
 // قائمة النماذج + إنشاء/تعديل/حذف + إحصائيات
 // ══════════════════════════════════════════════════════════════════════════════
 
-final formsListProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final formsListProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final client = Supabase.instance.client;
   try {
     final response = await client
@@ -24,13 +25,15 @@ final formsListProvider =
   }
 });
 
-final formsStatsProvider =
-    FutureProvider<Map<String, Map<String, int>>>((ref) async {
+final formsStatsProvider = FutureProvider<Map<String, Map<String, int>>>((
+  ref,
+) async {
   final client = Supabase.instance.client;
   try {
     final forms = await client.from('forms').select('id');
-    final formIds =
-        (forms as List<dynamic>).map((f) => f['id'] as String).toList();
+    final formIds = (forms as List<dynamic>)
+        .map((f) => f['id'] as String)
+        .toList();
 
     final Map<String, Map<String, int>> stats = {};
     for (final fid in formIds) {
@@ -74,8 +77,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         backgroundColor: AppTheme.backgroundLight,
         appBar: AppBar(
           backgroundColor: AppTheme.primaryColor,
-          title: const Text('إدارة النماذج',
-              style: TextStyle(fontFamily: 'Cairo')),
+          title: const Text(
+            'إدارة النماذج',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.add_circle_outline),
@@ -95,16 +100,20 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                 textDirection: TextDirection.rtl,
                 decoration: InputDecoration(
                   hintText: 'بحث في النماذج...',
-                  prefixIcon:
-                      const Icon(Icons.search, color: AppTheme.textSecondary),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: AppTheme.textSecondary,
+                  ),
                   filled: true,
                   fillColor: AppTheme.backgroundLight,
                   border: OutlineInputBorder(
                     borderRadius: AppTheme.radiusMedium,
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ),
@@ -140,11 +149,16 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline,
-                    size: 48, color: AppTheme.errorColor),
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: AppTheme.errorColor,
+                ),
                 const SizedBox(height: 16),
-                const Text('فشل تحميل النماذج',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                const Text(
+                  'فشل تحميل النماذج',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
                 const SizedBox(height: 8),
                 ElevatedButton.icon(
                   onPressed: () => ref.invalidate(formsListProvider),
@@ -169,24 +183,30 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.description_outlined,
-                        size: 64, color: AppTheme.textHint),
+                    const Icon(
+                      Icons.description_outlined,
+                      size: 64,
+                      color: AppTheme.textHint,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       _searchQuery.isEmpty
                           ? 'لا توجد نماذج بعد'
                           : 'لا توجد نتائج',
                       style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 16,
-                          color: AppTheme.textSecondary),
+                        fontFamily: 'Tajawal',
+                        fontSize: 16,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () => _showFormDialog(),
                       icon: const Icon(Icons.add, size: 18),
-                      label: const Text('إنشاء نموذج جديد',
-                          style: TextStyle(fontFamily: 'Tajawal')),
+                      label: const Text(
+                        'إنشاء نموذج جديد',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
                     ),
                   ],
                 ),
@@ -198,21 +218,26 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
             return Column(
               children: [
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: Row(
                     children: [
                       Text(
                         '${filtered.length} نموذج',
-                        style: AppTheme.bodyM
-                            .copyWith(color: AppTheme.textSecondary),
+                        style: AppTheme.bodyM.copyWith(
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                       const Spacer(),
                       TextButton.icon(
                         onPressed: () => _showFormDialog(),
                         icon: const Icon(Icons.add, size: 18),
-                        label: const Text('نموذج جديد',
-                            style: TextStyle(fontFamily: 'Tajawal')),
+                        label: const Text(
+                          'نموذج جديد',
+                          style: TextStyle(fontFamily: 'Tajawal'),
+                        ),
                       ),
                     ],
                   ),
@@ -232,24 +257,36 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                           (schema?['fields'] as List<dynamic>?)?.length ?? 0;
                       final totalFields = fields > 0 ? fields : schemaFields;
                       final createdAt = form['created_at'] != null
-                          ? DateFormat('d/M/yyyy')
-                              .format(DateTime.parse(form['created_at']))
+                          ? DateFormat(
+                              'd/M/yyyy',
+                            ).format(DateTime.parse(form['created_at']))
                           : '—';
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius: AppTheme.radiusMedium),
+                          borderRadius: AppTheme.radiusMedium,
+                        ),
                         child: InkWell(
                           borderRadius: AppTheme.radiusMedium,
                           onTap: () => context.go('/admin/forms/${form['id']}'),
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: isWide
-                                ? _buildWideFormCard(form, formStats, isActive,
-                                    totalFields, createdAt)
-                                : _buildCompactFormCard(form, formStats,
-                                    isActive, totalFields, createdAt),
+                                ? _buildWideFormCard(
+                                    form,
+                                    formStats,
+                                    isActive,
+                                    totalFields,
+                                    createdAt,
+                                  )
+                                : _buildCompactFormCard(
+                                    form,
+                                    formStats,
+                                    isActive,
+                                    totalFields,
+                                    createdAt,
+                                  ),
                           ),
                         ),
                       );
@@ -280,8 +317,11 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
             color: AppTheme.primaryColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.description_rounded,
-              color: AppTheme.primaryColor, size: 28),
+          child: const Icon(
+            Icons.description_rounded,
+            color: AppTheme.primaryColor,
+            size: 28,
+          ),
         ),
         const SizedBox(width: 16),
         // Info
@@ -295,9 +335,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                     child: Text(
                       form['name_ar'] ?? form['name'] ?? 'بدون عنوان',
                       style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700),
+                        fontFamily: 'Cairo',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   _buildStatusChip(isActive),
@@ -310,9 +351,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 13,
-                      color: AppTheme.textSecondary),
+                    fontFamily: 'Tajawal',
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               const SizedBox(height: 8),
               Wrap(
@@ -320,11 +362,15 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                 children: [
                   _buildInfoChip(Icons.layers_outlined, '$totalFields حقل'),
                   _buildInfoChip(
-                      Icons.upload_file, '${stats['total'] ?? 0} إرسالية'),
+                    Icons.upload_file,
+                    '${stats['total'] ?? 0} إرسالية',
+                  ),
                   if ((stats['submitted'] ?? 0) > 0)
-                    _buildInfoChip(Icons.pending_actions,
-                        '${stats['submitted']} قيد المراجعة',
-                        color: AppTheme.warningColor),
+                    _buildInfoChip(
+                      Icons.pending_actions,
+                      '${stats['submitted']} قيد المراجعة',
+                      color: AppTheme.warningColor,
+                    ),
                   _buildInfoChip(Icons.calendar_today_outlined, createdAt),
                 ],
               ),
@@ -341,14 +387,18 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
               tooltip: 'تعديل',
             ),
             IconButton(
-              icon: const Icon(Icons.play_circle_outline,
-                  color: AppTheme.primaryColor),
+              icon: const Icon(
+                Icons.play_circle_outline,
+                color: AppTheme.primaryColor,
+              ),
               onPressed: () => context.go('/admin/forms/${form['id']}'),
               tooltip: 'فتح المُصمم',
             ),
             IconButton(
-              icon:
-                  const Icon(Icons.delete_outline, color: AppTheme.errorColor),
+              icon: const Icon(
+                Icons.delete_outline,
+                color: AppTheme.errorColor,
+              ),
               onPressed: () => _deleteForm(form['id']),
               tooltip: 'حذف',
             ),
@@ -376,8 +426,11 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                 color: AppTheme.primaryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.description_rounded,
-                  color: AppTheme.primaryColor, size: 22),
+              child: const Icon(
+                Icons.description_rounded,
+                color: AppTheme.primaryColor,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -387,7 +440,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                   Text(
                     form['name_ar'] ?? form['name'] ?? 'بدون عنوان',
                     style: const TextStyle(
-                        fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   _buildStatusChip(isActive),
@@ -410,36 +465,50 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined,
-                            size: 18, color: AppTheme.infoColor),
-                        SizedBox(width: 8),
-                        Text('تعديل', style: TextStyle(fontFamily: 'Tajawal')),
-                      ],
-                    )),
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: AppTheme.infoColor,
+                      ),
+                      SizedBox(width: 8),
+                      Text('تعديل', style: TextStyle(fontFamily: 'Tajawal')),
+                    ],
+                  ),
+                ),
                 const PopupMenuItem(
-                    value: 'open',
-                    child: Row(
-                      children: [
-                        Icon(Icons.play_circle_outline,
-                            size: 18, color: AppTheme.primaryColor),
-                        SizedBox(width: 8),
-                        Text('فتح المُصمم',
-                            style: TextStyle(fontFamily: 'Tajawal')),
-                      ],
-                    )),
+                  value: 'open',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.play_circle_outline,
+                        size: 18,
+                        color: AppTheme.primaryColor,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'فتح المُصمم',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                    ],
+                  ),
+                ),
                 const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline,
-                            size: 18, color: AppTheme.errorColor),
-                        SizedBox(width: 8),
-                        Text('حذف', style: TextStyle(fontFamily: 'Tajawal')),
-                      ],
-                    )),
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: AppTheme.errorColor,
+                      ),
+                      SizedBox(width: 8),
+                      Text('حذف', style: TextStyle(fontFamily: 'Tajawal')),
+                    ],
+                  ),
+                ),
               ],
             ),
           ],
@@ -499,10 +568,12 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
 
   void _showFormDialog({Map<String, dynamic>? form}) {
     final isEdit = form != null;
-    final nameController =
-        TextEditingController(text: form?['name_ar'] ?? form?['name'] ?? '');
-    final descController =
-        TextEditingController(text: form?['description'] ?? '');
+    final nameController = TextEditingController(
+      text: form?['name_ar'] ?? form?['name'] ?? '',
+    );
+    final descController = TextEditingController(
+      text: form?['description'] ?? '',
+    );
     bool isActive = form?['is_active'] ?? true;
 
     showDialog(
@@ -541,8 +612,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                     ),
                     const SizedBox(height: 12),
                     SwitchListTile(
-                      title: const Text('النموذج نشط',
-                          style: TextStyle(fontFamily: 'Tajawal')),
+                      title: const Text(
+                        'النموذج نشط',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
                       value: isActive,
                       activeColor: AppTheme.primaryColor,
                       onChanged: (v) => setDialogState(() => isActive = v),
@@ -585,8 +658,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('اسم النموذج مطلوب',
-              style: TextStyle(fontFamily: 'Tajawal')),
+          content: Text(
+            'اسم النموذج مطلوب',
+            style: TextStyle(fontFamily: 'Tajawal'),
+          ),
           backgroundColor: AppTheme.errorColor,
         ),
       );
@@ -617,10 +692,11 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                formId != null
-                    ? 'تم تحديث النموذج'
-                    : 'تم إنشاء النموذج — افتح المُصمم لإضافة الحقول',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+              formId != null
+                  ? 'تم تحديث النموذج'
+                  : 'تم إنشاء النموذج — افتح المُصمم لإضافة الحقول',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -629,8 +705,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       if (ctx.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('فشل: $e', style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشل: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -655,8 +733,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content:
-                Text('تم حذف النموذج', style: TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'تم حذف النموذج',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.successColor,
           ),
         );

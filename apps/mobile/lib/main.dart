@@ -197,18 +197,20 @@ Future<void> main() async {
   if (SentryConfig.isEnabled) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
-        await SentryFlutter.init(
-          (options) {
-            options.dsn =
-                const String.fromEnvironment('SENTRY_DSN', defaultValue: '');
-            options.environment = const String.fromEnvironment('ENV',
-                defaultValue: 'development');
-            options.release = 'epi-supervisor@${AppConfig.appVersion}';
-            options.tracesSampleRate = 0.2;
-            options.enableAutoPerformanceTracing = true;
-            options.attachStacktrace = true;
-          },
-        ).timeout(const Duration(seconds: 8));
+        await SentryFlutter.init((options) {
+          options.dsn = const String.fromEnvironment(
+            'SENTRY_DSN',
+            defaultValue: '',
+          );
+          options.environment = const String.fromEnvironment(
+            'ENV',
+            defaultValue: 'development',
+          );
+          options.release = 'epi-supervisor@${AppConfig.appVersion}';
+          options.tracesSampleRate = 0.2;
+          options.enableAutoPerformanceTracing = true;
+          options.attachStacktrace = true;
+        }).timeout(const Duration(seconds: 8));
       } catch (e) {
         debugPrint('[Sentry] Deferred init failed: $e');
       }
@@ -237,10 +239,7 @@ class EpiSupervisorApp extends ConsumerWidget {
       ],
       builder: (context, child) {
         // RTL direction for Arabic app
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: child!,
-        );
+        return Directionality(textDirection: TextDirection.rtl, child: child!);
       },
     );
   }

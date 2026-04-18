@@ -38,7 +38,8 @@ class GeminiService {
 
       final response = await _api.callFunction(SupabaseConfig.fnAiChat, body);
 
-      final reply = response['reply'] as String? ??
+      final reply =
+          response['reply'] as String? ??
           response['text'] as String? ??
           'عذراً، لم أتمكن من معالجة طلبك.';
 
@@ -74,11 +75,11 @@ class GeminiService {
   }
 
   List<String> _fallbackSuggestions() => [
-        '📊 ما حالة الإرساليات اليوم؟',
-        '⚠️ أين النواقص الحرجة؟',
-        '📈 اعرض تقرير أسبوعي',
-        '🗺️ أي المحافظات تحتاج دعم؟',
-      ];
+    '📊 ما حالة الإرساليات اليوم؟',
+    '⚠️ أين النواقص الحرجة؟',
+    '📈 اعرض تقرير أسبوعي',
+    '🗺️ أي المحافظات تحتاج دعم؟',
+  ];
 
   // ─── Report Templates ─────────────────────────────────────────────────────
 
@@ -128,61 +129,62 @@ class GeminiService {
   }
 
   List<Map<String, dynamic>> _fallbackTemplates() => [
-        {
-          'id': 'daily',
-          'name': 'التقرير اليومي',
-          'description': 'ملخص شامل ليوم العمل',
-          'icon': '📅'
-        },
-        {
-          'id': 'weekly',
-          'name': 'التقرير الأسبوعي',
-          'description': 'تحليل اتجاه الأسبوع',
-          'icon': '📊'
-        },
-        {
-          'id': 'governorate',
-          'name': 'تقرير المحافظات',
-          'description': 'مقارنة أداء المحافظات',
-          'icon': '🗺️'
-        },
-        {
-          'id': 'shortages',
-          'name': 'تقرير النواقص',
-          'description': 'تحليل النواقص والحلول',
-          'icon': '⚠️'
-        },
-        {
-          'id': 'quality',
-          'name': 'تقرير جودة البيانات',
-          'description': 'اكتمال ودقة الإدخال',
-          'icon': '✅'
-        },
-        {
-          'id': 'comparison',
-          'name': 'تقرير مقارنة',
-          'description': 'مقارنة فترتين زمنيتين',
-          'icon': '🔄'
-        },
-        {
-          'id': 'coverage',
-          'name': 'تقرير التغطية',
-          'description': 'تغطية التطعيمات وفجوات',
-          'icon': '💉'
-        },
-        {
-          'id': 'field_performance',
-          'name': 'تقييم الميدانيين',
-          'description': 'أداء المشرفين الميدانيين',
-          'icon': '👥'
-        },
-      ];
+    {
+      'id': 'daily',
+      'name': 'التقرير اليومي',
+      'description': 'ملخص شامل ليوم العمل',
+      'icon': '📅',
+    },
+    {
+      'id': 'weekly',
+      'name': 'التقرير الأسبوعي',
+      'description': 'تحليل اتجاه الأسبوع',
+      'icon': '📊',
+    },
+    {
+      'id': 'governorate',
+      'name': 'تقرير المحافظات',
+      'description': 'مقارنة أداء المحافظات',
+      'icon': '🗺️',
+    },
+    {
+      'id': 'shortages',
+      'name': 'تقرير النواقص',
+      'description': 'تحليل النواقص والحلول',
+      'icon': '⚠️',
+    },
+    {
+      'id': 'quality',
+      'name': 'تقرير جودة البيانات',
+      'description': 'اكتمال ودقة الإدخال',
+      'icon': '✅',
+    },
+    {
+      'id': 'comparison',
+      'name': 'تقرير مقارنة',
+      'description': 'مقارنة فترتين زمنيتين',
+      'icon': '🔄',
+    },
+    {
+      'id': 'coverage',
+      'name': 'تقرير التغطية',
+      'description': 'تغطية التطعيمات وفجوات',
+      'icon': '💉',
+    },
+    {
+      'id': 'field_performance',
+      'name': 'تقييم الميدانيين',
+      'description': 'أداء المشرفين الميدانيين',
+      'icon': '👥',
+    },
+  ];
 
   // ─── Quick Actions ─────────────────────────────────────────────────────────
 
   /// Get contextual quick actions based on current data
-  Future<List<Map<String, dynamic>>> getQuickActions(
-      {Map<String, dynamic>? context}) async {
+  Future<List<Map<String, dynamic>>> getQuickActions({
+    Map<String, dynamic>? context,
+  }) async {
     try {
       final response = await _api.callFunction(SupabaseConfig.fnAiChat, {
         'mode': 'quick_actions',
@@ -200,7 +202,7 @@ class GeminiService {
       {
         'label': 'تغطية التطعيم',
         'icon': '💉',
-        'action': 'vaccination_coverage'
+        'action': 'vaccination_coverage',
       },
     ];
   }
@@ -216,10 +218,7 @@ class GeminiService {
 
   /// Ask about how to use a feature
   Future<String> askGuide(String feature) {
-    return chat(
-      'اشرح لي كيفية $feature في منصة مشرف EPI',
-      clearHistory: true,
-    );
+    return chat('اشرح لي كيفية $feature في منصة مشرف EPI', clearHistory: true);
   }
 
   void clearHistory() => _history.clear();

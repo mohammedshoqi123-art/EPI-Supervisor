@@ -74,15 +74,18 @@ class AuthRepository {
     });
 
     // Proactive session refresh: check every 4 minutes if token is near expiry
-    _sessionRefreshTimer =
-        Timer.periodic(const Duration(minutes: 4), (_) async {
+    _sessionRefreshTimer = Timer.periodic(const Duration(minutes: 4), (
+      _,
+    ) async {
       try {
         final session = _client?.auth.currentSession;
         if (session == null) return;
-        final expiresAt =
-            DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000);
-        if (DateTime.now()
-            .isAfter(expiresAt.subtract(const Duration(minutes: 10)))) {
+        final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+          session.expiresAt! * 1000,
+        );
+        if (DateTime.now().isAfter(
+          expiresAt.subtract(const Duration(minutes: 10)),
+        )) {
           await _client?.auth.refreshSession();
         }
       } catch (_) {
@@ -136,14 +139,18 @@ class AuthRepository {
       } else {
         // Profile missing — try to create it
         try {
-          await _client!.from('profiles').upsert({
-            'id': userId,
-            'email': user.email,
-            'full_name': user.userMetadata?['full_name'] ??
-                (user.email?.split('@').first ?? 'مستخدم'),
-            'role': 'data_entry',
-            'is_active': true,
-          }, onConflict: 'id').timeout(const Duration(seconds: 10));
+          await _client!
+              .from('profiles')
+              .upsert({
+                'id': userId,
+                'email': user.email,
+                'full_name':
+                    user.userMetadata?['full_name'] ??
+                    (user.email?.split('@').first ?? 'مستخدم'),
+                'role': 'data_entry',
+                'is_active': true,
+              }, onConflict: 'id')
+              .timeout(const Duration(seconds: 10));
 
           // Re-fetch after creation
           final newResponse = await _client!
@@ -198,7 +205,8 @@ class AuthRepository {
   Future<AuthResponse> signIn(String email, String password) async {
     if (!_isConfigured || _client == null) {
       throw StateError(
-          'Supabase is not configured. Please set SUPABASE_URL and SUPABASE_ANON_KEY.');
+        'Supabase is not configured. Please set SUPABASE_URL and SUPABASE_ANON_KEY.',
+      );
     }
 
     _currentState = _currentState.copyWith(isLoading: true, error: null);
@@ -211,8 +219,10 @@ class AuthRepository {
       );
       return response;
     } catch (e) {
-      _currentState =
-          _currentState.copyWith(isLoading: false, error: e.toString());
+      _currentState = _currentState.copyWith(
+        isLoading: false,
+        error: e.toString(),
+      );
       _authStateController.add(_currentState);
       rethrow;
     }
@@ -285,17 +295,17 @@ class AuthRepository {
     final fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
     final storagePath = 'avatars/$userId/$fileName';
 
-    await _client!.storage.from('avatars').uploadBinary(
+    await _client!.storage
+        .from('avatars')
+        .uploadBinary(
           storagePath,
           fileBytes,
-          fileOptions: FileOptions(
-            contentType: 'image/$ext',
-            upsert: true,
-          ),
+          fileOptions: FileOptions(contentType: 'image/$ext', upsert: true),
         );
 
-    final publicUrl =
-        _client!.storage.from('avatars').getPublicUrl(storagePath);
+    final publicUrl = _client!.storage
+        .from('avatars')
+        .getPublicUrl(storagePath);
 
     // Update profile with new avatar URL
     await updateProfile(avatarUrl: publicUrl);

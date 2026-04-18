@@ -6,16 +6,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///  الإعدادات — Settings Screen
 /// ═══════════════════════════════════════════════════════════════════
 
-final settingsProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final client = Supabase.instance.client;
-  final response = await client.functions.invoke('manage-data', body: {
-    'resource': 'settings',
-    'action': 'list',
-  });
-  if (response.status != 200) throw Exception('فشل تحميل الإعدادات');
-  return List<Map<String, dynamic>>.from(response.data['settings'] ?? []);
-});
+final settingsProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
+  (ref) async {
+    final client = Supabase.instance.client;
+    final response = await client.functions.invoke(
+      'manage-data',
+      body: {'resource': 'settings', 'action': 'list'},
+    );
+    if (response.status != 200) throw Exception('فشل تحميل الإعدادات');
+    return List<Map<String, dynamic>>.from(response.data['settings'] ?? []);
+  },
+);
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -84,22 +85,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFFFB8C00).withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: const Color(0xFFFB8C00).withOpacity(0.3)),
+              border: Border.all(
+                color: const Color(0xFFFB8C00).withOpacity(0.3),
+              ),
             ),
             child: Row(
               children: [
                 const Icon(Icons.info_rounded, color: Color(0xFFFB8C00)),
                 const SizedBox(width: 12),
-                const Text('لديك تغييرات غير محفوظة',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                const Text(
+                  'لديك تغييرات غير محفوظة',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
                 const Spacer(),
                 TextButton(
-                    onPressed: () => _resetChanges(settings),
-                    child: const Text('إلغاء')),
+                  onPressed: () => _resetChanges(settings),
+                  child: const Text('إلغاء'),
+                ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                    onPressed: () => _saveSettings(), child: const Text('حفظ')),
+                  onPressed: () => _saveSettings(),
+                  child: const Text('حفظ'),
+                ),
               ],
             ),
           ),
@@ -107,11 +114,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: SingleChildScrollView(
             child: Column(
               children: categories.entries
-                  .map((entry) => _buildCategoryCard(
-                        _categoryLabel(entry.key),
-                        _categoryIcon(entry.key),
-                        entry.value,
-                      ))
+                  .map(
+                    (entry) => _buildCategoryCard(
+                      _categoryLabel(entry.key),
+                      _categoryIcon(entry.key),
+                      entry.value,
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -121,14 +130,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildCategoryCard(
-      String title, IconData icon, List<Map<String, dynamic>> items) {
+    String title,
+    IconData icon,
+    List<Map<String, dynamic>> items,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -140,11 +152,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 Icon(icon, color: const Color(0xFF00897B)),
                 const SizedBox(width: 10),
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Cairo')),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
               ],
             ),
           ),
@@ -182,10 +197,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
             decoration: InputDecoration(
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 8,
+              ),
             ),
             onChanged: (_) => setState(() => _hasChanges = true),
           ),
@@ -211,9 +229,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 controller: _controllers[key],
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
                 ),
                 onChanged: (_) => setState(() => _hasChanges = true),
               ),
@@ -227,10 +248,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: TextField(
             controller: _controllers[key],
             decoration: InputDecoration(
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
             ),
             onChanged: (_) => setState(() => _hasChanges = true),
           ),
@@ -245,11 +269,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style:
-                        const TextStyle(fontSize: 14, fontFamily: 'Tajawal')),
-                Text(key,
-                    style: TextStyle(fontSize: 11, color: Colors.grey[400])),
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 14, fontFamily: 'Tajawal'),
+                ),
+                Text(
+                  key,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                ),
               ],
             ),
           ),
@@ -333,23 +360,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         updates.add({'key': entry.key, 'value': entry.value});
       }
 
-      await Supabase.instance.client.functions.invoke('manage-data', body: {
-        'resource': 'settings',
-        'action': 'update',
-        'settings': updates,
-      });
+      await Supabase.instance.client.functions.invoke(
+        'manage-data',
+        body: {'resource': 'settings', 'action': 'update', 'settings': updates},
+      );
 
       setState(() => _hasChanges = false);
       ref.invalidate(settingsProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم حفظ الإعدادات بنجاح')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم حفظ الإعدادات بنجاح')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('خطأ: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
       }
     }
   }

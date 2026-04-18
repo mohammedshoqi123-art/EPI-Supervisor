@@ -30,7 +30,7 @@ class EncryptionService {
   final String _activeKey;
 
   EncryptionService({String? overrideKey})
-      : _activeKey = overrideKey ?? _envKey {
+    : _activeKey = overrideKey ?? _envKey {
     if (_activeKey.isEmpty) {
       throw StateError(
         'ENCRYPTION_KEY is not set. '
@@ -50,9 +50,7 @@ class EncryptionService {
   /// Generate random bytes using dart:math Random.secure() — lightweight
   static Uint8List _generateRandomBytes(int length) {
     final rand = Random.secure();
-    return Uint8List.fromList(
-      List.generate(length, (_) => rand.nextInt(256)),
-    );
+    return Uint8List.fromList(List.generate(length, (_) => rand.nextInt(256)));
   }
 
   /// PBKDF2 key derivation using HMAC-SHA256 (crypto package only).
@@ -104,8 +102,9 @@ class EncryptionService {
       final encrypter = enc.Encrypter(enc.AES(_key, mode: enc.AESMode.gcm));
       final encrypted = encrypter.encrypt(plaintext, iv: iv);
 
-      final result =
-          Uint8List(_saltLength + _ivLength + encrypted.bytes.length);
+      final result = Uint8List(
+        _saltLength + _ivLength + encrypted.bytes.length,
+      );
       var offset = 0;
       result.setAll(offset, _salt);
       offset += _saltLength;
@@ -128,14 +127,17 @@ class EncryptionService {
       }
 
       var offset = 0;
-      final salt =
-          Uint8List.fromList(bytes.sublist(offset, offset + _saltLength));
+      final salt = Uint8List.fromList(
+        bytes.sublist(offset, offset + _saltLength),
+      );
       offset += _saltLength;
-      final iv =
-          enc.IV(Uint8List.fromList(bytes.sublist(offset, offset + _ivLength)));
+      final iv = enc.IV(
+        Uint8List.fromList(bytes.sublist(offset, offset + _ivLength)),
+      );
       offset += _ivLength;
-      final encrypted =
-          enc.Encrypted(Uint8List.fromList(bytes.sublist(offset)));
+      final encrypted = enc.Encrypted(
+        Uint8List.fromList(bytes.sublist(offset)),
+      );
 
       final keyBytes = utf8.encode(_activeKey);
       final key = _deriveKeyCached(keyBytes, salt);

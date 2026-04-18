@@ -143,7 +143,8 @@ class UserFormSheetState extends State<UserFormSheet> {
                     if (v == null || v.trim().isEmpty) return 'البريد مطلوب';
                     if (!RegExp(
                       r'^[\w.+-]+@[\w-]+\.[\w.]+$',
-                    ).hasMatch(v.trim())) return 'البريد غير صحيح';
+                    ).hasMatch(v.trim()))
+                      return 'البريد غير صحيح';
                     return null;
                   },
                   style: const TextStyle(fontFamily: 'Tajawal'),

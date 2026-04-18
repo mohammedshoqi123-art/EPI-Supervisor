@@ -8,14 +8,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 final notificationsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final client = Supabase.instance.client;
-  final response = await client.functions.invoke('manage-notifications', body: {
-    'action': 'list',
-    'limit': 100,
-  });
-  if (response.status != 200) throw Exception('فشل تحميل الإشعارات');
-  return List<Map<String, dynamic>>.from(response.data['notifications'] ?? []);
-});
+      final client = Supabase.instance.client;
+      final response = await client.functions.invoke(
+        'manage-notifications',
+        body: {'action': 'list', 'limit': 100},
+      );
+      if (response.status != 200) throw Exception('فشل تحميل الإشعارات');
+      return List<Map<String, dynamic>>.from(
+        response.data['notifications'] ?? [],
+      );
+    });
 
 class NotificationCenterScreen extends ConsumerStatefulWidget {
   const NotificationCenterScreen({super.key});
@@ -54,22 +56,24 @@ class _NotificationCenterScreenState
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
         ],
       ),
       child: Row(
         children: [
           // Filter chips
-          ...['all', 'unread', 'info', 'success', 'error'].map((f) => Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: FilterChip(
-                  label: Text(_filterLabel(f)),
-                  selected: _filter == f,
-                  onSelected: (_) => setState(() => _filter = f),
-                  selectedColor: const Color(0xFF00897B).withOpacity(0.15),
-                  checkmarkColor: const Color(0xFF00897B),
-                ),
-              )),
+          ...['all', 'unread', 'info', 'success', 'error'].map(
+            (f) => Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: FilterChip(
+                label: Text(_filterLabel(f)),
+                selected: _filter == f,
+                onSelected: (_) => setState(() => _filter = f),
+                selectedColor: const Color(0xFF00897B).withOpacity(0.15),
+                checkmarkColor: const Color(0xFF00897B),
+              ),
+            ),
+          ),
           const Spacer(),
           // Mark all read
           OutlinedButton.icon(
@@ -87,7 +91,8 @@ class _NotificationCenterScreenState
               backgroundColor: const Color(0xFF00897B),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ],
@@ -108,7 +113,7 @@ class _NotificationCenterScreenState
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
         ],
       ),
       child: filtered.isEmpty
@@ -166,7 +171,10 @@ class _NotificationCenterScreenState
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-            fontSize: 13, color: Colors.grey[600], fontFamily: 'Tajawal'),
+          fontSize: 13,
+          color: Colors.grey[600],
+          fontFamily: 'Tajawal',
+        ),
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -221,37 +229,38 @@ class _NotificationCenterScreenState
 
   void _markRead(List<String> ids) async {
     try {
-      await Supabase.instance.client.functions
-          .invoke('manage-notifications', body: {
-        'action': 'mark_read',
-        'notification_ids': ids,
-      });
+      await Supabase.instance.client.functions.invoke(
+        'manage-notifications',
+        body: {'action': 'mark_read', 'notification_ids': ids},
+      );
       ref.invalidate(notificationsProvider);
     } catch (_) {}
   }
 
   void _markAllRead() async {
     try {
-      await Supabase.instance.client.functions
-          .invoke('manage-notifications', body: {
-        'action': 'mark_all_read',
-      });
+      await Supabase.instance.client.functions.invoke(
+        'manage-notifications',
+        body: {'action': 'mark_all_read'},
+      );
       ref.invalidate(notificationsProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم تعيين الكل كمقروء')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم تعيين الكل كمقروء')));
       }
     } catch (_) {}
   }
 
   void _deleteNotif(String id) async {
     try {
-      await Supabase.instance.client.functions
-          .invoke('manage-notifications', body: {
-        'action': 'delete',
-        'notification_ids': [id],
-      });
+      await Supabase.instance.client.functions.invoke(
+        'manage-notifications',
+        body: {
+          'action': 'delete',
+          'notification_ids': [id],
+        },
+      );
       ref.invalidate(notificationsProvider);
     } catch (_) {}
   }
@@ -296,14 +305,22 @@ class _NotificationCenterScreenState
                       child: DropdownButtonFormField<String>(
                         value: notifType,
                         decoration: const InputDecoration(
-                            labelText: 'النوع', border: OutlineInputBorder()),
+                          labelText: 'النوع',
+                          border: OutlineInputBorder(),
+                        ),
                         items: const [
                           DropdownMenuItem(
-                              value: 'info', child: Text('معلومات')),
+                            value: 'info',
+                            child: Text('معلومات'),
+                          ),
                           DropdownMenuItem(
-                              value: 'success', child: Text('نجاح')),
+                            value: 'success',
+                            child: Text('نجاح'),
+                          ),
                           DropdownMenuItem(
-                              value: 'warning', child: Text('تحذير')),
+                            value: 'warning',
+                            child: Text('تحذير'),
+                          ),
                           DropdownMenuItem(value: 'error', child: Text('خطأ')),
                         ],
                         onChanged: (v) => setDialogState(() => notifType = v!),
@@ -314,20 +331,31 @@ class _NotificationCenterScreenState
                       child: DropdownButtonFormField<String>(
                         value: targetType,
                         decoration: const InputDecoration(
-                            labelText: 'إلى', border: OutlineInputBorder()),
+                          labelText: 'إلى',
+                          border: OutlineInputBorder(),
+                        ),
                         items: const [
                           DropdownMenuItem(value: 'all', child: Text('الجميع')),
                           DropdownMenuItem(
-                              value: 'admin', child: Text('المسؤولين')),
+                            value: 'admin',
+                            child: Text('المسؤولين'),
+                          ),
                           DropdownMenuItem(
-                              value: 'central', child: Text('المركزيين')),
+                            value: 'central',
+                            child: Text('المركزيين'),
+                          ),
                           DropdownMenuItem(
-                              value: 'governorate', child: Text('المحافظات')),
+                            value: 'governorate',
+                            child: Text('المحافظات'),
+                          ),
                           DropdownMenuItem(
-                              value: 'district', child: Text('المديريات')),
+                            value: 'district',
+                            child: Text('المديريات'),
+                          ),
                           DropdownMenuItem(
-                              value: 'data_entry',
-                              child: Text('إدخال البيانات')),
+                            value: 'data_entry',
+                            child: Text('إدخال البيانات'),
+                          ),
                         ],
                         onChanged: (v) => setDialogState(() => targetType = v!),
                       ),
@@ -339,8 +367,9 @@ class _NotificationCenterScreenState
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('إلغاء')),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء'),
+            ),
             FilledButton(
               onPressed: () async {
                 if (titleCtrl.text.isEmpty || bodyCtrl.text.isEmpty) return;
@@ -348,14 +377,16 @@ class _NotificationCenterScreenState
                   final target = targetType == 'all'
                       ? <String, dynamic>{}
                       : {'role': targetType};
-                  await Supabase.instance.client.functions
-                      .invoke('manage-notifications', body: {
-                    'action': 'send',
-                    'title': titleCtrl.text,
-                    'body': bodyCtrl.text,
-                    'type': notifType,
-                    'target': target,
-                  });
+                  await Supabase.instance.client.functions.invoke(
+                    'manage-notifications',
+                    body: {
+                      'action': 'send',
+                      'title': titleCtrl.text,
+                      'body': bodyCtrl.text,
+                      'type': notifType,
+                      'target': target,
+                    },
+                  );
                   Navigator.pop(ctx);
                   ref.invalidate(notificationsProvider);
                   if (mounted) {
@@ -365,8 +396,9 @@ class _NotificationCenterScreenState
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text('خطأ: $e')));
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
                   }
                 }
               },

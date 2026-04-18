@@ -56,13 +56,16 @@ class _KPICard extends StatelessWidget {
               const Spacer(),
               if (trend != null)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: (trend! >= 0
-                            ? const Color(0xFF43A047)
-                            : const Color(0xFFE53935))
-                        .withOpacity(0.1),
+                    color:
+                        (trend! >= 0
+                                ? const Color(0xFF43A047)
+                                : const Color(0xFFE53935))
+                            .withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -174,10 +177,7 @@ class _DashboardCard extends StatelessWidget {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: child,
-          ),
+          Padding(padding: const EdgeInsets.all(20), child: child),
         ],
       ),
     );
@@ -227,8 +227,11 @@ class _QuickActionTile extends StatelessWidget {
         title,
         style: const TextStyle(fontSize: 14, fontFamily: 'Tajawal'),
       ),
-      trailing:
-          Icon(Icons.arrow_back_ios_rounded, size: 16, color: Colors.grey[400]),
+      trailing: Icon(
+        Icons.arrow_back_ios_rounded,
+        size: 16,
+        color: Colors.grey[400],
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       onTap: onTap,
     );

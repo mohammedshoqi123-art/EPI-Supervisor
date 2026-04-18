@@ -16,8 +16,9 @@ class FormReportGenerator {
     final pdf = pw.Document();
 
     // Load Arabic fonts
-    final arabicFontData =
-        await rootBundle.load('assets/fonts/Cairo-Regular.ttf');
+    final arabicFontData = await rootBundle.load(
+      'assets/fonts/Cairo-Regular.ttf',
+    );
     final boldFontData = await rootBundle.load('assets/fonts/Cairo-Bold.ttf');
     final arabicFont = pw.Font.ttf(arabicFontData);
     final boldFont = pw.Font.ttf(boldFontData);
@@ -33,7 +34,7 @@ class FormReportGenerator {
         build: (ctx) => pw.Directionality(
           textDirection: pw.TextDirection.rtl,
           child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               // Header
               pw.Container(
@@ -44,28 +45,33 @@ class FormReportGenerator {
                   borderRadius: pw.BorderRadius.circular(12),
                 ),
                 child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
                       titleAr,
                       style: pw.TextStyle(
-                          font: boldFont, fontSize: 22, color: PdfColors.white),
+                        font: boldFont,
+                        fontSize: 22,
+                        color: PdfColors.white,
+                      ),
                     ),
                     pw.SizedBox(height: 4),
                     pw.Text(
                       'الفترة: $period',
                       style: pw.TextStyle(
-                          font: arabicFont,
-                          fontSize: 12,
-                          color: PdfColors.blue100),
+                        font: arabicFont,
+                        fontSize: 12,
+                        color: PdfColors.blue100,
+                      ),
                     ),
                     pw.SizedBox(height: 4),
                     pw.Text(
-                      'تاريخ التقرير: ${DateTime.now().toIso8601String().substring(0, 10)}',
+                      'تاريخ التقرير: ${_formatDateArabic(DateTime.now())}',
                       style: pw.TextStyle(
-                          font: arabicFont,
-                          fontSize: 10,
-                          color: PdfColors.blue100),
+                        font: arabicFont,
+                        fontSize: 10,
+                        color: PdfColors.blue100,
+                      ),
                     ),
                   ],
                 ),
@@ -78,26 +84,31 @@ class FormReportGenerator {
 
               // Fields summary
               if (fields.isNotEmpty) ...[
-                pw.Text('حقول النموذج:',
-                    style: pw.TextStyle(font: boldFont, fontSize: 14)),
+                pw.Text(
+                  'حقول النموذج:',
+                  style: pw.TextStyle(font: boldFont, fontSize: 14),
+                ),
                 pw.SizedBox(height: 8),
                 pw.Wrap(
                   spacing: 6,
                   runSpacing: 6,
                   children: fields
-                      .map((f) => pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: pw.BoxDecoration(
-                              border: pw.Border.all(color: PdfColors.grey300),
-                              borderRadius: pw.BorderRadius.circular(4),
-                            ),
-                            child: pw.Text(
-                              '${f['label']} (${f['type']})',
-                              style:
-                                  pw.TextStyle(font: arabicFont, fontSize: 9),
-                            ),
-                          ))
+                      .map(
+                        (f) => pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: PdfColors.grey300),
+                            borderRadius: pw.BorderRadius.circular(4),
+                          ),
+                          child: pw.Text(
+                            '${f['label']} (${_fieldTypeArabic(f['type'])})',
+                            style: pw.TextStyle(font: arabicFont, fontSize: 9),
+                          ),
+                        ),
+                      )
                       .toList(),
                 ),
               ],
@@ -111,8 +122,8 @@ class FormReportGenerator {
     for (final sub in submissions.take(50)) {
       final subData = sub['data'] as Map<String, dynamic>? ?? {};
       final subStatus = sub['status'] ?? '-';
-      final subDate =
-          (sub['submitted_at'] ?? sub['created_at'] ?? '').toString();
+      final subDate = (sub['submitted_at'] ?? sub['created_at'] ?? '')
+          .toString();
       final subUser = sub['profiles']?['full_name'] ?? '-';
       final subGov = sub['governorates']?['name_ar'] ?? '';
       final subDist = sub['districts']?['name_ar'] ?? '';
@@ -126,7 +137,7 @@ class FormReportGenerator {
             pw.Directionality(
               textDirection: pw.TextDirection.rtl,
               child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   // Submission header
                   pw.Container(
@@ -140,18 +151,20 @@ class FormReportGenerator {
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
                         pw.Text(
-                          titleAr,
-                          style: pw.TextStyle(
-                              font: boldFont,
-                              fontSize: 14,
-                              color: PdfColors.white),
-                        ),
-                        pw.Text(
                           _statusLabel(subStatus),
                           style: pw.TextStyle(
-                              font: boldFont,
-                              fontSize: 12,
-                              color: PdfColors.white),
+                            font: boldFont,
+                            fontSize: 12,
+                            color: PdfColors.white,
+                          ),
+                        ),
+                        pw.Text(
+                          titleAr,
+                          style: pw.TextStyle(
+                            font: boldFont,
+                            fontSize: 14,
+                            color: PdfColors.white,
+                          ),
                         ),
                       ],
                     ),
@@ -166,31 +179,39 @@ class FormReportGenerator {
                       color: PdfColors.grey100,
                       borderRadius: pw.BorderRadius.circular(8),
                     ),
-                    child: pw.Wrap(
-                      spacing: 16,
-                      runSpacing: 6,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         _metaItem('المقدم:', subUser, arabicFont, boldFont),
-                        _metaItem('التاريخ:', subDate.substring(0, 16),
-                            arabicFont, boldFont),
+                        _metaItem(
+                          'التاريخ:',
+                          _formatDateArabic(
+                            DateTime.tryParse(subDate) ?? DateTime.now(),
+                          ),
+                          arabicFont,
+                          boldFont,
+                        ),
                         if (subGov.isNotEmpty)
                           _metaItem('المحافظة:', subGov, arabicFont, boldFont),
                         if (subDist.isNotEmpty)
                           _metaItem('المديرية:', subDist, arabicFont, boldFont),
                         if (sub['gps_lat'] != null)
                           _metaItem(
-                              'الموقع:',
-                              '${sub['gps_lat']}, ${sub['gps_lng']}',
-                              arabicFont,
-                              boldFont),
+                            'الموقع:',
+                            '${sub['gps_lat']}, ${sub['gps_lng']}',
+                            arabicFont,
+                            boldFont,
+                          ),
                       ],
                     ),
                   ),
                   pw.SizedBox(height: 16),
 
-                  // ═══ ALL FORM FIELDS ═══
-                  pw.Text('بيانات الاستمارة:',
-                      style: pw.TextStyle(font: boldFont, fontSize: 16)),
+                  // ALL FORM FIELDS
+                  pw.Text(
+                    'بيانات الاستمارة:',
+                    style: pw.TextStyle(font: boldFont, fontSize: 16),
+                  ),
                   pw.SizedBox(height: 8),
 
                   if (fields.isEmpty && subData.isEmpty)
@@ -200,18 +221,30 @@ class FormReportGenerator {
                         border: pw.Border.all(color: PdfColors.grey300),
                         borderRadius: pw.BorderRadius.circular(8),
                       ),
-                      child: pw.Text('لا توجد بيانات',
-                          style: pw.TextStyle(
-                              font: arabicFont, color: PdfColors.grey600)),
+                      child: pw.Text(
+                        'لا توجد بيانات',
+                        style: pw.TextStyle(
+                          font: arabicFont,
+                          color: PdfColors.grey600,
+                        ),
+                      ),
                     )
                   else if (fields.isNotEmpty)
                     // Render from schema fields (ordered)
-                    ...fields.map((field) =>
-                        _buildFieldRow(field, subData, arabicFont, boldFont))
+                    ...fields.map(
+                      (field) =>
+                          _buildFieldRow(field, subData, arabicFont, boldFont),
+                    )
                   else
                     // Fallback: render raw data keys
-                    ...subData.entries.map((entry) => _buildRawFieldRow(
-                        entry.key, entry.value, arabicFont, boldFont)),
+                    ...subData.entries.map(
+                      (entry) => _buildRawFieldRow(
+                        entry.key,
+                        entry.value,
+                        arabicFont,
+                        boldFont,
+                      ),
+                    ),
 
                   // Notes
                   if (sub['notes'] != null &&
@@ -226,15 +259,17 @@ class FormReportGenerator {
                         borderRadius: pw.BorderRadius.circular(8),
                       ),
                       child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text('ملاحظات:',
-                              style:
-                                  pw.TextStyle(font: boldFont, fontSize: 12)),
+                          pw.Text(
+                            'ملاحظات:',
+                            style: pw.TextStyle(font: boldFont, fontSize: 12),
+                          ),
                           pw.SizedBox(height: 4),
-                          pw.Text(sub['notes'],
-                              style:
-                                  pw.TextStyle(font: arabicFont, fontSize: 11)),
+                          pw.Text(
+                            sub['notes'],
+                            style: pw.TextStyle(font: arabicFont, fontSize: 11),
+                          ),
                         ],
                       ),
                     ),
@@ -245,11 +280,12 @@ class FormReportGenerator {
                       (sub['photos'] as List).isNotEmpty) ...[
                     pw.SizedBox(height: 8),
                     pw.Text(
-                      '📷 عدد الصور المرفقة: ${(sub['photos'] as List).length}',
+                      'عدد الصور المرفقة: ${(sub['photos'] as List).length}',
                       style: pw.TextStyle(
-                          font: arabicFont,
-                          fontSize: 10,
-                          color: PdfColors.grey600),
+                        font: arabicFont,
+                        fontSize: 10,
+                        color: PdfColors.grey600,
+                      ),
                     ),
                   ],
                 ],
@@ -269,12 +305,14 @@ class FormReportGenerator {
             pw.Directionality(
               textDirection: pw.TextDirection.rtl,
               child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('ملخص الإرساليات',
-                      style: pw.TextStyle(font: boldFont, fontSize: 18)),
+                  pw.Text(
+                    'ملخص الإرساليات',
+                    style: pw.TextStyle(font: boldFont, fontSize: 18),
+                  ),
                   pw.SizedBox(height: 12),
-                  _buildSummaryTable(submissions, fields, arabicFont),
+                  _buildSummaryTable(submissions, fields, arabicFont, boldFont),
                 ],
               ),
             ),
@@ -285,7 +323,8 @@ class FormReportGenerator {
 
     final dir = await getTemporaryDirectory();
     final file = File(
-        '${dir.path}/report_${form['id']}_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      '${dir.path}/report_${form['id']}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+    );
     await file.writeAsBytes(await pdf.save());
     return file;
   }
@@ -296,8 +335,11 @@ class FormReportGenerator {
     required List<Map<String, dynamic>> submissions,
     required String period,
   }) async {
-    final file =
-        await generate(form: form, submissions: submissions, period: period);
+    final file = await generate(
+      form: form,
+      submissions: submissions,
+      period: period,
+    );
     return file.readAsBytes();
   }
 
@@ -307,7 +349,8 @@ class FormReportGenerator {
 
   /// Extract field definitions from form schema (handles flat + sections).
   static List<Map<String, dynamic>> _extractFields(
-      Map<String, dynamic> schema) {
+    Map<String, dynamic> schema,
+  ) {
     final List<Map<String, dynamic>> result = [];
 
     // Flat fields
@@ -368,8 +411,13 @@ class FormReportGenerator {
     );
   }
 
-  static pw.Widget _statCard(String label, String value, PdfColor color,
-      pw.Font font, pw.Font boldFont) {
+  static pw.Widget _statCard(
+    String label,
+    String value,
+    PdfColor color,
+    pw.Font font,
+    pw.Font boldFont,
+  ) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: pw.BoxDecoration(
@@ -378,18 +426,29 @@ class FormReportGenerator {
       ),
       child: pw.Column(
         children: [
-          pw.Text(value,
-              style: pw.TextStyle(
-                  font: boldFont, fontSize: 18, color: PdfColors.white)),
-          pw.Text(label,
-              style: pw.TextStyle(
-                  font: font, fontSize: 9, color: PdfColors.white)),
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              font: boldFont,
+              fontSize: 18,
+              color: PdfColors.white,
+            ),
+          ),
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              font: font,
+              fontSize: 9,
+              color: PdfColors.white,
+            ),
+          ),
         ],
       ),
     );
   }
 
   /// Build a field row from schema definition + submission data.
+  /// ✅ FIX: Proper RTL layout — label on right, value on left for Arabic
   static pw.Widget _buildFieldRow(
     Map<String, dynamic> field,
     Map<String, dynamic> data,
@@ -412,26 +471,32 @@ class FormReportGenerator {
         borderRadius: pw.BorderRadius.circular(6),
       ),
       child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.end,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           if (section != null)
-            pw.Text(section,
-                style: pw.TextStyle(
-                    font: font, fontSize: 8, color: PdfColors.grey500)),
+            pw.Text(
+              section,
+              style: pw.TextStyle(
+                font: font,
+                fontSize: 8,
+                color: PdfColors.grey500,
+              ),
+            ),
           pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
+              // Label on the right (Arabic reading order)
+              pw.Text(
+                '$label: ',
+                style: pw.TextStyle(font: boldFont, fontSize: 11),
+              ),
+              pw.SizedBox(width: 4),
+              // Value takes remaining space
               pw.Expanded(
                 child: pw.Text(
                   displayValue,
                   style: pw.TextStyle(font: font, fontSize: 11),
-                  textAlign: pw.TextAlign.left,
                 ),
-              ),
-              pw.SizedBox(width: 8),
-              pw.Text(
-                label,
-                style: pw.TextStyle(font: boldFont, fontSize: 11),
               ),
             ],
           ),
@@ -457,33 +522,42 @@ class FormReportGenerator {
         borderRadius: pw.BorderRadius.circular(6),
       ),
       child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
+          pw.Text('$key: ', style: pw.TextStyle(font: boldFont, fontSize: 11)),
+          pw.SizedBox(width: 4),
           pw.Expanded(
             child: pw.Text(
               displayValue,
               style: pw.TextStyle(font: font, fontSize: 11),
-              textAlign: pw.TextAlign.left,
             ),
           ),
-          pw.SizedBox(width: 8),
-          pw.Text(key, style: pw.TextStyle(font: boldFont, fontSize: 11)),
         ],
       ),
     );
   }
 
   static pw.Widget _metaItem(
-      String label, String value, pw.Font font, pw.Font boldFont) {
-    return pw.RichText(
-      text: pw.TextSpan(
-        children: [
-          pw.TextSpan(
+    String label,
+    String value,
+    pw.Font font,
+    pw.Font boldFont,
+  ) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 4),
+      child: pw.RichText(
+        text: pw.TextSpan(
+          children: [
+            pw.TextSpan(
               text: '$label ',
-              style: pw.TextStyle(font: boldFont, fontSize: 10)),
-          pw.TextSpan(
-              text: value, style: pw.TextStyle(font: font, fontSize: 10)),
-        ],
+              style: pw.TextStyle(font: boldFont, fontSize: 10),
+            ),
+            pw.TextSpan(
+              text: value,
+              style: pw.TextStyle(font: font, fontSize: 10),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -493,14 +567,15 @@ class FormReportGenerator {
     List<Map<String, dynamic>> subs,
     List<Map<String, dynamic>> fields,
     pw.Font font,
+    pw.Font boldFont,
   ) {
     // Take first 5 fields for the table (too many columns = unreadable)
     final tableFields = fields.take(5).toList();
     final headers = [
-      '#',
       'الحالة',
       'التاريخ',
       ...tableFields.map((f) => f['label_ar'] ?? f['key'] ?? '-'),
+      '#',
     ];
 
     final data = subs.take(50).toList().asMap().entries.map((entry) {
@@ -508,21 +583,26 @@ class FormReportGenerator {
       final sub = entry.value;
       final subData = sub['data'] as Map<String, dynamic>? ?? {};
       return [
-        '${i + 1}',
         _statusLabel(sub['status'] ?? '-'),
         (sub['created_at'] ?? '').toString().substring(0, 10),
-        ...tableFields
-            .map((f) => _formatValue(f['type'] ?? 'text', subData[f['key']])),
+        ...tableFields.map(
+          (f) => _formatValue(f['type'] ?? 'text', subData[f['key']]),
+        ),
+        '${i + 1}',
       ];
     }).toList();
 
     return pw.TableHelper.fromTextArray(
       border: pw.TableBorder.all(color: PdfColors.grey300),
-      headerStyle:
-          pw.TextStyle(font: font, color: PdfColors.white, fontSize: 9),
+      headerStyle: pw.TextStyle(
+        font: boldFont,
+        color: PdfColors.white,
+        fontSize: 9,
+      ),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.blue700),
       cellStyle: pw.TextStyle(font: font, fontSize: 8),
       cellAlignment: pw.Alignment.centerRight,
+      headerAlignment: pw.Alignment.centerRight,
       headers: headers,
       data: data,
     );
@@ -578,6 +658,53 @@ class FormReportGenerator {
         return PdfColors.blue700;
       default:
         return PdfColors.grey700;
+    }
+  }
+
+  /// Format date in Arabic
+  static String _formatDateArabic(DateTime date) {
+    const months = [
+      'يناير',
+      'فبراير',
+      'مارس',
+      'أبريل',
+      'مايو',
+      'يونيو',
+      'يوليو',
+      'أغسطس',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  /// Field type in Arabic
+  static String _fieldTypeArabic(String? type) {
+    switch (type) {
+      case 'text':
+        return 'نص';
+      case 'number':
+        return 'رقم';
+      case 'phone':
+        return 'جوال';
+      case 'textarea':
+        return 'نص طويل';
+      case 'select':
+        return 'اختيار';
+      case 'multiselect':
+        return 'اختيار متعدد';
+      case 'boolean':
+        return 'نعم/لا';
+      case 'date':
+        return 'تاريخ';
+      case 'gps':
+        return 'موقع';
+      case 'photo':
+        return 'صورة';
+      default:
+        return type ?? 'نص';
     }
   }
 }

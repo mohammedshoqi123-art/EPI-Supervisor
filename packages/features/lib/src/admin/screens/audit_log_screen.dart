@@ -8,14 +8,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 final auditLogsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final response = await Supabase.instance.client.functions
-      .invoke('get-advanced-reports', body: {
-    'report_type': 'audit',
-    'limit': 100,
-  });
-  if (response.status != 200) throw Exception('فشل تحميل السجل');
-  return List<Map<String, dynamic>>.from(response.data['logs'] ?? []);
-});
+      final response = await Supabase.instance.client.functions.invoke(
+        'get-advanced-reports',
+        body: {'report_type': 'audit', 'limit': 100},
+      );
+      if (response.status != 200) throw Exception('فشل تحميل السجل');
+      return List<Map<String, dynamic>>.from(response.data['logs'] ?? []);
+    });
 
 class AuditLogScreen extends ConsumerStatefulWidget {
   const AuditLogScreen({super.key});
@@ -55,7 +54,7 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
         ],
       ),
       child: Row(
@@ -66,10 +65,13 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
               decoration: InputDecoration(
                 hintText: 'بحث...',
                 prefixIcon: const Icon(Icons.search_rounded),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
@@ -78,8 +80,9 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(12)),
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _actionFilter,
@@ -98,20 +101,27 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(12)),
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _tableFilter,
                 items: const [
                   DropdownMenuItem(value: 'all', child: Text('جميع الجداول')),
                   DropdownMenuItem(
-                      value: 'profiles', child: Text('المستخدمين')),
+                    value: 'profiles',
+                    child: Text('المستخدمين'),
+                  ),
                   DropdownMenuItem(
-                      value: 'form_submissions', child: Text('الإرساليات')),
+                    value: 'form_submissions',
+                    child: Text('الإرساليات'),
+                  ),
                   DropdownMenuItem(value: 'forms', child: Text('النماذج')),
                   DropdownMenuItem(
-                      value: 'supply_shortages', child: Text('النواقص')),
+                    value: 'supply_shortages',
+                    child: Text('النواقص'),
+                  ),
                 ],
                 onChanged: (v) => setState(() => _tableFilter = v!),
               ),
@@ -134,8 +144,8 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
       if (_tableFilter != 'all' && l['table_name'] != _tableFilter)
         return false;
       if (_searchQuery.isNotEmpty) {
-        final name =
-            (l['profiles']?['full_name'] as String? ?? '').toLowerCase();
+        final name = (l['profiles']?['full_name'] as String? ?? '')
+            .toLowerCase();
         if (!name.contains(_searchQuery.toLowerCase())) return false;
       }
       return true;
@@ -146,7 +156,7 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -155,9 +165,13 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                Text('السجلات: ${filtered.length}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
+                Text(
+                  'السجلات: ${filtered.length}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Tajawal',
+                  ),
+                ),
               ],
             ),
           ),
@@ -211,14 +225,19 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10)),
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
         child: Icon(icon, color: color, size: 20),
       ),
-      title: Text('$userName • ${_actionLabel(action)}',
-          style: const TextStyle(fontSize: 14, fontFamily: 'Tajawal')),
-      subtitle: Text(_tableLabel(table),
-          style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+      title: Text(
+        '$userName • ${_actionLabel(action)}',
+        style: const TextStyle(fontSize: 14, fontFamily: 'Tajawal'),
+      ),
+      subtitle: Text(
+        _tableLabel(table),
+        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+      ),
       trailing: Text(
         _formatDate(createdAt),
         style: TextStyle(fontSize: 12, color: Colors.grey[400]),
@@ -293,34 +312,50 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
                 _detailRow('العملية', _actionLabel(log['action'] ?? '')),
                 _detailRow('الجدول', _tableLabel(log['table_name'] ?? '')),
                 _detailRow(
-                    'المستخدم', log['profiles']?['full_name'] ?? 'النظام'),
+                  'المستخدم',
+                  log['profiles']?['full_name'] ?? 'النظام',
+                ),
                 _detailRow('التاريخ', log['created_at'] ?? ''),
                 if (log['old_data'] != null) ...[
                   const SizedBox(height: 12),
-                  const Text('البيانات القديمة:',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'البيانات القديمة:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                        color: Colors.red[50],
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text(log['old_data'].toString(),
-                        style: const TextStyle(
-                            fontSize: 12, fontFamily: 'monospace')),
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      log['old_data'].toString(),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
                   ),
                 ],
                 if (log['new_data'] != null) ...[
                   const SizedBox(height: 12),
-                  const Text('البيانات الجديدة:',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'البيانات الجديدة:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                        color: Colors.green[50],
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text(log['new_data'].toString(),
-                        style: const TextStyle(
-                            fontSize: 12, fontFamily: 'monospace')),
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      log['new_data'].toString(),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -329,7 +364,9 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إغلاق'),
+          ),
         ],
       ),
     );
@@ -341,12 +378,18 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
       child: Row(
         children: [
           SizedBox(
-              width: 80,
-              child: Text(label,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13))),
+            width: 80,
+            child: Text(
+              label,
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+            ),
+          ),
           Expanded(
-              child: Text(value,
-                  style: const TextStyle(fontWeight: FontWeight.w500))),
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
         ],
       ),
     );

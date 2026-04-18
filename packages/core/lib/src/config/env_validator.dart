@@ -4,8 +4,10 @@ import 'supabase_config.dart';
 /// Validates required environment variables at startup.
 /// Supports offline-first mode where Supabase is optional.
 class EnvValidator {
-  static const bool _offlineMode =
-      bool.fromEnvironment('OFFLINE_MODE', defaultValue: false);
+  static const bool _offlineMode = bool.fromEnvironment(
+    'OFFLINE_MODE',
+    defaultValue: false,
+  );
 
   /// Whether the app is running in full offline mode
   static bool get isOfflineMode => _offlineMode || SupabaseConfig.url.isEmpty;
@@ -38,8 +40,10 @@ class EnvValidator {
     }
 
     // Optional variables — warn but don't fail
-    const geminiKey =
-        String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+    const geminiKey = String.fromEnvironment(
+      'GEMINI_API_KEY',
+      defaultValue: '',
+    );
     const sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
     const encKey = String.fromEnvironment('ENCRYPTION_KEY', defaultValue: '');
 

@@ -50,8 +50,10 @@ class ProductionSyncQueue {
     await _recoverStuckItems();
 
     // Auto-cleanup every hour: remove completed items older than 24h
-    _cleanupTimer =
-        Timer.periodic(const Duration(hours: 1), (_) => _autoCleanup());
+    _cleanupTimer = Timer.periodic(
+      const Duration(hours: 1),
+      (_) => _autoCleanup(),
+    );
 
     // Emit initial counts
     _emitCounts();
@@ -111,7 +113,8 @@ class ProductionSyncQueue {
 
     if (kDebugMode)
       print(
-          '[SyncQueue] Enqueued: ${entry.id} (type=$type, priority=${priority.name})');
+        '[SyncQueue] Enqueued: ${entry.id} (type=$type, priority=${priority.name})',
+      );
     return entry.id;
   }
 
@@ -122,10 +125,12 @@ class ProductionSyncQueue {
   List<SyncQueueEntry> getReadyItems() {
     final entries = _getAllEntries();
     return entries
-        .where((e) =>
-            (e.status == QueueItemStatus.pending ||
-                e.status == QueueItemStatus.retrying) &&
-            e.isReadyForRetry)
+        .where(
+          (e) =>
+              (e.status == QueueItemStatus.pending ||
+                  e.status == QueueItemStatus.retrying) &&
+              e.isReadyForRetry,
+        )
         .toList()
       ..sort((a, b) {
         // Higher priority first
@@ -147,10 +152,12 @@ class ProductionSyncQueue {
   Future<void> markSyncing(String id) async {
     final entry = _getEntry(id);
     if (entry == null) return;
-    await _saveEntry(entry.copyWith(
-      status: QueueItemStatus.syncing,
-      lastAttemptAt: DateTime.now(),
-    ));
+    await _saveEntry(
+      entry.copyWith(
+        status: QueueItemStatus.syncing,
+        lastAttemptAt: DateTime.now(),
+      ),
+    );
   }
 
   /// Mark an item as successfully synced. Removes it from the queue.
@@ -191,8 +198,9 @@ class ProductionSyncQueue {
       await _saveEntry(retryEntry);
       if (kDebugMode) {
         print(
-            '[SyncQueue] Retry $newRetryCount/${SyncQueueEntry.maxRetries} for $id '
-            '(next retry in ${retryEntry.nextRetryDelay.inSeconds}s)');
+          '[SyncQueue] Retry $newRetryCount/${SyncQueueEntry.maxRetries} for $id '
+          '(next retry in ${retryEntry.nextRetryDelay.inSeconds}s)',
+        );
       }
     }
     _emitCounts();
@@ -258,12 +266,15 @@ class ProductionSyncQueue {
 
   QueueCounts getCounts() {
     final entries = _getAllEntries();
-    final pending =
-        entries.where((e) => e.status == QueueItemStatus.pending).length;
-    final retrying =
-        entries.where((e) => e.status == QueueItemStatus.retrying).length;
-    final syncing =
-        entries.where((e) => e.status == QueueItemStatus.syncing).length;
+    final pending = entries
+        .where((e) => e.status == QueueItemStatus.pending)
+        .length;
+    final retrying = entries
+        .where((e) => e.status == QueueItemStatus.retrying)
+        .length;
+    final syncing = entries
+        .where((e) => e.status == QueueItemStatus.syncing)
+        .length;
     final failed = getFailedItems().length;
 
     return QueueCounts(
@@ -333,7 +344,8 @@ class ProductionSyncQueue {
     final b = _queueBox;
     if (b == null || !b.isOpen) {
       throw StateError(
-          'ProductionSyncQueue not initialized. Call init() first.');
+        'ProductionSyncQueue not initialized. Call init() first.',
+      );
     }
     return b;
   }

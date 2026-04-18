@@ -116,8 +116,10 @@ class ConnectionStatusWidget extends ConsumerWidget {
                       _formatDuration(state.offlineDuration!),
                       style: TextStyle(
                         fontSize: 10,
-                        color: _textColor(isOnline, hasPending)
-                            .withValues(alpha: 0.7),
+                        color: _textColor(
+                          isOnline,
+                          hasPending,
+                        ).withValues(alpha: 0.7),
                       ),
                     ),
                 ],

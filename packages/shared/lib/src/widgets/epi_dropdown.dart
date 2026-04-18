@@ -27,10 +27,7 @@ class EpiDropdown<T> extends StatelessWidget {
       items: items,
       onChanged: enabled ? onChanged : null,
       validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-      ),
+      decoration: InputDecoration(labelText: label, hintText: hint),
       style: const TextStyle(fontFamily: 'Tajawal', color: Colors.black87),
       dropdownColor: Colors.white,
       borderRadius: BorderRadius.circular(12),

@@ -15,30 +15,35 @@ import '../shared_providers.dart';
 // ─── Providers ─────────────────────────────────────────────────────────────
 
 final usersListProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, UserFilters>(
-        (ref, filters) async {
-  final client = Supabase.instance.client;
-  var query = client
-      .from('profiles')
-      .select('*, governorates(name_ar), districts(name_ar)');
+    FutureProvider.family<List<Map<String, dynamic>>, UserFilters>((
+      ref,
+      filters,
+    ) async {
+      final client = Supabase.instance.client;
+      var query = client
+          .from('profiles')
+          .select('*, governorates(name_ar), districts(name_ar)');
 
-  if (filters.search.isNotEmpty) {
-    query = query.or(
-        'full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%');
-  }
-  if (filters.role != null) {
-    query = query.eq('role', filters.role!);
-  }
-  if (filters.governorateId != null) {
-    query = query.eq('governorate_id', filters.governorateId!);
-  }
-  if (filters.isActive != null) {
-    query = query.eq('is_active', filters.isActive!);
-  }
+      if (filters.search.isNotEmpty) {
+        query = query.or(
+          'full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%',
+        );
+      }
+      if (filters.role != null) {
+        query = query.eq('role', filters.role!);
+      }
+      if (filters.governorateId != null) {
+        query = query.eq('governorate_id', filters.governorateId!);
+      }
+      if (filters.isActive != null) {
+        query = query.eq('is_active', filters.isActive!);
+      }
 
-  final response = await query.order('created_at', ascending: false).limit(200);
-  return (response as List<dynamic>).cast<Map<String, dynamic>>();
-});
+      final response = await query
+          .order('created_at', ascending: false)
+          .limit(200);
+      return (response as List<dynamic>).cast<Map<String, dynamic>>();
+    });
 
 // ─── Filters Model ─────────────────────────────────────────────────────────
 
@@ -122,8 +127,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         backgroundColor: AppTheme.backgroundLight,
         appBar: AppBar(
           backgroundColor: AppTheme.primaryColor,
-          title: const Text('إدارة المستخدمين',
-              style: TextStyle(fontFamily: 'Cairo')),
+          title: const Text(
+            'إدارة المستخدمين',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.file_download_outlined),
@@ -189,8 +196,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               borderRadius: AppTheme.radiusMedium,
               borderSide: BorderSide.none,
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
       ),
@@ -230,13 +239,16 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
             borderRadius: AppTheme.radiusMedium,
             borderSide: BorderSide.none,
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
         ),
         items: [
           const DropdownMenuItem(value: null, child: Text('كل الأدوار')),
-          ...roles.entries
-              .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))),
+          ...roles.entries.map(
+            (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
+          ),
         ],
       ),
     );
@@ -267,14 +279,22 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                   borderRadius: AppTheme.radiusMedium,
                   borderSide: BorderSide.none,
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
               ),
               items: [
                 const DropdownMenuItem(
-                    value: null, child: Text('كل المحافظات')),
-                ...govs.map((g) => DropdownMenuItem(
-                    value: g['id'] as String, child: Text(g['name_ar'] ?? ''))),
+                  value: null,
+                  child: Text('كل المحافظات'),
+                ),
+                ...govs.map(
+                  (g) => DropdownMenuItem(
+                    value: g['id'] as String,
+                    child: Text(g['name_ar'] ?? ''),
+                  ),
+                ),
               ],
             ),
           ),
@@ -302,8 +322,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
             borderRadius: AppTheme.radiusMedium,
             borderSide: BorderSide.none,
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
         ),
         items: const [
           DropdownMenuItem(value: null, child: Text('الكل')),
@@ -386,11 +408,16 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline,
-                    size: 48, color: AppTheme.errorColor),
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: AppTheme.errorColor,
+                ),
                 const SizedBox(height: 16),
-                const Text('فشل تحميل المستخدمين',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                const Text(
+                  'فشل تحميل المستخدمين',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
                 const SizedBox(height: 8),
                 ElevatedButton.icon(
                   onPressed: () => ref.invalidate(usersListProvider),
@@ -406,28 +433,37 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.people_outline,
-                        size: 64, color: AppTheme.textHint),
+                    Icon(
+                      Icons.people_outline,
+                      size: 64,
+                      color: AppTheme.textHint,
+                    ),
                     SizedBox(height: 16),
-                    Text('لا يوجد مستخدمون',
-                        style: TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 16,
-                            color: AppTheme.textSecondary)),
+                    Text(
+                      'لا يوجد مستخدمون',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 16,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
               );
             }
 
-            final paged =
-                users.skip(_currentPage * _pageSize).take(_pageSize).toList();
+            final paged = users
+                .skip(_currentPage * _pageSize)
+                .take(_pageSize)
+                .toList();
             final totalPages = (users.length / _pageSize).ceil();
 
             return Column(
               children: [
                 Expanded(
-                  child:
-                      isWide ? _buildDataTable(paged) : _buildCardsList(paged),
+                  child: isWide
+                      ? _buildDataTable(paged)
+                      : _buildCardsList(paged),
                 ),
                 _buildPagination(totalPages, users.length),
               ],
@@ -453,8 +489,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               onChanged: (v) {
                 setState(() {
                   if (v == true) {
-                    _selectedUserIds
-                        .addAll(users.map((u) => u['id'] as String));
+                    _selectedUserIds.addAll(
+                      users.map((u) => u['id'] as String),
+                    );
                   } else {
                     _selectedUserIds.clear();
                   }
@@ -463,41 +500,77 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
             ),
           ),
           const DataColumn(
-              label: Text('الاسم',
-                  style: TextStyle(
-                      fontFamily: 'Cairo', fontWeight: FontWeight.w600))),
+            label: Text(
+              'الاسم',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           const DataColumn(
-              label: Text('البريد',
-                  style: TextStyle(
-                      fontFamily: 'Cairo', fontWeight: FontWeight.w600))),
+            label: Text(
+              'البريد',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           const DataColumn(
-              label: Text('الدور',
-                  style: TextStyle(
-                      fontFamily: 'Cairo', fontWeight: FontWeight.w600))),
+            label: Text(
+              'الدور',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           const DataColumn(
-              label: Text('المحافظة',
-                  style: TextStyle(
-                      fontFamily: 'Cairo', fontWeight: FontWeight.w600))),
+            label: Text(
+              'المحافظة',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           const DataColumn(
-              label: Text('الحالة',
-                  style: TextStyle(
-                      fontFamily: 'Cairo', fontWeight: FontWeight.w600))),
+            label: Text(
+              'الحالة',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           const DataColumn(
-              label: Text('آخر دخول',
-                  style: TextStyle(
-                      fontFamily: 'Cairo', fontWeight: FontWeight.w600))),
+            label: Text(
+              'آخر دخول',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           const DataColumn(
-              label: Text('إجراءات',
-                  style: TextStyle(
-                      fontFamily: 'Cairo', fontWeight: FontWeight.w600))),
+            label: Text(
+              'إجراءات',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
         rows: users.map((user) {
           final id = user['id'] as String;
           final isActive = user['is_active'] ?? true;
           final govName = user['governorates']?['name_ar'] ?? '—';
           final lastLogin = user['last_login'] != null
-              ? DateFormat('d/M/yyyy')
-                  .format(DateTime.parse(user['last_login']))
+              ? DateFormat(
+                  'd/M/yyyy',
+                ).format(DateTime.parse(user['last_login']))
               : 'لم يسجل دخول';
 
           return DataRow(
@@ -512,58 +585,81 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               });
             },
             cells: [
-              DataCell(Checkbox(
-                value: _selectedUserIds.contains(id),
-                onChanged: (v) {
-                  setState(() {
-                    if (v == true) {
-                      _selectedUserIds.add(id);
-                    } else {
-                      _selectedUserIds.remove(id);
-                    }
-                  });
-                },
-              )),
-              DataCell(Text(user['full_name'] ?? '',
-                  style: const TextStyle(fontFamily: 'Tajawal'))),
-              DataCell(Text(user['email'] ?? '',
-                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12))),
+              DataCell(
+                Checkbox(
+                  value: _selectedUserIds.contains(id),
+                  onChanged: (v) {
+                    setState(() {
+                      if (v == true) {
+                        _selectedUserIds.add(id);
+                      } else {
+                        _selectedUserIds.remove(id);
+                      }
+                    });
+                  },
+                ),
+              ),
+              DataCell(
+                Text(
+                  user['full_name'] ?? '',
+                  style: const TextStyle(fontFamily: 'Tajawal'),
+                ),
+              ),
+              DataCell(
+                Text(
+                  user['email'] ?? '',
+                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                ),
+              ),
               DataCell(_buildRoleChip(user['role'] ?? 'data_entry')),
               DataCell(
-                  Text(govName, style: const TextStyle(fontFamily: 'Tajawal'))),
+                Text(govName, style: const TextStyle(fontFamily: 'Tajawal')),
+              ),
               DataCell(_buildStatusChip(isActive)),
-              DataCell(Text(lastLogin,
-                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12))),
-              DataCell(Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined,
-                        size: 18, color: AppTheme.infoColor),
-                    onPressed: () => _showUserDialog(user: user),
-                    tooltip: 'تعديل',
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      isActive
-                          ? Icons.block_outlined
-                          : Icons.check_circle_outline,
-                      size: 18,
-                      color: isActive
-                          ? AppTheme.warningColor
-                          : AppTheme.successColor,
+              DataCell(
+                Text(
+                  lastLogin,
+                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                ),
+              ),
+              DataCell(
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: AppTheme.infoColor,
+                      ),
+                      onPressed: () => _showUserDialog(user: user),
+                      tooltip: 'تعديل',
                     ),
-                    onPressed: () => _toggleUserActive(id, !isActive),
-                    tooltip: isActive ? 'تعطيل' : 'تفعيل',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        size: 18, color: AppTheme.errorColor),
-                    onPressed: () => _deleteUser(id),
-                    tooltip: 'حذف',
-                  ),
-                ],
-              )),
+                    IconButton(
+                      icon: Icon(
+                        isActive
+                            ? Icons.block_outlined
+                            : Icons.check_circle_outline,
+                        size: 18,
+                        color: isActive
+                            ? AppTheme.warningColor
+                            : AppTheme.successColor,
+                      ),
+                      onPressed: () => _toggleUserActive(id, !isActive),
+                      tooltip: isActive ? 'تعطيل' : 'تفعيل',
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: AppTheme.errorColor,
+                      ),
+                      onPressed: () => _deleteUser(id),
+                      tooltip: 'حذف',
+                    ),
+                  ],
+                ),
+              ),
             ],
           );
         }).toList(),
@@ -589,20 +685,26 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               child: Text(
                 (user['full_name'] ?? '؟')[0],
                 style: const TextStyle(
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.primaryColor),
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.primaryColor,
+                ),
               ),
             ),
-            title: Text(user['full_name'] ?? '',
-                style: const TextStyle(
-                    fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+            title: Text(
+              user['full_name'] ?? '',
+              style: const TextStyle(
+                fontFamily: 'Tajawal',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(user['email'] ?? '',
-                    style:
-                        const TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+                Text(
+                  user['email'] ?? '',
+                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -629,42 +731,54 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined,
-                            size: 18, color: AppTheme.infoColor),
-                        SizedBox(width: 8),
-                        Text('تعديل', style: TextStyle(fontFamily: 'Tajawal')),
-                      ],
-                    )),
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: AppTheme.infoColor,
+                      ),
+                      SizedBox(width: 8),
+                      Text('تعديل', style: TextStyle(fontFamily: 'Tajawal')),
+                    ],
+                  ),
+                ),
                 PopupMenuItem(
-                    value: 'toggle',
-                    child: Row(
-                      children: [
-                        Icon(
-                            isActive
-                                ? Icons.block_outlined
-                                : Icons.check_circle_outline,
-                            size: 18,
-                            color: isActive
-                                ? AppTheme.warningColor
-                                : AppTheme.successColor),
-                        const SizedBox(width: 8),
-                        Text(isActive ? 'تعطيل' : 'تفعيل',
-                            style: const TextStyle(fontFamily: 'Tajawal')),
-                      ],
-                    )),
+                  value: 'toggle',
+                  child: Row(
+                    children: [
+                      Icon(
+                        isActive
+                            ? Icons.block_outlined
+                            : Icons.check_circle_outline,
+                        size: 18,
+                        color: isActive
+                            ? AppTheme.warningColor
+                            : AppTheme.successColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isActive ? 'تعطيل' : 'تفعيل',
+                        style: const TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                    ],
+                  ),
+                ),
                 const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline,
-                            size: 18, color: AppTheme.errorColor),
-                        SizedBox(width: 8),
-                        Text('حذف', style: TextStyle(fontFamily: 'Tajawal')),
-                      ],
-                    )),
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: AppTheme.errorColor,
+                      ),
+                      SizedBox(width: 8),
+                      Text('حذف', style: TextStyle(fontFamily: 'Tajawal')),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -687,12 +801,12 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     final color = role == 'admin'
         ? AppTheme.errorColor
         : role == 'central'
-            ? AppTheme.secondaryColor
-            : role == 'governorate'
-                ? AppTheme.warningColor
-                : role == 'district'
-                    ? AppTheme.infoColor
-                    : AppTheme.textSecondary;
+        ? AppTheme.secondaryColor
+        : role == 'governorate'
+        ? AppTheme.warningColor
+        : role == 'district'
+        ? AppTheme.infoColor
+        : AppTheme.textSecondary;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -741,9 +855,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         child: Text(
           'إجمالي: $totalItems مستخدم',
           style: const TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 12,
-              color: AppTheme.textSecondary),
+            fontFamily: 'Tajawal',
+            fontSize: 12,
+            color: AppTheme.textSecondary,
+          ),
         ),
       );
     }
@@ -760,9 +875,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
           Text(
             'إجمالي: $totalItems — صفحة ${_currentPage + 1} من $totalPages',
             style: const TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 12,
-                color: AppTheme.textSecondary),
+              fontFamily: 'Tajawal',
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+            ),
           ),
           Row(
             children: [
@@ -821,8 +937,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
   void _showUserDialog({Map<String, dynamic>? user}) {
     final isEdit = user != null;
-    final nameController =
-        TextEditingController(text: user?['full_name'] ?? '');
+    final nameController = TextEditingController(
+      text: user?['full_name'] ?? '',
+    );
     final emailController = TextEditingController(text: user?['email'] ?? '');
     final phoneController = TextEditingController(text: user?['phone'] ?? '');
     String selectedRole = user?['role'] ?? 'data_entry';
@@ -883,15 +1000,25 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                         ),
                         items: const [
                           DropdownMenuItem(
-                              value: 'admin', child: Text('مدير النظام')),
+                            value: 'admin',
+                            child: Text('مدير النظام'),
+                          ),
                           DropdownMenuItem(
-                              value: 'central', child: Text('مركزي')),
+                            value: 'central',
+                            child: Text('مركزي'),
+                          ),
                           DropdownMenuItem(
-                              value: 'governorate', child: Text('محافظة')),
+                            value: 'governorate',
+                            child: Text('محافظة'),
+                          ),
                           DropdownMenuItem(
-                              value: 'district', child: Text('منطقة')),
+                            value: 'district',
+                            child: Text('منطقة'),
+                          ),
                           DropdownMenuItem(
-                              value: 'data_entry', child: Text('إدخال بيانات')),
+                            value: 'data_entry',
+                            child: Text('إدخال بيانات'),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -914,10 +1041,15 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                               ),
                               items: [
                                 const DropdownMenuItem(
-                                    value: null, child: Text('بدون')),
-                                ...govs.map((g) => DropdownMenuItem(
+                                  value: null,
+                                  child: Text('بدون'),
+                                ),
+                                ...govs.map(
+                                  (g) => DropdownMenuItem(
                                     value: g['id'] as String,
-                                    child: Text(g['name_ar'] ?? ''))),
+                                    child: Text(g['name_ar'] ?? ''),
+                                  ),
+                                ),
                               ],
                             ),
                           );
@@ -927,11 +1059,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                         const SizedBox(height: 12),
                         Consumer(
                           builder: (context, ref, _) {
-                            final distsAsync =
-                                ref.watch(districtsListProvider(selectedGovId));
+                            final distsAsync = ref.watch(
+                              districtsListProvider(selectedGovId),
+                            );
                             return distsAsync.when(
                               loading: () => const CircularProgressIndicator(
-                                  strokeWidth: 2),
+                                strokeWidth: 2,
+                              ),
                               error: (_, __) => const SizedBox.shrink(),
                               data: (dists) => DropdownButtonFormField<String?>(
                                 value: selectedDistId,
@@ -943,10 +1077,15 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                                 ),
                                 items: [
                                   const DropdownMenuItem(
-                                      value: null, child: Text('بدون')),
-                                  ...dists.map((d) => DropdownMenuItem(
+                                    value: null,
+                                    child: Text('بدون'),
+                                  ),
+                                  ...dists.map(
+                                    (d) => DropdownMenuItem(
                                       value: d['id'] as String,
-                                      child: Text(d['name_ar'] ?? ''))),
+                                      child: Text(d['name_ar'] ?? ''),
+                                    ),
+                                  ),
                                 ],
                               ),
                             );
@@ -999,8 +1138,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     if (name.isEmpty || email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('الاسم والبريد مطلوبان',
-              style: TextStyle(fontFamily: 'Tajawal')),
+          content: Text(
+            'الاسم والبريد مطلوبان',
+            style: TextStyle(fontFamily: 'Tajawal'),
+          ),
           backgroundColor: AppTheme.errorColor,
         ),
       );
@@ -1010,24 +1151,30 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     try {
       final client = Supabase.instance.client;
       if (userId != null) {
-        await client.from('profiles').update({
-          'full_name': name,
-          'phone': phone.isNotEmpty ? phone : null,
-          'role': role,
-          'governorate_id': govId,
-          'district_id': distId,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', userId);
+        await client
+            .from('profiles')
+            .update({
+              'full_name': name,
+              'phone': phone.isNotEmpty ? phone : null,
+              'role': role,
+              'governorate_id': govId,
+              'district_id': distId,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', userId);
       } else {
-        await client.functions.invoke('admin-actions', body: {
-          'action': 'create_user',
-          'email': email,
-          'full_name': name,
-          'phone': phone.isNotEmpty ? phone : null,
-          'role': role,
-          'governorate_id': govId,
-          'district_id': distId,
-        });
+        await client.functions.invoke(
+          'admin-actions',
+          body: {
+            'action': 'create_user',
+            'email': email,
+            'full_name': name,
+            'phone': phone.isNotEmpty ? phone : null,
+            'role': role,
+            'governorate_id': govId,
+            'district_id': distId,
+          },
+        );
       }
 
       if (ctx.mounted) {
@@ -1049,8 +1196,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       if (ctx.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('حدث خطأ: $e',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'حدث خطأ: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -1060,10 +1209,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
   Future<void> _toggleUserActive(String id, bool active) async {
     try {
-      await Supabase.instance.client.from('profiles').update({
-        'is_active': active,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', id);
+      await Supabase.instance.client
+          .from('profiles')
+          .update({
+            'is_active': active,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', id);
 
       ref.invalidate(usersListProvider);
       if (mounted) {
@@ -1073,8 +1225,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               active ? 'تم تفعيل المستخدم' : 'تم تعطيل المستخدم',
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
-            backgroundColor:
-                active ? AppTheme.successColor : AppTheme.warningColor,
+            backgroundColor: active
+                ? AppTheme.successColor
+                : AppTheme.warningColor,
           ),
         );
       }
@@ -1082,8 +1235,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشل العملية: $e',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشل العملية: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -1106,16 +1261,18 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     if (confirmed != true) return;
 
     try {
-      await Supabase.instance.client.functions.invoke('admin-actions', body: {
-        'action': 'delete_user',
-        'user_id': id,
-      });
+      await Supabase.instance.client.functions.invoke(
+        'admin-actions',
+        body: {'action': 'delete_user', 'user_id': id},
+      );
       ref.invalidate(usersListProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم حذف المستخدم',
-                style: TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'تم حذف المستخدم',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -1124,8 +1281,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشل الحذف: $e',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشل الحذف: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -1136,10 +1295,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   Future<void> _bulkToggleActive(bool active) async {
     try {
       for (final id in _selectedUserIds) {
-        await Supabase.instance.client.from('profiles').update({
-          'is_active': active,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', id);
+        await Supabase.instance.client
+            .from('profiles')
+            .update({
+              'is_active': active,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', id);
       }
       setState(() => _selectedUserIds.clear());
       ref.invalidate(usersListProvider);
@@ -1160,8 +1322,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشلت العملية: $e',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشلت العملية: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -1183,18 +1347,20 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
     try {
       for (final id in _selectedUserIds) {
-        await Supabase.instance.client.functions.invoke('admin-actions', body: {
-          'action': 'delete_user',
-          'user_id': id,
-        });
+        await Supabase.instance.client.functions.invoke(
+          'admin-actions',
+          body: {'action': 'delete_user', 'user_id': id},
+        );
       }
       setState(() => _selectedUserIds.clear());
       ref.invalidate(usersListProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم حذف المستخدمين',
-                style: TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'تم حذف المستخدمين',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -1203,8 +1369,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('فشل الحذف: $e', style: TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشل الحذف: $e',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -1231,18 +1399,20 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
           'المحافظة',
           'المنطقة',
           'نشط',
-          'آخر دخول'
+          'آخر دخول',
         ],
-        ...users.map((u) => [
-              u['full_name'] ?? '',
-              u['email'] ?? '',
-              u['phone'] ?? '',
-              u['role'] ?? '',
-              u['governorates']?['name_ar'] ?? '',
-              u['districts']?['name_ar'] ?? '',
-              (u['is_active'] ?? true) ? 'نعم' : 'لا',
-              u['last_login'] ?? '',
-            ]),
+        ...users.map(
+          (u) => [
+            u['full_name'] ?? '',
+            u['email'] ?? '',
+            u['phone'] ?? '',
+            u['role'] ?? '',
+            u['governorates']?['name_ar'] ?? '',
+            u['districts']?['name_ar'] ?? '',
+            (u['is_active'] ?? true) ? 'نعم' : 'لا',
+            u['last_login'] ?? '',
+          ],
+        ),
       ];
 
       final csvData = const ListToCsvConverter().convert(rows);
@@ -1251,8 +1421,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم نسخ بيانات CSV إلى الحافظة',
-                style: TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'تم نسخ بيانات CSV إلى الحافظة',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -1261,8 +1433,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشل التصدير: $e',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشل التصدير: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );

@@ -72,9 +72,7 @@ class _XFileImageState extends State<XFileImage> {
       child = SizedBox(
         width: widget.width,
         height: widget.height,
-        child: const Center(
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
       );
     } else {
       child = Image.memory(

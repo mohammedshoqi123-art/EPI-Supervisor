@@ -55,7 +55,8 @@ class SyncService {
         await cache.invalidateAll();
         if (kDebugMode)
           print(
-              '[SyncService] All caches cleared — next fetch will get fresh data');
+            '[SyncService] All caches cleared — next fetch will get fresh data',
+          );
       }
     } catch (e) {
       if (kDebugMode) print('[SyncService] forceRefreshAll error: $e');
@@ -159,15 +160,18 @@ class SyncService {
 
     try {
       // ═══ معالجة العناصر دفعات ═══
-      for (int offset = 0;
-          offset < uniqueItems.length;
-          offset += _maxBatchSize) {
+      for (
+        int offset = 0;
+        offset < uniqueItems.length;
+        offset += _maxBatchSize
+      ) {
         final batchEnd = (offset + _maxBatchSize).clamp(0, uniqueItems.length);
         final batch = uniqueItems.sublist(offset, batchEnd);
 
         if (kDebugMode)
           print(
-              '[SyncService] Batch: ${batch.length} items ($offset/${uniqueItems.length})');
+            '[SyncService] Batch: ${batch.length} items ($offset/${uniqueItems.length})',
+          );
 
         // ═══ FIX: تصفية العناصر التي تجاوزت الحد الأقصى ═══
         final toRetry = <Map<String, dynamic>>[];
@@ -189,10 +193,12 @@ class SyncService {
           if (kDebugMode)
             print('[SyncService] Archived failed item: $offlineId');
           result.archived++;
-          result.errors.add(SyncError(
-            offlineId: offlineId,
-            error: 'Max retries ($_maxRetries) exceeded — removed from queue',
-          ));
+          result.errors.add(
+            SyncError(
+              offlineId: offlineId,
+              error: 'Max retries ($_maxRetries) exceeded — removed from queue',
+            ),
+          );
         }
 
         if (toRetry.isEmpty) continue;
@@ -206,16 +212,15 @@ class SyncService {
             return payload;
           }).toList();
 
-          final response = await _api.callFunction(
-            SupabaseConfig.fnSyncOffline,
-            {'items': items},
-          ).timeout(
-            const Duration(seconds: 90), // ═══ مهلة أطول ═══
-            onTimeout: () {
-              if (kDebugMode) print('[SyncService] Timeout');
-              throw TimeoutException('Batch sync timed out');
-            },
-          );
+          final response = await _api
+              .callFunction(SupabaseConfig.fnSyncOffline, {'items': items})
+              .timeout(
+                const Duration(seconds: 90), // ═══ مهلة أطول ═══
+                onTimeout: () {
+                  if (kDebugMode) print('[SyncService] Timeout');
+                  throw TimeoutException('Batch sync timed out');
+                },
+              );
 
           final serverResults = (response['results'] as List?) ?? [];
           final serverErrors = (response['errors'] as List?) ?? [];
@@ -224,9 +229,9 @@ class SyncService {
             final offlineId = item['offline_id'] as String? ?? '';
 
             final match = serverResults.cast<Map<String, dynamic>>().firstWhere(
-                  (r) => r['offline_id'] == offlineId,
-                  orElse: () => <String, dynamic>{},
-                );
+              (r) => r['offline_id'] == offlineId,
+              orElse: () => <String, dynamic>{},
+            );
 
             if (match.isNotEmpty) {
               final status = match['status'] as String? ?? 'error';
@@ -241,8 +246,9 @@ class SyncService {
                   await _offline.saveConflict(item, match);
                   await _offline.removeFromQueue(offlineId);
                   result.conflicts++;
-                  result.conflictDetails
-                      .add(OfflineSyncResult.conflict(offlineId, match));
+                  result.conflictDetails.add(
+                    OfflineSyncResult.conflict(offlineId, match),
+                  );
                 default:
                   // ═══ FIX: backoff تدريجي ═══
                   final retryCount = (item['retry_count'] ?? 0) as int;
@@ -253,18 +259,22 @@ class SyncService {
                       .add(Duration(seconds: backoffSeconds))
                       .toIso8601String();
                   result.failed++;
-                  result.errors.add(SyncError(
-                    offlineId: offlineId,
-                    error: match['error'] ??
-                        'Unknown error (retry ${retryCount + 1}/$_maxRetries in ${backoffSeconds}s)',
-                  ));
+                  result.errors.add(
+                    SyncError(
+                      offlineId: offlineId,
+                      error:
+                          match['error'] ??
+                          'Unknown error (retry ${retryCount + 1}/$_maxRetries in ${backoffSeconds}s)',
+                    ),
+                  );
               }
             } else {
-              final errMatch =
-                  serverErrors.cast<Map<String, dynamic>>().firstWhere(
-                        (e) => e['offline_id'] == offlineId,
-                        orElse: () => <String, dynamic>{},
-                      );
+              final errMatch = serverErrors
+                  .cast<Map<String, dynamic>>()
+                  .firstWhere(
+                    (e) => e['offline_id'] == offlineId,
+                    orElse: () => <String, dynamic>{},
+                  );
               final retryCount = (item['retry_count'] ?? 0) as int;
               final backoffSeconds = _calculateBackoff(retryCount);
               item['retry_count'] = retryCount + 1;
@@ -273,11 +283,14 @@ class SyncService {
                   .add(Duration(seconds: backoffSeconds))
                   .toIso8601String();
               result.failed++;
-              result.errors.add(SyncError(
-                offlineId: offlineId,
-                error: errMatch['error'] ??
-                    'No response (retry ${retryCount + 1}/$_maxRetries)',
-              ));
+              result.errors.add(
+                SyncError(
+                  offlineId: offlineId,
+                  error:
+                      errMatch['error'] ??
+                      'No response (retry ${retryCount + 1}/$_maxRetries)',
+                ),
+              );
             }
           }
         } on TimeoutException {
@@ -322,7 +335,8 @@ class SyncService {
 
           if (kDebugMode && invalidated > 0)
             print(
-                '[SyncService] Invalidated $invalidated caches (submissions + analytics)');
+              '[SyncService] Invalidated $invalidated caches (submissions + analytics)',
+            );
         }
       }
     } catch (e) {
@@ -352,9 +366,11 @@ class SyncService {
     }
 
     if (kDebugMode) {
-      print('[SyncService] Done: +${result.synced} dup=${result.duplicates} '
-          'conf=${result.conflicts} fail=${result.failed} archive=${result.archived} '
-          'remain=${_offline.pendingCount}');
+      print(
+        '[SyncService] Done: +${result.synced} dup=${result.duplicates} '
+        'conf=${result.conflicts} fail=${result.failed} archive=${result.archived} '
+        'remain=${_offline.pendingCount}',
+      );
     }
 
     return result;
@@ -380,10 +396,12 @@ class SyncService {
           .add(Duration(seconds: backoffSeconds))
           .toIso8601String();
       result.failed++;
-      result.errors.add(SyncError(
-        offlineId: item['offline_id'] as String? ?? '',
-        error: '$error (retry ${retryCount + 1}/$_maxRetries)',
-      ));
+      result.errors.add(
+        SyncError(
+          offlineId: item['offline_id'] as String? ?? '',
+          error: '$error (retry ${retryCount + 1}/$_maxRetries)',
+        ),
+      );
     }
   }
 
@@ -391,16 +409,14 @@ class SyncService {
     return _offline.getUnresolvedConflicts();
   }
 
-  Future<void> resolveConflict(String offlineId,
-      {bool useLocal = false}) async {
+  Future<void> resolveConflict(
+    String offlineId, {
+    bool useLocal = false,
+  }) async {
     await _offline.resolveConflict(offlineId, useLocal: useLocal);
   }
 
-  void _updateState({
-    bool? isSyncing,
-    DateTime? lastSync,
-    int? pendingCount,
-  }) {
+  void _updateState({bool? isSyncing, DateTime? lastSync, int? pendingCount}) {
     _currentState = _currentState.copyWith(
       isSyncing: isSyncing,
       lastSync: lastSync,
@@ -429,11 +445,7 @@ class SyncState {
     this.pendingCount = 0,
   });
 
-  SyncState copyWith({
-    bool? isSyncing,
-    DateTime? lastSync,
-    int? pendingCount,
-  }) {
+  SyncState copyWith({bool? isSyncing, DateTime? lastSync, int? pendingCount}) {
     return SyncState(
       isSyncing: isSyncing ?? this.isSyncing,
       lastSync: lastSync ?? this.lastSync,

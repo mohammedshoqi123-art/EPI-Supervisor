@@ -9,16 +9,12 @@ class GeoUtils {
   // ─── Distance ─────────────────────────────────────────────────────────────
 
   /// Calculate distance between two coordinates in kilometers (Haversine formula)
-  static double distanceKm(
-    double lat1,
-    double lng1,
-    double lat2,
-    double lng2,
-  ) {
+  static double distanceKm(double lat1, double lng1, double lat2, double lng2) {
     final dLat = _toRad(lat2 - lat1);
     final dLng = _toRad(lng2 - lng1);
 
-    final a = sin(dLat / 2) * sin(dLat / 2) +
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
         cos(_toRad(lat1)) * cos(_toRad(lat2)) * sin(dLng / 2) * sin(dLng / 2);
     final c = 2 * atan2(sqrt(a), sqrt(1 - a));
 
@@ -31,8 +27,7 @@ class GeoUtils {
     double lng1,
     double lat2,
     double lng2,
-  ) =>
-      distanceKm(lat1, lng1, lat2, lng2) * 1000;
+  ) => distanceKm(lat1, lng1, lat2, lng2) * 1000;
 
   // ─── Validation ───────────────────────────────────────────────────────────
 
@@ -92,8 +87,9 @@ class GeoUtils {
   /// Parse PostGIS POINT string to lat/lng
   static (double lat, double lng)? fromPostGISPoint(String? point) {
     if (point == null) return null;
-    final match =
-        RegExp(r'POINT\(([+-]?\d+\.?\d*) ([+-]?\d+\.?\d*)\)').firstMatch(point);
+    final match = RegExp(
+      r'POINT\(([+-]?\d+\.?\d*) ([+-]?\d+\.?\d*)\)',
+    ).firstMatch(point);
     if (match == null) return null;
     final lng = double.tryParse(match.group(1) ?? '');
     final lat = double.tryParse(match.group(2) ?? '');

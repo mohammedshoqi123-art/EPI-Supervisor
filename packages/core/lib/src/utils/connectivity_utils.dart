@@ -23,9 +23,9 @@ class ConnectivityUtils {
   static Future<void> initialize() async {
     try {
       final result = await _connectivity.checkConnectivity().timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <ConnectivityResult>[],
-          );
+        const Duration(seconds: 5),
+        onTimeout: () => <ConnectivityResult>[],
+      );
       _isOnline = _isConnected(result);
     } catch (_) {
       _isOnline = true;
@@ -67,20 +67,17 @@ class ConnectivityUtils {
   /// then subsequent changes. This ensures Riverpod providers get the initial value. ═══
   static Stream<bool> get onConnectivityChanged {
     // Use a custom stream that emits the current value first, then the broadcast stream
-    return Stream.multi(
-      (controller) {
-        // Emit current state immediately
-        controller.add(_isOnline);
-        // Then subscribe to future changes
-        final sub = _controller.stream.listen(
-          controller.add,
-          onError: controller.addError,
-          onDone: controller.close,
-        );
-        controller.onCancel = () => sub.cancel();
-      },
-      isBroadcast: true,
-    );
+    return Stream.multi((controller) {
+      // Emit current state immediately
+      controller.add(_isOnline);
+      // Then subscribe to future changes
+      final sub = _controller.stream.listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+      controller.onCancel = () => sub.cancel();
+    }, isBroadcast: true);
   }
 
   /// Wait until device is online (useful before sync attempts)

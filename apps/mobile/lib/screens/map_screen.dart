@@ -520,10 +520,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
           final color = count > 20
               ? const Color(0xFF10B981)
               : count > 5
-                  ? const Color(0xFF3B82F6)
-                  : count > 0
-                      ? const Color(0xFFF59E0B)
-                      : const Color(0xFF9CA3AF);
+              ? const Color(0xFF3B82F6)
+              : count > 0
+              ? const Color(0xFFF59E0B)
+              : const Color(0xFF9CA3AF);
 
           markers.add(
             Marker(
@@ -578,52 +578,53 @@ class _MapScreenState extends ConsumerState<MapScreen>
         final markers = governorates
             .where((g) => g['center_lat'] != null && g['center_lng'] != null)
             .map((gov) {
-          final lat = (gov['center_lat'] as num).toDouble();
-          final lng = (gov['center_lng'] as num).toDouble();
-          final name = gov['name_ar'] ?? '';
-          final count = (gov['submission_count'] as num?)?.toInt() ?? 0;
+              final lat = (gov['center_lat'] as num).toDouble();
+              final lng = (gov['center_lng'] as num).toDouble();
+              final name = gov['name_ar'] ?? '';
+              final count = (gov['submission_count'] as num?)?.toInt() ?? 0;
 
-          // Color based on count
-          final color = count > 20
-              ? const Color(0xFF10B981)
-              : count > 5
+              // Color based on count
+              final color = count > 20
+                  ? const Color(0xFF10B981)
+                  : count > 5
                   ? const Color(0xFF3B82F6)
                   : count > 0
-                      ? const Color(0xFFF59E0B)
-                      : const Color(0xFF9CA3AF);
+                  ? const Color(0xFFF59E0B)
+                  : const Color(0xFF9CA3AF);
 
-          return Marker(
-            point: LatLng(lat, lng),
-            width: 48,
-            height: 48,
-            child: GestureDetector(
-              onTap: () => _showGovernorateInfo(gov),
-              child: Container(
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.4),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
+              return Marker(
+                point: LatLng(lat, lng),
+                width: 48,
+                height: 48,
+                child: GestureDetector(
+                  onTap: () => _showGovernorateInfo(gov),
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: Text(
-                  '$count',
-                  style: const TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-          );
-        }).toList();
+              );
+            })
+            .toList();
 
         return MarkerLayer(markers: markers);
       },
@@ -681,23 +682,25 @@ class _MapScreenState extends ConsumerState<MapScreen>
               ),
               const SizedBox(height: 16),
               // Status breakdown
-              ...byStatus.entries.map((e) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        EpiStatusChip(status: e.key, small: true),
-                        const Spacer(),
-                        Text(
-                          '${e.value}',
-                          style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
+              ...byStatus.entries.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      EpiStatusChip(status: e.key, small: true),
+                      const Spacer(),
+                      Text(
+                        '${e.value}',
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ],
-                    ),
-                  )),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,

@@ -27,14 +27,14 @@ class AppNotification {
   }) : createdAt = createdAt ?? DateTime.now();
 
   AppNotification markAsRead() => AppNotification(
-        id: id,
-        title: title,
-        body: body,
-        type: type,
-        category: category,
-        createdAt: createdAt,
-        read: true,
-      );
+    id: id,
+    title: title,
+    body: body,
+    type: type,
+    category: category,
+    createdAt: createdAt,
+    read: true,
+  );
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     return AppNotification(

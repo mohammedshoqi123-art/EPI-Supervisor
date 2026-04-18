@@ -56,9 +56,12 @@ class EpiDialog extends StatelessWidget {
       title: Row(
         children: [
           if (icon != null) ...[
-            Icon(icon,
-                color: iconColor ??
-                    (isDanger ? AppTheme.errorColor : AppTheme.primaryColor)),
+            Icon(
+              icon,
+              color:
+                  iconColor ??
+                  (isDanger ? AppTheme.errorColor : AppTheme.primaryColor),
+            ),
             const SizedBox(width: 12),
           ],
           Expanded(

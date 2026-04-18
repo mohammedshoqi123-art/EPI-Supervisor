@@ -24,18 +24,18 @@ class ChatMsg {
   }) : time = time ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'role': role,
-        'content': content,
-        'source': source,
-        'time': time.toIso8601String(),
-      };
+    'role': role,
+    'content': content,
+    'source': source,
+    'time': time.toIso8601String(),
+  };
 
   factory ChatMsg.fromJson(Map<String, dynamic> j) => ChatMsg(
-        role: j['role'] ?? 'assistant',
-        content: j['content'] ?? '',
-        source: j['source'],
-        time: DateTime.tryParse(j['time'] ?? ''),
-      );
+    role: j['role'] ?? 'assistant',
+    content: j['content'] ?? '',
+    source: j['source'],
+    time: DateTime.tryParse(j['time'] ?? ''),
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -152,58 +152,69 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
       final api = ref.read(apiClientProvider);
 
       // Build history (last 6 messages, truncated)
-      final history =
-          _msgs.length > 6 ? _msgs.sublist(_msgs.length - 6) : _msgs;
+      final history = _msgs.length > 6
+          ? _msgs.sublist(_msgs.length - 6)
+          : _msgs;
       final historyJson = history
-          .map((m) => {
-                'role': m.role,
-                'content': m.content.length > 500
-                    ? '${m.content.substring(0, 500)}...'
-                    : m.content,
-              })
+          .map(
+            (m) => {
+              'role': m.role,
+              'content': m.content.length > 500
+                  ? '${m.content.substring(0, 500)}...'
+                  : m.content,
+            },
+          )
           .toList();
 
       // ✅ FIX: Wrap in try-catch with specific error messages
-      final resp = await api.callFunction('ai-chat-v3', {
-        'message': text,
-        'history': historyJson,
-        if (template != null) 'template': template,
-      }).timeout(
-        const Duration(seconds: 60),
-        onTimeout: () {
-          throw TimeoutException('انتهت مهلة الطلب');
-        },
-      );
+      final resp = await api
+          .callFunction('ai-chat-v3', {
+            'message': text,
+            'history': historyJson,
+            if (template != null) 'template': template,
+          })
+          .timeout(
+            const Duration(seconds: 60),
+            onTimeout: () {
+              throw TimeoutException('انتهت مهلة الطلب');
+            },
+          );
 
       if (!_mounted) return;
 
       // ✅ FIX: Safe response parsing — handle missing/null fields
-      final reply = resp['reply'] as String? ??
+      final reply =
+          resp['reply'] as String? ??
           resp['message'] as String? ??
           resp['error'] as String? ??
           '';
       final source = resp['source'] as String? ?? 'unknown';
 
       setState(() {
-        _msgs.add(ChatMsg(
-          role: 'assistant',
-          content:
-              reply.isNotEmpty ? reply : '⚠️ تم استلام رد فارغ. حاول مرة أخرى.',
-          source: source,
-        ));
+        _msgs.add(
+          ChatMsg(
+            role: 'assistant',
+            content: reply.isNotEmpty
+                ? reply
+                : '⚠️ تم استلام رد فارغ. حاول مرة أخرى.',
+            source: source,
+          ),
+        );
         _loading = false;
       });
       await _ChatStore.save(_msgs);
     } on TimeoutException {
       if (!_mounted) return;
       setState(() {
-        _msgs.add(ChatMsg(
-          role: 'assistant',
-          content:
-              '⏱️ انتهت مهلة الطلب. قد يكون الخادم بطيئاً حالياً.\n\n'
-              '💡 نصيحة: حاول مرة أخرى أو اسأل سؤالاً أقصر.',
-          source: 'error',
-        ));
+        _msgs.add(
+          ChatMsg(
+            role: 'assistant',
+            content:
+                '⏱️ انتهت مهلة الطلب. قد يكون الخادم بطيئاً حالياً.\n\n'
+                '💡 نصيحة: حاول مرة أخرى أو اسأل سؤالاً أقصر.',
+            source: 'error',
+          ),
+        );
         _loading = false;
       });
       await _ChatStore.save(_msgs);
@@ -219,7 +230,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
       } else if (errorMsg.contains('Network') ||
           errorMsg.contains('Socket') ||
           errorMsg.contains('Failed host')) {
-        userMessage = '📡 لا يوجد اتصال بالإنترنت.\nتحقق من الاتصال وحاول مرة أخرى.';
+        userMessage =
+            '📡 لا يوجد اتصال بالإنترنت.\nتحقق من الاتصال وحاول مرة أخرى.';
       } else {
         userMessage =
             '⚠️ حدث خطأ أثناء الاتصال.\n\n'
@@ -227,11 +239,9 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
       }
 
       setState(() {
-        _msgs.add(ChatMsg(
-          role: 'assistant',
-          content: userMessage,
-          source: 'error',
-        ));
+        _msgs.add(
+          ChatMsg(role: 'assistant', content: userMessage, source: 'error'),
+        );
         _loading = false;
       });
       await _ChatStore.save(_msgs);
@@ -318,9 +328,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [cs.primary, cs.tertiary],
-              ),
+              gradient: LinearGradient(colors: [cs.primary, cs.tertiary]),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
@@ -382,8 +390,9 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
             childAspectRatio: 1.8,
-            children:
-                reports.map((r) => _reportCard(cs, r.$1, r.$2, r.$3)).toList(),
+            children: reports
+                .map((r) => _reportCard(cs, r.$1, r.$2, r.$3))
+                .toList(),
           ),
         ],
       ),
@@ -443,7 +452,11 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
   }
 
   Widget _reportCard(
-      ColorScheme cs, String emoji, String templateId, String name) {
+    ColorScheme cs,
+    String emoji,
+    String templateId,
+    String name,
+  ) {
     return Material(
       color: cs.surfaceContainerLow,
       borderRadius: BorderRadius.circular(14),
@@ -494,27 +507,34 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
             CircleAvatar(
               radius: 18,
               backgroundColor: cs.primaryContainer,
-              child:
-                  Icon(Icons.auto_awesome_rounded, size: 18, color: cs.primary),
+              child: Icon(
+                Icons.auto_awesome_rounded,
+                size: 18,
+                color: cs.primary,
+              ),
             ),
             const SizedBox(width: 10),
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isUser
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: isUser ? cs.primary : cs.surfaceContainerHigh,
                     borderRadius: BorderRadius.only(
@@ -565,13 +585,13 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
   }
 
   String _sourceLabel(String s) => switch (s) {
-        'groq' => '⚡ Groq',
-        'mimo' => '🤖 MiMo',
-        'function_call' => '📊 من قاعدة البيانات',
-        'rag' => '📚 من قاعدة المعرفة',
-        'error' => '⚠️ خطأ',
-        _ => '',
-      };
+    'groq' => '⚡ Groq',
+    'mimo' => '🤖 MiMo',
+    'function_call' => '📊 من قاعدة البيانات',
+    'rag' => '📚 من قاعدة المعرفة',
+    'error' => '⚠️ خطأ',
+    _ => '',
+  };
 
   // ═══ TYPING INDICATOR ═══
 
@@ -583,8 +603,11 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
           CircleAvatar(
             radius: 16,
             backgroundColor: cs.primaryContainer,
-            child:
-                Icon(Icons.auto_awesome_rounded, size: 16, color: cs.primary),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 16,
+              color: cs.primary,
+            ),
           ),
           const SizedBox(width: 10),
           Container(
@@ -600,7 +623,9 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: cs.primary),
+                    strokeWidth: 2,
+                    color: cs.primary,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Text(
@@ -655,7 +680,9 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 12),
+                      horizontal: 18,
+                      vertical: 12,
+                    ),
                   ),
                   onSubmitted: (t) => _send(t),
                   maxLines: null,

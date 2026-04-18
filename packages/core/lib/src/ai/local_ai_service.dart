@@ -85,17 +85,23 @@ class LocalAIService {
     if (data.isEmpty) return List.filled(10, 0.0);
 
     final total = data.length.toDouble();
-    final submitted =
-        data.where((d) => d['status'] == 'submitted').length.toDouble();
-    final rejected =
-        data.where((d) => d['status'] == 'rejected').length.toDouble();
+    final submitted = data
+        .where((d) => d['status'] == 'submitted')
+        .length
+        .toDouble();
+    final rejected = data
+        .where((d) => d['status'] == 'rejected')
+        .length
+        .toDouble();
 
     // Coverage rate
     final coverageRate = total > 0 ? submitted / total : 0.0;
 
     // Dropout rate (items that were started but not completed)
-    final pending =
-        data.where((d) => d['status'] == 'pending').length.toDouble();
+    final pending = data
+        .where((d) => d['status'] == 'pending')
+        .length
+        .toDouble();
     final dropoutRate = total > 0 ? pending / total : 0.0;
 
     // Temporal features
@@ -163,15 +169,18 @@ class LocalAIService {
 
     if (coverageRate < 0.8) {
       recs.add(
-          '⚠️ نسبة التغطية منخفضة (${(coverageRate * 100).toStringAsFixed(1)}%). يُنصح بزيادة عدد فرق التطعيم.');
+        '⚠️ نسبة التغطية منخفضة (${(coverageRate * 100).toStringAsFixed(1)}%). يُنصح بزيادة عدد فرق التطعيم.',
+      );
     }
     if (dropoutRate > 0.2) {
       recs.add(
-          '📉 معدل الانسحاب مرتفع (${(dropoutRate * 100).toStringAsFixed(1)}%). تحقق من أسباب عدم إكمال التطعيم.');
+        '📉 معدل الانسحاب مرتفع (${(dropoutRate * 100).toStringAsFixed(1)}%). تحقق من أسباب عدم إكمال التطعيم.',
+      );
     }
     if (rejectionRate > 0.1) {
       recs.add(
-          '❌ معدل الرفض مرتفع (${(rejectionRate * 100).toStringAsFixed(1)}%). راجع جودة البيانات المُدخلة.');
+        '❌ معدل الرفض مرتفع (${(rejectionRate * 100).toStringAsFixed(1)}%). راجع جودة البيانات المُدخلة.',
+      );
     }
     if (riskScore > 0.6) {
       recs.add('🔴 مستوى الخطر مرتفع. يُطلب تدخل فوري من الإدارة.');
@@ -239,19 +248,22 @@ class LocalAIService {
 
     for (final entry in byArea.entries) {
       final total = entry.value.length;
-      final rejected =
-          entry.value.where((d) => d['status'] == 'rejected').length;
+      final rejected = entry.value
+          .where((d) => d['status'] == 'rejected')
+          .length;
       final rejectedRate = total > 0 ? rejected / total : 0.0;
 
       if (rejectedRate > 0.15) {
-        points.add(CriticalPoint(
-          area: entry.key,
-          metric: 'معدل الرفض',
-          value: rejectedRate,
-          severity: rejectedRate > 0.3 ? 'حرج' : 'تحذير',
-          description:
-              'معدل رفض مرتفع في هذه المنطقة (${(rejectedRate * 100).toStringAsFixed(1)}%)',
-        ));
+        points.add(
+          CriticalPoint(
+            area: entry.key,
+            metric: 'معدل الرفض',
+            value: rejectedRate,
+            severity: rejectedRate > 0.3 ? 'حرج' : 'تحذير',
+            description:
+                'معدل رفض مرتفع في هذه المنطقة (${(rejectedRate * 100).toStringAsFixed(1)}%)',
+          ),
+        );
       }
     }
 
@@ -273,16 +285,20 @@ class LocalAIService {
     if (trends.length >= 7) {
       final recent = trends.sublist(trends.length - 7);
       final avg = recent.fold(0.0, (s, p) => s + p.value) / recent.length;
-      final older =
-          trends.sublist(0, (trends.length - 7).clamp(0, trends.length));
+      final older = trends.sublist(
+        0,
+        (trends.length - 7).clamp(0, trends.length),
+      );
       if (older.isNotEmpty) {
         final oldAvg = older.fold(0.0, (s, p) => s + p.value) / older.length;
         if (avg < oldAvg * 0.8) {
           recs.add(
-              '📉 يوجد انخفاض في عدد الإرساليات خلال الأسبوع الماضي. يُنصح بالتحقق من أسباب ذلك.');
+            '📉 يوجد انخفاض في عدد الإرساليات خلال الأسبوع الماضي. يُنصح بالتحقق من أسباب ذلك.',
+          );
         } else if (avg > oldAvg * 1.2) {
           recs.add(
-              '📈 يوجد زيادة في عدد الإرساليات. استمر في هذا الأداء الممتاز.');
+            '📈 يوجد زيادة في عدد الإرساليات. استمر في هذا الأداء الممتاز.',
+          );
         }
       }
     }
@@ -300,7 +316,8 @@ class LocalAIService {
     final total = submissions.length;
     if (total < 10) {
       recs.add(
-          '📊 عدد الإرساليات قليل. تأكد من تشجيع فرق العمل على إدخال البيانات.');
+        '📊 عدد الإرساليات قليل. تأكد من تشجيع فرق العمل على إدخال البيانات.',
+      );
     }
 
     return recs;
@@ -341,8 +358,9 @@ class LocalAIService {
 
   String _generateSummary(List<Map<String, dynamic>> submissions) {
     final total = submissions.length;
-    final submitted =
-        submissions.where((s) => s['status'] == 'submitted').length;
+    final submitted = submissions
+        .where((s) => s['status'] == 'submitted')
+        .length;
     final rejected = submissions.where((s) => s['status'] == 'rejected').length;
     final rate = total > 0 ? (submitted * 100 ~/ total) : 0;
 
@@ -376,13 +394,13 @@ class VaccinationAnalysis {
   });
 
   Map<String, dynamic> toJson() => {
-        'coverage_rate': coverageRate,
-        'dropout_rate': dropoutRate,
-        'wastage_rate': wastageRate,
-        'predicted_shortages': predictedShortages,
-        'risk_score': riskScore,
-        'recommendations': recommendations,
-      };
+    'coverage_rate': coverageRate,
+    'dropout_rate': dropoutRate,
+    'wastage_rate': wastageRate,
+    'predicted_shortages': predictedShortages,
+    'risk_score': riskScore,
+    'recommendations': recommendations,
+  };
 }
 
 class SmartReport {
@@ -403,16 +421,16 @@ class SmartReport {
   });
 
   Map<String, dynamic> toJson() => {
-        'period': {
-          'start': period.start.toIso8601String(),
-          'end': period.end.toIso8601String()
-        },
-        'summary': summary,
-        'trends': trends.map((t) => t.toJson()).toList(),
-        'critical_points': criticalPoints.map((c) => c.toJson()).toList(),
-        'recommendations': recommendations,
-        'charts_data': chartsData,
-      };
+    'period': {
+      'start': period.start.toIso8601String(),
+      'end': period.end.toIso8601String(),
+    },
+    'summary': summary,
+    'trends': trends.map((t) => t.toJson()).toList(),
+    'critical_points': criticalPoints.map((c) => c.toJson()).toList(),
+    'recommendations': recommendations,
+    'charts_data': chartsData,
+  };
 }
 
 class DateRange {
@@ -449,10 +467,10 @@ class CriticalPoint {
   });
 
   Map<String, dynamic> toJson() => {
-        'area': area,
-        'metric': metric,
-        'value': value,
-        'severity': severity,
-        'description': description,
-      };
+    'area': area,
+    'metric': metric,
+    'value': value,
+    'severity': severity,
+    'description': description,
+  };
 }

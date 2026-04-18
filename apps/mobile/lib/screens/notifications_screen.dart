@@ -78,23 +78,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       body: _isLoading
           ? const Center(child: EpiLoading.shimmer())
           : notifications.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadNotifications,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: notifications.length +
-                        (NotificationService.hasMore ? 1 : 0),
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, indent: 72),
-                    itemBuilder: (context, index) {
-                      if (index >= notifications.length) {
-                        return _buildLoadMoreButton();
-                      }
-                      return _buildNotificationTile(notifications[index]);
-                    },
-                  ),
-                ),
+          ? _buildEmptyState()
+          : RefreshIndicator(
+              onRefresh: _loadNotifications,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount:
+                    notifications.length +
+                    (NotificationService.hasMore ? 1 : 0),
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, indent: 72),
+                itemBuilder: (context, index) {
+                  if (index >= notifications.length) {
+                    return _buildLoadMoreButton();
+                  }
+                  return _buildNotificationTile(notifications[index]);
+                },
+              ),
+            ),
     );
   }
 

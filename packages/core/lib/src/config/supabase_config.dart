@@ -37,14 +37,18 @@ class SupabaseConfig {
   /// Validates that required config is set
   static void validate() {
     if (url.isEmpty || url == 'https://your-project-ref.supabase.co') {
-      throw StateError('SUPABASE_URL is not configured.\n'
-          'Set it via --dart-define=SUPABASE_URL=... when building,\n'
-          'or create a .env file from .env.example with your Supabase project URL.');
+      throw StateError(
+        'SUPABASE_URL is not configured.\n'
+        'Set it via --dart-define=SUPABASE_URL=... when building,\n'
+        'or create a .env file from .env.example with your Supabase project URL.',
+      );
     }
     if (anonKey.isEmpty || anonKey == 'your-anon-public-key-here') {
-      throw StateError('SUPABASE_ANON_KEY is not configured.\n'
-          'Set it via --dart-define=SUPABASE_ANON_KEY=... when building,\n'
-          'or create a .env file from .env.example with your Supabase anon key.');
+      throw StateError(
+        'SUPABASE_ANON_KEY is not configured.\n'
+        'Set it via --dart-define=SUPABASE_ANON_KEY=... when building,\n'
+        'or create a .env file from .env.example with your Supabase anon key.',
+      );
     }
   }
 
@@ -84,8 +88,10 @@ extension SupabaseConfigAI on SupabaseConfig {
 
 // ═══ Groq Configuration ═══
 extension SupabaseConfigGroq on SupabaseConfig {
-  static const String _compileGroqKey =
-      String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
+  static const String _compileGroqKey = String.fromEnvironment(
+    'GROQ_API_KEY',
+    defaultValue: '',
+  );
   static String _envGroqKey = '';
   static void setGroqKey(String key) => _envGroqKey = key;
   static String get groqApiKey =>

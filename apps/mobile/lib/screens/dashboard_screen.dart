@@ -47,11 +47,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     _pulseAnim.repeat(reverse: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(syncServiceProvider.future).then((service) {
-        if (service.currentState.pendingCount > 0) {
-          service.sync().catchError((_) => SyncCycleResult.empty());
-        }
-      }).catchError((_) => null);
+      ref
+          .read(syncServiceProvider.future)
+          .then((service) {
+            if (service.currentState.pendingCount > 0) {
+              service.sync().catchError((_) => SyncCycleResult.empty());
+            }
+          })
+          .catchError((_) => null);
     });
   }
 
@@ -106,7 +109,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               SliverToBoxAdapter(
                 child: DashboardSyncBanner(
                   pendingCount: pendingCount,
-                  onSyncTap: () => ref.read(syncServiceProvider.future).then(
+                  onSyncTap: () => ref
+                      .read(syncServiceProvider.future)
+                      .then(
                         (s) =>
                             s.sync().catchError((_) => SyncCycleResult.empty()),
                       ),

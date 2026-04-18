@@ -172,8 +172,8 @@ class _MainShellState extends ConsumerState<MainShell> {
         final msg = result.synced > 0
             ? 'تمت مزامنة ${result.synced} عنصر ✅'
             : result.failed > 0
-                ? 'فشلت مزامنة ${result.failed} عنصر ❌'
-                : 'لا توجد عناصر للمزامنة';
+            ? 'فشلت مزامنة ${result.failed} عنصر ❌'
+            : 'لا توجد عناصر للمزامنة';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg, style: const TextStyle(fontFamily: 'Tajawal')),

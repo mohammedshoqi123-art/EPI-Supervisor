@@ -8,14 +8,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 final governoratesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final client = Supabase.instance.client;
-  final response = await client.functions.invoke('manage-data', body: {
-    'resource': 'governorates',
-    'action': 'list',
-  });
-  if (response.status != 200) throw Exception('فشل تحميل المحافظات');
-  return List<Map<String, dynamic>>.from(response.data['governorates'] ?? []);
-});
+      final client = Supabase.instance.client;
+      final response = await client.functions.invoke(
+        'manage-data',
+        body: {'resource': 'governorates', 'action': 'list'},
+      );
+      if (response.status != 200) throw Exception('فشل تحميل المحافظات');
+      return List<Map<String, dynamic>>.from(
+        response.data['governorates'] ?? [],
+      );
+    });
 
 class DataManagementScreen extends ConsumerStatefulWidget {
   const DataManagementScreen({super.key});
@@ -51,7 +53,7 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)
+              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
             ],
           ),
           child: TabBar(
@@ -63,8 +65,9 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
               Tab(icon: Icon(Icons.location_city_rounded), text: 'المحافظات'),
               Tab(icon: Icon(Icons.domain_rounded), text: 'المديريات'),
               Tab(
-                  icon: Icon(Icons.local_hospital_rounded),
-                  text: 'المنشآت الصحية'),
+                icon: Icon(Icons.local_hospital_rounded),
+                text: 'المنشآت الصحية',
+              ),
             ],
           ),
         ),
@@ -96,17 +99,19 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
           'السكان',
           'المديريات',
           'نشط',
-          'إجراءات'
+          'إجراءات',
         ],
         rows: govs
-            .map((g) => [
-                  (g['name_ar'] ?? '').toString(),
-                  (g['code'] ?? '').toString(),
-                  '${g['population'] ?? 0}',
-                  '${(g['districts'] as List?)?.length ?? 0}',
-                  g['is_active'] == true ? '✓' : '✗',
-                  '',
-                ])
+            .map(
+              (g) => [
+                (g['name_ar'] ?? '').toString(),
+                (g['code'] ?? '').toString(),
+                '${g['population'] ?? 0}',
+                '${(g['districts'] as List?)?.length ?? 0}',
+                g['is_active'] == true ? '✓' : '✗',
+                '',
+              ],
+            )
             .toList(),
         rawData: govs,
         onAdd: () => _showGovDialog(),
@@ -118,18 +123,22 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
 
   Widget _buildDistrictsTab() {
     return FutureBuilder(
-      future: Supabase.instance.client.functions.invoke('manage-data', body: {
-        'resource': 'districts',
-        'action': 'list',
-        if (_selectedGovId != null) 'governorate_id': _selectedGovId,
-      }),
+      future: Supabase.instance.client.functions.invoke(
+        'manage-data',
+        body: {
+          'resource': 'districts',
+          'action': 'list',
+          if (_selectedGovId != null) 'governorate_id': _selectedGovId,
+        },
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final data = snapshot.data?.data;
-        final districts =
-            List<Map<String, dynamic>>.from(data?['districts'] ?? []);
+        final districts = List<Map<String, dynamic>>.from(
+          data?['districts'] ?? [],
+        );
 
         return Column(
           children: [
@@ -143,8 +152,9 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
                       .eq('is_active', true)
                       .order('name_ar'),
                   builder: (ctx, snap) {
-                    final govs =
-                        List<Map<String, dynamic>>.from(snap.data ?? []);
+                    final govs = List<Map<String, dynamic>>.from(
+                      snap.data ?? [],
+                    );
                     return SizedBox(
                       width: 250,
                       child: DropdownButtonFormField<String?>(
@@ -152,16 +162,22 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
                         decoration: const InputDecoration(
                           labelText: 'تصفية حسب المحافظة',
                           border: OutlineInputBorder(),
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                         ),
                         items: [
                           const DropdownMenuItem(
-                              value: null, child: Text('الكل')),
-                          ...govs.map((g) => DropdownMenuItem(
-                                value: g['id'] as String,
-                                child: Text(g['name_ar'] ?? ''),
-                              )),
+                            value: null,
+                            child: Text('الكل'),
+                          ),
+                          ...govs.map(
+                            (g) => DropdownMenuItem(
+                              value: g['id'] as String,
+                              child: Text(g['name_ar'] ?? ''),
+                            ),
+                          ),
                         ],
                         onChanged: (v) => setState(() => _selectedGovId = v),
                       ),
@@ -174,29 +190,34 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('إضافة مديرية'),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00897B),
-                      foregroundColor: Colors.white),
+                    backgroundColor: const Color(0xFF00897B),
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
             Expanded(
-                child: _buildDataTable(
-              title: 'المديريات (${districts.length})',
-              columns: const ['الاسم', 'المحافظة', 'الرمز', 'نشط', 'إجراءات'],
-              rows: districts
-                  .map((d) => [
+              child: _buildDataTable(
+                title: 'المديريات (${districts.length})',
+                columns: const ['الاسم', 'المحافظة', 'الرمز', 'نشط', 'إجراءات'],
+                rows: districts
+                    .map(
+                      (d) => [
                         (d['name_ar'] ?? '').toString(),
                         (d['governorates']?['name_ar'] ?? '').toString(),
                         (d['code'] ?? '').toString(),
                         d['is_active'] == true ? '✓' : '✗',
                         '',
-                      ])
-                  .toList(),
-              rawData: districts,
-              onEdit: (d) => _showDistDialog(district: d),
-              onDelete: (d) => _deleteItem('districts', d['id'], d['name_ar']),
-            )),
+                      ],
+                    )
+                    .toList(),
+                rawData: districts,
+                onEdit: (d) => _showDistDialog(district: d),
+                onDelete: (d) =>
+                    _deleteItem('districts', d['id'], d['name_ar']),
+              ),
+            ),
           ],
         );
       },
@@ -205,17 +226,18 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
 
   Widget _buildFacilitiesTab() {
     return FutureBuilder(
-      future: Supabase.instance.client.functions.invoke('manage-data', body: {
-        'resource': 'facilities',
-        'action': 'list',
-      }),
+      future: Supabase.instance.client.functions.invoke(
+        'manage-data',
+        body: {'resource': 'facilities', 'action': 'list'},
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final data = snapshot.data?.data;
-        final facilities =
-            List<Map<String, dynamic>>.from(data?['facilities'] ?? []);
+        final facilities = List<Map<String, dynamic>>.from(
+          data?['facilities'] ?? [],
+        );
 
         return Column(
           children: [
@@ -227,26 +249,28 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('إضافة منشأة'),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00897B),
-                      foregroundColor: Colors.white),
+                    backgroundColor: const Color(0xFF00897B),
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
             Expanded(
-                child: _buildDataTable(
-              title: 'المنشآت الصحية (${facilities.length})',
-              columns: const [
-                'الاسم',
-                'الرمز',
-                'النوع',
-                'المديرية',
-                'المحافظة',
-                'نشط',
-                'إجراءات'
-              ],
-              rows: facilities
-                  .map((f) => [
+              child: _buildDataTable(
+                title: 'المنشآت الصحية (${facilities.length})',
+                columns: const [
+                  'الاسم',
+                  'الرمز',
+                  'النوع',
+                  'المديرية',
+                  'المحافظة',
+                  'نشط',
+                  'إجراءات',
+                ],
+                rows: facilities
+                    .map(
+                      (f) => [
                         (f['name_ar'] ?? '').toString(),
                         (f['code'] ?? '').toString(),
                         (f['facility_type'] ?? '').toString(),
@@ -255,13 +279,15 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
                             .toString(),
                         f['is_active'] == true ? '✓' : '✗',
                         '',
-                      ])
-                  .toList(),
-              rawData: facilities,
-              onEdit: (f) => _showFacilityDialog(facility: f),
-              onDelete: (f) =>
-                  _deleteItem('health_facilities', f['id'], f['name_ar']),
-            )),
+                      ],
+                    )
+                    .toList(),
+                rawData: facilities,
+                onEdit: (f) => _showFacilityDialog(facility: f),
+                onDelete: (f) =>
+                    _deleteItem('health_facilities', f['id'], f['name_ar']),
+              ),
+            ),
           ],
         );
       },
@@ -282,7 +308,7 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -292,17 +318,21 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Cairo')),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
                 const Spacer(),
                 if (onAdd != null)
                   IconButton(
-                      onPressed: onAdd,
-                      icon: const Icon(Icons.add_rounded),
-                      tooltip: 'إضافة'),
+                    onPressed: onAdd,
+                    icon: const Icon(Icons.add_rounded),
+                    tooltip: 'إضافة',
+                  ),
               ],
             ),
           ),
@@ -313,10 +343,14 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
               child: SingleChildScrollView(
                 child: DataTable(
                   columns: columns
-                      .map((c) => DataColumn(
-                          label: Text(c,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold))))
+                      .map(
+                        (c) => DataColumn(
+                          label: Text(
+                            c,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      )
                       .toList(),
                   rows: rows.asMap().entries.map((entry) {
                     final i = entry.key;
@@ -324,23 +358,30 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
                     return DataRow(
                       cells: row.asMap().entries.map((cell) {
                         if (cell.key == row.length - 1) {
-                          return DataCell(Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (onEdit != null)
-                                IconButton(
-                                  icon:
-                                      const Icon(Icons.edit_rounded, size: 18),
-                                  onPressed: () => onEdit(rawData[i]),
-                                ),
-                              if (onDelete != null)
-                                IconButton(
-                                  icon: Icon(Icons.delete_rounded,
-                                      size: 18, color: Colors.red[300]),
-                                  onPressed: () => onDelete(rawData[i]),
-                                ),
-                            ],
-                          ));
+                          return DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (onEdit != null)
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.edit_rounded,
+                                      size: 18,
+                                    ),
+                                    onPressed: () => onEdit(rawData[i]),
+                                  ),
+                                if (onDelete != null)
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.delete_rounded,
+                                      size: 18,
+                                      color: Colors.red[300],
+                                    ),
+                                    onPressed: () => onDelete(rawData[i]),
+                                  ),
+                              ],
+                            ),
+                          );
                         }
                         return DataCell(Text(cell.value));
                       }).toList(),
@@ -359,8 +400,9 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
     final nameAr = TextEditingController(text: gov?['name_ar']);
     final nameEn = TextEditingController(text: gov?['name_en']);
     final code = TextEditingController(text: gov?['code']);
-    final population =
-        TextEditingController(text: '${gov?['population'] ?? ''}');
+    final population = TextEditingController(
+      text: '${gov?['population'] ?? ''}',
+    );
 
     showDialog(
       context: context,
@@ -368,51 +410,70 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
         title: Text(gov == null ? 'إضافة محافظة' : 'تعديل محافظة'),
         content: SizedBox(
           width: 400,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
                 controller: nameAr,
                 decoration: const InputDecoration(
-                    labelText: 'الاسم (عربي)', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(
+                  labelText: 'الاسم (عربي)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: nameEn,
                 decoration: const InputDecoration(
-                    labelText: 'الاسم (إنجليزي)',
-                    border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(
+                  labelText: 'الاسم (إنجليزي)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: code,
                 decoration: const InputDecoration(
-                    labelText: 'الرمز', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(
+                  labelText: 'الرمز',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: population,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                    labelText: 'السكان', border: OutlineInputBorder())),
-          ]),
+                  labelText: 'السكان',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
           FilledButton(
             onPressed: () async {
               try {
-                await Supabase.instance.client.functions
-                    .invoke('manage-data', body: {
-                  'resource': 'governorates',
-                  'action': gov == null ? 'create' : 'update',
-                  if (gov != null) 'id': gov['id'],
-                  'name_ar': nameAr.text,
-                  'name_en': nameEn.text,
-                  'code': code.text,
-                  'population': int.tryParse(population.text),
-                });
+                await Supabase.instance.client.functions.invoke(
+                  'manage-data',
+                  body: {
+                    'resource': 'governorates',
+                    'action': gov == null ? 'create' : 'update',
+                    if (gov != null) 'id': gov['id'],
+                    'name_ar': nameAr.text,
+                    'name_en': nameEn.text,
+                    'code': code.text,
+                    'population': int.tryParse(population.text),
+                  },
+                );
                 Navigator.pop(ctx);
                 ref.invalidate(governoratesProvider);
               } catch (e) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text('خطأ: $e')));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
               }
             },
             child: const Text('حفظ'),
@@ -433,34 +494,48 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
         title: Text(district == null ? 'إضافة مديرية' : 'تعديل مديرية'),
         content: SizedBox(
           width: 400,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
                 controller: nameAr,
                 decoration: const InputDecoration(
-                    labelText: 'الاسم (عربي)', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(
+                  labelText: 'الاسم (عربي)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: nameEn,
                 decoration: const InputDecoration(
-                    labelText: 'الاسم (إنجليزي)',
-                    border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(
+                  labelText: 'الاسم (إنجليزي)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: code,
                 decoration: const InputDecoration(
-                    labelText: 'الرمز', border: OutlineInputBorder())),
-          ]),
+                  labelText: 'الرمز',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
           FilledButton(
-              onPressed: () async {
-                // Save logic
-                Navigator.pop(ctx);
-                setState(() {});
-              },
-              child: const Text('حفظ')),
+            onPressed: () async {
+              // Save logic
+              Navigator.pop(ctx);
+              setState(() {});
+            },
+            child: const Text('حفظ'),
+          ),
         ],
       ),
     );
@@ -478,38 +553,55 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
         title: Text(facility == null ? 'إضافة منشأة' : 'تعديل منشأة'),
         content: SizedBox(
           width: 400,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
                 controller: nameAr,
                 decoration: const InputDecoration(
-                    labelText: 'الاسم (عربي)', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(
+                  labelText: 'الاسم (عربي)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: nameEn,
                 decoration: const InputDecoration(
-                    labelText: 'الاسم (إنجليزي)',
-                    border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(
+                  labelText: 'الاسم (إنجليزي)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: code,
                 decoration: const InputDecoration(
-                    labelText: 'الرمز', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(
+                  labelText: 'الرمز',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: type,
                 decoration: const InputDecoration(
-                    labelText: 'النوع', border: OutlineInputBorder())),
-          ]),
+                  labelText: 'النوع',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
           FilledButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                setState(() {});
-              },
-              child: const Text('حفظ')),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              setState(() {});
+            },
+            child: const Text('حفظ'),
+          ),
         ],
       ),
     );
@@ -523,22 +615,23 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen>
         content: Text('هل تريد حذف "$name"؟'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
           FilledButton(
             onPressed: () async {
               try {
-                await Supabase.instance.client.functions
-                    .invoke('manage-data', body: {
-                  'resource': resource,
-                  'action': 'delete',
-                  'id': id,
-                });
+                await Supabase.instance.client.functions.invoke(
+                  'manage-data',
+                  body: {'resource': resource, 'action': 'delete', 'id': id},
+                );
                 Navigator.pop(ctx);
                 ref.invalidate(governoratesProvider);
                 setState(() {});
               } catch (e) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text('خطأ: $e')));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
               }
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),

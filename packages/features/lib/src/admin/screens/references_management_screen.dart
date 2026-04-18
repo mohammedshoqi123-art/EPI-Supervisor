@@ -9,8 +9,9 @@ import 'package:epi_shared/epi_shared.dart';
 // كتب، أدلة، مراجع التطعيم
 // ══════════════════════════════════════════════════════════════════════════════
 
-final referencesListProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final referencesListProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final client = Supabase.instance.client;
   try {
     final response = await client
@@ -56,8 +57,10 @@ class _ReferencesManagementScreenState
         backgroundColor: AppTheme.backgroundLight,
         appBar: AppBar(
           backgroundColor: AppTheme.primaryColor,
-          title: const Text('إدارة المراجع',
-              style: TextStyle(fontFamily: 'Cairo')),
+          title: const Text(
+            'إدارة المراجع',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.add_circle_outline),
@@ -89,16 +92,20 @@ class _ReferencesManagementScreenState
               textDirection: TextDirection.rtl,
               decoration: InputDecoration(
                 hintText: 'بحث في المراجع...',
-                prefixIcon:
-                    const Icon(Icons.search, color: AppTheme.textSecondary),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: AppTheme.textSecondary,
+                ),
                 filled: true,
                 fillColor: AppTheme.backgroundLight,
                 border: OutlineInputBorder(
                   borderRadius: AppTheme.radiusMedium,
                   borderSide: BorderSide.none,
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
             ),
           ),
@@ -117,14 +124,19 @@ class _ReferencesManagementScreenState
                   borderRadius: AppTheme.radiusMedium,
                   borderSide: BorderSide.none,
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
               ),
               items: [
                 const DropdownMenuItem(
-                    value: null, child: Text('كل التصنيفات')),
-                ...categories.entries.map((e) =>
-                    DropdownMenuItem(value: e.key, child: Text(e.value))),
+                  value: null,
+                  child: Text('كل التصنيفات'),
+                ),
+                ...categories.entries.map(
+                  (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
+                ),
               ],
             ),
           ),
@@ -157,11 +169,16 @@ class _ReferencesManagementScreenState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline,
-                    size: 48, color: AppTheme.errorColor),
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: AppTheme.errorColor,
+                ),
                 const SizedBox(height: 16),
-                const Text('فشل تحميل المراجع',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                const Text(
+                  'فشل تحميل المراجع',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
                 const SizedBox(height: 8),
                 ElevatedButton.icon(
                   onPressed: () => ref.invalidate(referencesListProvider),
@@ -193,24 +210,30 @@ class _ReferencesManagementScreenState
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.menu_book_outlined,
-                        size: 64, color: AppTheme.textHint),
+                    const Icon(
+                      Icons.menu_book_outlined,
+                      size: 64,
+                      color: AppTheme.textHint,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       _searchQuery.isEmpty && _selectedCategory == null
                           ? 'لا توجد مراجع بعد'
                           : 'لا توجد نتائج',
                       style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 16,
-                          color: AppTheme.textSecondary),
+                        fontFamily: 'Tajawal',
+                        fontSize: 16,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () => _showReferenceDialog(),
                       icon: const Icon(Icons.add, size: 18),
-                      label: const Text('إضافة مرجع',
-                          style: TextStyle(fontFamily: 'Tajawal')),
+                      label: const Text(
+                        'إضافة مرجع',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
                     ),
                   ],
                 ),
@@ -220,21 +243,26 @@ class _ReferencesManagementScreenState
             return Column(
               children: [
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: Row(
                     children: [
                       Text(
                         '${filtered.length} مرجع',
-                        style: AppTheme.bodyM
-                            .copyWith(color: AppTheme.textSecondary),
+                        style: AppTheme.bodyM.copyWith(
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                       const Spacer(),
                       TextButton.icon(
                         onPressed: () => _showReferenceDialog(),
                         icon: const Icon(Icons.add, size: 18),
-                        label: const Text('مرجع جديد',
-                            style: TextStyle(fontFamily: 'Tajawal')),
+                        label: const Text(
+                          'مرجع جديد',
+                          style: TextStyle(fontFamily: 'Tajawal'),
+                        ),
                       ),
                     ],
                   ),
@@ -281,11 +309,7 @@ class _ReferencesManagementScreenState
                 color: catColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                _categoryIcon(category),
-                color: catColor,
-                size: 28,
-              ),
+              child: Icon(_categoryIcon(category), color: catColor, size: 28),
             ),
             const SizedBox(width: 16),
             // Content
@@ -310,7 +334,9 @@ class _ReferencesManagementScreenState
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: catColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
@@ -334,9 +360,10 @@ class _ReferencesManagementScreenState
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 13,
-                          color: AppTheme.textSecondary),
+                        fontFamily: 'Tajawal',
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -346,41 +373,59 @@ class _ReferencesManagementScreenState
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.person_outline,
-                                size: 14, color: AppTheme.textHint),
+                            const Icon(
+                              Icons.person_outline,
+                              size: 14,
+                              color: AppTheme.textHint,
+                            ),
                             const SizedBox(width: 4),
-                            Text(ref['author'],
-                                style: const TextStyle(
-                                    fontFamily: 'Tajawal',
-                                    fontSize: 12,
-                                    color: AppTheme.textSecondary)),
+                            Text(
+                              ref['author'],
+                              style: const TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
                           ],
                         ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.calendar_today_outlined,
-                              size: 14, color: AppTheme.textHint),
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 14,
+                            color: AppTheme.textHint,
+                          ),
                           const SizedBox(width: 4),
-                          Text(createdAt,
-                              style: const TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontSize: 12,
-                                  color: AppTheme.textSecondary)),
+                          Text(
+                            createdAt,
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
                         ],
                       ),
                       if (ref['file_url'] != null)
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.attach_file,
-                                size: 14, color: AppTheme.successColor),
+                            const Icon(
+                              Icons.attach_file,
+                              size: 14,
+                              color: AppTheme.successColor,
+                            ),
                             const SizedBox(width: 4),
-                            const Text('مرفق',
-                                style: TextStyle(
-                                    fontFamily: 'Tajawal',
-                                    fontSize: 12,
-                                    color: AppTheme.successColor)),
+                            const Text(
+                              'مرفق',
+                              style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 12,
+                                color: AppTheme.successColor,
+                              ),
+                            ),
                           ],
                         ),
                     ],
@@ -393,8 +438,11 @@ class _ReferencesManagementScreenState
             Column(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined,
-                      size: 20, color: AppTheme.infoColor),
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    size: 20,
+                    color: AppTheme.infoColor,
+                  ),
                   onPressed: () => _showReferenceDialog(ref: ref),
                   tooltip: 'تعديل',
                 ),
@@ -410,8 +458,11 @@ class _ReferencesManagementScreenState
                   tooltip: isActive ? 'إخفاء' : 'إظهار',
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      size: 20, color: AppTheme.errorColor),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 20,
+                    color: AppTheme.errorColor,
+                  ),
                   onPressed: () => _deleteReference(ref['id']),
                   tooltip: 'حذف',
                 ),
@@ -465,10 +516,12 @@ class _ReferencesManagementScreenState
 
   void _showReferenceDialog({Map<String, dynamic>? ref}) {
     final isEdit = ref != null;
-    final titleController =
-        TextEditingController(text: ref?['title_ar'] ?? ref?['title'] ?? '');
-    final descController =
-        TextEditingController(text: ref?['description'] ?? '');
+    final titleController = TextEditingController(
+      text: ref?['title_ar'] ?? ref?['title'] ?? '',
+    );
+    final descController = TextEditingController(
+      text: ref?['description'] ?? '',
+    );
     final authorController = TextEditingController(text: ref?['author'] ?? '');
     final urlController = TextEditingController(text: ref?['file_url'] ?? '');
     String selectedCategory = ref?['category'] ?? 'other';
@@ -509,8 +562,12 @@ class _ReferencesManagementScreenState
                           prefixIcon: Icon(Icons.category_outlined),
                         ),
                         items: categories.entries
-                            .map((e) => DropdownMenuItem(
-                                value: e.key, child: Text(e.value)))
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e.key,
+                                child: Text(e.value),
+                              ),
+                            )
                             .toList(),
                       ),
                       const SizedBox(height: 12),
@@ -542,8 +599,10 @@ class _ReferencesManagementScreenState
                       ),
                       const SizedBox(height: 12),
                       SwitchListTile(
-                        title: const Text('المرجع نشط',
-                            style: TextStyle(fontFamily: 'Tajawal')),
+                        title: const Text(
+                          'المرجع نشط',
+                          style: TextStyle(fontFamily: 'Tajawal'),
+                        ),
                         value: isActive,
                         activeColor: AppTheme.primaryColor,
                         onChanged: (v) => setDialogState(() => isActive = v),
@@ -593,8 +652,10 @@ class _ReferencesManagementScreenState
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('العنوان مطلوب', style: TextStyle(fontFamily: 'Tajawal')),
+          content: Text(
+            'العنوان مطلوب',
+            style: TextStyle(fontFamily: 'Tajawal'),
+          ),
           backgroundColor: AppTheme.errorColor,
         ),
       );
@@ -626,8 +687,10 @@ class _ReferencesManagementScreenState
         ref.invalidate(referencesListProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(refId != null ? 'تم تحديث المرجع' : 'تمت الإضافة',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              refId != null ? 'تم تحديث المرجع' : 'تمت الإضافة',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -636,8 +699,10 @@ class _ReferencesManagementScreenState
       if (ctx.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('فشل: $e', style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشل: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -647,10 +712,13 @@ class _ReferencesManagementScreenState
 
   Future<void> _toggleReference(String id, bool active) async {
     try {
-      await Supabase.instance.client.from('doc_references').update({
-        'is_active': active,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', id);
+      await Supabase.instance.client
+          .from('doc_references')
+          .update({
+            'is_active': active,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', id);
       ref.invalidate(referencesListProvider);
     } catch (_) {}
   }
@@ -674,8 +742,10 @@ class _ReferencesManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content:
-                Text('تم حذف المرجع', style: TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'تم حذف المرجع',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.successColor,
           ),
         );

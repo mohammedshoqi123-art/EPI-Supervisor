@@ -131,17 +131,17 @@ class FormFieldDefinition {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'label': label,
-        'type': type.name,
-        'required': required,
-        'validation': validation,
-        'options': options,
-        'default_value': defaultValue,
-        'help_text': helpText,
-        'order': order,
-      };
+    'id': id,
+    'name': name,
+    'label': label,
+    'type': type.name,
+    'required': required,
+    'validation': validation,
+    'options': options,
+    'default_value': defaultValue,
+    'help_text': helpText,
+    'order': order,
+  };
 
   factory FormFieldDefinition.fromJson(Map<String, dynamic> json) {
     return FormFieldDefinition(
@@ -209,14 +209,14 @@ class FormTemplate {
   }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'description': description,
-        'fields': fields.map((f) => f.toJson()).toList(),
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt?.toIso8601String(),
-        'is_active': isActive,
-      };
+    'id': id,
+    'name': name,
+    'description': description,
+    'fields': fields.map((f) => f.toJson()).toList(),
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt?.toIso8601String(),
+    'is_active': isActive,
+  };
 }
 
 /// Dynamic form builder screen for creating and editing forms.
@@ -256,9 +256,11 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.existingForm == null
-            ? 'إنشاء استمارة جديدة'
-            : 'تعديل الاستمارة'),
+        title: Text(
+          widget.existingForm == null
+              ? 'إنشاء استمارة جديدة'
+              : 'تعديل الاستمارة',
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.preview),
@@ -302,9 +304,7 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
     return Container(
       width: 240,
       decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: Theme.of(context).dividerColor),
-        ),
+        border: Border(left: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,9 +363,7 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
           dense: true,
           leading: Icon(type.icon, size: 20, color: Colors.grey[600]),
           title: Text(type.labelAr, style: const TextStyle(fontSize: 13)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           onTap: () => _addField(type),
         ),
       ),
@@ -378,7 +376,8 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-            color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -443,8 +442,11 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.add_circle_outline,
-                      size: 48, color: Colors.grey[400]),
+                  Icon(
+                    Icons.add_circle_outline,
+                    size: 48,
+                    color: Colors.grey[400],
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     'اسحب العناصر هنا أو اضغط + لإضافة حقل',
@@ -496,8 +498,11 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
                 color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(field.type.icon,
-                  size: 18, color: Theme.of(context).primaryColor),
+              child: Icon(
+                field.type.icon,
+                size: 18,
+                color: Theme.of(context).primaryColor,
+              ),
             ),
           ],
         ),
@@ -543,13 +548,15 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
   void _addField(FormFieldType type) {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     setState(() {
-      _fields.add(FormFieldDefinition(
-        id: id,
-        name: 'field_$id',
-        label: '',
-        type: type,
-        order: _fields.length,
-      ));
+      _fields.add(
+        FormFieldDefinition(
+          id: id,
+          name: 'field_$id',
+          label: '',
+          type: type,
+          order: _fields.length,
+        ),
+      );
     });
     _editField(_fields.length - 1);
   }
@@ -625,30 +632,38 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_formName.isEmpty ? 'استمارة بدون اسم' : _formName,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(
+                _formName.isEmpty ? 'استمارة بدون اسم' : _formName,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               if (_formDescription.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text(_formDescription,
-                    style: TextStyle(color: Colors.grey[600])),
+                Text(
+                  _formDescription,
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
               ],
               const Divider(),
               const SizedBox(height: 16),
               Text('${_fields.length} حقل'),
               const SizedBox(height: 16),
-              ..._fields.map((f) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: [
-                        Icon(f.type.icon, size: 16, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Text(f.label.isEmpty ? f.type.labelAr : f.label),
-                        if (f.required)
-                          const Text(' *', style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
-                  )),
+              ..._fields.map(
+                (f) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(f.type.icon, size: 16, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      Text(f.label.isEmpty ? f.type.labelAr : f.label),
+                      if (f.required)
+                        const Text(' *', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerLeft,
@@ -666,14 +681,15 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
 
   void _saveForm() {
     if (_formName.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يرجى إدخال اسم الاستمارة')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('يرجى إدخال اسم الاستمارة')));
       return;
     }
 
     final template = FormTemplate(
-      id: widget.existingForm?.id ??
+      id:
+          widget.existingForm?.id ??
           DateTime.now().millisecondsSinceEpoch.toString(),
       name: _formName,
       description: _formDescription,
@@ -687,7 +703,8 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-            'تم حفظ الاستمارة (معاينة) — راجع تطبيق الموبايل للحفظ النهائي'),
+          'تم حفظ الاستمارة (معاينة) — راجع تطبيق الموبايل للحفظ النهائي',
+        ),
       ),
     );
   }
@@ -772,18 +789,21 @@ class _FieldEditDialogState extends State<_FieldEditDialog> {
                   widget.field.type == FormFieldType.radio ||
                   widget.field.type == FormFieldType.multiSelect) ...[
                 const Divider(),
-                const Text('الخيارات:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'الخيارات:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
-                ..._options.asMap().entries.map((e) => ListTile(
-                      dense: true,
-                      title: Text(e.value),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.remove_circle, size: 18),
-                        onPressed: () =>
-                            setState(() => _options.removeAt(e.key)),
-                      ),
-                    )),
+                ..._options.asMap().entries.map(
+                  (e) => ListTile(
+                    dense: true,
+                    title: Text(e.value),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.remove_circle, size: 18),
+                      onPressed: () => setState(() => _options.removeAt(e.key)),
+                    ),
+                  ),
+                ),
                 TextButton.icon(
                   onPressed: () {
                     final controller = TextEditingController();
@@ -831,14 +851,17 @@ class _FieldEditDialogState extends State<_FieldEditDialog> {
         ),
         FilledButton(
           onPressed: () {
-            widget.onSave(widget.field.copyWith(
-              label: _labelController.text,
-              name: _nameController.text,
-              helpText:
-                  _helpController.text.isEmpty ? null : _helpController.text,
-              required: _required,
-              options: _options.isNotEmpty ? {'items': _options} : {},
-            ));
+            widget.onSave(
+              widget.field.copyWith(
+                label: _labelController.text,
+                name: _nameController.text,
+                helpText: _helpController.text.isEmpty
+                    ? null
+                    : _helpController.text,
+                required: _required,
+                options: _options.isNotEmpty ? {'items': _options} : {},
+              ),
+            );
             Navigator.pop(context);
           },
           child: const Text('حفظ'),

@@ -100,30 +100,30 @@ class DataConflict {
   }) : detectedAt = detectedAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'entity_type': entityType,
-        'entity_id': entityId,
-        'local_data': localData,
-        'server_data': serverData,
-        'detected_at': detectedAt.toIso8601String(),
-        'merged_data': mergedData,
-        'resolved_strategy': resolvedStrategy?.name,
-        'resolved': resolved,
-      };
+    'id': id,
+    'entity_type': entityType,
+    'entity_id': entityId,
+    'local_data': localData,
+    'server_data': serverData,
+    'detected_at': detectedAt.toIso8601String(),
+    'merged_data': mergedData,
+    'resolved_strategy': resolvedStrategy?.name,
+    'resolved': resolved,
+  };
 
   factory DataConflict.fromJson(Map<String, dynamic> json) => DataConflict(
-        id: json['id'],
-        entityType: json['entity_type'],
-        entityId: json['entity_id'],
-        localData: Map<String, dynamic>.from(json['local_data']),
-        serverData: Map<String, dynamic>.from(json['server_data']),
-        detectedAt: DateTime.parse(json['detected_at']),
-        mergedData: json['merged_data'],
-        resolvedStrategy: json['resolved_strategy'] != null
-            ? ConflictStrategy.values.byName(json['resolved_strategy'])
-            : null,
-        resolved: json['resolved'] ?? false,
-      );
+    id: json['id'],
+    entityType: json['entity_type'],
+    entityId: json['entity_id'],
+    localData: Map<String, dynamic>.from(json['local_data']),
+    serverData: Map<String, dynamic>.from(json['server_data']),
+    detectedAt: DateTime.parse(json['detected_at']),
+    mergedData: json['merged_data'],
+    resolvedStrategy: json['resolved_strategy'] != null
+        ? ConflictStrategy.values.byName(json['resolved_strategy'])
+        : null,
+    resolved: json['resolved'] ?? false,
+  );
 }
 
 /// Sync result for a single change
@@ -135,20 +135,20 @@ class ChangeSyncResult {
   final String? error;
 
   ChangeSyncResult.success(this.changeId)
-      : success = true,
-        hasConflict = false,
-        conflict = null,
-        error = null;
+    : success = true,
+      hasConflict = false,
+      conflict = null,
+      error = null;
 
   ChangeSyncResult.conflict(this.changeId, this.conflict)
-      : success = false,
-        hasConflict = true,
-        error = null;
+    : success = false,
+      hasConflict = true,
+      error = null;
 
   ChangeSyncResult.error(this.changeId, this.error)
-      : success = false,
-        hasConflict = false,
-        conflict = null;
+    : success = false,
+      hasConflict = false,
+      conflict = null;
 }
 
 /// Enhanced sync service with intelligent connection management,
@@ -187,20 +187,23 @@ class EnhancedSyncService {
   Stream<SyncBatchResult> get onSyncComplete => _syncResultController.stream;
 
   NetworkState get currentState => NetworkState(
-        isOnline: _isOnline,
-        quality: _measureQuality(),
-        pendingItems: _pendingCount,
-        lastOnline: _lastOnline,
-        lastSync: _lastSync,
-      );
+    isOnline: _isOnline,
+    quality: _measureQuality(),
+    pendingItems: _pendingCount,
+    lastOnline: _lastOnline,
+    lastSync: _lastSync,
+  );
 
   /// Callback to submit a single change to the server
   final Future<Map<String, dynamic>> Function(Map<String, dynamic> change)?
-      onSubmitChange;
+  onSubmitChange;
 
   /// Callback to fetch latest server version for conflict detection
   final Future<Map<String, dynamic>?> Function(
-      String entityType, String entityId)? onFetchServerVersion;
+    String entityType,
+    String entityId,
+  )?
+  onFetchServerVersion;
 
   EnhancedSyncService(
     this._offlineBox,
@@ -217,10 +220,12 @@ class EnhancedSyncService {
   }
 
   void _initConnectivityListener() {
-    _connectivitySubscription =
-        _connectivity.onConnectivityChanged.listen((results) {
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
+      results,
+    ) {
       final wasOffline = !_isOnline;
-      final newOnline = results.isNotEmpty &&
+      final newOnline =
+          results.isNotEmpty &&
           results.any((r) => r != ConnectivityResult.none);
 
       // Deduplicate: skip if status didn't actually change
@@ -243,7 +248,8 @@ class EnhancedSyncService {
 
     // Initial check
     _connectivity.checkConnectivity().then((results) {
-      _isOnline = results.isNotEmpty &&
+      _isOnline =
+          results.isNotEmpty &&
           results.any((r) => r != ConnectivityResult.none);
       if (_isOnline) _lastOnline = DateTime.now();
       _forceEmitState();
@@ -423,7 +429,8 @@ class EnhancedSyncService {
   }
 
   Future<ChangeSyncResult> _syncSingleChange(
-      Map<String, dynamic> change) async {
+    Map<String, dynamic> change,
+  ) async {
     // Check for conflicts if server fetch is available
     if (onFetchServerVersion != null) {
       final entityType = change['entity_type'] as String?;
@@ -457,13 +464,17 @@ class EnhancedSyncService {
       return ChangeSyncResult.conflict(change['change_id'], conflict);
     } else {
       return ChangeSyncResult.error(
-          change['change_id'], response['error'] ?? 'Unknown error');
+        change['change_id'],
+        response['error'] ?? 'Unknown error',
+      );
     }
   }
 
   /// Detect conflicts between local and server versions
   DataConflict? _detectConflict(
-      Map<String, dynamic> local, Map<String, dynamic> server) {
+    Map<String, dynamic> local,
+    Map<String, dynamic> server,
+  ) {
     final localUpdated = DateTime.tryParse(local['updated_at'] ?? '');
     final serverUpdated = DateTime.tryParse(server['updated_at'] ?? '');
 
@@ -471,7 +482,8 @@ class EnhancedSyncService {
 
     // If server was updated after our last known version
     final localBaseUpdated = DateTime.tryParse(
-        local['base_updated_at'] ?? local['created_at'] ?? '');
+      local['base_updated_at'] ?? local['created_at'] ?? '',
+    );
 
     if (localBaseUpdated != null && serverUpdated.isAfter(localBaseUpdated)) {
       // Check if there are actual data differences

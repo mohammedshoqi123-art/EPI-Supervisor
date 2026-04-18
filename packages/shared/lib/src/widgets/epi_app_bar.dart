@@ -26,7 +26,8 @@ class EpiAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       title: Text(title),
       centerTitle: centerTitle,
-      leading: leading ??
+      leading:
+          leading ??
           (showBackButton && Navigator.of(context).canPop()
               ? IconButton(
                   icon: const Icon(Icons.arrow_back_ios),
@@ -39,7 +40,6 @@ class EpiAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize => Size.fromHeight(
-        kToolbarHeight + (bottom?.preferredSize.height ?? 0),
-      );
+  Size get preferredSize =>
+      Size.fromHeight(kToolbarHeight + (bottom?.preferredSize.height ?? 0));
 }

@@ -21,13 +21,21 @@ class EpiBottomNav extends StatelessWidget {
       unselectedItemColor: AppTheme.textHint,
       items: const [
         BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_rounded), label: 'الرئيسية'),
+          icon: Icon(Icons.dashboard_rounded),
+          label: 'الرئيسية',
+        ),
         BottomNavigationBarItem(
-            icon: Icon(Icons.assignment_rounded), label: 'النماذج'),
+          icon: Icon(Icons.assignment_rounded),
+          label: 'النماذج',
+        ),
         BottomNavigationBarItem(
-            icon: Icon(Icons.fact_check_rounded), label: 'الحالة'),
+          icon: Icon(Icons.fact_check_rounded),
+          label: 'الحالة',
+        ),
         BottomNavigationBarItem(
-            icon: Icon(Icons.map_rounded), label: 'الخريطة'),
+          icon: Icon(Icons.map_rounded),
+          label: 'الخريطة',
+        ),
         BottomNavigationBarItem(icon: Icon(Icons.chat_rounded), label: 'الشات'),
       ],
     );

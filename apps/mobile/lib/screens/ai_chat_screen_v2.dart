@@ -76,7 +76,7 @@ class _ChatStore {
 }
 
 // ═══════════════════════════════════════════════════════════
-// AI CHAT SCREEN — Clean rebuild
+// AI CHAT SCREEN
 // ═══════════════════════════════════════════════════════════
 
 class AiChatScreenV2 extends ConsumerStatefulWidget {
@@ -86,17 +86,23 @@ class AiChatScreenV2 extends ConsumerStatefulWidget {
   ConsumerState<AiChatScreenV2> createState() => _AiChatScreenV2State();
 }
 
-class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
+class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
+    with SingleTickerProviderStateMixin {
   final _ctrl = TextEditingController();
   final _scroll = ScrollController();
   final List<ChatMsg> _msgs = [];
   bool _loading = false;
   bool _mounted = true;
   DateTime? _lastSend;
+  late AnimationController _typingAnimCtrl;
 
   @override
   void initState() {
     super.initState();
+    _typingAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
     _restore();
   }
 
@@ -105,6 +111,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
     _mounted = false;
     _ctrl.dispose();
     _scroll.dispose();
+    _typingAnimCtrl.dispose();
     super.dispose();
   }
 
@@ -120,8 +127,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
       if (_scroll.hasClients) {
         _scroll.animateTo(
           _scroll.position.maxScrollExtent + 60,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
         );
       }
     });
@@ -132,7 +139,6 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
   Future<void> _send(String text, {String? template}) async {
     if (text.trim().isEmpty || _loading) return;
 
-    // Rate limit: 1 second between sends
     final now = DateTime.now();
     if (_lastSend != null &&
         now.difference(_lastSend!) < const Duration(seconds: 1)) {
@@ -151,21 +157,17 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
     try {
       final api = ref.read(apiClientProvider);
 
-      // Build history (last 6 messages, truncated)
       final history =
           _msgs.length > 6 ? _msgs.sublist(_msgs.length - 6) : _msgs;
       final historyJson = history
-          .map(
-            (m) => {
-              'role': m.role,
-              'content': m.content.length > 500
-                  ? '${m.content.substring(0, 500)}...'
-                  : m.content,
-            },
-          )
+          .map((m) => {
+                'role': m.role,
+                'content': m.content.length > 500
+                    ? '${m.content.substring(0, 500)}...'
+                    : m.content,
+              })
           .toList();
 
-      // ✅ FIX: Wrap in try-catch with specific error messages
       final resp = await api.callFunction('ai-chat-v3', {
         'message': text,
         'history': historyJson,
@@ -179,7 +181,6 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
 
       if (!_mounted) return;
 
-      // ✅ FIX: Safe response parsing — handle missing/null fields
       final reply = resp['reply'] as String? ??
           resp['message'] as String? ??
           resp['error'] as String? ??
@@ -187,29 +188,24 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
       final source = resp['source'] as String? ?? 'unknown';
 
       setState(() {
-        _msgs.add(
-          ChatMsg(
-            role: 'assistant',
-            content: reply.isNotEmpty
-                ? reply
-                : '⚠️ تم استلام رد فارغ. حاول مرة أخرى.',
-            source: source,
-          ),
-        );
+        _msgs.add(ChatMsg(
+          role: 'assistant',
+          content:
+              reply.isNotEmpty ? reply : '⚠️ تم استلام رد فارغ. حاول مرة أخرى.',
+          source: source,
+        ));
         _loading = false;
       });
       await _ChatStore.save(_msgs);
     } on TimeoutException {
       if (!_mounted) return;
       setState(() {
-        _msgs.add(
-          ChatMsg(
-            role: 'assistant',
-            content: '⏱️ انتهت مهلة الطلب. قد يكون الخادم بطيئاً حالياً.\n\n'
-                '💡 نصيحة: حاول مرة أخرى أو اسأل سؤالاً أقصر.',
-            source: 'error',
-          ),
-        );
+        _msgs.add(ChatMsg(
+          role: 'assistant',
+          content: '⏱️ انتهت مهلة الطلب. قد يكون الخادم بطيئاً حالياً.\n\n'
+              '💡 نصيحة: حاول مرة أخرى أو اسأل سؤالاً أقصر.',
+          source: 'error',
+        ));
         _loading = false;
       });
       await _ChatStore.save(_msgs);
@@ -233,9 +229,11 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
       }
 
       setState(() {
-        _msgs.add(
-          ChatMsg(role: 'assistant', content: userMessage, source: 'error'),
-        );
+        _msgs.add(ChatMsg(
+          role: 'assistant',
+          content: userMessage,
+          source: 'error',
+        ));
         _loading = false;
       });
       await _ChatStore.save(_msgs);
@@ -248,34 +246,76 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.auto_awesome_rounded, size: 22),
-            SizedBox(width: 10),
-            Text(
-              'المساعد الذكي',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Cairo',
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: cs.onPrimary.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: Icon(Icons.auto_awesome_rounded,
+                  size: 18, color: cs.onPrimary),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'المساعد الذكي',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+                Text(
+                  'متصل ببيانات النظام',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontFamily: 'Tajawal',
+                    color: cs.onPrimary.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         actions: [
           if (_msgs.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, size: 22),
+              icon: const Icon(Icons.delete_outline_rounded, size: 20),
               onPressed: () async {
-                setState(() => _msgs.clear());
-                await _ChatStore.clear();
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('مسح المحادثة',
+                        style: TextStyle(fontFamily: 'Cairo')),
+                    content: const Text('هل أنت متأكد من مسح كل الرسائل؟',
+                        style: TextStyle(fontFamily: 'Tajawal')),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('إلغاء')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('مسح')),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  setState(() => _msgs.clear());
+                  await _ChatStore.clear();
+                }
               },
               tooltip: 'مسح المحادثة',
             ),
@@ -284,7 +324,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
       body: Column(
         children: [
           Expanded(
-            child: _msgs.isEmpty ? _buildWelcome(cs) : _buildMessages(cs),
+            child: _msgs.isEmpty ? _buildWelcome(cs, tt) : _buildMessages(cs),
           ),
           if (_loading) _buildTypingIndicator(cs),
           _buildInputBar(cs),
@@ -295,54 +335,48 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
 
   // ═══ WELCOME SCREEN ═══
 
-  Widget _buildWelcome(ColorScheme cs) {
-    final suggestions = [
-      ('📊', 'ما حالة الإرساليات؟'),
-      ('⚠️', 'أين النواقص الحرجة؟'),
-      ('📈', 'اعرض تقرير الأسبوع'),
-      ('🗺️', 'أي المحافظات تحتاج دعم؟'),
-      ('💉', 'ما تغطية التطعيم؟'),
-      ('✅', 'حلل جودة الإدخال'),
-    ];
-
-    final reports = [
-      ('📅', 'daily', 'التقرير اليومي'),
-      ('📊', 'weekly', 'التقرير الأسبوعي'),
-      ('⚠️', 'shortages', 'تقرير النواقص'),
-      ('💉', 'coverage', 'تقرير التغطية'),
-    ];
-
+  Widget _buildWelcome(ColorScheme cs, TextTheme tt) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          const SizedBox(height: 20),
-          // Logo
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [cs.primary, cs.tertiary]),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: cs.primary.withValues(alpha: 0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+          const SizedBox(height: 16),
+          // Hero
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOutBack,
+            builder: (context, value, child) => Transform.scale(
+              scale: value,
+              child: child,
             ),
-            child: Icon(
-              Icons.auto_awesome_rounded,
-              size: 40,
-              color: cs.onPrimary,
+            child: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [cs.primary, cs.tertiary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: cs.primary.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Icon(Icons.auto_awesome_rounded,
+                  size: 36, color: cs.onPrimary),
             ),
           ),
           const SizedBox(height: 16),
           Text(
             'كيف أساعدك اليوم؟',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: FontWeight.w800,
               fontFamily: 'Cairo',
               color: cs.onSurface,
@@ -350,49 +384,77 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
           ),
           const SizedBox(height: 4),
           Text(
-            'اختر اقتراحاً أو اكتب سؤالك',
+            'المساعد متصل ببيانات النظام مباشرة',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               fontFamily: 'Tajawal',
               color: cs.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 24),
 
-          // Quick suggestions
-          ...suggestions.map((s) => _suggestionTile(cs, s.$1, s.$2)),
+          // Data query cards
+          _sectionLabel('📊 استعلامات سريعة من النظام', cs),
+          const SizedBox(height: 10),
+          _quickQueryCard(cs, '📊', 'حالة الإرساليات',
+              'عرض إحصائيات الإرساليات حسب الحالة', 'ما حالة الإرساليات؟'),
+          _quickQueryCard(cs, '⚠️', 'النواقص الحرجة',
+              'عرض النواقص الميدانية ومستوى الخطورة', 'أين النواقص الحرجة؟'),
+          _quickQueryCard(cs, '🏛️', 'أداء المحافظات',
+              'ترتيب المحافظات حسب عدد الإرساليات', 'أي المحافظات تحتاج دعم؟'),
+          _quickQueryCard(cs, '👥', 'المستخدمين',
+              'عرض إحصائيات المستخدمين والأدوار', 'كم عدد المستخدمين؟'),
 
-          const SizedBox(height: 16),
-          Divider(color: cs.outlineVariant),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
+          _sectionLabel('🤖 اسأل أي شيء', cs),
+          const SizedBox(height: 10),
+          _quickQueryCard(cs, '💉', 'تغطية التطعيم',
+              'اسأل عن تغطية Penta, OPV, MR', 'ما تغطية التطعيم؟'),
+          _quickQueryCard(cs, '📈', 'تحليل واتجاهات', 'تحليل أداء الحملات',
+              'حلل أداء الأسبوع'),
+          _quickQueryCard(
+              cs, '📋', 'إنشاء تقرير', 'توليد تقرير تلقائي', 'أنشئ تقرير يومي'),
 
-          // Report templates
-          Text(
-            '📝 قوالب التقارير',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Cairo',
-              color: cs.onSurface,
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
+          _sectionLabel('📝 قوالب التقارير', cs),
+          const SizedBox(height: 10),
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.8,
-            children:
-                reports.map((r) => _reportCard(cs, r.$1, r.$2, r.$3)).toList(),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 2.2,
+            children: [
+              _reportCard(cs, '📅', 'daily', 'يومي'),
+              _reportCard(cs, '📊', 'weekly', 'أسبوعي'),
+              _reportCard(cs, '⚠️', 'shortages', 'النواقص'),
+              _reportCard(cs, '💉', 'coverage', 'التغطية'),
+            ],
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 
-  Widget _suggestionTile(ColorScheme cs, String emoji, String text) {
+  Widget _sectionLabel(String text, ColorScheme cs) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          fontFamily: 'Cairo',
+          color: cs.onSurface,
+        ),
+      ),
+    );
+  }
+
+  Widget _quickQueryCard(
+      ColorScheme cs, String emoji, String title, String desc, String query) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -402,10 +464,10 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
           borderRadius: BorderRadius.circular(14),
           onTap: () {
             HapticFeedback.lightImpact();
-            _send(text);
+            _send(query);
           },
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
                 Container(
@@ -416,26 +478,37 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
-                    child: Text(emoji, style: const TextStyle(fontSize: 22)),
+                    child: Text(emoji, style: const TextStyle(fontSize: 20)),
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    text,
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      Text(
+                        desc,
+                        style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Icon(
-                  Icons.arrow_back_ios_rounded,
-                  size: 14,
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.4),
-                ),
+                Icon(Icons.arrow_back_ios_rounded,
+                    size: 14,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
               ],
             ),
           ),
@@ -445,36 +518,32 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
   }
 
   Widget _reportCard(
-    ColorScheme cs,
-    String emoji,
-    String templateId,
-    String name,
-  ) {
+      ColorScheme cs, String emoji, String templateId, String name) {
     return Material(
       color: cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         onTap: () {
           HapticFeedback.lightImpact();
-          _send('أنشئ $name', template: templateId);
+          _send('أنشئ تقرير $name', template: templateId);
         },
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          padding: const EdgeInsets.all(10),
+          child: Row(
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 24)),
-              const SizedBox(height: 4),
-              Text(
-                name,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
+              Text(emoji, style: const TextStyle(fontSize: 20)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'تقرير $name',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
                 ),
-                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -496,6 +565,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
 
   Widget _buildBubble(ChatMsg msg, ColorScheme cs) {
     final isUser = msg.role == 'user';
+    final isError = msg.source == 'error';
+    final isData = msg.source == 'function_call';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -507,11 +578,12 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
           if (!isUser) ...[
             CircleAvatar(
               radius: 18,
-              backgroundColor: cs.primaryContainer,
+              backgroundColor:
+                  isError ? cs.errorContainer : cs.primaryContainer,
               child: Icon(
-                Icons.auto_awesome_rounded,
+                isError ? Icons.warning_rounded : Icons.auto_awesome_rounded,
                 size: 18,
-                color: cs.primary,
+                color: isError ? cs.error : cs.primary,
               ),
             ),
             const SizedBox(width: 10),
@@ -522,12 +594,16 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
                   isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: isUser ? cs.primary : cs.surfaceContainerHigh,
+                    color: isUser
+                        ? cs.primary
+                        : isError
+                            ? cs.errorContainer
+                            : isData
+                                ? cs.primaryContainer.withValues(alpha: 0.5)
+                                : cs.surfaceContainerHigh,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(18),
                       topRight: const Radius.circular(18),
@@ -539,13 +615,17 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
                     msg.content,
                     style: TextStyle(
                       fontFamily: 'Tajawal',
-                      color: isUser ? cs.onPrimary : cs.onSurface,
+                      color: isUser
+                          ? cs.onPrimary
+                          : isError
+                              ? cs.onErrorContainer
+                              : cs.onSurface,
                       fontSize: 14,
-                      height: 1.6,
+                      height: 1.7,
                     ),
                   ),
                 ),
-                if (!isUser && msg.source != null) ...[
+                if (!isUser && msg.source != null && msg.source != 'error') ...[
                   const SizedBox(height: 4),
                   Padding(
                     padding: const EdgeInsets.only(left: 8),
@@ -576,11 +656,10 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
   }
 
   String _sourceLabel(String s) => switch (s) {
-        'groq' => '⚡ Groq',
-        'mimo' => '🤖 MiMo',
-        'function_call' => '📊 من قاعدة البيانات',
+        'groq' => '⚡ Groq AI',
+        'mimo' => '🤖 MiMo AI',
+        'function_call' => '📊 من بيانات النظام',
         'rag' => '📚 من قاعدة المعرفة',
-        'error' => '⚠️ خطأ',
         _ => '',
       };
 
@@ -594,11 +673,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
           CircleAvatar(
             radius: 16,
             backgroundColor: cs.primaryContainer,
-            child: Icon(
-              Icons.auto_awesome_rounded,
-              size: 16,
-              color: cs.primary,
-            ),
+            child:
+                Icon(Icons.auto_awesome_rounded, size: 16, color: cs.primary),
           ),
           const SizedBox(width: 10),
           Container(
@@ -611,8 +687,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
-                  width: 16,
-                  height: 16,
+                  width: 20,
+                  height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
                     color: cs.primary,
@@ -620,7 +696,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'جارٍ التفكير...',
+                  'جارٍ التحليل...',
                   style: TextStyle(
                     fontFamily: 'Tajawal',
                     color: cs.onSurfaceVariant,
@@ -664,16 +740,15 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
                   textDirection: TextDirection.rtl,
                   style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: 'اسألني أي شيء...',
+                    hintText: 'اسأل عن بيانات النظام أو التطعيم...',
                     hintStyle: TextStyle(
                       fontFamily: 'Tajawal',
+                      fontSize: 13,
                       color: cs.onSurfaceVariant.withValues(alpha: 0.6),
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
-                    ),
+                        horizontal: 18, vertical: 12),
                   ),
                   onSubmitted: (t) => _send(t),
                   maxLines: null,
@@ -681,13 +756,27 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
               ),
             ),
             const SizedBox(width: 8),
-            Container(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
                 gradient: _loading
                     ? null
-                    : LinearGradient(colors: [cs.primary, cs.tertiary]),
+                    : LinearGradient(
+                        colors: [cs.primary, cs.tertiary],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                 color: _loading ? cs.surfaceContainerHigh : null,
                 borderRadius: BorderRadius.circular(16),
+                boxShadow: _loading
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: cs.primary.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
               ),
               child: IconButton(
                 icon: Icon(

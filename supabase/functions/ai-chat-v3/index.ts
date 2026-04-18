@@ -195,16 +195,17 @@ async function mimoChat(messages: any[], key: string, stream = false) {
 // ═══════════════════════════════════════════════════════════
 
 const INTENT_RULES: [string, RegExp][] = [
-  ['query_submissions', /إرساليات|إرسال|استمارة|كم عدد|كم إرسالية|كم طلب|إدخالات|نماذج مُرسلة/i],
-  ['query_shortages', /نقص|نواقص|احتياج|مفقود|نواقص حرجة|مخزون/i],
-  ['query_analytics', /إحصائيات|احصائيات|أرقام|نظرة عامة|لوحة|dashboard/i],
+  ['query_submissions', /إرساليات|إرسال|استمارة|كم عدد|كم إرسالية|كم طلب|إدخالات|نماذج مُرسلة|حالة الإرساليات/i],
+  ['query_shortages', /نقص|نواقص|احتياج|مفقود|نواقص حرجة|مخزون|احتياجات ميدانية/i],
+  ['query_analytics', /إحصائيات|احصائيات|أرقام|نظرة عامة|لوحة|dashboard|ملخص عام/i],
   ['generate_report', /تقرير|إنشاء تقرير|أنشئ|أعد|ملخص/i],
-  ['query_governorates', /محافظة|محافظات|مناطق|ترتيب المحافظات|أداء المحافظات/i],
-  ['query_users', /مستخدم|فريق|مشرف|مدخل بيانات|أعضاء|صلاحيات/i],
-  ['ask_guide', /كيف|شرح|دليل|تعليمات|خطوات|مساعدة|استخدام/i],
-  ['analyze_trend', /اتجاه|تطور|مقارنة|تحسن|تراجع|تغير|نسبة/i],
-  ['query_health', /تغطية|تطعيم|لقاح|وصول|انسحاب|penta|opv|bcg|mr|dropout|تحصين/i],
+  ['query_governorates', /محافظة|محافظات|مناطق|ترتيب المحافظات|أداء المحافظات|أي المحافظات/i],
+  ['query_users', /مستخدم|فريق|مشرف|مدخل بيانات|أعضاء|صلاحيات|كم مستخدم/i],
+  ['ask_guide', /كيف|شرح|دليل|تعليمات|خطوات|مساعدة|استخدام|طريقة/i],
+  ['analyze_trend', /اتجاه|تطور|مقارنة|تحسن|تراجع|تغير|نسبة|تحليل/i],
+  ['query_health', /تغطية|تطعيم|لقاح|وصول|انسحاب|penta|opv|bcg|mr|dropout|تحصين|جرعات/i],
   ['compare_data', /قارن|مقارنة|فرق|versus|ضد/i],
+  ['query_coverage', /تغطية التطعيم|نسبة التطعيم|copertura|coverage/i],
 ]
 
 function classifyIntentLocal(text: string): { intent: string; confidence: number } {
@@ -233,6 +234,106 @@ function classifyIntentLocal(text: string): { intent: string; confidence: number
 const QUERY_MAP: Record<string, string> = {
   query_submissions: 'submissions', query_shortages: 'shortages',
   query_analytics: 'analytics', query_governorates: 'governorates', query_users: 'users',
+  query_health: 'health_coverage', query_coverage: 'health_coverage',
+}
+
+// ═══ FETCH LIVE SYSTEM DATA ═══
+async function fetchLiveData(supa: any): Promise<string> {
+  const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
+    return Promise.race([promise, new Promise<null>((r) => setTimeout(() => r(null), ms))]) as Promise<T | null>
+  }
+
+  const parts: string[] = []
+
+  try {
+    // Submissions by status
+    const { data: subs } = await withTimeout(
+      supa.from('form_submissions').select('status, governorate_id, created_at').is('deleted_at', null).limit(500), 5_000
+    ) ?? {}
+    if (subs?.length) {
+      const byStatus: Record<string, number> = {}
+      const byGov: Record<string, number> = {}
+      const today = new Date().toISOString().split('T')[0]
+      let todayCount = 0
+      for (const s of subs) {
+        byStatus[s.status] = (byStatus[s.status] ?? 0) + 1
+        if (s.governorate_id) byGov[s.governorate_id] = (byGov[s.governorate_id] ?? 0) + 1
+        if (s.created_at?.startsWith(today)) todayCount++
+      }
+      parts.push(`📊 الإرساليات: الكلي=${subs.length} | اليوم=${todayCount} | معتمدة=${byStatus.approved ?? 0} | مرفوضة=${byStatus.rejected ?? 0} | قيد المراجعة=${byStatus.submitted ?? 0} | مسودات=${byStatus.draft ?? 0}`)
+      
+      // Top governorates
+      const govSorted = Object.entries(byGov).sort((a, b) => b[1] - a[1]).slice(0, 5)
+      if (govSorted.length) {
+        const govIds = govSorted.map(g => g[0])
+        const { data: govs } = await withTimeout(
+          supa.from('governorates').select('id, name_ar').in('id', govIds), 3_000
+        ) ?? {}
+        const govNames: Record<string, string> = {}
+        govs?.forEach((g: any) => { govNames[g.id] = g.name_ar })
+        const topGovs = govSorted.map(g => `${govNames[g[0]] ?? '?'}: ${g[1]}`).join(' | ')
+        parts.push(`🗺️ أعلى المحافظات إرسالاً: ${topGovs}`)
+      }
+    }
+  } catch {}
+
+  try {
+    // Shortages
+    const { data: shs } = await withTimeout(
+      supa.from('supply_shortages').select('severity, is_resolved, item_name').is('deleted_at', null).limit(200), 5_000
+    ) ?? {}
+    if (shs?.length) {
+      const bySev: Record<string, number> = {}
+      let resolved = 0
+      const criticalItems: string[] = []
+      for (const s of shs) {
+        bySev[s.severity] = (bySev[s.severity] ?? 0) + 1
+        if (s.is_resolved) resolved++
+        if (s.severity === 'critical' && !s.is_resolved) criticalItems.push(s.item_name)
+      }
+      parts.push(`⚠️ النواقص: الكلي=${shs.length} | محلولة=${resolved} | حرجة=${bySev.critical ?? 0} | عالية=${bySev.high ?? 0} | متوسطة=${bySev.medium ?? 0}`)
+      if (criticalItems.length) parts.push(`🔴 نواقص حرجة: ${[...new Set(criticalItems)].slice(0, 5).join('، ')}`)
+    }
+  } catch {}
+
+  try {
+    // Users
+    const { data: users } = await withTimeout(
+      supa.from('profiles').select('role, is_active').is('deleted_at', null).limit(200), 3_000
+    ) ?? {}
+    if (users?.length) {
+      const byRole: Record<string, number> = {}
+      let active = 0
+      for (const u of users) {
+        byRole[u.role] = (byRole[u.role] ?? 0) + 1
+        if (u.is_active) active++
+      }
+      parts.push(`👥 المستخدمين: الكلي=${users.length} | نشط=${active} | admin=${byRole.admin ?? 0} | مركزي=${byRole.central ?? 0} | محافظة=${byRole.governorate ?? 0} | مديرية=${byRole.district ?? 0} | إدخال بيانات=${byRole.data_entry ?? 0}`)
+    }
+  } catch {}
+
+  try {
+    // Governorates performance
+    const { data: govs } = await withTimeout(
+      supa.from('governorates').select('id, name_ar, is_active').eq('is_active', true).is('deleted_at', null), 3_000
+    ) ?? {}
+    if (govs?.length) {
+      parts.push(`🏛️ المحافظات النشطة: ${govs.length} محافظة`)
+    }
+  } catch {}
+
+  try {
+    // Recent submissions (last 7 days trend)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+    const { count: recentCount } = await withTimeout(
+      supa.from('form_submissions').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo).is('deleted_at', null), 3_000
+    ) ?? {}
+    if (recentCount !== null && recentCount !== undefined) {
+      parts.push(`📈 إرساليات آخر 7 أيام: ${recentCount}`)
+    }
+  } catch {}
+
+  return parts.join('\n')
 }
 
 async function dbQuery(supa: any, type: string) {
@@ -270,6 +371,48 @@ async function dbQuery(supa: any, type: string) {
         const [s, sh, u] = results
         return { total_submissions: s.count, active_shortages: sh.count, active_users: u.count }
       }
+      case 'governorates': {
+        const { data: govs } = await withTimeout(
+          supa.from('governorates').select('id, name_ar, is_active').eq('is_active', true).is('deleted_at', null), 5_000
+        ) ?? {}
+        if (!govs) return null
+        // Get submission counts per governorate
+        const { data: subs } = await withTimeout(
+          supa.from('form_submissions').select('governorate_id, status').is('deleted_at', null).limit(500), 5_000
+        ) ?? {}
+        const govSubs: Record<string, { total: number; approved: number }> = {}
+        for (const s of subs ?? []) {
+          if (!s.governorate_id) continue
+          if (!govSubs[s.governorate_id]) govSubs[s.governorate_id] = { total: 0, approved: 0 }
+          govSubs[s.governorate_id].total++
+          if (s.status === 'approved') govSubs[s.governorate_id].approved++
+        }
+        return govs.map((g: any) => ({
+          name: g.name_ar,
+          submissions: govSubs[g.id]?.total ?? 0,
+          approved: govSubs[g.id]?.approved ?? 0,
+        })).sort((a: any, b: any) => b.submissions - a.submissions)
+      }
+      case 'users': {
+        const { data: users } = await withTimeout(
+          supa.from('profiles').select('full_name, role, is_active, governorate_id').is('deleted_at', null).limit(100), 5_000
+        ) ?? {}
+        if (!users) return null
+        const byRole: Record<string, number> = {}
+        let active = 0
+        for (const u of users) {
+          byRole[u.role] = (byRole[u.role] ?? 0) + 1
+          if (u.is_active) active++
+        }
+        return { total: users.length, active, byRole }
+      }
+      case 'health_coverage': {
+        // Return knowledge base chunks about coverage
+        const { data: chunks } = await withTimeout(
+          supa.from('ai_chunks').select('content, metadata').ilike('content', '%تغطية%Penta%').limit(3), 5_000
+        ) ?? {}
+        return chunks?.length ? { coverage_data: chunks.map((c: any) => c.content.slice(0, 300)).join('\n---\n') } : null
+      }
       default: return null
     }
   } catch (e) {
@@ -280,13 +423,26 @@ async function dbQuery(supa: any, type: string) {
 
 function formatResult(intent: string, data: any): string {
   if (intent === 'query_submissions' && data?.byStatus) {
-    return `📊 الإرساليات:\n• الإجمالي: ${data.total}\n• معتمدة: ${data.byStatus.approved ?? 0}\n• مرفوضة: ${data.byStatus.rejected ?? 0}\n• قيد المراجعة: ${data.byStatus.submitted ?? 0}`
+    return `📊 الإرساليات:\n• الإجمالي: ${data.total}\n• معتمدة: ${data.byStatus.approved ?? 0}\n• مرفوضة: ${data.byStatus.rejected ?? 0}\n• قيد المراجعة: ${data.byStatus.submitted ?? 0}\n• مسودات: ${data.byStatus.draft ?? 0}`
   }
   if (intent === 'query_shortages') {
-    return `⚠️ النواقص:\n• الإجمالي: ${data.total}\n• حرجة: ${data.bySeverity?.critical ?? 0} 🔴\n• محلولة: ${data.resolved}`
+    return `⚠️ النواقص:\n• الإجمالي: ${data.total}\n• حرجة: ${data.bySeverity?.critical ?? 0} 🔴\n• عالية: ${data.bySeverity?.high ?? 0}\n• محلولة: ${data.resolved}`
   }
   if (intent === 'query_analytics') {
     return `📈 إحصائيات:\n• إرساليات: ${data.total_submissions}\n• نواقص نشطة: ${data.active_shortages}\n• مستخدمين: ${data.active_users}`
+  }
+  if (intent === 'query_governorates' && Array.isArray(data)) {
+    const top = data.slice(0, 10).map((g: any, i: number) => 
+      `${i + 1}. ${g.name}: ${g.submissions} إرسالية (${g.approved} معتمدة)`
+    ).join('\n')
+    return `🏛️ أداء المحافظات:\n${top}`
+  }
+  if (intent === 'query_users' && data?.byRole) {
+    const roles = Object.entries(data.byRole).map(([r, c]) => `• ${r}: ${c}`).join('\n')
+    return `👥 المستخدمين:\n• الإجمالي: ${data.total}\n• نشط: ${data.active}\n${roles}`
+  }
+  if (intent === 'query_health' || intent === 'query_coverage') {
+    return data?.coverage_data ? `💉 بيانات التغطية:\n${data.coverage_data}` : 'لا توجد بيانات تغطية متاحة حالياً'
   }
   return JSON.stringify(data)
 }
@@ -446,14 +602,17 @@ interface ChatRequest {
   stream: boolean
 }
 
-function buildSystemPrompt(req: ChatRequest, rag: string, dbResult: any | null): string {
+function buildSystemPrompt(req: ChatRequest, rag: string, dbResult: any | null, liveData: string): string {
   let sys = SYSTEM_PROMPT
 
-  // Add real-time context
-  if (req.context) sys += `\n\n== بيانات حية ==\n${compressCtx(req.context)}`
+  // Add live system data (always)
+  if (liveData) sys += `\n\n== بيانات النظام الحية ==\n${liveData}`
+
+  // Add client-side context
+  if (req.context) sys += `\n\n== بيانات العميل ==\n${compressCtx(req.context)}`
 
   // Add RAG knowledge
-  if (rag) sys += `\n\n== مراجع ==\n${rag}`
+  if (rag) sys += `\n\n== مراجع من قاعدة المعرفة ==\n${rag}`
 
   // Add template task
   if (req.template) {
@@ -625,11 +784,14 @@ serve(async (req) => {
       rag = await keywordSearchEnhanced(supabase, message).catch(() => '')
     }
 
+    // ─── STEP 3.5: Fetch live system data ───
+    const liveData = await fetchLiveData(supabase).catch(() => '')
+
     // ═══════════════════════════════════════════════════════
     // STEP 4: SINGLE LLM CALL (the only API call)
     // ═══════════════════════════════════════════════════════
     const chatReq: ChatRequest = { message, history, context, mode, template, stream }
-    const systemPrompt = buildSystemPrompt(chatReq, rag, dbResult)
+    const systemPrompt = buildSystemPrompt(chatReq, rag, dbResult, liveData)
     const messages = buildMessages(chatReq, systemPrompt)
 
     const startMs = Date.now()

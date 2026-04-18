@@ -81,20 +81,28 @@ class PhotoPickerField extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading:
-                  const Icon(Icons.camera_alt, color: AppTheme.primaryColor),
-              title: const Text('الكاميرا',
-                  style: TextStyle(fontFamily: 'Tajawal')),
+              leading: const Icon(
+                Icons.camera_alt,
+                color: AppTheme.primaryColor,
+              ),
+              title: const Text(
+                'الكاميرا',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(context, ImageSource.camera);
               },
             ),
             ListTile(
-              leading:
-                  const Icon(Icons.photo_library, color: AppTheme.primaryColor),
-              title:
-                  const Text('المعرض', style: TextStyle(fontFamily: 'Tajawal')),
+              leading: const Icon(
+                Icons.photo_library,
+                color: AppTheme.primaryColor,
+              ),
+              title: const Text(
+                'المعرض',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(context, ImageSource.gallery);
@@ -147,8 +155,11 @@ class PhotoPickerField extends StatelessWidget {
                               color: AppTheme.errorColor,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.close,
-                                size: 14, color: Colors.white),
+                            child: const Icon(
+                              Icons.close,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),

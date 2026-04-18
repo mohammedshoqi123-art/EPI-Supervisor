@@ -47,9 +47,10 @@ Future<void> main() async {
                 details.exceptionAsString(),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 12,
-                    color: Color(0xFF666666)),
+                  fontFamily: 'Tajawal',
+                  fontSize: 12,
+                  color: Color(0xFF666666),
+                ),
                 maxLines: 5,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -73,35 +74,38 @@ Future<void> main() async {
   try {
     EnvValidator.validate();
   } catch (e) {
-    runApp(MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                const Text(
-                  'خطأ في الإعدادات',
-                  style: TextStyle(
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'خطأ في الإعدادات',
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      fontFamily: 'Cairo'),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  e.toString(),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontFamily: 'Tajawal'),
-                ),
-              ],
+                      fontFamily: 'Cairo',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    e.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontFamily: 'Tajawal'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     return;
   }
 
@@ -122,35 +126,42 @@ Future<void> main() async {
         debug: AppConfig.isDevelopment,
       );
     } catch (e) {
-      runApp(MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'خطأ في إعدادات Supabase',
-                    style: TextStyle(
+      runApp(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: Colors.red,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'خطأ في إعدادات Supabase',
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        fontFamily: 'Cairo'),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    e.toString(),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontFamily: 'Tajawal'),
-                  ),
-                ],
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      e.toString(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontFamily: 'Tajawal'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ));
+      );
       return;
     }
   }
@@ -209,10 +220,7 @@ class EpiSupervisorApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       routerConfig: router,
       locale: const Locale('ar', 'IQ'),
-      supportedLocales: const [
-        Locale('ar', 'IQ'),
-        Locale('en', 'US'),
-      ],
+      supportedLocales: const [Locale('ar', 'IQ'), Locale('en', 'US')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -226,9 +234,10 @@ class EpiSupervisorApp extends ConsumerWidget {
             // Allow accessibility text scaling up to 1.3x for readability
             data: MediaQuery.of(context).copyWith(
               textScaler: TextScaler.linear(
-                  MediaQuery.of(context).textScaler.scale(1.0) > 2.0
-                      ? 2.0
-                      : MediaQuery.of(context).textScaler.scale(1.0)),
+                MediaQuery.of(context).textScaler.scale(1.0) > 2.0
+                    ? 2.0
+                    : MediaQuery.of(context).textScaler.scale(1.0),
+              ),
             ),
             child: child!,
           ),

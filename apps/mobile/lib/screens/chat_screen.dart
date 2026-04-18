@@ -45,7 +45,8 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final client = Supabase.instance.client;
       _currentUserId = client.auth.currentUser?.id;
-      _currentUserName = client.auth.currentUser?.userMetadata?['full_name'] ??
+      _currentUserName =
+          client.auth.currentUser?.userMetadata?['full_name'] ??
           client.auth.currentUser?.email?.split('@').first ??
           'مستخدم';
     } catch (_) {
@@ -127,14 +128,17 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Icon(Icons.error_outline, color: Colors.white, size: 20),
                 SizedBox(width: 8),
-                Text('فشل الإرسال — حاول مرة أخرى',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                Text(
+                  'فشل الإرسال — حاول مرة أخرى',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
               ],
             ),
             backgroundColor: const Color(0xFFEF4444),
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             margin: const EdgeInsets.all(16),
           ),
         );
@@ -174,9 +178,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _shouldShowDateSeparator(int index) {
     if (index == 0) return true;
-    final current = DateTime.tryParse(_messages[index]['created_at'] ?? '') ??
+    final current =
+        DateTime.tryParse(_messages[index]['created_at'] ?? '') ??
         DateTime.now();
-    final prev = DateTime.tryParse(_messages[index - 1]['created_at'] ?? '') ??
+    final prev =
+        DateTime.tryParse(_messages[index - 1]['created_at'] ?? '') ??
         DateTime.now();
     return !_isSameDay(current, prev);
   }
@@ -201,8 +207,8 @@ class _ChatScreenState extends State<ChatScreen> {
           child: _isLoading
               ? _buildLoadingState()
               : _messages.isEmpty
-                  ? _buildEmptyState()
-                  : _buildMessagesList(),
+              ? _buildEmptyState()
+              : _buildMessagesList(),
         ),
 
         // Input
@@ -238,8 +244,11 @@ class _ChatScreenState extends State<ChatScreen> {
               color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(14),
             ),
-            child:
-                const Icon(Icons.chat_rounded, color: Colors.white, size: 24),
+            child: const Icon(
+              Icons.chat_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 12),
           // Title & status
@@ -305,7 +314,8 @@ class _ChatScreenState extends State<ChatScreen> {
     for (int i = 0; i < _messages.length; i++) {
       // Date separator
       if (_shouldShowDateSeparator(i)) {
-        final date = DateTime.tryParse(_messages[i]['created_at'] ?? '') ??
+        final date =
+            DateTime.tryParse(_messages[i]['created_at'] ?? '') ??
             DateTime.now();
         items.add(_dateSeparator(_dateLabel(date)));
       }
@@ -359,7 +369,11 @@ class _ChatScreenState extends State<ChatScreen> {
   // ─── Message Bubble ─────────────────────────────────────────────────
 
   Widget _buildMessageBubble(
-      Map<String, dynamic> msg, bool isMe, bool showAvatar, bool showName) {
+    Map<String, dynamic> msg,
+    bool isMe,
+    bool showAvatar,
+    bool showName,
+  ) {
     final createdAt =
         DateTime.tryParse(msg['created_at'] ?? '') ?? DateTime.now();
     final timeStr = DateFormat('HH:mm').format(createdAt);
@@ -375,8 +389,9 @@ class _ChatScreenState extends State<ChatScreen> {
         right: isMe ? 0 : 48,
       ),
       child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Other user avatar
@@ -390,8 +405,9 @@ class _ChatScreenState extends State<ChatScreen> {
           // Bubble
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 // Sender name
                 if (!isMe && showName)
@@ -413,7 +429,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   onLongPress: () => _showMessageOptions(msg, isMe),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: isMe ? const Color(0xFF00897B) : Colors.white,
                       borderRadius: BorderRadius.only(
@@ -424,8 +442,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black
-                              .withValues(alpha: isMe ? 0.12 : 0.04),
+                          color: Colors.black.withValues(
+                            alpha: isMe ? 0.12 : 0.04,
+                          ),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -440,8 +459,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             fontFamily: 'Tajawal',
                             fontSize: 14.5,
                             height: 1.5,
-                            color:
-                                isMe ? Colors.white : const Color(0xFF1A2332),
+                            color: isMe
+                                ? Colors.white
+                                : const Color(0xFF1A2332),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -556,8 +576,10 @@ class _ChatScreenState extends State<ChatScreen> {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('تم النسخ!',
-                      style: TextStyle(fontFamily: 'Tajawal')),
+                  content: Text(
+                    'تم النسخ!',
+                    style: TextStyle(fontFamily: 'Tajawal'),
+                  ),
                   duration: Duration(seconds: 1),
                   behavior: SnackBarBehavior.floating,
                 ),
@@ -574,12 +596,18 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _optionTile(IconData icon, String label, VoidCallback onTap,
-      {Color color = const Color(0xFF6B7280)}) {
+  Widget _optionTile(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    Color color = const Color(0xFF6B7280),
+  }) {
     return ListTile(
       leading: Icon(icon, color: color, size: 22),
-      title: Text(label,
-          style: TextStyle(fontFamily: 'Tajawal', color: color, fontSize: 14)),
+      title: Text(
+        label,
+        style: TextStyle(fontFamily: 'Tajawal', color: color, fontSize: 14),
+      ),
       onTap: onTap,
       horizontalTitleGap: 8,
     );
@@ -660,10 +688,7 @@ class _ChatScreenState extends State<ChatScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFFF5F7FA),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: const Color(0xFFE5E7EB),
-                  width: 1,
-                ),
+                border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
               ),
               child: TextField(
                 controller: _messageController,
@@ -689,8 +714,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     vertical: 12,
                   ),
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.emoji_emotions_outlined,
-                        color: Color(0xFF9CA3AF), size: 22),
+                    icon: const Icon(
+                      Icons.emoji_emotions_outlined,
+                      color: Color(0xFF9CA3AF),
+                      size: 22,
+                    ),
                     onPressed: () {
                       // Emoji picker placeholder
                     },
@@ -757,8 +785,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.cloud_off_rounded,
-                  size: 56, color: Color(0xFFF97316)),
+              child: const Icon(
+                Icons.cloud_off_rounded,
+                size: 56,
+                color: Color(0xFFF97316),
+              ),
             ),
             const SizedBox(height: 28),
             const Text(
@@ -800,10 +831,7 @@ class _ChatScreenState extends State<ChatScreen> {
               duration: const Duration(milliseconds: 800),
               curve: Curves.elasticOut,
               builder: (context, value, child) {
-                return Transform.scale(
-                  scale: value,
-                  child: child,
-                );
+                return Transform.scale(scale: value, child: child);
               },
               child: Container(
                 width: 120,
@@ -822,8 +850,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    const Icon(Icons.chat_bubble_outline_rounded,
-                        size: 52, color: Color(0xFF00897B)),
+                    const Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      size: 52,
+                      color: Color(0xFF00897B),
+                    ),
                     Positioned(
                       top: 25,
                       right: 25,
@@ -834,8 +865,11 @@ class _ChatScreenState extends State<ChatScreen> {
                           color: Color(0xFF10B981),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.add_rounded,
-                            color: Colors.white, size: 18),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
                     ),
                   ],
@@ -950,8 +984,9 @@ class _PulseDotState extends State<_PulseDot>
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF10B981)
-                    .withValues(alpha: 0.4 * _controller.value),
+                color: const Color(
+                  0xFF10B981,
+                ).withValues(alpha: 0.4 * _controller.value),
                 blurRadius: 6 * _controller.value,
                 spreadRadius: 2 * _controller.value,
               ),

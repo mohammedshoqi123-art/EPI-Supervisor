@@ -206,8 +206,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   _iconButton(
                     Icons.refresh_rounded,
                     onTap: () {
-                      ref.invalidate(submissionsProvider(SubmissionsFilter(
-                          campaignType: ref.read(campaignProvider).value)));
+                      ref.invalidate(
+                        submissionsProvider(
+                          SubmissionsFilter(
+                            campaignType: ref.read(campaignProvider).value,
+                          ),
+                        ),
+                      );
                       ref.invalidate(shortagesProvider);
                       ref.invalidate(governoratesProvider);
                     },
@@ -230,7 +235,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   scrollDirection: Axis.horizontal,
                   children: [
                     _modeChip(
-                        'submissions', 'إرساليات', Icons.description_rounded),
+                      'submissions',
+                      'إرساليات',
+                      Icons.description_rounded,
+                    ),
                     const SizedBox(width: 8),
                     _modeChip('shortages', 'نواقص', Icons.warning_rounded),
                     const SizedBox(width: 8),
@@ -246,8 +254,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
   }
 
   Widget _modeChip(String mode, String label, IconData icon) {
-    final isActive =
-        mode == 'heatmap' ? _showHeatmap : _mapMode == mode && !_showHeatmap;
+    final isActive = mode == 'heatmap'
+        ? _showHeatmap
+        : _mapMode == mode && !_showHeatmap;
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -268,7 +277,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
           border: isActive
               ? null
               : Border.all(
-                  color: Colors.white.withValues(alpha: 0.3), width: 1),
+                  color: Colors.white.withValues(alpha: 0.3),
+                  width: 1,
+                ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -317,9 +328,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
       right: 16,
       child: Consumer(
         builder: (context, ref, _) {
-          final submissionsAsync = ref.watch(submissionsProvider(
-              SubmissionsFilter(
-                  campaignType: ref.read(campaignProvider).value)));
+          final submissionsAsync = ref.watch(
+            submissionsProvider(
+              SubmissionsFilter(campaignType: ref.read(campaignProvider).value),
+            ),
+          );
           final governoratesAsync = ref.watch(governoratesProvider);
 
           final subCount = submissionsAsync.valueOrNull?.length ?? 0;
@@ -327,17 +340,26 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
           return Row(
             children: [
-              _statCard('إرساليات', '$subCount', Icons.description_rounded,
-                  const Color(0xFF3B82F6)),
-              const SizedBox(width: 8),
-              _statCard('محافظات', '$govCount', Icons.location_city_rounded,
-                  const Color(0xFF10B981)),
+              _statCard(
+                'إرساليات',
+                '$subCount',
+                Icons.description_rounded,
+                const Color(0xFF3B82F6),
+              ),
               const SizedBox(width: 8),
               _statCard(
-                  'خريطة',
-                  _showHeatmap ? 'حرارية' : 'علامات',
-                  _showHeatmap ? Icons.grid_on : Icons.place_rounded,
-                  const Color(0xFFF59E0B)),
+                'محافظات',
+                '$govCount',
+                Icons.location_city_rounded,
+                const Color(0xFF10B981),
+              ),
+              const SizedBox(width: 8),
+              _statCard(
+                'خريطة',
+                _showHeatmap ? 'حرارية' : 'علامات',
+                _showHeatmap ? Icons.grid_on : Icons.place_rounded,
+                const Color(0xFFF59E0B),
+              ),
             ],
           );
         },
@@ -423,8 +445,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
         child: _showHeatmap
             ? _heatmapLegend()
             : _mapMode == 'submissions'
-                ? _submissionLegend()
-                : _shortageLegend(),
+            ? _submissionLegend()
+            : _shortageLegend(),
       ),
     );
   }
@@ -469,11 +491,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(4),
             gradient: const LinearGradient(
-              colors: [
-                Color(0xFF22C55E),
-                Color(0xFFFBBF24),
-                Color(0xFFEF4444),
-              ],
+              colors: [Color(0xFF22C55E), Color(0xFFFBBF24), Color(0xFFEF4444)],
             ),
           ),
         ),
@@ -497,10 +515,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         Container(
           width: 10,
           height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
         Text(
@@ -537,39 +552,35 @@ class _MapScreenState extends ConsumerState<MapScreen>
           // Zoom in
           ScaleTransition(
             scale: _fabAnimation,
-            child: _fabMini(
-              Icons.add_rounded,
-              Colors.white,
-              () {
-                setState(
-                    () => _currentZoom = (_currentZoom + 1).clamp(4.0, 18.0));
-                _mapController.move(_mapController.camera.center, _currentZoom);
-              },
-              iconColor: const Color(0xFF1A2332),
-            ),
+            child: _fabMini(Icons.add_rounded, Colors.white, () {
+              setState(
+                () => _currentZoom = (_currentZoom + 1).clamp(4.0, 18.0),
+              );
+              _mapController.move(_mapController.camera.center, _currentZoom);
+            }, iconColor: const Color(0xFF1A2332)),
           ),
           const SizedBox(height: 8),
           // Zoom out
           ScaleTransition(
             scale: _fabAnimation,
-            child: _fabMini(
-              Icons.remove_rounded,
-              Colors.white,
-              () {
-                setState(
-                    () => _currentZoom = (_currentZoom - 1).clamp(4.0, 18.0));
-                _mapController.move(_mapController.camera.center, _currentZoom);
-              },
-              iconColor: const Color(0xFF1A2332),
-            ),
+            child: _fabMini(Icons.remove_rounded, Colors.white, () {
+              setState(
+                () => _currentZoom = (_currentZoom - 1).clamp(4.0, 18.0),
+              );
+              _mapController.move(_mapController.camera.center, _currentZoom);
+            }, iconColor: const Color(0xFF1A2332)),
           ),
         ],
       ),
     );
   }
 
-  Widget _fabMini(IconData icon, Color bgColor, VoidCallback onTap,
-      {Color iconColor = Colors.white}) {
+  Widget _fabMini(
+    IconData icon,
+    Color bgColor,
+    VoidCallback onTap, {
+    Color iconColor = Colors.white,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -681,47 +692,60 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
           Color color;
           if (intensity < 0.33) {
-            color = Color.lerp(const Color(0xFF22C55E), const Color(0xFFFBBF24),
-                intensity * 3)!;
+            color = Color.lerp(
+              const Color(0xFF22C55E),
+              const Color(0xFFFBBF24),
+              intensity * 3,
+            )!;
           } else if (intensity < 0.66) {
-            color = Color.lerp(const Color(0xFFFBBF24), const Color(0xFFF97316),
-                (intensity - 0.33) * 3)!;
+            color = Color.lerp(
+              const Color(0xFFFBBF24),
+              const Color(0xFFF97316),
+              (intensity - 0.33) * 3,
+            )!;
           } else {
-            color = Color.lerp(const Color(0xFFF97316), const Color(0xFFEF4444),
-                (intensity - 0.66) * 3)!;
+            color = Color.lerp(
+              const Color(0xFFF97316),
+              const Color(0xFFEF4444),
+              (intensity - 0.66) * 3,
+            )!;
           }
 
-          circles.add(CircleMarker(
-            point: LatLng(lat.toDouble(), lng.toDouble()),
-            radius: 12000 + (count * 600),
-            useRadiusInMeter: true,
-            color: color.withValues(alpha: 0.35),
-            borderColor: color.withValues(alpha: 0.7),
-            borderStrokeWidth: 2,
-          ));
+          circles.add(
+            CircleMarker(
+              point: LatLng(lat.toDouble(), lng.toDouble()),
+              radius: 12000 + (count * 600),
+              useRadiusInMeter: true,
+              color: color.withValues(alpha: 0.35),
+              borderColor: color.withValues(alpha: 0.7),
+              borderStrokeWidth: 2,
+            ),
+          );
 
           // Add count label
-          labels.add(Marker(
-            point: LatLng(lat.toDouble(), lng.toDouble()),
-            width: 40,
-            height: 24,
-            child: Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${count.toInt()}',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: color,
+          labels.add(
+            Marker(
+              point: LatLng(lat.toDouble(), lng.toDouble()),
+              width: 40,
+              height: 24,
+              child: Container(
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${count.toInt()}',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
                 ),
               ),
             ),
-          ));
+          );
         }
 
         return Stack(
@@ -737,8 +761,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
   // ─── Submissions Cluster Layer ───────────────────────────────────────
 
   Widget _buildSubmissionsClusterLayer() {
-    final submissionsAsync = ref.watch(submissionsProvider(
-        SubmissionsFilter(campaignType: ref.read(campaignProvider).value)));
+    final submissionsAsync = ref.watch(
+      submissionsProvider(
+        SubmissionsFilter(campaignType: ref.read(campaignProvider).value),
+      ),
+    );
 
     return submissionsAsync.when(
       loading: () => const MarkerLayer(markers: []),
@@ -754,15 +781,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
           final status = sub['status'] as String? ?? 'draft';
           final color = _statusColor(status);
 
-          markers.add(Marker(
-            point: LatLng(lat, lng),
-            width: 48,
-            height: 48,
-            child: GestureDetector(
-              onTap: () => _showSubmissionInfo(sub),
-              child: _animatedMarker(color, _statusIcon(status)),
+          markers.add(
+            Marker(
+              point: LatLng(lat, lng),
+              width: 48,
+              height: 48,
+              child: GestureDetector(
+                onTap: () => _showSubmissionInfo(sub),
+                child: _animatedMarker(color, _statusIcon(status)),
+              ),
             ),
-          ));
+          );
         }
 
         if (markers.isEmpty) {
@@ -857,15 +886,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
           final severity = shortage['severity'] as String? ?? 'medium';
           final color = _severityColor(severity);
 
-          markers.add(Marker(
-            point: LatLng(lat, lng),
-            width: 44,
-            height: 44,
-            child: GestureDetector(
-              onTap: () => _showShortageInfo(shortage),
-              child: _animatedMarker(color, Icons.warning_rounded),
+          markers.add(
+            Marker(
+              point: LatLng(lat, lng),
+              width: 44,
+              height: 44,
+              child: GestureDetector(
+                onTap: () => _showShortageInfo(shortage),
+                child: _animatedMarker(color, Icons.warning_rounded),
+              ),
             ),
-          ));
+          );
         }
 
         if (markers.isEmpty) {
@@ -889,83 +920,85 @@ class _MapScreenState extends ConsumerState<MapScreen>
         final markers = governorates
             .where((g) => g['center_lat'] != null && g['center_lng'] != null)
             .map((gov) {
-          final lat = (gov['center_lat'] as num).toDouble();
-          final lng = (gov['center_lng'] as num).toDouble();
-          final name = gov['name_ar'] ?? '';
-          final count = (gov['submission_count'] as num?)?.toInt() ?? 0;
-          final color =
-              severityMode ? const Color(0xFFF97316) : const Color(0xFF00897B);
+              final lat = (gov['center_lat'] as num).toDouble();
+              final lng = (gov['center_lng'] as num).toDouble();
+              final name = gov['name_ar'] ?? '';
+              final count = (gov['submission_count'] as num?)?.toInt() ?? 0;
+              final color = severityMode
+                  ? const Color(0xFFF97316)
+                  : const Color(0xFF00897B);
 
-          return Marker(
-            point: LatLng(lat, lng),
-            width: 100,
-            height: 70,
-            child: GestureDetector(
-              onTap: () => _showGovernorateInfo(gov),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Label
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
+              return Marker(
+                point: LatLng(lat, lng),
+                width: 100,
+                height: 70,
+                child: GestureDetector(
+                  onTap: () => _showGovernorateInfo(gov),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Label
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 11,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (count > 0) ...[
-                          const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 5, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.25),
-                              borderRadius: BorderRadius.circular(8),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: color.withValues(alpha: 0.3),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
                             ),
-                            child: Text(
-                              '$count',
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              name,
                               style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 9,
+                                fontFamily: 'Tajawal',
+                                fontSize: 11,
                                 color: Colors.white,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ),
-                        ],
-                      ],
-                    ),
+                            if (count > 0) ...[
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.25),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '$count',
+                                  style: const TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 9,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      // Pin
+                      Icon(Icons.location_on_rounded, color: color, size: 28),
+                    ],
                   ),
-                  // Pin
-                  Icon(
-                    Icons.location_on_rounded,
-                    color: color,
-                    size: 28,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList();
+                ),
+              );
+            })
+            .toList();
 
         return MarkerLayer(markers: markers);
       },
@@ -1052,8 +1085,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     context.go('/forms/status/submission/${sub['id']}');
                   },
                   icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: const Text('عرض التفاصيل',
-                      style: TextStyle(fontFamily: 'Tajawal')),
+                  label: const Text(
+                    'عرض التفاصيل',
+                    style: TextStyle(fontFamily: 'Tajawal'),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00897B),
                     foregroundColor: Colors.white,
@@ -1166,8 +1201,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text('إغلاق',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                child: const Text(
+                  'إغلاق',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
               ),
             ),
           ],
@@ -1219,8 +1256,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   ),
                 ],
               ),
-              child: const Icon(Icons.location_city_rounded,
-                  color: Colors.white, size: 32),
+              child: const Icon(
+                Icons.location_city_rounded,
+                color: Colors.white,
+                size: 32,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -1259,8 +1299,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text('إغلاق',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                child: const Text(
+                  'إغلاق',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
               ),
             ),
           ],

@@ -25,7 +25,8 @@ List<Widget> buildFormSections({
 
   final sortedSections = List.from(sections);
   sortedSections.sort(
-      (a, b) => (a['order'] as int? ?? 0).compareTo(b['order'] as int? ?? 0));
+    (a, b) => (a['order'] as int? ?? 0).compareTo(b['order'] as int? ?? 0),
+  );
 
   for (final section in sortedSections) {
     final title = section['title_ar'] as String? ?? '';
@@ -39,8 +40,9 @@ List<Widget> buildFormSections({
         decoration: BoxDecoration(
           color: AppTheme.primaryColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border:
-              Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+          border: Border.all(
+            color: AppTheme.primaryColor.withValues(alpha: 0.3),
+          ),
         ),
         child: Row(
           children: [
@@ -70,19 +72,21 @@ List<Widget> buildFormSections({
     );
 
     for (final field in fields) {
-      widgets.add(buildFormField(
-        field: field,
-        formData: formData,
-        textControllers: textControllers,
-        isGettingLocation: isGettingLocation,
-        gpsLat: gpsLat,
-        gpsLng: gpsLng,
-        markChanged: markChanged,
-        getLocation: getLocation,
-        runSetState: runSetState,
-        formSchema: formSchema,
-        pickedPhotos: pickedPhotos,
-      ));
+      widgets.add(
+        buildFormField(
+          field: field,
+          formData: formData,
+          textControllers: textControllers,
+          isGettingLocation: isGettingLocation,
+          gpsLat: gpsLat,
+          gpsLng: gpsLng,
+          markChanged: markChanged,
+          getLocation: getLocation,
+          runSetState: runSetState,
+          formSchema: formSchema,
+          pickedPhotos: pickedPhotos,
+        ),
+      );
     }
 
     widgets.add(const SizedBox(height: 8));
@@ -122,7 +126,9 @@ Widget buildFormField({
               child: Text(
                 label,
                 style: const TextStyle(
-                    fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             if (isRequired)
@@ -153,8 +159,10 @@ Widget buildFormField({
 }
 
 TextEditingController _getController(
-    Map<String, TextEditingController> controllers, String key,
-    {String? initialValue}) {
+  Map<String, TextEditingController> controllers,
+  String key, {
+  String? initialValue,
+}) {
   if (!controllers.containsKey(key)) {
     controllers[key] = TextEditingController(text: initialValue ?? '');
   }
@@ -181,8 +189,11 @@ Widget _buildFieldInput({
   switch (type) {
     case 'text':
       return EpiTextField(
-        controller: _getController(textControllers, key,
-            initialValue: formData[key]?.toString()),
+        controller: _getController(
+          textControllers,
+          key,
+          initialValue: formData[key]?.toString(),
+        ),
         hint: hint,
         onChanged: (v) {
           formData[key] = v;
@@ -195,8 +206,11 @@ Widget _buildFieldInput({
 
     case 'phone':
       return EpiTextField(
-        controller: _getController(textControllers, key,
-            initialValue: formData[key]?.toString()),
+        controller: _getController(
+          textControllers,
+          key,
+          initialValue: formData[key]?.toString(),
+        ),
         hint: hint ?? '7XXXXXXXX',
         keyboardType: TextInputType.phone,
         onChanged: (v) {
@@ -215,8 +229,11 @@ Widget _buildFieldInput({
 
     case 'textarea':
       return EpiTextField(
-        controller: _getController(textControllers, key,
-            initialValue: formData[key]?.toString()),
+        controller: _getController(
+          textControllers,
+          key,
+          initialValue: formData[key]?.toString(),
+        ),
         hint: hint,
         maxLines: 4,
         onChanged: (v) {
@@ -230,8 +247,11 @@ Widget _buildFieldInput({
 
     case 'number':
       return EpiTextField(
-        controller: _getController(textControllers, key,
-            initialValue: formData[key]?.toString()),
+        controller: _getController(
+          textControllers,
+          key,
+          initialValue: formData[key]?.toString(),
+        ),
         hint: hint,
         keyboardType: TextInputType.number,
         onChanged: (v) {
@@ -249,16 +269,20 @@ Widget _buildFieldInput({
         hint: hint,
         value: formData[key],
         items: options
-            .map((o) => DropdownMenuItem(
+            .map(
+              (o) => DropdownMenuItem(
                 value: o,
-                child: Text(o, style: const TextStyle(fontFamily: 'Tajawal'))))
+                child: Text(o, style: const TextStyle(fontFamily: 'Tajawal')),
+              ),
+            )
             .toList(),
         onChanged: (v) => runSetState(() {
           formData[key] = v;
           markChanged();
         }),
-        validator:
-            isRequired ? (v) => v == null ? AppStrings.required : null : null,
+        validator: isRequired
+            ? (v) => v == null ? AppStrings.required : null
+            : null,
       );
 
     case 'multiselect':
@@ -304,8 +328,9 @@ Widget _buildFieldInput({
                   formData[key] = true;
                   markChanged();
                 }),
-                borderRadius:
-                    const BorderRadius.horizontal(right: Radius.circular(12)),
+                borderRadius: const BorderRadius.horizontal(
+                  right: Radius.circular(12),
+                ),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
@@ -313,7 +338,8 @@ Widget _buildFieldInput({
                         ? AppTheme.successColor.withValues(alpha: 0.15)
                         : null,
                     borderRadius: const BorderRadius.horizontal(
-                        right: Radius.circular(11)),
+                      right: Radius.circular(11),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -352,8 +378,9 @@ Widget _buildFieldInput({
                   formData[key] = false;
                   markChanged();
                 }),
-                borderRadius:
-                    const BorderRadius.horizontal(left: Radius.circular(12)),
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(12),
+                ),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
@@ -361,7 +388,8 @@ Widget _buildFieldInput({
                         ? AppTheme.errorColor.withValues(alpha: 0.15)
                         : null,
                     borderRadius: const BorderRadius.horizontal(
-                        left: Radius.circular(11)),
+                      left: Radius.circular(11),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -419,10 +447,13 @@ Widget _buildFieldInput({
           child: InputDecorator(
             decoration: InputDecoration(
               hintText: hint ?? 'اختر التاريخ',
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
               suffixIcon: const Icon(Icons.calendar_today, size: 20),
             ),
             child: Text(
@@ -456,10 +487,13 @@ Widget _buildFieldInput({
           child: InputDecorator(
             decoration: InputDecoration(
               hintText: hint ?? 'اختر الوقت',
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
               suffixIcon: const Icon(Icons.access_time, size: 20),
             ),
             child: Text(
@@ -479,8 +513,9 @@ Widget _buildFieldInput({
         decoration: BoxDecoration(
           color: AppTheme.primarySurface,
           borderRadius: BorderRadius.circular(12),
-          border:
-              Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+          border: Border.all(
+            color: AppTheme.primaryColor.withValues(alpha: 0.3),
+          ),
         ),
         child: Row(
           children: [
@@ -498,9 +533,10 @@ Widget _buildFieldInput({
                     Text(
                       '${gpsLat.toStringAsFixed(6)}, ${gpsLng!.toStringAsFixed(6)}',
                       style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 12,
-                          color: AppTheme.textSecondary),
+                        fontFamily: 'Tajawal',
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                 ],
               ),
@@ -510,11 +546,15 @@ Widget _buildFieldInput({
                     width: 24,
                     height: 24,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppTheme.primaryColor),
+                      strokeWidth: 2,
+                      color: AppTheme.primaryColor,
+                    ),
                   )
                 : IconButton(
-                    icon: const Icon(Icons.my_location,
-                        color: AppTheme.primaryColor),
+                    icon: const Icon(
+                      Icons.my_location,
+                      color: AppTheme.primaryColor,
+                    ),
                     onPressed: getLocation,
                     tooltip: 'تحديد الموقع',
                   ),
@@ -574,8 +614,11 @@ Widget _buildFieldInput({
 
     default:
       return EpiTextField(
-        controller: _getController(textControllers, key,
-            initialValue: formData[key]?.toString()),
+        controller: _getController(
+          textControllers,
+          key,
+          initialValue: formData[key]?.toString(),
+        ),
         hint: hint,
         onChanged: (v) {
           formData[key] = v;

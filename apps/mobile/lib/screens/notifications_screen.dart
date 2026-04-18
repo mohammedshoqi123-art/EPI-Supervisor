@@ -51,8 +51,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('الإشعارات',
-            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+        title: const Text(
+          'الإشعارات',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+        ),
         centerTitle: true,
         actions: [
           if (unreadCount > 0)
@@ -62,34 +64,38 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 if (mounted) setState(() {});
               },
               icon: const Icon(Icons.done_all, size: 18, color: Colors.white),
-              label: Text('$unreadCount',
-                  style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700)),
+              label: Text(
+                '$unreadCount',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
         ],
       ),
       body: _isLoading
           ? const Center(child: EpiLoading.shimmer())
           : notifications.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadNotifications,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: notifications.length +
-                        (NotificationService.hasMore ? 1 : 0),
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, indent: 72),
-                    itemBuilder: (context, index) {
-                      if (index >= notifications.length) {
-                        return _buildLoadMoreButton();
-                      }
-                      return _buildNotificationTile(notifications[index]);
-                    },
-                  ),
-                ),
+          ? _buildEmptyState()
+          : RefreshIndicator(
+              onRefresh: _loadNotifications,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount:
+                    notifications.length +
+                    (NotificationService.hasMore ? 1 : 0),
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, indent: 72),
+                itemBuilder: (context, index) {
+                  if (index >= notifications.length) {
+                    return _buildLoadMoreButton();
+                  }
+                  return _buildNotificationTile(notifications[index]);
+                },
+              ),
+            ),
     );
   }
 
@@ -98,21 +104,30 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.notifications_off_outlined,
-              size: 72, color: AppTheme.textHint.withValues(alpha: 0.5)),
+          Icon(
+            Icons.notifications_off_outlined,
+            size: 72,
+            color: AppTheme.textHint.withValues(alpha: 0.5),
+          ),
           const SizedBox(height: 16),
-          const Text('لا توجد إشعارات',
-              style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondary)),
+          const Text(
+            'لا توجد إشعارات',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
+            ),
+          ),
           const SizedBox(height: 8),
-          const Text('ستظهر هنا الإشعارات الجديدة عند وصولها',
-              style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 14,
-                  color: AppTheme.textHint)),
+          const Text(
+            'ستظهر هنا الإشعارات الجديدة عند وصولها',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontSize: 14,
+              color: AppTheme.textHint,
+            ),
+          ),
           const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: _loadNotifications,
@@ -148,8 +163,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12)),
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Icon(icon, color: color, size: 22),
         ),
         title: Text(
@@ -164,32 +180,46 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text(notification.body,
-                style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 13,
-                    color: AppTheme.textSecondary),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis),
+            Text(
+              notification.body,
+              style: const TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
             const SizedBox(height: 4),
             Row(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4)),
-                  child: Text(notification.category,
-                      style: TextStyle(
-                          fontFamily: 'Tajawal', fontSize: 10, color: color)),
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    notification.category,
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 10,
+                      color: color,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                Text(timeAgo,
-                    style: const TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 11,
-                        color: AppTheme.textHint)),
+                Text(
+                  timeAgo,
+                  style: const TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 11,
+                    color: AppTheme.textHint,
+                  ),
+                ),
               ],
             ),
           ],
@@ -199,13 +229,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                    color: AppTheme.primaryColor,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                          blurRadius: 6)
-                    ]))
+                  color: AppTheme.primaryColor,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              )
             : null,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         onTap: () async {
@@ -226,12 +259,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             ? const SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2))
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
             : OutlinedButton.icon(
                 onPressed: _loadMore,
                 icon: const Icon(Icons.expand_more, size: 18),
-                label: const Text('تحميل المزيد',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                label: const Text(
+                  'تحميل المزيد',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
               ),
       ),
     );

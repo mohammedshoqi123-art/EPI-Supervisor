@@ -51,8 +51,10 @@ class HealthFacilityDropdown extends ConsumerWidget {
             ),
             child: Text(
               'لا توجد مرافق صحية لهذه المديرية',
-              style:
-                  TextStyle(fontFamily: 'Tajawal', color: Colors.grey.shade500),
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                color: Colors.grey.shade500,
+              ),
             ),
           );
         }
@@ -63,13 +65,16 @@ class HealthFacilityDropdown extends ConsumerWidget {
             final typeIcon = f['type'] == 'hospital' ? '🏥' : '🏩';
             return DropdownMenuItem(
               value: f['id'] as String,
-              child: Text('$typeIcon ${f['name_ar']}',
-                  style: const TextStyle(fontFamily: 'Tajawal')),
+              child: Text(
+                '$typeIcon ${f['name_ar']}',
+                style: const TextStyle(fontFamily: 'Tajawal'),
+              ),
             );
           }).toList(),
           onChanged: onChanged,
-          validator:
-              isRequired ? (v) => v == null ? AppStrings.required : null : null,
+          validator: isRequired
+              ? (v) => v == null ? AppStrings.required : null
+              : null,
         );
       },
     );

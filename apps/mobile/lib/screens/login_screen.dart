@@ -31,11 +31,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       duration: const Duration(milliseconds: 800),
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(
-        CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+        );
     _animController.forward();
   }
 
@@ -54,10 +53,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     try {
       final auth = ref.read(authRepositoryProvider);
-      await auth.signIn(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+      await auth.signIn(_emailController.text.trim(), _passwordController.text);
       // FIX: Don't manually navigate — let GoRouter handle the redirect
       // when authStateProvider emits the new authenticated state.
       // Manual context.go('/dashboard') caused redirect loops.
@@ -80,7 +76,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             colors: [
               AppTheme.primaryColor,
               AppTheme.primaryDark,
-              Color(0xFF004D40)
+              Color(0xFF004D40),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -147,12 +143,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             color: Colors.orange.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: Colors.orange.withValues(alpha: 0.3)),
+                              color: Colors.orange.withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.warning_amber,
-                                  color: Colors.orange, size: 20),
+                              const Icon(
+                                Icons.warning_amber,
+                                color: Colors.orange,
+                                size: 20,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -243,8 +243,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                       key: ValueKey(_obscurePassword),
                                     ),
                                   ),
-                                  onPressed: () => setState(() =>
-                                      _obscurePassword = !_obscurePassword),
+                                  onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  ),
                                 ),
                                 validator: (v) {
                                   if (v == null || v.isEmpty)
@@ -264,14 +265,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                     gradient: const LinearGradient(
                                       colors: [
                                         AppTheme.primaryColor,
-                                        AppTheme.primaryDark
+                                        AppTheme.primaryDark,
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(14),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppTheme.primaryColor
-                                            .withValues(alpha: 0.35),
+                                        color: AppTheme.primaryColor.withValues(
+                                          alpha: 0.35,
+                                        ),
                                         blurRadius: 12,
                                         offset: const Offset(0, 4),
                                       ),
@@ -283,16 +285,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                       backgroundColor: Colors.transparent,
                                       shadowColor: Colors.transparent,
                                       shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14)),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
                                     ),
                                     child: _isLoading
                                         ? const SizedBox(
                                             width: 22,
                                             height: 22,
                                             child: CircularProgressIndicator(
-                                                strokeWidth: 2.5,
-                                                color: Colors.white),
+                                              strokeWidth: 2.5,
+                                              color: Colors.white,
+                                            ),
                                           )
                                         : const Row(
                                             mainAxisAlignment:
@@ -308,9 +311,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                 ),
                                               ),
                                               SizedBox(width: 8),
-                                              Icon(Icons.arrow_forward,
-                                                  color: Colors.white,
-                                                  size: 20),
+                                              Icon(
+                                                Icons.arrow_forward,
+                                                color: Colors.white,
+                                                size: 20,
+                                              ),
                                             ],
                                           ),
                                   ),

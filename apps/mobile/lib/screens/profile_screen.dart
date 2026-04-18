@@ -80,8 +80,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشل اختيار الصورة: $e',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشل اختيار الصورة: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -125,8 +127,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم حفظ التغييرات بنجاح ✅',
-                style: TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'تم حفظ التغييرات بنجاح ✅',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.successColor,
             duration: Duration(seconds: 2),
           ),
@@ -136,8 +140,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشل الحفظ: $e',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشل الحفظ: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -156,23 +162,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (authState == null || !authState.isAuthenticated) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('البروفايل',
-              style:
-                  TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+          title: const Text(
+            'البروفايل',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+          ),
           centerTitle: true,
         ),
         body: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.person_off_outlined,
-                  size: 64, color: AppTheme.textHint),
+              Icon(
+                Icons.person_off_outlined,
+                size: 64,
+                color: AppTheme.textHint,
+              ),
               SizedBox(height: 16),
-              Text('غير مسجل الدخول',
-                  style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600)),
+              Text(
+                'غير مسجل الدخول',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         ),
@@ -304,8 +317,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.info_outline,
-                              size: 16, color: Colors.grey.shade400),
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: Colors.grey.shade400,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'الإصدار ${AppConfig.appVersion}',
@@ -351,7 +367,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     width: 22,
                     height: 22,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(Icons.check_rounded, color: Colors.white),
             onPressed: _isSaving ? null : _saveProfile,
           )
@@ -382,8 +401,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   child: AnimatedBuilder(
                     animation: _animController,
                     builder: (context, _) {
-                      final scale =
-                          Curves.easeOutBack.transform(_animController.value);
+                      final scale = Curves.easeOutBack.transform(
+                        _animController.value,
+                      );
                       return Transform.scale(
                         scale: scale,
                         child: Stack(
@@ -395,8 +415,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.4),
-                                    width: 3),
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                  width: 3,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.2),
@@ -407,14 +428,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               ),
                               child: CircleAvatar(
                                 radius: 52,
-                                backgroundColor:
-                                    Colors.white.withValues(alpha: 0.15),
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.15,
+                                ),
                                 backgroundImage: _pickedImageBytes != null
                                     ? MemoryImage(_pickedImageBytes!)
                                     : (authState.avatarUrl != null
-                                        ? NetworkImage(authState.avatarUrl!)
-                                        : null) as ImageProvider?,
-                                child: (_pickedImageBytes == null &&
+                                              ? NetworkImage(
+                                                  authState.avatarUrl!,
+                                                )
+                                              : null)
+                                          as ImageProvider?,
+                                child:
+                                    (_pickedImageBytes == null &&
                                         authState.avatarUrl == null)
                                     ? Text(
                                         _getInitials(authState.fullName ?? ''),
@@ -439,8 +465,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.15),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.15,
+                                      ),
                                       blurRadius: 8,
                                     ),
                                   ],
@@ -475,19 +502,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 // Role badge
                 if (role != null)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3)),
+                        color: Colors.white.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.verified_user_outlined,
-                            size: 16, color: Colors.white),
+                        const Icon(
+                          Icons.verified_user_outlined,
+                          size: 16,
+                          color: Colors.white,
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           role.nameAr,
@@ -507,8 +540,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 // Edit mode indicator
                 if (_isEditing)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.amber.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(20),
@@ -516,8 +551,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.edit_note_rounded,
-                            size: 16, color: Colors.amber),
+                        Icon(
+                          Icons.edit_note_rounded,
+                          size: 16,
+                          color: Colors.amber,
+                        ),
                         SizedBox(width: 4),
                         Text(
                           'وضع التعديل',
@@ -557,7 +595,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         borderRadius: BorderRadius.circular(16),
         border: _isEditing
             ? Border.all(
-                color: AppTheme.primaryColor.withValues(alpha: 0.3), width: 1.5)
+                color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                width: 1.5,
+              )
             : Border.all(color: Colors.transparent),
         boxShadow: [
           BoxShadow(
@@ -706,8 +746,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final color = role.hierarchyLevel >= 4
         ? AppTheme.errorColor
         : role.hierarchyLevel >= 3
-            ? AppTheme.warningColor
-            : AppTheme.infoColor;
+        ? AppTheme.warningColor
+        : AppTheme.infoColor;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

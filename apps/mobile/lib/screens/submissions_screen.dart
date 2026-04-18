@@ -106,8 +106,10 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
   Future<void> _refresh() async {
     if (!ConnectivityUtils.isOnline) return;
     final campaign = ref.read(campaignProvider);
-    final filter =
-        SubmissionsFilter(status: _statusFilter, campaignType: campaign.value);
+    final filter = SubmissionsFilter(
+      status: _statusFilter,
+      campaignType: campaign.value,
+    );
     await ref.read(forceRefreshProvider)(filter.cacheKey);
     ref.invalidate(submissionsProvider(filter));
     await _loadInitial();
@@ -125,10 +127,12 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
     final filtered = _searchQuery.isEmpty
         ? _items
         : _items.where((sub) {
-            final formTitle =
-                (sub['forms']?['title_ar'] ?? '').toString().toLowerCase();
-            final userName =
-                (sub['profiles']?['full_name'] ?? '').toString().toLowerCase();
+            final formTitle = (sub['forms']?['title_ar'] ?? '')
+                .toString()
+                .toLowerCase();
+            final userName = (sub['profiles']?['full_name'] ?? '')
+                .toString()
+                .toLowerCase();
             final status = (sub['status'] ?? '').toString().toLowerCase();
             return formTitle.contains(_searchQuery) ||
                 userName.contains(_searchQuery) ||
@@ -166,8 +170,11 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
                   const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () => _onFilterChanged(null),
-                    child: const Icon(Icons.close,
-                        size: 18, color: AppTheme.textSecondary),
+                    child: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -191,10 +198,7 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
 
     // Error state
     if (_error != null && _items.isEmpty) {
-      return EpiErrorWidget(
-        message: _error!,
-        onRetry: _loadInitial,
-      );
+      return EpiErrorWidget(message: _error!, onRetry: _loadInitial);
     }
 
     // Empty state
@@ -223,7 +227,9 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
             child: Center(
               child: _isLoadingMore
                   ? const CircularProgressIndicator(
-                      strokeWidth: 2, color: AppTheme.primaryColor)
+                      strokeWidth: 2,
+                      color: AppTheme.primaryColor,
+                    )
                   : const SizedBox.shrink(),
             ),
           );
@@ -257,31 +263,35 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('تصفية حسب الحالة',
-                style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700)),
+            const Text(
+              'تصفية حسب الحالة',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [
-                'draft',
-                'submitted',
-                'reviewed',
-                'approved',
-                'rejected'
-              ].map((s) {
-                return ChoiceChip(
-                  label: EpiStatusChip(status: s, small: true),
-                  selected: _statusFilter == s,
-                  onSelected: (selected) {
-                    _onFilterChanged(selected ? s : null);
-                    Navigator.pop(context);
-                  },
-                );
-              }).toList(),
+              children:
+                  [
+                    'draft',
+                    'submitted',
+                    'reviewed',
+                    'approved',
+                    'rejected',
+                  ].map((s) {
+                    return ChoiceChip(
+                      label: EpiStatusChip(status: s, small: true),
+                      selected: _statusFilter == s,
+                      onSelected: (selected) {
+                        _onFilterChanged(selected ? s : null);
+                        Navigator.pop(context);
+                      },
+                    );
+                  }).toList(),
             ),
             const SizedBox(height: 16),
           ],
@@ -305,16 +315,20 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
 
       if (!mounted) return;
 
-      await SharePlus.instance.share(ShareParams(
-        files: [XFile(file.path)],
-        subject: 'تقرير استمارة EPI — ${form['title_ar'] ?? ''}',
-      ));
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          subject: 'تقرير استمارة EPI — ${form['title_ar'] ?? ''}',
+        ),
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم إنشاء التقرير ✅',
-                style: TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'تم إنشاء التقرير ✅',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.successColor,
             duration: Duration(seconds: 2),
           ),
@@ -324,8 +338,10 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشل إنشاء التقرير: $e',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشل إنشاء التقرير: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: AppTheme.errorColor,
           ),
         );
@@ -370,22 +386,32 @@ class _SubmissionTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontFamily: 'Cairo', fontWeight: FontWeight.w600)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 if (userName != null)
-                  Text(userName!,
-                      style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 12,
-                          color: AppTheme.textSecondary)),
+                  Text(
+                    userName!,
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
                 if (date != null)
-                  Text(_formatDate(date!),
-                      style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 11,
-                          color: AppTheme.textHint)),
+                  Text(
+                    _formatDate(date!),
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      color: AppTheme.textHint,
+                    ),
+                  ),
               ],
             ),
           ),

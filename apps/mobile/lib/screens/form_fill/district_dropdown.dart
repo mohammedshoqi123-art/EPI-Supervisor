@@ -48,13 +48,16 @@ class DistrictDropdown extends ConsumerWidget {
           items: districts.map((d) {
             return DropdownMenuItem(
               value: d['id'] as String,
-              child: Text(d['name_ar'] as String,
-                  style: const TextStyle(fontFamily: 'Tajawal')),
+              child: Text(
+                d['name_ar'] as String,
+                style: const TextStyle(fontFamily: 'Tajawal'),
+              ),
             );
           }).toList(),
           onChanged: onChanged,
-          validator:
-              isRequired ? (v) => v == null ? AppStrings.required : null : null,
+          validator: isRequired
+              ? (v) => v == null ? AppStrings.required : null
+              : null,
         );
       },
     );

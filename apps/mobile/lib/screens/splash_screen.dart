@@ -49,13 +49,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         setState(() => _status = 'تم العثور على جلسة — جاري التحميل...');
         // Try to load profile with timeout
         try {
-          await ref.read(authStateProvider.future).timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              // Profile load timed out — go to dashboard anyway
-              throw TimeoutException('Profile load timed out');
-            },
-          );
+          await ref
+              .read(authStateProvider.future)
+              .timeout(
+                const Duration(seconds: 10),
+                onTimeout: () {
+                  // Profile load timed out — go to dashboard anyway
+                  throw TimeoutException('Profile load timed out');
+                },
+              );
         } catch (_) {
           // Profile failed but user is authenticated — go to dashboard
         }

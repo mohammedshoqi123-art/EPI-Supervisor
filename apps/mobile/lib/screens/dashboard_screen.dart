@@ -27,23 +27,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   void initState() {
     super.initState();
     _headerAnim = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 800));
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _cardsAnim = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1000));
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
     _pulseAnim = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1500));
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
 
     _headerAnim.forward();
     Future.delayed(
-        const Duration(milliseconds: 200), () => _cardsAnim.forward());
+      const Duration(milliseconds: 200),
+      () => _cardsAnim.forward(),
+    );
     _pulseAnim.repeat(reverse: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(syncServiceProvider.future).then((service) {
-        if (service.currentState.pendingCount > 0) {
-          service.sync().catchError((_) => SyncCycleResult.empty());
-        }
-      }).catchError((_) => null);
+      ref
+          .read(syncServiceProvider.future)
+          .then((service) {
+            if (service.currentState.pendingCount > 0) {
+              service.sync().catchError((_) => SyncCycleResult.empty());
+            }
+          })
+          .catchError((_) => null);
     });
   }
 
@@ -57,8 +68,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    final analytics = ref.watch(dashboardAnalyticsProvider(
-        AnalyticsFilter(campaignType: ref.read(campaignProvider).value)));
+    final analytics = ref.watch(
+      dashboardAnalyticsProvider(
+        AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
+      ),
+    );
     final authState = ref.watch(authStateProvider);
     final pendingAsync = ref.watch(syncPendingCountProvider);
     final pendingCount = pendingAsync.valueOrNull ?? 0;
@@ -70,8 +84,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           HapticFeedback.mediumImpact();
           if (!ConnectivityUtils.isOnline) return;
           await ref.read(forceRefreshProvider)('dashboard_analytics');
-          ref.invalidate(dashboardAnalyticsProvider(
-              AnalyticsFilter(campaignType: ref.read(campaignProvider).value)));
+          ref.invalidate(
+            dashboardAnalyticsProvider(
+              AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
+            ),
+          );
         },
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -89,29 +106,38 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               SliverToBoxAdapter(
                 child: DashboardSyncBanner(
                   pendingCount: pendingCount,
-                  onSyncTap: () => ref.read(syncServiceProvider.future).then(
-                      (s) =>
-                          s.sync().catchError((_) => SyncCycleResult.empty())),
+                  onSyncTap: () => ref
+                      .read(syncServiceProvider.future)
+                      .then(
+                        (s) =>
+                            s.sync().catchError((_) => SyncCycleResult.empty()),
+                      ),
                 ),
               ),
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: analytics.when(
                 loading: () => SliverList(
-                    delegate: SliverChildListDelegate([
-                  const SizedBox(height: 200),
-                  const Center(child: EpiLoading.shimmer()),
-                ])),
+                  delegate: SliverChildListDelegate([
+                    const SizedBox(height: 200),
+                    const Center(child: EpiLoading.shimmer()),
+                  ]),
+                ),
                 error: (e, _) => SliverList(
-                    delegate: SliverChildListDelegate([
-                  const SizedBox(height: 100),
-                  EpiErrorWidget(
-                    message: e.toString(),
-                    onRetry: () => ref.invalidate(dashboardAnalyticsProvider(
-                        AnalyticsFilter(
-                            campaignType: ref.read(campaignProvider).value))),
-                  ),
-                ])),
+                  delegate: SliverChildListDelegate([
+                    const SizedBox(height: 100),
+                    EpiErrorWidget(
+                      message: e.toString(),
+                      onRetry: () => ref.invalidate(
+                        dashboardAnalyticsProvider(
+                          AnalyticsFilter(
+                            campaignType: ref.read(campaignProvider).value,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ]),
+                ),
                 data: (data) => _buildDashboardContent(data),
               ),
             ),
@@ -131,8 +157,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final resolved = shortages['resolved'] as int? ?? 0;
     final bySeverity = shortages['bySeverity'] as Map<String, dynamic>? ?? {};
     final critical = bySeverity['critical'] as int? ?? 0;
-    final completionRate =
-        totalShortages > 0 ? ((resolved / totalShortages) * 100).round() : 0;
+    final completionRate = totalShortages > 0
+        ? ((resolved / totalShortages) * 100).round()
+        : 0;
 
     return SliverList(
       delegate: SliverChildListDelegate([
@@ -160,12 +187,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         _sectionTitle('توزيع الحالات'),
         const SizedBox(height: 12),
         DashboardStatusDonut(
-            data: submissions['byStatus'] as Map<String, dynamic>? ?? {}),
+          data: submissions['byStatus'] as Map<String, dynamic>? ?? {},
+        ),
         const SizedBox(height: 20),
         _sectionTitle('النشاط الأسبوعي'),
         const SizedBox(height: 12),
         DashboardTrendLine(
-            dayData: submissions['byDay'] as Map<String, dynamic>? ?? {}),
+          dayData: submissions['byDay'] as Map<String, dynamic>? ?? {},
+        ),
         const SizedBox(height: 20),
         _sectionTitle('آخر النشاطات'),
         const SizedBox(height: 12),
@@ -187,11 +216,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           ),
         ),
         const SizedBox(width: 10),
-        Text(title,
-            style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 17,
-                fontWeight: FontWeight.w700)),
+        Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
     );
   }
@@ -203,8 +235,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         context: context,
         type: type,
         analyticsData: ref
-            .read(dashboardAnalyticsProvider(AnalyticsFilter(
-                campaignType: ref.read(campaignProvider).value)))
+            .read(
+              dashboardAnalyticsProvider(
+                AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
+              ),
+            )
             .valueOrNull,
         fetchGovRanking: () async {
           try {

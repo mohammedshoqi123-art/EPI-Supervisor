@@ -68,77 +68,87 @@ class _SubmissionDetailScreenState
       body: _isLoading
           ? const EpiLoading()
           : _submission == null
-              ? const EpiErrorWidget(message: 'الإرسالية غير موجودة')
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header with PDF button
-                      _buildHeader(),
-                      const SizedBox(height: 20),
+          ? const EpiErrorWidget(message: 'الإرسالية غير موجودة')
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header with PDF button
+                  _buildHeader(),
+                  const SizedBox(height: 20),
 
-                      // Status
-                      _buildSection('الحالة', [
-                        Row(
-                          children: [
-                            EpiStatusChip(
-                                status: _submission!['status'] ?? 'draft'),
-                            const Spacer(),
-                            if (_submission!['submitted_at'] != null)
-                              Text(
-                                _formatDate(_submission!['submitted_at']),
-                                style: const TextStyle(
-                                    fontFamily: 'Tajawal',
-                                    fontSize: 12,
-                                    color: AppTheme.textSecondary),
-                              ),
-                          ],
+                  // Status
+                  _buildSection('الحالة', [
+                    Row(
+                      children: [
+                        EpiStatusChip(
+                          status: _submission!['status'] ?? 'draft',
                         ),
-                      ]),
-                      const SizedBox(height: 16),
+                        const Spacer(),
+                        if (_submission!['submitted_at'] != null)
+                          Text(
+                            _formatDate(_submission!['submitted_at']),
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
 
-                      // Submitter info
-                      _buildSection('المُرسل', [
-                        _infoRow('الاسم',
-                            _submission!['profiles']?['full_name'] ?? '-'),
-                        _infoRow('البريد',
-                            _submission!['profiles']?['email'] ?? '-'),
-                      ]),
-                      const SizedBox(height: 16),
+                  // Submitter info
+                  _buildSection('المُرسل', [
+                    _infoRow(
+                      'الاسم',
+                      _submission!['profiles']?['full_name'] ?? '-',
+                    ),
+                    _infoRow(
+                      'البريد',
+                      _submission!['profiles']?['email'] ?? '-',
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
 
-                      // Location
-                      if (_submission!['gps_lat'] != null)
-                        _buildSection('الموقع', [
-                          _infoRow('خط العرض', '${_submission!['gps_lat']}'),
-                          _infoRow('خط الطول', '${_submission!['gps_lng']}'),
-                        ]),
-                      const SizedBox(height: 16),
+                  // Location
+                  if (_submission!['gps_lat'] != null)
+                    _buildSection('الموقع', [
+                      _infoRow('خط العرض', '${_submission!['gps_lat']}'),
+                      _infoRow('خط الطول', '${_submission!['gps_lng']}'),
+                    ]),
+                  const SizedBox(height: 16),
 
-                      // Form data
-                      _buildSection('بيانات النموذج', _buildFormData()),
-                      const SizedBox(height: 16),
+                  // Form data
+                  _buildSection('بيانات النموذج', _buildFormData()),
+                  const SizedBox(height: 16),
 
-                      // Review info
-                      if (_submission!['reviewed_by'] != null)
-                        _buildSection('المراجعة', [
-                          _infoRow('راجع بواسطة',
-                              _submission!['profiles']?['full_name'] ?? '-'),
-                          _infoRow('تاريخ المراجعة',
-                              _formatDate(_submission!['reviewed_at'])),
-                          if (_submission!['review_notes'] != null)
-                            _infoRow('ملاحظات', _submission!['review_notes']),
-                        ]),
+                  // Review info
+                  if (_submission!['reviewed_by'] != null)
+                    _buildSection('المراجعة', [
+                      _infoRow(
+                        'راجع بواسطة',
+                        _submission!['profiles']?['full_name'] ?? '-',
+                      ),
+                      _infoRow(
+                        'تاريخ المراجعة',
+                        _formatDate(_submission!['reviewed_at']),
+                      ),
+                      if (_submission!['review_notes'] != null)
+                        _infoRow('ملاحظات', _submission!['review_notes']),
+                    ]),
 
-                      const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                      // ═══ PDF Download Button (prominent) ═══
-                      if (_canGeneratePdf) _buildPdfButton(),
+                  // ═══ PDF Download Button (prominent) ═══
+                  if (_canGeneratePdf) _buildPdfButton(),
 
-                      const SizedBox(height: 100),
-                    ],
-                  ),
-                ),
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
     );
   }
 
@@ -175,18 +185,20 @@ class _SubmissionDetailScreenState
                 Text(
                   _submission!['forms']?['title_ar'] ?? 'نموذج',
                   style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white),
+                    fontFamily: 'Cairo',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'ID: ${widget.id.substring(0, 8)}...',
                   style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      color: Colors.white.withValues(alpha: 0.7),
-                      fontSize: 12),
+                    fontFamily: 'Tajawal',
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -210,7 +222,8 @@ class _SubmissionDetailScreenState
         decoration: BoxDecoration(
           gradient: _isGeneratingPdf
               ? LinearGradient(
-                  colors: [Colors.grey.shade300, Colors.grey.shade400])
+                  colors: [Colors.grey.shade300, Colors.grey.shade400],
+                )
               : const LinearGradient(
                   colors: [Color(0xFFE53935), Color(0xFFC62828)],
                   begin: Alignment.topLeft,
@@ -235,7 +248,9 @@ class _SubmissionDetailScreenState
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Colors.white),
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
               )
             else
               Container(
@@ -244,8 +259,11 @@ class _SubmissionDetailScreenState
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.picture_as_pdf_rounded,
-                    color: Colors.white, size: 24),
+                child: const Icon(
+                  Icons.picture_as_pdf_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
             const SizedBox(width: 14),
             Column(
@@ -290,17 +308,23 @@ class _SubmissionDetailScreenState
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const Divider(),
           const SizedBox(height: 8),
           ...children,
@@ -317,16 +341,23 @@ class _SubmissionDetailScreenState
         children: [
           SizedBox(
             width: 100,
-            child: Text(label,
-                style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: AppTheme.textSecondary,
-                    fontSize: 13)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Tajawal',
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontFamily: 'Tajawal', fontWeight: FontWeight.w500)),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontFamily: 'Tajawal',
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
@@ -337,9 +368,13 @@ class _SubmissionDetailScreenState
     final data = _submission!['data'] as Map<String, dynamic>? ?? {};
     if (data.isEmpty)
       return [
-        const Text('لا توجد بيانات',
-            style:
-                TextStyle(fontFamily: 'Tajawal', color: AppTheme.textSecondary))
+        const Text(
+          'لا توجد بيانات',
+          style: TextStyle(
+            fontFamily: 'Tajawal',
+            color: AppTheme.textSecondary,
+          ),
+        ),
       ];
 
     return data.entries.map((e) => _infoRow(e.key, '${e.value}')).toList();
@@ -403,7 +438,8 @@ class _SubmissionDetailScreenState
     if (_submission!['gps_lat'] != null) {
       text.writeln('');
       text.writeln(
-          '📍 الموقع: ${_submission!['gps_lat']}, ${_submission!['gps_lng']}');
+        '📍 الموقع: ${_submission!['gps_lat']}, ${_submission!['gps_lng']}',
+      );
     }
     text.writeln('');
     text.writeln('━━━━ EPI Supervisor ━━━━');
@@ -439,10 +475,12 @@ class _SubmissionDetailScreenState
 
       if (!mounted) return;
 
-      await SharePlus.instance.share(ShareParams(
-        files: [XFile(file.path)],
-        subject: 'تقرير استمارة EPI — ${form['title_ar'] ?? ''}',
-      ));
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          subject: 'تقرير استمارة EPI — ${form['title_ar'] ?? ''}',
+        ),
+      );
 
       if (mounted) {
         context.showSuccess('تم إنشاء التقرير بنجاح ✅');

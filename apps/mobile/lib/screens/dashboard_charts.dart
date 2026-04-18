@@ -13,8 +13,14 @@ class KPIItem {
   final IconData icon;
   final Color color;
   final String subLabel;
-  KPIItem(this.label, this.mainValue, this.subValue, this.icon, this.color,
-      this.subLabel);
+  KPIItem(
+    this.label,
+    this.mainValue,
+    this.subValue,
+    this.icon,
+    this.color,
+    this.subLabel,
+  );
 }
 
 class QuickAction {
@@ -30,11 +36,12 @@ class AnimatedCounter extends StatefulWidget {
   final int value;
   final Color color;
   final double fontSize;
-  const AnimatedCounter(
-      {super.key,
-      required this.value,
-      required this.color,
-      this.fontSize = 28});
+  const AnimatedCounter({
+    super.key,
+    required this.value,
+    required this.color,
+    this.fontSize = 28,
+  });
 
   @override
   State<AnimatedCounter> createState() => _AnimatedCounterState();
@@ -50,9 +57,13 @@ class _AnimatedCounterState extends State<AnimatedCounter>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 800));
-    _anim = Tween(begin: 0.0, end: widget.value.toDouble())
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _anim = Tween(
+      begin: 0.0,
+      end: widget.value.toDouble(),
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
     _lastValue = widget.value;
     _ctrl.forward();
   }
@@ -61,8 +72,10 @@ class _AnimatedCounterState extends State<AnimatedCounter>
   void didUpdateWidget(AnimatedCounter old) {
     super.didUpdateWidget(old);
     if (old.value != widget.value) {
-      _anim = Tween(begin: _lastValue.toDouble(), end: widget.value.toDouble())
-          .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+      _anim = Tween(
+        begin: _lastValue.toDouble(),
+        end: widget.value.toDouble(),
+      ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
       _lastValue = widget.value;
       _ctrl.reset();
       _ctrl.forward();
@@ -83,10 +96,11 @@ class _AnimatedCounterState extends State<AnimatedCounter>
         return Text(
           _anim.value.round().toString(),
           style: TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: widget.fontSize,
-              fontWeight: FontWeight.w700,
-              color: widget.color),
+            fontFamily: 'Cairo',
+            fontSize: widget.fontSize,
+            fontWeight: FontWeight.w700,
+            color: widget.color,
+          ),
         );
       },
     );
@@ -117,14 +131,38 @@ class DashboardKPIGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      KPIItem('الإرساليات', total, today, Icons.upload_file_rounded,
-          AppTheme.primaryColor, 'اليوم'),
-      KPIItem('النواقص', shortages, resolved, Icons.warning_amber_rounded,
-          AppTheme.warningColor, 'محلول'),
-      KPIItem('حرج', critical, 0, Icons.local_fire_department_rounded,
-          AppTheme.errorColor, critical > 0 ? 'يحتاج تدخل!' : 'لا يوجد'),
-      KPIItem('الإنجاز', completionRate, 0, Icons.speed_rounded,
-          AppTheme.successColor, '%'),
+      KPIItem(
+        'الإرساليات',
+        total,
+        today,
+        Icons.upload_file_rounded,
+        AppTheme.primaryColor,
+        'اليوم',
+      ),
+      KPIItem(
+        'النواقص',
+        shortages,
+        resolved,
+        Icons.warning_amber_rounded,
+        AppTheme.warningColor,
+        'محلول',
+      ),
+      KPIItem(
+        'حرج',
+        critical,
+        0,
+        Icons.local_fire_department_rounded,
+        AppTheme.errorColor,
+        critical > 0 ? 'يحتاج تدخل!' : 'لا يوجد',
+      ),
+      KPIItem(
+        'الإنجاز',
+        completionRate,
+        0,
+        Icons.speed_rounded,
+        AppTheme.successColor,
+        '%',
+      ),
     ];
 
     return AnimatedBuilder(
@@ -171,9 +209,10 @@ class DashboardKPIGrid extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-                color: kpi.color.withValues(alpha: 0.08),
-                blurRadius: 14,
-                offset: const Offset(0, 4))
+              color: kpi.color.withValues(alpha: 0.08),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
         child: Column(
@@ -191,8 +230,11 @@ class DashboardKPIGrid extends StatelessWidget {
                   ),
                   child: Icon(kpi.icon, color: kpi.color, size: 20),
                 ),
-                Icon(Icons.arrow_forward_ios_rounded,
-                    size: 12, color: Colors.grey.shade300),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 12,
+                  color: Colors.grey.shade300,
+                ),
               ],
             ),
             const Spacer(),
@@ -205,23 +247,32 @@ class DashboardKPIGrid extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(kpi.label,
-                    style: const TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 12,
-                        color: AppTheme.textSecondary)),
+                Text(
+                  kpi.label,
+                  style: const TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
                 if (kpi.label != 'الإنجاز')
-                  Text('${kpi.subValue} ${kpi.subLabel}',
-                      style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 10,
-                          color: kpi.color.withValues(alpha: 0.7))),
+                  Text(
+                    '${kpi.subValue} ${kpi.subLabel}',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 10,
+                      color: kpi.color.withValues(alpha: 0.7),
+                    ),
+                  ),
                 if (kpi.label == 'الإنجاز')
-                  Text(kpi.subLabel,
-                      style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 10,
-                          color: kpi.color.withValues(alpha: 0.7))),
+                  Text(
+                    kpi.subLabel,
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 10,
+                      color: kpi.color.withValues(alpha: 0.7),
+                    ),
+                  ),
               ],
             ),
           ],
@@ -253,13 +304,13 @@ class DashboardHealthRing extends StatelessWidget {
     final color = score >= 80
         ? AppTheme.successColor
         : score >= 50
-            ? AppTheme.warningColor
-            : AppTheme.errorColor;
+        ? AppTheme.warningColor
+        : AppTheme.errorColor;
     final label = score >= 80
         ? 'أداء ممتاز'
         : score >= 50
-            ? 'أداء متوسط'
-            : 'يحتاج تحسين';
+        ? 'أداء متوسط'
+        : 'يحتاج تحسين';
     final insights = LocalAnalyticsEngine.generateInsights(data);
 
     return Container(
@@ -269,9 +320,10 @@ class DashboardHealthRing extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: color.withValues(alpha: 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 4))
+            color: color.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Row(
@@ -296,10 +348,11 @@ class DashboardHealthRing extends StatelessWidget {
                       child: Text(
                         '$score',
                         style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: color),
+                          fontFamily: 'Cairo',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
                       ),
                     ),
                   ],
@@ -312,20 +365,24 @@ class DashboardHealthRing extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: color)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 if (insights.isNotEmpty)
                   Text(
                     insights.first,
                     style: const TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 12,
-                        color: AppTheme.textSecondary),
+                      fontFamily: 'Tajawal',
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -336,7 +393,9 @@ class DashboardHealthRing extends StatelessWidget {
                   children: insights.skip(1).take(2).map((insight) {
                     return Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8),
@@ -346,9 +405,10 @@ class DashboardHealthRing extends StatelessWidget {
                             ? '${insight.substring(0, 32)}...'
                             : insight,
                         style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 10,
-                            color: AppTheme.primaryColor),
+                          fontFamily: 'Tajawal',
+                          fontSize: 10,
+                          color: AppTheme.primaryColor,
+                        ),
                       ),
                     );
                   }).toList(),
@@ -382,16 +442,36 @@ class DashboardQuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = [
-      QuickAction(Icons.add_circle_outline_rounded, 'إرسال جديد', '/forms',
-          const Color(0xFF00897B)),
-      QuickAction(Icons.description_rounded, 'النماذج', '/forms',
-          const Color(0xFF5C6BC0)),
-      QuickAction(Icons.picture_as_pdf_rounded, 'تصدير PDF', '__export_pdf__',
-          const Color(0xFFE53935)),
       QuickAction(
-          Icons.map_outlined, 'الخريطة', '/map', const Color(0xFF1E88E5)),
-      QuickAction(Icons.smart_toy_outlined, 'المساعد الذكي', '/ai',
-          const Color(0xFFFF8F00)),
+        Icons.add_circle_outline_rounded,
+        'إرسال جديد',
+        '/forms',
+        const Color(0xFF00897B),
+      ),
+      QuickAction(
+        Icons.description_rounded,
+        'النماذج',
+        '/forms',
+        const Color(0xFF5C6BC0),
+      ),
+      QuickAction(
+        Icons.picture_as_pdf_rounded,
+        'تصدير PDF',
+        '__export_pdf__',
+        const Color(0xFFE53935),
+      ),
+      QuickAction(
+        Icons.map_outlined,
+        'الخريطة',
+        '/map',
+        const Color(0xFF1E88E5),
+      ),
+      QuickAction(
+        Icons.smart_toy_outlined,
+        'المساعد الذكي',
+        '/ai',
+        const Color(0xFFFF8F00),
+      ),
     ];
 
     return SizedBox(
@@ -422,8 +502,9 @@ class DashboardQuickActions extends StatelessWidget {
               width: 82,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               decoration: BoxDecoration(
-                color:
-                    isSelected ? a.color.withValues(alpha: 0.12) : Colors.white,
+                color: isSelected
+                    ? a.color.withValues(alpha: 0.12)
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: isSelected
@@ -433,10 +514,10 @@ class DashboardQuickActions extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                      color:
-                          a.color.withValues(alpha: isSelected ? 0.12 : 0.04),
-                      blurRadius: 12,
-                      offset: const Offset(0, 3))
+                    color: a.color.withValues(alpha: isSelected ? 0.12 : 0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
                 ],
               ),
               child: Column(
@@ -452,16 +533,20 @@ class DashboardQuickActions extends StatelessWidget {
                     child: Icon(a.icon, color: a.color, size: 22),
                   ),
                   const SizedBox(height: 6),
-                  Text(a.label,
-                      style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 10,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.w500,
-                          color: a.color),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    a.label,
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 10,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                      color: a.color,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -502,12 +587,15 @@ class DashboardStatusDonut extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04), blurRadius: 12)
-          ]),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+          ),
+        ],
+      ),
       child: Row(
         children: [
           SizedBox(
@@ -525,10 +613,11 @@ class DashboardStatusDonut extends StatelessWidget {
                     radius: 45,
                     title: '${pct.toStringAsFixed(0)}%',
                     titleStyle: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white),
+                      fontFamily: 'Cairo',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   );
                 }).toList(),
               ),
@@ -546,27 +635,40 @@ class DashboardStatusDonut extends StatelessWidget {
                   child: Row(
                     children: [
                       Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                              color: colors[e.key],
-                              borderRadius: BorderRadius.circular(3))),
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: colors[e.key],
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
-                          child: Text(labels[e.key] ?? e.key,
-                              style: const TextStyle(
-                                  fontFamily: 'Tajawal', fontSize: 12))),
-                      Text('${e.value}',
+                        child: Text(
+                          labels[e.key] ?? e.key,
                           style: const TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700)),
+                            fontFamily: 'Tajawal',
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${e.value}',
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       const SizedBox(width: 4),
-                      Text('($pct%)',
-                          style: const TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontSize: 10,
-                              color: AppTheme.textHint)),
+                      Text(
+                        '($pct%)',
+                        style: const TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 10,
+                          color: AppTheme.textHint,
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -582,20 +684,26 @@ class DashboardStatusDonut extends StatelessWidget {
     return Container(
       height: 120,
       decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Center(
-          child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.inbox_rounded, size: 32, color: Colors.grey.shade300),
-          const SizedBox(height: 8),
-          Text(msg,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inbox_rounded, size: 32, color: Colors.grey.shade300),
+            const SizedBox(height: 8),
+            Text(
+              msg,
               style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  color: Colors.grey.shade400,
-                  fontSize: 13))
-        ],
-      )),
+                fontFamily: 'Tajawal',
+                color: Colors.grey.shade400,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -612,69 +720,93 @@ class DashboardTrendLine extends StatelessWidget {
       return Container(
         height: 120,
         decoration: BoxDecoration(
-            color: Colors.white, borderRadius: BorderRadius.circular(20)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Center(
-            child: Text('لا توجد بيانات',
-                style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: Colors.grey.shade400,
-                    fontSize: 13))),
+          child: Text(
+            'لا توجد بيانات',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              color: Colors.grey.shade400,
+              fontSize: 13,
+            ),
+          ),
+        ),
       );
     }
 
     final entries = dayData.entries.toList();
-    final maxY =
-        entries.fold<num>(1, (m, e) => e.value > m ? e.value : m).toDouble();
+    final maxY = entries
+        .fold<num>(1, (m, e) => e.value > m ? e.value : m)
+        .toDouble();
 
     return Container(
       height: 200,
       padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04), blurRadius: 12)
-          ]),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+          ),
+        ],
+      ),
       child: LineChart(
         LineChartData(
           gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              getDrawingHorizontalLine: (v) =>
-                  FlLine(color: Colors.grey.shade100, strokeWidth: 1)),
+            show: true,
+            drawVerticalLine: false,
+            getDrawingHorizontalLine: (v) =>
+                FlLine(color: Colors.grey.shade100, strokeWidth: 1),
+          ),
           titlesData: FlTitlesData(
             leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 30,
-                    getTitlesWidget: (v, _) => Text(v.toInt().toString(),
-                        style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 9,
-                            color: AppTheme.textHint)))),
-            rightTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 30,
+                getTitlesWidget: (v, _) => Text(
+                  v.toInt().toString(),
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 9,
+                    color: AppTheme.textHint,
+                  ),
+                ),
+              ),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
             bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                    showTitles: true,
-                    getTitlesWidget: (v, _) {
-                      final i = v.toInt();
-                      if (i >= 0 &&
-                          i < entries.length &&
-                          (i % 2 == 0 || entries.length <= 7)) {
-                        return Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(entries[i].key,
-                                style: const TextStyle(
-                                    fontFamily: 'Tajawal',
-                                    fontSize: 9,
-                                    color: AppTheme.textHint)));
-                      }
-                      return const SizedBox();
-                    })),
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (v, _) {
+                  final i = v.toInt();
+                  if (i >= 0 &&
+                      i < entries.length &&
+                      (i % 2 == 0 || entries.length <= 7)) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        entries[i].key,
+                        style: const TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 9,
+                          color: AppTheme.textHint,
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox();
+                },
+              ),
+            ),
           ),
           borderData: FlBorderData(show: false),
           minY: 0,
@@ -684,34 +816,51 @@ class DashboardTrendLine extends StatelessWidget {
               spots: entries
                   .asMap()
                   .entries
-                  .map((e) => FlSpot(
-                      e.key.toDouble(), (e.value.value as num).toDouble()))
+                  .map(
+                    (e) => FlSpot(
+                      e.key.toDouble(),
+                      (e.value.value as num).toDouble(),
+                    ),
+                  )
                   .toList(),
               isCurved: true,
               curveSmoothness: 0.3,
               color: AppTheme.primaryColor,
               barWidth: 2.5,
               dotData: FlDotData(
-                  show: true,
-                  getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-                      radius: 3, color: AppTheme.primaryColor, strokeWidth: 0)),
+                show: true,
+                getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
+                  radius: 3,
+                  color: AppTheme.primaryColor,
+                  strokeWidth: 0,
+                ),
+              ),
               belowBarData: BarAreaData(
-                  show: true,
-                  gradient: LinearGradient(colors: [
+                show: true,
+                gradient: LinearGradient(
+                  colors: [
                     AppTheme.primaryColor.withValues(alpha: 0.15),
-                    AppTheme.primaryColor.withValues(alpha: 0.02)
-                  ], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+                    AppTheme.primaryColor.withValues(alpha: 0.02),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
             ),
           ],
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
               getTooltipItems: (spots) => spots
-                  .map((s) => LineTooltipItem(
+                  .map(
+                    (s) => LineTooltipItem(
                       '${entries[s.x.toInt()].key}\n${s.y.toInt()} إرسالية',
                       const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 11,
-                          color: Colors.white)))
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        color: Colors.white,
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -734,24 +883,33 @@ class DashboardActivityFeed extends StatelessWidget {
       return Container(
         height: 120,
         decoration: BoxDecoration(
-            color: Colors.white, borderRadius: BorderRadius.circular(20)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Center(
-            child: Text('لا توجد نشاطات حديثة',
-                style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: Colors.grey.shade400,
-                    fontSize: 13))),
+          child: Text(
+            'لا توجد نشاطات حديثة',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              color: Colors.grey.shade400,
+              fontSize: 13,
+            ),
+          ),
+        ),
       );
     }
 
     return Container(
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04), blurRadius: 12)
-          ]),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+          ),
+        ],
+      ),
       child: Column(
         children: insights.asMap().entries.map((entry) {
           return Padding(
@@ -766,17 +924,21 @@ class DashboardActivityFeed extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
-                      child: Text(entry.value.substring(0, 1),
-                          style: const TextStyle(fontSize: 16))),
+                    child: Text(
+                      entry.value.substring(0, 1),
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     entry.value,
                     style: const TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 13,
-                        color: AppTheme.textPrimary),
+                      fontFamily: 'Tajawal',
+                      fontSize: 13,
+                      color: AppTheme.textPrimary,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),

@@ -27,52 +27,52 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     'text': {
       'label': 'نص',
       'icon': Icons.text_fields_rounded,
-      'color': Colors.blue
+      'color': Colors.blue,
     },
     'number': {
       'label': 'رقم',
       'icon': Icons.numbers_rounded,
-      'color': Colors.indigo
+      'color': Colors.indigo,
     },
     'phone': {
       'label': 'جوال',
       'icon': Icons.phone_rounded,
-      'color': Colors.green
+      'color': Colors.green,
     },
     'textarea': {
       'label': 'نص طويل',
       'icon': Icons.notes_rounded,
-      'color': Colors.teal
+      'color': Colors.teal,
     },
     'select': {
       'label': 'قائمة اختيار',
       'icon': Icons.arrow_drop_down_circle_rounded,
-      'color': Colors.purple
+      'color': Colors.purple,
     },
     'multiselect': {
       'label': 'اختيار متعدد',
       'icon': Icons.checklist_rounded,
-      'color': Colors.deepPurple
+      'color': Colors.deepPurple,
     },
     'yesno': {
       'label': 'نعم / لا',
       'icon': Icons.toggle_on_rounded,
-      'color': Colors.orange
+      'color': Colors.orange,
     },
     'date': {
       'label': 'تاريخ',
       'icon': Icons.calendar_today_rounded,
-      'color': Colors.cyan
+      'color': Colors.cyan,
     },
     'gps': {
       'label': 'موقع GPS',
       'icon': Icons.location_on_rounded,
-      'color': Colors.red
+      'color': Colors.red,
     },
     'photo': {
       'label': 'صورة',
       'icon': Icons.camera_alt_rounded,
-      'color': Colors.amber
+      'color': Colors.amber,
     },
   };
 
@@ -96,12 +96,14 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
 
       if (sections.isNotEmpty) {
         _useSections = true;
-        _sections =
-            sections.map((s) => Map<String, dynamic>.from(s as Map)).toList();
+        _sections = sections
+            .map((s) => Map<String, dynamic>.from(s as Map))
+            .toList();
       } else {
         _useSections = false;
-        _fields =
-            flatFields.map((f) => Map<String, dynamic>.from(f as Map)).toList();
+        _fields = flatFields
+            .map((f) => Map<String, dynamic>.from(f as Map))
+            .toList();
       }
     }
   }
@@ -118,9 +120,12 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     if (_titleArController.text.trim().length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content:
-                Text('العنوان مطلوب', style: TextStyle(fontFamily: 'Tajawal')),
-            backgroundColor: AppTheme.errorColor),
+          content: Text(
+            'العنوان مطلوب',
+            style: TextStyle(fontFamily: 'Tajawal'),
+          ),
+          backgroundColor: AppTheme.errorColor,
+        ),
       );
       return;
     }
@@ -129,7 +134,7 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
         ? {
             'sections': _sections
                 .map((s) => Map<String, dynamic>.from(s)..remove('expanded'))
-                .toList()
+                .toList(),
           }
         : {'fields': _fields};
 
@@ -189,66 +194,80 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     Map<String, dynamic>? existingField;
     if (isEdit) {
       if (sectionIndex != null) {
-        existingField = (_sections[sectionIndex]['fields'] as List)[fieldIndex]
-            as Map<String, dynamic>;
+        existingField =
+            (_sections[sectionIndex]['fields'] as List)[fieldIndex]
+                as Map<String, dynamic>;
       } else {
         existingField = _fields[fieldIndex];
       }
     }
 
-    final keyController =
-        TextEditingController(text: existingField?['key'] ?? '');
-    final labelController =
-        TextEditingController(text: existingField?['label_ar'] ?? '');
-    final hintController =
-        TextEditingController(text: existingField?['hint'] ?? '');
+    final keyController = TextEditingController(
+      text: existingField?['key'] ?? '',
+    );
+    final labelController = TextEditingController(
+      text: existingField?['label_ar'] ?? '',
+    );
+    final hintController = TextEditingController(
+      text: existingField?['hint'] ?? '',
+    );
     String selectedType = existingField?['type'] ?? 'text';
     bool isRequired = existingField?['required'] ?? false;
-    final List<String> options =
-        List<String>.from(existingField?['options'] ?? []);
+    final List<String> options = List<String>.from(
+      existingField?['options'] ?? [],
+    );
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Directionality(
           textDirection: TextDirection.rtl,
           child: Padding(
             padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Center(
-                      child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(2)))),
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
-                  Text(isEdit ? 'تعديل الحقل' : 'إضافة حقل جديد',
-                      style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700)),
+                  Text(
+                    isEdit ? 'تعديل الحقل' : 'إضافة حقل جديد',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
                   // Field Key
                   TextField(
                     controller: keyController,
                     decoration: const InputDecoration(
-                        labelText: 'مفتاح الحقل (بالإنجليزي)',
-                        prefixIcon: Icon(Icons.vpn_key_rounded),
-                        border: OutlineInputBorder(),
-                        helperText: 'مثال: patient_name'),
+                      labelText: 'مفتاح الحقل (بالإنجليزي)',
+                      prefixIcon: Icon(Icons.vpn_key_rounded),
+                      border: OutlineInputBorder(),
+                      helperText: 'مثال: patient_name',
+                    ),
                     style: const TextStyle(fontFamily: 'Tajawal'),
                   ),
                   const SizedBox(height: 14),
@@ -257,9 +276,10 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                   TextField(
                     controller: labelController,
                     decoration: const InputDecoration(
-                        labelText: 'التسمية (عربي)',
-                        prefixIcon: Icon(Icons.label_rounded),
-                        border: OutlineInputBorder()),
+                      labelText: 'التسمية (عربي)',
+                      prefixIcon: Icon(Icons.label_rounded),
+                      border: OutlineInputBorder(),
+                    ),
                     style: const TextStyle(fontFamily: 'Tajawal'),
                   ),
                   const SizedBox(height: 14),
@@ -268,17 +288,22 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                   TextField(
                     controller: hintController,
                     decoration: const InputDecoration(
-                        labelText: 'نص المساعدة (اختياري)',
-                        prefixIcon: Icon(Icons.help_outline_rounded),
-                        border: OutlineInputBorder()),
+                      labelText: 'نص المساعدة (اختياري)',
+                      prefixIcon: Icon(Icons.help_outline_rounded),
+                      border: OutlineInputBorder(),
+                    ),
                     style: const TextStyle(fontFamily: 'Tajawal'),
                   ),
                   const SizedBox(height: 14),
 
                   // Type selector
-                  const Text('نوع الحقل:',
-                      style: TextStyle(
-                          fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+                  const Text(
+                    'نوع الحقل:',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -291,37 +316,46 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? (info['color'] as Color)
-                                    .withValues(alpha: 0.15)
+                                ? (info['color'] as Color).withValues(
+                                    alpha: 0.15,
+                                  )
                                 : Colors.grey.shade100,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                                color: isSelected
-                                    ? info['color'] as Color
-                                    : Colors.grey.shade300),
+                              color: isSelected
+                                  ? info['color'] as Color
+                                  : Colors.grey.shade300,
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(info['icon'] as IconData,
-                                  size: 18,
+                              Icon(
+                                info['icon'] as IconData,
+                                size: 18,
+                                color: isSelected
+                                    ? info['color'] as Color
+                                    : Colors.grey,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                info['label'] as String,
+                                style: TextStyle(
+                                  fontFamily: 'Tajawal',
+                                  fontSize: 13,
                                   color: isSelected
                                       ? info['color'] as Color
-                                      : Colors.grey),
-                              const SizedBox(width: 6),
-                              Text(info['label'] as String,
-                                  style: TextStyle(
-                                      fontFamily: 'Tajawal',
-                                      fontSize: 13,
-                                      color: isSelected
-                                          ? info['color'] as Color
-                                          : Colors.grey.shade700,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w600
-                                          : FontWeight.normal)),
+                                      : Colors.grey.shade700,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -332,56 +366,73 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
 
                   // Required toggle
                   SwitchListTile(
-                    title: const Text('حقل مطلوب',
-                        style: TextStyle(fontFamily: 'Tajawal')),
-                    subtitle: const Text('يجب ملء هذا الحقل عند الإرسال',
-                        style: TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+                    title: const Text(
+                      'حقل مطلوب',
+                      style: TextStyle(fontFamily: 'Tajawal'),
+                    ),
+                    subtitle: const Text(
+                      'يجب ملء هذا الحقل عند الإرسال',
+                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                    ),
                     value: isRequired,
                     onChanged: (v) => setModalState(() => isRequired = v),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade300)),
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
                   ),
                   const SizedBox(height: 8),
 
                   // Options (for select/multiselect)
                   if (selectedType == 'select' ||
                       selectedType == 'multiselect') ...[
-                    const Text('الخيارات:',
-                        style: TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontWeight: FontWeight.w600)),
+                    const Text(
+                      'الخيارات:',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 8),
-                    ...options.asMap().entries.map((entry) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller:
-                                      TextEditingController(text: entry.value),
-                                  decoration: InputDecoration(
-                                      labelText: 'خيار ${entry.key + 1}',
-                                      border: const OutlineInputBorder(),
-                                      isDense: true),
-                                  style: const TextStyle(fontFamily: 'Tajawal'),
-                                  onChanged: (v) => options[entry.key] = v,
+                    ...options.asMap().entries.map(
+                      (entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: TextEditingController(
+                                  text: entry.value,
                                 ),
+                                decoration: InputDecoration(
+                                  labelText: 'خيار ${entry.key + 1}',
+                                  border: const OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                style: const TextStyle(fontFamily: 'Tajawal'),
+                                onChanged: (v) => options[entry.key] = v,
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle_outline,
-                                    color: AppTheme.errorColor),
-                                onPressed: () => setModalState(
-                                    () => options.removeAt(entry.key)),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.remove_circle_outline,
+                                color: AppTheme.errorColor,
                               ),
-                            ],
-                          ),
-                        )),
+                              onPressed: () => setModalState(
+                                () => options.removeAt(entry.key),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     OutlinedButton.icon(
                       onPressed: () => setModalState(() => options.add('')),
                       icon: const Icon(Icons.add_rounded),
-                      label: const Text('إضافة خيار',
-                          style: TextStyle(fontFamily: 'Tajawal')),
+                      label: const Text(
+                        'إضافة خيار',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
                     ),
                     const SizedBox(height: 8),
                   ],
@@ -396,9 +447,12 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                             labelController.text.trim().isEmpty) {
                           ScaffoldMessenger.of(ctx).showSnackBar(
                             const SnackBar(
-                                content: Text('المفتاح والتسمية مطلوبان',
-                                    style: TextStyle(fontFamily: 'Tajawal')),
-                                backgroundColor: AppTheme.errorColor),
+                              content: Text(
+                                'المفتاح والتسمية مطلوبان',
+                                style: TextStyle(fontFamily: 'Tajawal'),
+                              ),
+                              backgroundColor: AppTheme.errorColor,
+                            ),
                           );
                           return;
                         }
@@ -439,17 +493,23 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                         Navigator.pop(ctx);
                       },
                       icon: Icon(
-                          isEdit ? Icons.save_rounded : Icons.add_rounded,
-                          color: Colors.white),
-                      label: Text(isEdit ? 'حفظ التعديل' : 'إضافة الحقل',
-                          style: const TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white)),
+                        isEdit ? Icons.save_rounded : Icons.add_rounded,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        isEdit ? 'حفظ التعديل' : 'إضافة الحقل',
+                        style: const TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryColor,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14))),
+                        backgroundColor: AppTheme.primaryColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -473,21 +533,27 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Text('قسم جديد', style: TextStyle(fontFamily: 'Cairo')),
           content: TextField(
             controller: controller,
             decoration: const InputDecoration(
-                labelText: 'عنوان القسم', border: OutlineInputBorder()),
+              labelText: 'عنوان القسم',
+              border: OutlineInputBorder(),
+            ),
             style: const TextStyle(fontFamily: 'Tajawal'),
             autofocus: true,
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('إلغاء',
-                    style: TextStyle(fontFamily: 'Tajawal'))),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
+            ),
             ElevatedButton(
               onPressed: () {
                 if (controller.text.trim().isNotEmpty) {
@@ -502,9 +568,12 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                 Navigator.pop(ctx);
               },
               style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor),
-              child: const Text('إضافة',
-                  style: TextStyle(fontFamily: 'Tajawal', color: Colors.white)),
+                backgroundColor: AppTheme.primaryColor,
+              ),
+              child: const Text(
+                'إضافة',
+                style: TextStyle(fontFamily: 'Tajawal', color: Colors.white),
+              ),
             ),
           ],
         ),
@@ -513,29 +582,38 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
   }
 
   void _editSectionTitle(int index) {
-    final controller =
-        TextEditingController(text: _sections[index]['title'] ?? '');
+    final controller = TextEditingController(
+      text: _sections[index]['title'] ?? '',
+    );
     showDialog(
       context: context,
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('تعديل عنوان القسم',
-              style: TextStyle(fontFamily: 'Cairo')),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'تعديل عنوان القسم',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
           content: TextField(
             controller: controller,
             decoration: const InputDecoration(
-                labelText: 'عنوان القسم', border: OutlineInputBorder()),
+              labelText: 'عنوان القسم',
+              border: OutlineInputBorder(),
+            ),
             style: const TextStyle(fontFamily: 'Tajawal'),
             autofocus: true,
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('إلغاء',
-                    style: TextStyle(fontFamily: 'Tajawal'))),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
+            ),
             ElevatedButton(
               onPressed: () {
                 if (controller.text.trim().isNotEmpty) {
@@ -546,9 +624,12 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                 Navigator.pop(ctx);
               },
               style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor),
-              child: const Text('حفظ',
-                  style: TextStyle(fontFamily: 'Tajawal', color: Colors.white)),
+                backgroundColor: AppTheme.primaryColor,
+              ),
+              child: const Text(
+                'حفظ',
+                style: TextStyle(fontFamily: 'Tajawal', color: Colors.white),
+              ),
             ),
           ],
         ),
@@ -570,19 +651,26 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'تعديل النموذج' : 'نموذج جديد',
-            style: const TextStyle(
-                fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+        title: Text(
+          _isEditing ? 'تعديل النموذج' : 'نموذج جديد',
+          style: const TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         centerTitle: true,
         actions: [
           TextButton.icon(
             onPressed: _save,
             icon: const Icon(Icons.save_rounded, color: AppTheme.primaryColor),
-            label: const Text('حفظ',
-                style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: AppTheme.primaryColor,
-                    fontWeight: FontWeight.w700)),
+            label: const Text(
+              'حفظ',
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                color: AppTheme.primaryColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -597,18 +685,20 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
             TextField(
               controller: _titleArController,
               decoration: const InputDecoration(
-                  labelText: 'العنوان (عربي) *',
-                  prefixIcon: Icon(Icons.title_rounded),
-                  border: OutlineInputBorder()),
+                labelText: 'العنوان (عربي) *',
+                prefixIcon: Icon(Icons.title_rounded),
+                border: OutlineInputBorder(),
+              ),
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _titleEnController,
               decoration: const InputDecoration(
-                  labelText: 'العنوان (إنجليزي)',
-                  prefixIcon: Icon(Icons.title_rounded),
-                  border: OutlineInputBorder()),
+                labelText: 'العنوان (إنجليزي)',
+                prefixIcon: Icon(Icons.title_rounded),
+                border: OutlineInputBorder(),
+              ),
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
             const SizedBox(height: 12),
@@ -616,9 +706,10 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
               controller: _descArController,
               maxLines: 3,
               decoration: const InputDecoration(
-                  labelText: 'الوصف',
-                  prefixIcon: Icon(Icons.description_rounded),
-                  border: OutlineInputBorder()),
+                labelText: 'الوصف',
+                prefixIcon: Icon(Icons.description_rounded),
+                border: OutlineInputBorder(),
+              ),
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
             const SizedBox(height: 16),
@@ -627,41 +718,54 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
             _sectionTitle('⚙️ الإعدادات'),
             const SizedBox(height: 8),
             SwitchListTile(
-              title: const Text('📍 يتطلب GPS',
-                  style: TextStyle(fontFamily: 'Tajawal')),
+              title: const Text(
+                '📍 يتطلب GPS',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
               value: _requiresGps,
               onChanged: (v) => setState(() => _requiresGps = v),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade300)),
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
             ),
             const SizedBox(height: 4),
             SwitchListTile(
-              title: const Text('📷 يتطلب صورة',
-                  style: TextStyle(fontFamily: 'Tajawal')),
+              title: const Text(
+                '📷 يتطلب صورة',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
               subtitle: _requiresPhoto
-                  ? Text('حد أقصى $_maxPhotos صور',
-                      style:
-                          const TextStyle(fontFamily: 'Tajawal', fontSize: 12))
+                  ? Text(
+                      'حد أقصى $_maxPhotos صور',
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 12,
+                      ),
+                    )
                   : null,
               value: _requiresPhoto,
               onChanged: (v) => setState(() => _requiresPhoto = v),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade300)),
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
             ),
             if (_requiresPhoto) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Text('عدد الصور الأقصى:',
-                      style: TextStyle(fontFamily: 'Tajawal')),
+                  const Text(
+                    'عدد الصور الأقصى:',
+                    style: TextStyle(fontFamily: 'Tajawal'),
+                  ),
                   const SizedBox(width: 12),
                   DropdownButton<int>(
                     value: _maxPhotos,
                     items: [1, 2, 3, 5, 10]
-                        .map((n) =>
-                            DropdownMenuItem(value: n, child: Text('$n')))
+                        .map(
+                          (n) => DropdownMenuItem(value: n, child: Text('$n')),
+                        )
                         .toList(),
                     onChanged: (v) => setState(() => _maxPhotos = v ?? 5),
                   ),
@@ -692,14 +796,15 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text('حقول مباشرة',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontFamily: 'Tajawal',
-                                fontWeight: FontWeight.w600,
-                                color: !_useSections
-                                    ? Colors.white
-                                    : Colors.grey)),
+                        child: Text(
+                          'حقول مباشرة',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontWeight: FontWeight.w600,
+                            color: !_useSections ? Colors.white : Colors.grey,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -715,13 +820,15 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(' مقسم بأقسام',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontFamily: 'Tajawal',
-                                fontWeight: FontWeight.w600,
-                                color:
-                                    _useSections ? Colors.white : Colors.grey)),
+                        child: Text(
+                          ' مقسم بأقسام',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontWeight: FontWeight.w600,
+                            color: _useSections ? Colors.white : Colors.grey,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -739,35 +846,40 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
               OutlinedButton.icon(
                 onPressed: () => _addField(),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('إضافة حقل',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                label: const Text(
+                  'إضافة حقل',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.primaryColor,
                   side: const BorderSide(color: AppTheme.primaryColor),
                   minimumSize: const Size(double.infinity, 48),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ] else ...[
               _sectionTitle('📂 الأقسام (${_sections.length})'),
               const SizedBox(height: 8),
-              ..._sections
-                  .asMap()
-                  .entries
-                  .map((entry) => _buildSectionCard(entry.key, entry.value)),
+              ..._sections.asMap().entries.map(
+                (entry) => _buildSectionCard(entry.key, entry.value),
+              ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _addSection,
                 icon: const Icon(Icons.create_new_folder_rounded),
-                label: const Text('إضافة قسم',
-                    style: TextStyle(fontFamily: 'Tajawal')),
+                label: const Text(
+                  'إضافة قسم',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.teal,
                   side: const BorderSide(color: Colors.teal),
                   minimumSize: const Size(double.infinity, 48),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ],
@@ -782,23 +894,30 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     return Row(
       children: [
         Container(
-            width: 4,
-            height: 20,
-            decoration: BoxDecoration(
-                color: AppTheme.primaryColor,
-                borderRadius: BorderRadius.circular(2))),
+          width: 4,
+          height: 20,
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
         const SizedBox(width: 10),
-        Text(title,
-            style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 16,
-                fontWeight: FontWeight.w700)),
+        Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildFieldsList(List<Map<String, dynamic>> fields,
-      {int? sectionIndex}) {
+  Widget _buildFieldsList(
+    List<Map<String, dynamic>> fields, {
+    int? sectionIndex,
+  }) {
     if (fields.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(32),
@@ -811,9 +930,10 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
           children: [
             Icon(Icons.inbox_rounded, size: 48, color: AppTheme.textHint),
             SizedBox(height: 8),
-            Text('لا توجد حقول بعد',
-                style:
-                    TextStyle(fontFamily: 'Tajawal', color: AppTheme.textHint)),
+            Text(
+              'لا توجد حقول بعد',
+              style: TextStyle(fontFamily: 'Tajawal', color: AppTheme.textHint),
+            ),
           ],
         ),
       );
@@ -830,8 +950,11 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     );
   }
 
-  Widget _buildFieldTile(Map<String, dynamic> field, int index,
-      {int? sectionIndex}) {
+  Widget _buildFieldTile(
+    Map<String, dynamic> field,
+    int index, {
+    int? sectionIndex,
+  }) {
     final type = field['type'] as String? ?? 'text';
     final typeInfo = _fieldTypes[type] ?? _fieldTypes['text']!;
     final isRequired = field['required'] == true;
@@ -848,29 +971,39 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
             color: (typeInfo['color'] as Color).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(typeInfo['icon'] as IconData,
-              color: typeInfo['color'] as Color, size: 22),
+          child: Icon(
+            typeInfo['icon'] as IconData,
+            color: typeInfo['color'] as Color,
+            size: 22,
+          ),
         ),
         title: Row(
           children: [
             Expanded(
-              child: Text(field['label_ar'] ?? field['key'] ?? '—',
-                  style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14)),
+              child: Text(
+                field['label_ar'] ?? field['key'] ?? '—',
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
             ),
             if (isRequired)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                    color: AppTheme.errorColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4)),
-                child: const Text('مطلوب',
-                    style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 10,
-                        color: AppTheme.errorColor)),
+                  color: AppTheme.errorColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'مطلوب',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 10,
+                    color: AppTheme.errorColor,
+                  ),
+                ),
               ),
           ],
         ),
@@ -882,13 +1015,19 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.edit_rounded,
-                  size: 20, color: AppTheme.primaryColor),
+              icon: const Icon(
+                Icons.edit_rounded,
+                size: 20,
+                color: AppTheme.primaryColor,
+              ),
               onPressed: () => _editField(index, sectionIndex: sectionIndex),
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded,
-                  size: 20, color: AppTheme.errorColor),
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                size: 20,
+                color: AppTheme.errorColor,
+              ),
               onPressed: () => _deleteField(index, sectionIndex: sectionIndex),
             ),
             const Icon(Icons.drag_handle_rounded, color: AppTheme.textHint),
@@ -910,10 +1049,12 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
         children: [
           InkWell(
             borderRadius: BorderRadius.vertical(
-                top: const Radius.circular(16),
-                bottom: isExpanded ? Radius.zero : const Radius.circular(16)),
+              top: const Radius.circular(16),
+              bottom: isExpanded ? Radius.zero : const Radius.circular(16),
+            ),
             onTap: () => setState(
-                () => _sections[sectionIndex]['expanded'] = !isExpanded),
+              () => _sections[sectionIndex]['expanded'] = !isExpanded,
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -921,42 +1062,61 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                        color: Colors.teal.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8)),
-                    child: const Icon(Icons.folder_rounded,
-                        color: Colors.teal, size: 22),
+                      color: Colors.teal.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.folder_rounded,
+                      color: Colors.teal,
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(section['title'] ?? '—',
-                            style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700)),
-                        Text('${fields.length} حقل',
-                            style: const TextStyle(
-                                fontFamily: 'Tajawal',
-                                fontSize: 12,
-                                color: AppTheme.textSecondary)),
+                        Text(
+                          section['title'] ?? '—',
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          '${fields.length} حقل',
+                          style: const TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   IconButton(
-                      icon: const Icon(Icons.edit_rounded,
-                          size: 20, color: AppTheme.primaryColor),
-                      onPressed: () => _editSectionTitle(sectionIndex)),
+                    icon: const Icon(
+                      Icons.edit_rounded,
+                      size: 20,
+                      color: AppTheme.primaryColor,
+                    ),
+                    onPressed: () => _editSectionTitle(sectionIndex),
+                  ),
                   IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded,
-                          size: 20, color: AppTheme.errorColor),
-                      onPressed: () => _deleteSection(sectionIndex)),
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      size: 20,
+                      color: AppTheme.errorColor,
+                    ),
+                    onPressed: () => _deleteSection(sectionIndex),
+                  ),
                   Icon(
-                      isExpanded
-                          ? Icons.expand_less_rounded
-                          : Icons.expand_more_rounded,
-                      color: AppTheme.textHint),
+                    isExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: AppTheme.textHint,
+                  ),
                 ],
               ),
             ),
@@ -972,14 +1132,17 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                   OutlinedButton.icon(
                     onPressed: () => _addField(sectionIndex: sectionIndex),
                     icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('إضافة حقل لهذا القسم',
-                        style: TextStyle(fontFamily: 'Tajawal')),
+                    label: const Text(
+                      'إضافة حقل لهذا القسم',
+                      style: TextStyle(fontFamily: 'Tajawal'),
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.teal,
                       side: const BorderSide(color: Colors.teal),
                       minimumSize: const Size(double.infinity, 40),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ],

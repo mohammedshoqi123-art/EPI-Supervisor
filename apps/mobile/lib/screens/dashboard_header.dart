@@ -24,18 +24,19 @@ class DashboardHeroHeader extends StatelessWidget {
     final greeting = hour < 12
         ? 'صباح الخير'
         : hour < 17
-            ? 'مساء الخير'
-            : 'تصبح على خير';
+        ? 'مساء الخير'
+        : 'تصبح على خير';
     final emoji = hour < 12
         ? '☀️'
         : hour < 17
-            ? '🌤️'
-            : '🌙';
+        ? '🌤️'
+        : '🌙';
 
     return SlideTransition(
       position: Tween<Offset>(begin: const Offset(0, -0.3), end: Offset.zero)
           .animate(
-              CurvedAnimation(parent: headerAnim, curve: Curves.easeOutCubic)),
+            CurvedAnimation(parent: headerAnim, curve: Curves.easeOutCubic),
+          ),
       child: FadeTransition(
         opacity: headerAnim,
         child: Container(
@@ -86,7 +87,9 @@ class DashboardHeroHeader extends StatelessWidget {
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
@@ -113,11 +116,15 @@ class DashboardHeroHeader extends StatelessWidget {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(
-                                alpha: 0.15 + 0.05 * pulseAnim.value),
+                              alpha: 0.15 + 0.05 * pulseAnim.value,
+                            ),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: const Icon(Icons.notifications_active_rounded,
-                              color: Colors.white, size: 24),
+                          child: const Icon(
+                            Icons.notifications_active_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
                         );
                       },
                     ),
@@ -127,15 +134,19 @@ class DashboardHeroHeader extends StatelessWidget {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  const Icon(Icons.calendar_today_rounded,
-                      color: Colors.white60, size: 14),
+                  const Icon(
+                    Icons.calendar_today_rounded,
+                    color: Colors.white60,
+                    size: 14,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     _getDateString(),
                     style: const TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 12,
-                        color: Colors.white60),
+                      fontFamily: 'Tajawal',
+                      fontSize: 12,
+                      color: Colors.white60,
+                    ),
                   ),
                 ],
               ),
@@ -160,7 +171,7 @@ class DashboardHeroHeader extends StatelessWidget {
       'سبتمبر',
       'أكتوبر',
       'نوفمبر',
-      'ديسمبر'
+      'ديسمبر',
     ];
     const days = [
       'الاثنين',
@@ -169,7 +180,7 @@ class DashboardHeroHeader extends StatelessWidget {
       'الخميس',
       'الجمعة',
       'السبت',
-      'الأحد'
+      'الأحد',
     ];
     return '${days[now.weekday - 1]}، ${now.day} ${months[now.month - 1]} ${now.year}';
   }
@@ -198,26 +209,35 @@ class DashboardSyncBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.cloud_upload_outlined,
-              color: Colors.orange, size: 22),
+          const Icon(
+            Icons.cloud_upload_outlined,
+            color: Colors.orange,
+            size: 22,
+          ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text('$pendingCount استمارة بانتظار المزامنة',
-                style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.orange.shade800)),
+            child: Text(
+              '$pendingCount استمارة بانتظار المزامنة',
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.orange.shade800,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () {
               HapticFeedback.lightImpact();
               onSyncTap();
             },
-            child: Text('مزامنة',
-                style: TextStyle(
-                    color: Colors.orange.shade800,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              'مزامنة',
+              style: TextStyle(
+                color: Colors.orange.shade800,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),

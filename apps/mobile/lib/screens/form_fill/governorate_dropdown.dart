@@ -31,13 +31,16 @@ class GovernorateDropdown extends ConsumerWidget {
           items: governorates.map((g) {
             return DropdownMenuItem(
               value: g['id'] as String,
-              child: Text(g['name_ar'] as String,
-                  style: const TextStyle(fontFamily: 'Tajawal')),
+              child: Text(
+                g['name_ar'] as String,
+                style: const TextStyle(fontFamily: 'Tajawal'),
+              ),
             );
           }).toList(),
           onChanged: onChanged,
-          validator:
-              isRequired ? (v) => v == null ? AppStrings.required : null : null,
+          validator: isRequired
+              ? (v) => v == null ? AppStrings.required : null
+              : null,
         );
       },
     );

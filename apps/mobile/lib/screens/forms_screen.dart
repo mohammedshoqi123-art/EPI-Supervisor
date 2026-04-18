@@ -117,10 +117,12 @@ class _FormCard extends StatelessWidget {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         gradient: isActive
-                            ? const LinearGradient(colors: [
-                                AppTheme.primaryColor,
-                                AppTheme.primaryDark
-                              ])
+                            ? const LinearGradient(
+                                colors: [
+                                  AppTheme.primaryColor,
+                                  AppTheme.primaryDark,
+                                ],
+                              )
                             : null,
                         color: isActive ? null : Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(14),
@@ -168,8 +170,11 @@ class _FormCard extends StatelessWidget {
                           color: AppTheme.primarySurface,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.arrow_forward_ios,
-                            size: 14, color: AppTheme.primaryColor),
+                        child: const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 14,
+                          color: AppTheme.primaryColor,
+                        ),
                       ),
                   ],
                 ),
@@ -180,16 +185,20 @@ class _FormCard extends StatelessWidget {
                       _buildBadge(Icons.location_on, 'GPS', AppTheme.infoColor),
                     if (requiresPhoto)
                       _buildBadge(
-                          Icons.camera_alt, 'صور', AppTheme.secondaryColor),
+                        Icons.camera_alt,
+                        'صور',
+                        AppTheme.secondaryColor,
+                      ),
                     if (!isActive)
                       _buildBadge(Icons.block, 'غير نشط', AppTheme.errorColor),
                     const Spacer(),
                     Text(
                       'v$version',
                       style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 11,
-                          color: AppTheme.textHint),
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        color: AppTheme.textHint,
+                      ),
                     ),
                   ],
                 ),
@@ -217,10 +226,11 @@ class _FormCard extends StatelessWidget {
           Text(
             text,
             style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 11,
-                color: color,
-                fontWeight: FontWeight.w500),
+              fontFamily: 'Tajawal',
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

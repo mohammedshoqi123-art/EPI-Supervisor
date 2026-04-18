@@ -52,8 +52,10 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('المراجع والكتب', style: TextStyle(fontFamily: 'Cairo')),
+        title: const Text(
+          'المراجع والكتب',
+          style: TextStyle(fontFamily: 'Cairo'),
+        ),
         centerTitle: true,
       ),
       body: Column(
@@ -71,27 +73,27 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
             child: _isLoading
                 ? const EpiLoading()
                 : _filtered.isEmpty
-                    ? const EpiEmptyState(
-                        icon: Icons.menu_book_outlined,
-                        title: 'لا توجد مراجع متاحة حالياً',
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadReferences,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: _filtered.length,
-                          itemBuilder: (context, index) {
-                            final ref = _filtered[index];
-                            return _ReferenceCard(
-                              title: ref['title_ar'] ?? '',
-                              description: ref['description_ar'] ?? '',
-                              category: ref['category'] ?? '',
-                              fileUrl: ref['file_url'],
-                              icon: _getCategoryIcon(ref['category']),
-                            );
-                          },
-                        ),
-                      ),
+                ? const EpiEmptyState(
+                    icon: Icons.menu_book_outlined,
+                    title: 'لا توجد مراجع متاحة حالياً',
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadReferences,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _filtered.length,
+                      itemBuilder: (context, index) {
+                        final ref = _filtered[index];
+                        return _ReferenceCard(
+                          title: ref['title_ar'] ?? '',
+                          description: ref['description_ar'] ?? '',
+                          category: ref['category'] ?? '',
+                          fileUrl: ref['file_url'],
+                          icon: _getCategoryIcon(ref['category']),
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
@@ -178,7 +180,9 @@ class _ReferenceCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(6),
@@ -196,8 +200,10 @@ class _ReferenceCard extends StatelessWidget {
                 ),
               ),
               if (fileUrl != null)
-                const Icon(Icons.download_rounded,
-                    color: AppTheme.primaryColor),
+                const Icon(
+                  Icons.download_rounded,
+                  color: AppTheme.primaryColor,
+                ),
             ],
           ),
         ),

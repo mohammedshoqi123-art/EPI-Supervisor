@@ -97,25 +97,33 @@ class UserFormSheetState extends State<UserFormSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(
-                    child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(2)))),
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
-                Text(widget.title,
-                    style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700)),
+                Text(
+                  widget.title,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 20),
 
                 // Full Name
                 TextFormField(
                   controller: _nameController,
-                  decoration:
-                      _inputDecoration('الاسم الكامل', Icons.person_rounded),
+                  decoration: _inputDecoration(
+                    'الاسم الكامل',
+                    Icons.person_rounded,
+                  ),
                   validator: (v) =>
                       (v == null || v.trim().length < 2) ? 'الاسم مطلوب' : null,
                   style: const TextStyle(fontFamily: 'Tajawal'),
@@ -127,12 +135,16 @@ class UserFormSheetState extends State<UserFormSheet> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: _inputDecoration(
-                      'البريد الإلكتروني', Icons.email_rounded),
+                    'البريد الإلكتروني',
+                    Icons.email_rounded,
+                  ),
                   enabled: !_isEditing, // Can't change email when editing
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return 'البريد مطلوب';
-                    if (!RegExp(r'^[\w.+-]+@[\w-]+\.[\w.]+$')
-                        .hasMatch(v.trim())) return 'البريد غير صحيح';
+                    if (!RegExp(
+                      r'^[\w.+-]+@[\w-]+\.[\w.]+$',
+                    ).hasMatch(v.trim()))
+                      return 'البريد غير صحيح';
                     return null;
                   },
                   style: const TextStyle(fontFamily: 'Tajawal'),
@@ -148,14 +160,18 @@ class UserFormSheetState extends State<UserFormSheet> {
                       labelText: 'كلمة المرور',
                       prefixIcon: const Icon(Icons.lock_rounded),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
                         onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword),
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
                       ),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     validator: (v) => (v == null || v.length < 8)
                         ? 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'
@@ -169,8 +185,10 @@ class UserFormSheetState extends State<UserFormSheet> {
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration:
-                      _inputDecoration('رقم الجوال', Icons.phone_rounded),
+                  decoration: _inputDecoration(
+                    'رقم الجوال',
+                    Icons.phone_rounded,
+                  ),
                   validator: (v) {
                     if (v != null &&
                         v.isNotEmpty &&
@@ -186,7 +204,9 @@ class UserFormSheetState extends State<UserFormSheet> {
                 TextFormField(
                   controller: _nationalIdController,
                   decoration: _inputDecoration(
-                      'الرقم الوطني (اختياري)', Icons.badge_rounded),
+                    'الرقم الوطني (اختياري)',
+                    Icons.badge_rounded,
+                  ),
                   style: const TextStyle(fontFamily: 'Tajawal'),
                 ),
                 const SizedBox(height: 14),
@@ -195,33 +215,52 @@ class UserFormSheetState extends State<UserFormSheet> {
                 DropdownButtonFormField<String>(
                   value: _selectedRole,
                   decoration: _inputDecoration(
-                      'الدور', Icons.admin_panel_settings_rounded),
+                    'الدور',
+                    Icons.admin_panel_settings_rounded,
+                  ),
                   items: const [
                     DropdownMenuItem(
-                        value: 'data_entry',
-                        child: Text('إدخال بيانات',
-                            style: TextStyle(fontFamily: 'Tajawal'))),
+                      value: 'data_entry',
+                      child: Text(
+                        'إدخال بيانات',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                    ),
                     DropdownMenuItem(
-                        value: 'district',
-                        child: Text('مديرية',
-                            style: TextStyle(fontFamily: 'Tajawal'))),
+                      value: 'district',
+                      child: Text(
+                        'مديرية',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                    ),
                     DropdownMenuItem(
-                        value: 'governorate',
-                        child: Text('محافظة',
-                            style: TextStyle(fontFamily: 'Tajawal'))),
+                      value: 'governorate',
+                      child: Text(
+                        'محافظة',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                    ),
                     DropdownMenuItem(
-                        value: 'central',
-                        child: Text('مركزي',
-                            style: TextStyle(fontFamily: 'Tajawal'))),
+                      value: 'central',
+                      child: Text(
+                        'مركزي',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                    ),
                     DropdownMenuItem(
-                        value: 'admin',
-                        child: Text('مدير النظام',
-                            style: TextStyle(fontFamily: 'Tajawal'))),
+                      value: 'admin',
+                      child: Text(
+                        'مدير النظام',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                    ),
                   ],
                   onChanged: (v) =>
                       setState(() => _selectedRole = v ?? 'data_entry'),
                   style: const TextStyle(
-                      fontFamily: 'Tajawal', color: Colors.black87),
+                    fontFamily: 'Tajawal',
+                    color: Colors.black87,
+                  ),
                 ),
                 const SizedBox(height: 14),
 
@@ -229,23 +268,35 @@ class UserFormSheetState extends State<UserFormSheet> {
                 DropdownButtonFormField<String>(
                   value: _selectedGovernorateId,
                   decoration: _inputDecoration(
-                      'المحافظة (اختياري)', Icons.location_city_rounded),
+                    'المحافظة (اختياري)',
+                    Icons.location_city_rounded,
+                  ),
                   items: [
                     const DropdownMenuItem(
-                        value: null,
-                        child: Text('— بدون —',
-                            style: TextStyle(fontFamily: 'Tajawal'))),
-                    ...widget.governorates.map((g) => DropdownMenuItem(
+                      value: null,
+                      child: Text(
+                        '— بدون —',
+                        style: TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                    ),
+                    ...widget.governorates.map(
+                      (g) => DropdownMenuItem(
                         value: g['id'] as String,
-                        child: Text(g['name_ar'],
-                            style: const TextStyle(fontFamily: 'Tajawal')))),
+                        child: Text(
+                          g['name_ar'],
+                          style: const TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                      ),
+                    ),
                   ],
                   onChanged: (v) => setState(() {
                     _selectedGovernorateId = v;
                     _selectedDistrictId = null;
                   }),
                   style: const TextStyle(
-                      fontFamily: 'Tajawal', color: Colors.black87),
+                    fontFamily: 'Tajawal',
+                    color: Colors.black87,
+                  ),
                 ),
                 const SizedBox(height: 14),
 
@@ -254,20 +305,32 @@ class UserFormSheetState extends State<UserFormSheet> {
                   DropdownButtonFormField<String>(
                     value: _selectedDistrictId,
                     decoration: _inputDecoration(
-                        'المديرية (اختياري)', Icons.location_on_rounded),
+                      'المديرية (اختياري)',
+                      Icons.location_on_rounded,
+                    ),
                     items: [
                       const DropdownMenuItem(
-                          value: null,
-                          child: Text('— بدون —',
-                              style: TextStyle(fontFamily: 'Tajawal'))),
-                      ..._filteredDistricts.map((d) => DropdownMenuItem(
+                        value: null,
+                        child: Text(
+                          '— بدون —',
+                          style: TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                      ),
+                      ..._filteredDistricts.map(
+                        (d) => DropdownMenuItem(
                           value: d['id'] as String,
-                          child: Text(d['name_ar'],
-                              style: const TextStyle(fontFamily: 'Tajawal')))),
+                          child: Text(
+                            d['name_ar'],
+                            style: const TextStyle(fontFamily: 'Tajawal'),
+                          ),
+                        ),
+                      ),
                     ],
                     onChanged: (v) => setState(() => _selectedDistrictId = v),
                     style: const TextStyle(
-                        fontFamily: 'Tajawal', color: Colors.black87),
+                      fontFamily: 'Tajawal',
+                      color: Colors.black87,
+                    ),
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -279,19 +342,25 @@ class UserFormSheetState extends State<UserFormSheet> {
                   child: ElevatedButton.icon(
                     onPressed: _submit,
                     icon: Icon(
-                        _isEditing
-                            ? Icons.save_rounded
-                            : Icons.person_add_rounded,
-                        color: Colors.white),
-                    label: Text(_isEditing ? 'حفظ التعديلات' : 'إضافة المستخدم',
-                        style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white)),
+                      _isEditing
+                          ? Icons.save_rounded
+                          : Icons.person_add_rounded,
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      _isEditing ? 'حفظ التعديلات' : 'إضافة المستخدم',
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14))),
+                      backgroundColor: AppTheme.primaryColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),

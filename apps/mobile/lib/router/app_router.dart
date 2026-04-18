@@ -36,7 +36,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     debugLogDiagnostics: true,
     refreshListenable: GoRouterRefreshStream(
-        ref.watch(authRepositoryProvider).authStateChanges),
+      ref.watch(authRepositoryProvider).authStateChanges,
+    ),
     redirect: (context, state) {
       final isLoginRoute = state.matchedLocation == '/login';
       final isSplash = state.matchedLocation == '/splash';
@@ -75,10 +76,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
       ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
@@ -92,9 +90,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'fill/:formId',
-                builder: (context, state) => FormFillScreen(
-                  formId: state.pathParameters['formId']!,
-                ),
+                builder: (context, state) =>
+                    FormFillScreen(formId: state.pathParameters['formId']!),
               ),
               GoRoute(
                 path: 'status',
@@ -102,18 +99,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'submission/:id',
-                    builder: (context, state) => SubmissionDetailScreen(
-                      id: state.pathParameters['id']!,
-                    ),
+                    builder: (context, state) =>
+                        SubmissionDetailScreen(id: state.pathParameters['id']!),
                   ),
                 ],
               ),
             ],
           ),
-          GoRoute(
-            path: '/map',
-            builder: (context, state) => const MapScreen(),
-          ),
+          GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
           GoRoute(
             path: '/ai',
             builder: (context, state) => const AiChatScreenV2(),
@@ -179,21 +172,25 @@ class _MainShellState extends ConsumerState<MainShell> {
         final msg = result.synced > 0
             ? 'تمت مزامنة ${result.synced} عنصر ✅'
             : result.failed > 0
-                ? 'فشلت مزامنة ${result.failed} عنصر ❌'
-                : 'لا توجد عناصر للمزامنة';
+            ? 'فشلت مزامنة ${result.failed} عنصر ❌'
+            : 'لا توجد عناصر للمزامنة';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(msg, style: const TextStyle(fontFamily: 'Tajawal')),
-              duration: const Duration(seconds: 2)),
+            content: Text(msg, style: const TextStyle(fontFamily: 'Tajawal')),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('فشلت المزامنة: $e',
-                  style: const TextStyle(fontFamily: 'Tajawal')),
-              duration: const Duration(seconds: 3)),
+            content: Text(
+              'فشلت المزامنة: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
     } finally {
@@ -214,10 +211,7 @@ class _MainShellState extends ConsumerState<MainShell> {
         children: [
           // Offline/Online status banner
           if (!isOnline || pendingCount > 0)
-            ConnectivityBanner(
-              isOnline: isOnline,
-              pendingCount: pendingCount,
-            ),
+            ConnectivityBanner(isOnline: isOnline, pendingCount: pendingCount),
           Expanded(child: widget.child),
         ],
       ),
@@ -238,11 +232,15 @@ class _MainShellState extends ConsumerState<MainShell> {
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : Badge(
-                      label: Text('$pendingCount',
-                          style: const TextStyle(fontSize: 10)),
+                      label: Text(
+                        '$pendingCount',
+                        style: const TextStyle(fontSize: 10),
+                      ),
                       child: const Icon(Icons.cloud_upload_rounded, size: 20),
                     ),
             ),
@@ -310,8 +308,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                'لا يمكن المزامنة بدون إنترنت. اتصلك حالياً غير متاح.',
-                style: TextStyle(fontFamily: 'Tajawal')),
+              'لا يمكن المزامنة بدون إنترنت. اتصلك حالياً غير متاح.',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 3),
           ),
@@ -350,8 +349,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشلت المزامنة: $e',
-                style: const TextStyle(fontFamily: 'Tajawal')),
+            content: Text(
+              'فشلت المزامنة: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),

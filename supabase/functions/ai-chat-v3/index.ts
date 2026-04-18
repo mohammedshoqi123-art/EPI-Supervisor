@@ -107,20 +107,44 @@ async function hfCall(model: string, body: any, token: string) {
 }
 
 async function groqChat(messages: any[], key: string, opts: any = {}) {
+  const body = {
+    model: opts.model || 'llama-3.3-70b-versatile',
+    messages,
+    max_tokens: opts.maxTokens || 800,
+    temperature: opts.temperature ?? 0.4,
+    ...(opts.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+    ...(opts.stream ? { stream: true } : {}),
+  }
+
   const r = await fetch(GROQ_API, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: opts.model || 'llama-3.3-70b-versatile',
-      messages,
-      max_tokens: opts.maxTokens || 800,
-      temperature: opts.temperature ?? 0.4,
-      ...(opts.jsonMode ? { response_format: { type: 'json_object' } } : {}),
-      ...(opts.stream ? { stream: true } : {}),
-    }),
+    body: JSON.stringify(body),
   })
-  if (!r.ok) { console.error('Groq error:', r.status, await r.text()); return null }
-  return opts.stream ? r : r.json()
+
+  if (!r.ok) {
+    const errText = await r.text().catch(() => 'unknown')
+    console.error(`Groq API error ${r.status}:`, errText)
+    return null
+  }
+
+  if (opts.stream) return r
+
+  const json = await r.json().catch((e) => {
+    console.error('Groq JSON parse error:', e)
+    return null
+  })
+
+  if (!json) return null
+
+  // Validate response structure
+  const content = json.choices?.[0]?.message?.content
+  if (!content || content.trim().length === 0) {
+    console.error('Groq returned empty content. Full response:', JSON.stringify(json).slice(0, 500))
+    return null
+  }
+
+  return json
 }
 
 async function mimoChat(messages: any[], key: string, stream = false) {
@@ -568,64 +592,97 @@ serve(async (req) => {
       }, 200, origin)
     }
 
-    // ═══ Model selection: DB config → provider fallback ═══
+    // ═══════════════════════════════════════════════════════
+    // STEP 4: LLM CALL with retry on empty response
+    // ═══════════════════════════════════════════════════════
 
-    // Provider: Groq (from DB config)
-    if (dbProvider === 'groq' && groqKey) {
-      const useStream = stream && modelConfig.streamEnabled
-      if (useStream) {
-        const resp = await groqChat(messages, groqKey, { stream: true, model: dbModelId, maxTokens: dbMaxTokens, temperature: dbTemperature })
-        if (resp) return handleStream(resp as Response, origin)
-      }
-      const r = await groqChat(messages, groqKey, { model: dbModelId, maxTokens: dbMaxTokens, temperature: dbTemperature })
-      const text = r?.choices?.[0]?.message?.content ?? ''
-      const tokens = r?.usage?.total_tokens || 0
-      await logUsage(supabase, dbModel?.id || 'groq-70b', tokens, Date.now() - startMs, !!text)
-      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', model: dbModelId, intent, confidence }, 200, origin)
+    // Helper: try Groq streaming (returns Response or null)
+    async function tryGroqStream(model: string, maxTokens: number): Promise<Response | null> {
+      if (!groqKey || !stream || !modelConfig.streamEnabled) return null
+      const resp = await groqChat(messages, groqKey, { stream: true, model, maxTokens, temperature: dbTemperature })
+      return resp as Response || null
     }
 
-    // Provider: MiMo (from DB config)
-    if (dbProvider === 'mimo' && mimoKey) {
-      const useStream = stream && modelConfig.streamEnabled
-      if (useStream) {
-        const resp = await mimoChat(messages, mimoKey, true)
-        if (resp) return handleStream(resp as Response, origin)
-      }
+    // Helper: try Groq with a specific model, return text or null
+    async function tryGroq(model: string, maxTokens: number): Promise<{ text: string; tokens: number } | null> {
+      if (!groqKey) return null
+      const r = await groqChat(messages, groqKey, { model, maxTokens, temperature: dbTemperature })
+      if (!r) return null
+      const text = r.choices?.[0]?.message?.content?.trim() || ''
+      const tokens = r.usage?.total_tokens || 0
+      return text.length > 0 ? { text, tokens } : null
+    }
+
+    // Helper: try MiMo, return text or null
+    async function tryMimo(): Promise<string | null> {
+      if (!mimoKey) return null
       const r = await mimoChat(messages, mimoKey)
-      const text = r?.choices?.[0]?.message?.content ?? ''
-      await logUsage(supabase, dbModel?.id || 'mimo-v2', 0, Date.now() - startMs, !!text)
-      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', model: dbModelId, intent, confidence }, 200, origin)
+      if (!r) return null
+      return r.choices?.[0]?.message?.content?.trim() || null
     }
 
-    // ═══ Default fallback: Groq 70B → MiMo ═══
-    if (groqKey) {
-      const useStream = stream && modelConfig.streamEnabled
-      if (useStream) {
-        const resp = await groqChat(messages, groqKey, { stream: true, model: 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens })
-        if (resp) return handleStream(resp as Response, origin)
+    // ═══ Try providers in order ═══
+
+    // 1. DB-configured provider first
+    if (dbProvider === 'groq' && groqKey) {
+      // Try streaming first
+      const streamResp = await tryGroqStream(dbModelId || 'llama-3.3-70b-versatile', dbMaxTokens)
+      if (streamResp) return handleStream(streamResp, origin)
+
+      // Non-streaming fallback
+      const result = await tryGroq(dbModelId || 'llama-3.3-70b-versatile', dbMaxTokens)
+      if (result) {
+        await logUsage(supabase, dbModel?.id || 'groq-70b', result.tokens, Date.now() - startMs, true)
+        return jsonResponse({ reply: result.text, source: 'groq', model: dbModelId, intent, confidence }, 200, origin)
       }
-      const r = await groqChat(messages, groqKey, { model: 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens, temperature: dbTemperature })
-      const text = r?.choices?.[0]?.message?.content ?? ''
-      const tokens = r?.usage?.total_tokens || 0
-      await logUsage(supabase, 'groq-70b', tokens, Date.now() - startMs, !!text)
-      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', model: 'llama-3.3-70b-versatile', intent, confidence }, 200, origin)
+      // Empty → try 8B as retry
+      const retry = await tryGroq('llama-3.1-8b-instant', dbMaxTokens)
+      if (retry) {
+        await logUsage(supabase, 'groq-8b', retry.tokens, Date.now() - startMs, true)
+        return jsonResponse({ reply: retry.text, source: 'groq', model: 'llama-3.1-8b-instant', intent, confidence }, 200, origin)
+      }
+    }
+
+    if (dbProvider === 'mimo' && mimoKey) {
+      const result = await tryMimo()
+      if (result) {
+        await logUsage(supabase, dbModel?.id || 'mimo-v2', 0, Date.now() - startMs, true)
+        return jsonResponse({ reply: result, source: 'mimo', model: dbModelId, intent, confidence }, 200, origin)
+      }
+    }
+
+    // 2. Fallback: try Groq 70B → 8B → MiMo
+    if (groqKey) {
+      for (const model of ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']) {
+        // Try streaming for first model
+        if (model === 'llama-3.3-70b-versatile') {
+          const streamResp = await tryGroqStream(model, dbMaxTokens)
+          if (streamResp) return handleStream(streamResp, origin)
+        }
+        const result = await tryGroq(model, dbMaxTokens)
+        if (result) {
+          await logUsage(supabase, `groq-${model.includes('70') ? '70b' : '8b'}`, result.tokens, Date.now() - startMs, true)
+          return jsonResponse({ reply: result.text, source: 'groq', model, intent, confidence }, 200, origin)
+        }
+        console.error(`Groq ${model} returned empty, trying next...`)
+      }
     }
 
     if (mimoKey) {
-      const useStream = stream && modelConfig.streamEnabled
-      if (useStream) {
-        const resp = await mimoChat(messages, mimoKey, true)
-        if (resp) return handleStream(resp as Response, origin)
+      const result = await tryMimo()
+      if (result) {
+        await logUsage(supabase, 'mimo-v2', 0, Date.now() - startMs, true)
+        return jsonResponse({ reply: result, source: 'mimo', model: 'mimo-v2-pro', intent, confidence }, 200, origin)
       }
-      const r = await mimoChat(messages, mimoKey)
-      const text = r?.choices?.[0]?.message?.content ?? ''
-      await logUsage(supabase, 'mimo-v2', 0, Date.now() - startMs, !!text)
-      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', model: 'mimo-v2-pro', intent, confidence }, 200, origin)
     }
 
-    // No provider available
-    await logUsage(supabase, 'local-ai', 0, Date.now() - startMs, false, 'No AI provider available')
-    return jsonResponse({ reply: 'خدمة AI غير مُعدّة. تأكد من إعداد مفتاح API.', source: 'fallback' }, 200, origin)
+    // 3. Nothing worked
+    await logUsage(supabase, 'none', 0, Date.now() - startMs, false, 'All providers returned empty')
+    return jsonResponse({
+      reply: '⚠️ لم أتمكن من توليد رد. تحقق من إعدادات مزود AI (Groq/MiMo) ومفتاح API.',
+      source: 'all_failed',
+      debug: { groqKeySet: !!groqKey, mimoKeySet: !!mimoKey, dbProvider, dbModelId },
+    }, 200, origin)
 
   } catch (error) {
     console.error('AI error:', error)

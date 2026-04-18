@@ -134,7 +134,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
   }
 
   // ═══════════════════════════════════════════════════════════
-  // SEND MESSAGE — with rate limiting, offline fallback, context trimming
+  // SEND MESSAGE — with rate limiting
   // ═══════════════════════════════════════════════════════════
 
   Future<void> _send(String text, {String? mode, String? template}) async {
@@ -194,8 +194,21 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         );
       }
     } catch (e) {
-      // FIX: On any error, fall back to local AI (offline)
-      await _sendOffline(text);
+      // Show error to user
+      if (!_mounted) return;
+      setState(() {
+        _msgs.add(
+          ChatMsg(
+            role: 'assistant',
+            content:
+                '⚠️ فشل الاتصال بالخادم. تحقق من اتصال الإنترنت وحاول مرة أخرى.',
+            source: 'error',
+          ),
+        );
+        _loading = false;
+        _streamingText = null;
+      });
+      _saveChat();
     }
     _scrollDown();
   }
@@ -220,7 +233,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
   }
 
   // ═══════════════════════════════════════════════════════════
-  // STREAMING — with fallback to normal, then offline
+  // STREAMING — falls back to normal request on failure
   // ═══════════════════════════════════════════════════════════
 
   Future<void> _sendStreaming(
@@ -235,7 +248,6 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
     try {
       await for (final chunk in api.callFunctionStream('ai-chat-v3', {
         'message': text,
-        // FIX: Last 3 pairs only (was 10 — too expensive)
         'history': _buildHistory(6),
         if (context != null) 'context': context,
         if (mode != null) 'mode': mode,
@@ -249,11 +261,12 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       }
 
       if (!_mounted) return;
+      final content = buffer.toString().trim();
       setState(() {
         _msgs.add(
           ChatMsg(
             role: 'assistant',
-            content: buffer.toString(),
+            content: content.isNotEmpty ? content : '⚠️ تم استلام رد فارغ.',
             source: 'groq',
           ),
         );
@@ -262,23 +275,19 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       });
       _saveChat();
     } catch (_) {
-      // FIX: Fallback chain: streaming → normal → offline
-      try {
-        await _sendNormal(
-          api,
-          text,
-          context: context,
-          mode: mode,
-          template: template,
-        );
-      } catch (_) {
-        await _sendOffline(text);
-      }
+      // Fallback: streaming → normal (no offline)
+      await _sendNormal(
+        api,
+        text,
+        context: context,
+        mode: mode,
+        template: template,
+      );
     }
   }
 
   // ═══════════════════════════════════════════════════════════
-  // NORMAL REQUEST — with fallback to offline
+  // NORMAL REQUEST
   // ═══════════════════════════════════════════════════════════
 
   Future<void> _sendNormal(
@@ -301,76 +310,14 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       final reply = resp['reply'] as String? ?? 'عذراً، لم أتمكن من المعالجة.';
       final source = resp['source'] as String? ?? 'unknown';
 
+      // Check if reply is an error message
+      final displayReply = (reply.isEmpty)
+          ? '⚠️ تم استلام رد فارغ من الخادم. حاول مرة أخرى.'
+          : reply;
+
       setState(() {
         _msgs.add(
-          ChatMsg(role: 'assistant', content: reply, source: source),
-        );
-        _loading = false;
-        _streamingText = null;
-      });
-      _saveChat();
-    } catch (_) {
-      // FIX: Fall back to offline AI
-      await _sendOffline(text);
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // OFFLINE FALLBACK — uses EnhancedLocalAI + optional HF intent
-  // ═══════════════════════════════════════════════════════════
-
-  Future<void> _sendOffline(String text) async {
-    if (!_mounted) return;
-
-    try {
-      // Get cached data for local analysis
-      Map<String, dynamic> data = {};
-      try {
-        final campaign = ref.read(campaignProvider);
-        final analytics = ref.read(
-          dashboardAnalyticsProvider(
-            AnalyticsFilter(campaignType: campaign.value),
-          ),
-        );
-        analytics.whenData((d) => data = _compactContext(d));
-      } catch (_) {}
-
-      // Try HF intent classification first (better routing for local AI)
-      String? hfIntent;
-      double hfConfidence = 0;
-      try {
-        final hf = ref.read(huggingFaceServiceProvider);
-        if (hf != null && ConnectivityUtils.isOnline) {
-          final intent = await hf.getTopIntent(text).timeout(
-                const Duration(seconds: 5),
-                onTimeout: () => (intent: 'general_question', confidence: 0.0),
-              );
-          hfIntent = intent.intent;
-          hfConfidence = intent.confidence;
-        }
-      } catch (_) {}
-
-      // Use EnhancedLocalAI with the data
-      final localAI = EnhancedLocalAI();
-      final result = localAI.processQuery(text, data);
-
-      // Build response with HF context if available
-      String response = result.response;
-      if (hfIntent != null &&
-          hfConfidence > 0.5 &&
-          hfIntent != 'general_question') {
-        response = '💡 (تحليل محلي ذكي)\n\n$result.response';
-      }
-
-      if (!_mounted) return;
-      setState(() {
-        _msgs.add(
-          ChatMsg(
-            role: 'assistant',
-            content: response,
-            source:
-                hfIntent != null && hfConfidence > 0.5 ? 'local+hf' : 'local',
-          ),
+          ChatMsg(role: 'assistant', content: displayReply, source: source),
         );
         _loading = false;
         _streamingText = null;
@@ -382,8 +329,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         _msgs.add(
           ChatMsg(
             role: 'assistant',
-            content: '⚠️ الخادم غير متاح والتحليل المحلي غير متوفر حالياً.\n'
-                'تحقق من اتصال الإنترنت وحاول مرة أخرى.',
+            content:
+                '⚠️ فشل الاتصال: ${e.toString().length > 100 ? "خطأ في الشبكة" : e}',
             source: 'error',
           ),
         );
@@ -681,7 +628,6 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       _Guide('📊', 'كيف أشاهد التحليلات؟', 'view_analytics'),
       _Guide('🗺️', 'كيف أستخدم الخريطة؟', 'use_map'),
       _Guide('📤', 'كيف أُصدّر PDF؟', 'export_pdf'),
-      _Guide('📡', 'العمل بدون إنترنت', 'offline_mode'),
       _Guide('👥', 'إدارة المستخدمين', 'manage_users'),
       _Guide('🔄', 'المزامنة اليدوية', 'manual_sync'),
     ];
@@ -1001,9 +947,6 @@ class _MsgBubble extends StatelessWidget {
         'mimo' => '🤖 MiMo',
         'function_call' => '📊 من قاعدة البيانات',
         'rag' => '📚 من قاعدة المعرفة',
-        'local' => '📱 بدون إنترنت',
-        'local+hf' => '📱⚡ بدون إنترنت + HF',
-        'streaming' => '⚡ جارٍ الكتابة...',
         'error' => '⚠️ خطأ',
         _ => '',
       };

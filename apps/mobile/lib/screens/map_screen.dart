@@ -17,8 +17,6 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen>
     with TickerProviderStateMixin {
   final MapController _mapController = MapController();
-  String _mapMode = 'submissions'; // submissions, shortages, facilities
-  bool _showHeatmap = false;
   bool _showStats = true;
   double _currentZoom = 6.0;
 
@@ -213,7 +211,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
                           ),
                         ),
                       );
-                      ref.invalidate(shortagesProvider);
                       ref.invalidate(governoratesProvider);
                     },
                   ),
@@ -231,18 +228,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
               // Mode chips
               SizedBox(
                 height: 36,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
+                child: Row(
                   children: [
                     _modeChip(
                       'submissions',
                       'إرساليات',
                       Icons.description_rounded,
                     ),
-                    const SizedBox(width: 8),
-                    _modeChip('shortages', 'نواقص', Icons.warning_rounded),
-                    const SizedBox(width: 8),
-                    _modeChip('heatmap', 'خريطة حرارية', Icons.grid_on_rounded),
                   ],
                 ),
               ),
@@ -254,52 +246,27 @@ class _MapScreenState extends ConsumerState<MapScreen>
   }
 
   Widget _modeChip(String mode, String label, IconData icon) {
-    final isActive =
-        mode == 'heatmap' ? _showHeatmap : _mapMode == mode && !_showHeatmap;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          if (mode == 'heatmap') {
-            _showHeatmap = true;
-          } else {
-            _showHeatmap = false;
-            _mapMode = mode;
-          }
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(20),
-          border: isActive
-              ? null
-              : Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isActive ? const Color(0xFF00695C) : Colors.white,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFF00695C)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Tajawal',
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF00695C),
             ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 13,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? const Color(0xFF00695C) : Colors.white,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -351,13 +318,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 '$govCount',
                 Icons.location_city_rounded,
                 const Color(0xFF10B981),
-              ),
-              const SizedBox(width: 8),
-              _statCard(
-                'خريطة',
-                _showHeatmap ? 'حرارية' : 'علامات',
-                _showHeatmap ? Icons.grid_on : Icons.place_rounded,
-                const Color(0xFFF59E0B),
               ),
             ],
           );
@@ -441,11 +401,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
             ),
           ],
         ),
-        child: _showHeatmap
-            ? _heatmapLegend()
-            : _mapMode == 'submissions'
-                ? _submissionLegend()
-                : _shortageLegend(),
+        child: _submissionLegend(),
       ),
     );
   }
@@ -461,48 +417,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
         _legendDot(const Color(0xFFF59E0B), 'قيد المراجعة'),
         const SizedBox(width: 12),
         _legendDot(const Color(0xFFEF4444), 'مرفوض'),
-      ],
-    );
-  }
-
-  Widget _shortageLegend() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _legendDot(const Color(0xFFDC2626), 'حرج'),
-        const SizedBox(width: 12),
-        _legendDot(const Color(0xFFF97316), 'عالي'),
-        const SizedBox(width: 12),
-        _legendDot(const Color(0xFFFBBF24), 'متوسط'),
-        const SizedBox(width: 12),
-        _legendDot(const Color(0xFF22C55E), 'منخفض'),
-      ],
-    );
-  }
-
-  Widget _heatmapLegend() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 60,
-          height: 8,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF22C55E), Color(0xFFFBBF24), Color(0xFFEF4444)],
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        const Text(
-          'منخفض ← عالي',
-          style: TextStyle(
-            fontFamily: 'Tajawal',
-            fontSize: 10,
-            color: Color(0xFF6B7280),
-          ),
-        ),
       ],
     );
   }
@@ -604,22 +518,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
   // ─── Map Layers ──────────────────────────────────────────────────────
 
   Widget _buildMap() {
-    final children = <Widget>[
-      TileLayer(
-        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        userAgentPackageName: 'com.epi.supervisor',
-        tileBuilder: _darkTileBuilder,
-      ),
-    ];
-
-    if (_showHeatmap) {
-      children.add(_buildHeatmapLayer());
-    } else if (_mapMode == 'submissions') {
-      children.add(_buildSubmissionsClusterLayer());
-    } else {
-      children.add(_buildShortagesLayer());
-    }
-
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
@@ -631,7 +529,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
           setState(() => _currentZoom = pos.zoom ?? _currentZoom);
         },
       ),
-      children: children,
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.epi.supervisor',
+          tileBuilder: _darkTileBuilder,
+        ),
+        _buildSubmissionsClusterLayer(),
+      ],
     );
   }
 
@@ -665,95 +570,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
         0,
       ]),
       child: tileWidget,
-    );
-  }
-
-  // ─── Heatmap Layer ───────────────────────────────────────────────────
-
-  Widget _buildHeatmapLayer() {
-    final governoratesAsync = ref.watch(governoratesProvider);
-
-    return governoratesAsync.when(
-      loading: () => const CircleLayer(circles: []),
-      error: (_, __) => const CircleLayer(circles: []),
-      data: (governorates) {
-        final circles = <CircleMarker>[];
-        final labels = <Marker>[];
-
-        for (final gov in governorates) {
-          final lat = gov['center_lat'];
-          final lng = gov['center_lng'];
-          if (lat == null || lng == null) continue;
-
-          final count = (gov['submission_count'] as num?)?.toDouble() ?? 1.0;
-          const maxCount = 50.0;
-          final intensity = (count / maxCount).clamp(0.1, 1.0);
-
-          Color color;
-          if (intensity < 0.33) {
-            color = Color.lerp(
-              const Color(0xFF22C55E),
-              const Color(0xFFFBBF24),
-              intensity * 3,
-            )!;
-          } else if (intensity < 0.66) {
-            color = Color.lerp(
-              const Color(0xFFFBBF24),
-              const Color(0xFFF97316),
-              (intensity - 0.33) * 3,
-            )!;
-          } else {
-            color = Color.lerp(
-              const Color(0xFFF97316),
-              const Color(0xFFEF4444),
-              (intensity - 0.66) * 3,
-            )!;
-          }
-
-          circles.add(
-            CircleMarker(
-              point: LatLng(lat.toDouble(), lng.toDouble()),
-              radius: 12000 + (count * 600),
-              useRadiusInMeter: true,
-              color: color.withValues(alpha: 0.35),
-              borderColor: color.withValues(alpha: 0.7),
-              borderStrokeWidth: 2,
-            ),
-          );
-
-          // Add count label
-          labels.add(
-            Marker(
-              point: LatLng(lat.toDouble(), lng.toDouble()),
-              width: 40,
-              height: 24,
-              child: Container(
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${count.toInt()}',
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-
-        return Stack(
-          children: [
-            CircleLayer(circles: circles),
-            MarkerLayer(markers: labels),
-          ],
-        );
-      },
     );
   }
 
@@ -867,49 +683,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
   }
 
-  // ─── Shortages Layer ─────────────────────────────────────────────────
-
-  Widget _buildShortagesLayer() {
-    final shortagesAsync = ref.watch(shortagesProvider);
-
-    return shortagesAsync.when(
-      loading: () => const MarkerLayer(markers: []),
-      error: (_, __) => const MarkerLayer(markers: []),
-      data: (shortages) {
-        final markers = <Marker>[];
-        for (final shortage in shortages) {
-          final lat = shortage['gps_lat'] as double?;
-          final lng = shortage['gps_lng'] as double?;
-          if (lat == null || lng == null) continue;
-
-          final severity = shortage['severity'] as String? ?? 'medium';
-          final color = _severityColor(severity);
-
-          markers.add(
-            Marker(
-              point: LatLng(lat, lng),
-              width: 44,
-              height: 44,
-              child: GestureDetector(
-                onTap: () => _showShortageInfo(shortage),
-                child: _animatedMarker(color, Icons.warning_rounded),
-              ),
-            ),
-          );
-        }
-
-        if (markers.isEmpty) {
-          return _buildGovernorateMarkers(severityMode: true);
-        }
-
-        return MarkerLayer(markers: markers);
-      },
-    );
-  }
-
   // ─── Governorate Markers ─────────────────────────────────────────────
 
-  Widget _buildGovernorateMarkers({bool severityMode = false}) {
+  Widget _buildGovernorateMarkers() {
     final governoratesAsync = ref.watch(governoratesProvider);
 
     return governoratesAsync.when(
@@ -923,75 +699,44 @@ class _MapScreenState extends ConsumerState<MapScreen>
           final lng = (gov['center_lng'] as num).toDouble();
           final name = gov['name_ar'] ?? '';
           final count = (gov['submission_count'] as num?)?.toInt() ?? 0;
-          final color =
-              severityMode ? const Color(0xFFF97316) : const Color(0xFF00897B);
+
+          // Color based on count
+          final color = count > 20
+              ? const Color(0xFF10B981)
+              : count > 5
+                  ? const Color(0xFF3B82F6)
+                  : count > 0
+                      ? const Color(0xFFF59E0B)
+                      : const Color(0xFF9CA3AF);
 
           return Marker(
             point: LatLng(lat, lng),
-            width: 100,
-            height: 70,
+            width: 48,
+            height: 48,
             child: GestureDetector(
               onTap: () => _showGovernorateInfo(gov),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Label
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
+              child: Container(
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withValues(alpha: 0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 11,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (count > 0) ...[
-                          const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.25),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '$count',
-                              style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 9,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                  ],
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
                   ),
-                  // Pin
-                  Icon(Icons.location_on_rounded, color: color, size: 28),
-                ],
+                ),
               ),
             ),
           );
@@ -1124,88 +869,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showShortageInfo(Map<String, dynamic> shortage) {
-    final item = shortage['item_name'] ?? 'غير محدد';
-    final severity = shortage['severity'] ?? 'medium';
-    final color = _severityColor(severity);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.warning_rounded, color: color, size: 36),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              item,
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                'خطورة: $severity',
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text(
-                  'إغلاق',
-                  style: TextStyle(fontFamily: 'Tajawal'),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

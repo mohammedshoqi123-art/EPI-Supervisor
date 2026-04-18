@@ -175,85 +175,87 @@ class DashboardKPIGrid extends StatelessWidget {
   }
 
   Widget _buildKPICard(BuildContext context, KPIItem kpi) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        if (kpi.label == 'الإرساليات') context.go('/forms/status');
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: kpi.color.withValues(alpha: 0.08),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: kpi.color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          if (kpi.label == 'الإرساليات') context.go('/forms/status');
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: kpi.color.withValues(alpha: 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: kpi.color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(kpi.icon, color: kpi.color, size: 20),
                   ),
-                  child: Icon(kpi.icon, color: kpi.color, size: 20),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 12,
-                  color: Colors.grey.shade300,
-                ),
-              ],
-            ),
-            const Spacer(),
-            AnimatedCounter(
-              value: kpi.mainValue,
-              color: kpi.color,
-              fontSize: 28,
-            ),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  kpi.label,
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 12,
+                    color: Colors.grey.shade300,
                   ),
-                ),
-                if (kpi.subValue > 0)
+                ],
+              ),
+              const Spacer(),
+              AnimatedCounter(
+                value: kpi.mainValue,
+                color: kpi.color,
+                fontSize: 28,
+              ),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                   Text(
-                    '${kpi.subValue} ${kpi.subLabel}',
-                    style: TextStyle(
+                    kpi.label,
+                    style: const TextStyle(
                       fontFamily: 'Tajawal',
-                      fontSize: 10,
-                      color: kpi.color.withValues(alpha: 0.7),
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
                     ),
                   ),
-                if (kpi.subValue == 0)
-                  Text(
-                    kpi.subLabel,
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 10,
-                      color: kpi.color.withValues(alpha: 0.7),
+                  if (kpi.subValue > 0)
+                    Text(
+                      '${kpi.subValue} ${kpi.subLabel}',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 10,
+                        color: kpi.color.withValues(alpha: 0.7),
+                      ),
                     ),
-                  ),
-              ],
-            ),
-          ],
+                  if (kpi.subValue == 0)
+                    Text(
+                      kpi.subLabel,
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 10,
+                        color: kpi.color.withValues(alpha: 0.7),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -425,127 +427,129 @@ class DashboardTrendLine extends StatelessWidget {
     final maxY =
         entries.fold<num>(1, (m, e) => e.value > m ? e.value : m).toDouble();
 
-    return Container(
-      height: 200,
-      padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-          ),
-        ],
-      ),
-      child: LineChart(
-        LineChartData(
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            getDrawingHorizontalLine: (v) =>
-                FlLine(color: Colors.grey.shade100, strokeWidth: 1),
-          ),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 30,
-                getTitlesWidget: (v, _) => Text(
-                  v.toInt().toString(),
-                  style: const TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 9,
-                    color: AppTheme.textHint,
+    return RepaintBoundary(
+      child: Container(
+        height: 200,
+        padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+            ),
+          ],
+        ),
+        child: LineChart(
+          LineChartData(
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              getDrawingHorizontalLine: (v) =>
+                  FlLine(color: Colors.grey.shade100, strokeWidth: 1),
+            ),
+            titlesData: FlTitlesData(
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 30,
+                  getTitlesWidget: (v, _) => Text(
+                    v.toInt().toString(),
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 9,
+                      color: AppTheme.textHint,
+                    ),
                   ),
                 ),
               ),
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (v, _) {
+                    final i = v.toInt();
+                    if (i >= 0 &&
+                        i < entries.length &&
+                        (i % 2 == 0 || entries.length <= 7)) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          entries[i].key,
+                          style: const TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 9,
+                            color: AppTheme.textHint,
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox();
+                  },
+                ),
+              ),
             ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (v, _) {
-                  final i = v.toInt();
-                  if (i >= 0 &&
-                      i < entries.length &&
-                      (i % 2 == 0 || entries.length <= 7)) {
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        entries[i].key,
-                        style: const TextStyle(
+            borderData: FlBorderData(show: false),
+            minY: 0,
+            maxY: maxY * 1.2,
+            lineBarsData: [
+              LineChartBarData(
+                spots: entries
+                    .asMap()
+                    .entries
+                    .map(
+                      (e) => FlSpot(
+                        e.key.toDouble(),
+                        (e.value.value as num).toDouble(),
+                      ),
+                    )
+                    .toList(),
+                isCurved: true,
+                curveSmoothness: 0.3,
+                color: AppTheme.primaryColor,
+                barWidth: 2.5,
+                dotData: FlDotData(
+                  show: true,
+                  getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
+                    radius: 3,
+                    color: AppTheme.primaryColor,
+                    strokeWidth: 0,
+                  ),
+                ),
+                belowBarData: BarAreaData(
+                  show: true,
+                  gradient: LinearGradient(
+                    colors: [
+                      AppTheme.primaryColor.withValues(alpha: 0.15),
+                      AppTheme.primaryColor.withValues(alpha: 0.02),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+            ],
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipItems: (spots) => spots
+                    .map(
+                      (s) => LineTooltipItem(
+                        '${entries[s.x.toInt()].key}\n${s.y.toInt()} إرسالية',
+                        const TextStyle(
                           fontFamily: 'Tajawal',
-                          fontSize: 9,
-                          color: AppTheme.textHint,
+                          fontSize: 11,
+                          color: Colors.white,
                         ),
                       ),
-                    );
-                  }
-                  return const SizedBox();
-                },
+                    )
+                    .toList(),
               ),
-            ),
-          ),
-          borderData: FlBorderData(show: false),
-          minY: 0,
-          maxY: maxY * 1.2,
-          lineBarsData: [
-            LineChartBarData(
-              spots: entries
-                  .asMap()
-                  .entries
-                  .map(
-                    (e) => FlSpot(
-                      e.key.toDouble(),
-                      (e.value.value as num).toDouble(),
-                    ),
-                  )
-                  .toList(),
-              isCurved: true,
-              curveSmoothness: 0.3,
-              color: AppTheme.primaryColor,
-              barWidth: 2.5,
-              dotData: FlDotData(
-                show: true,
-                getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-                  radius: 3,
-                  color: AppTheme.primaryColor,
-                  strokeWidth: 0,
-                ),
-              ),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.primaryColor.withValues(alpha: 0.15),
-                    AppTheme.primaryColor.withValues(alpha: 0.02),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ],
-          lineTouchData: LineTouchData(
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipItems: (spots) => spots
-                  .map(
-                    (s) => LineTooltipItem(
-                      '${entries[s.x.toInt()].key}\n${s.y.toInt()} إرسالية',
-                      const TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 11,
-                        color: Colors.white,
-                      ),
-                    ),
-                  )
-                  .toList(),
             ),
           ),
         ),

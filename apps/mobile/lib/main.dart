@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'package:epi_core/epi_core.dart';
 import 'package:epi_shared/epi_shared.dart';
@@ -189,21 +190,29 @@ Future<void> main() async {
     ),
   );
 
-  // Initialize Sentry with centralized config — with timeout to prevent blocking
-  try {
-    await SentryConfig.init(
-      appRunner: () async =>
-          runApp(const ProviderScope(child: EpiSupervisorApp())),
-    ).timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {
-        debugPrint('[SentryConfig] Init timed out, running app without Sentry');
-        runApp(const ProviderScope(child: EpiSupervisorApp()));
-      },
-    );
-  } catch (e) {
-    debugPrint('[SentryConfig] Init failed: $e, running app without Sentry');
-    runApp(const ProviderScope(child: EpiSupervisorApp()));
+  // Run app first — Sentry will init after first frame (non-blocking)
+  runApp(const ProviderScope(child: EpiSupervisorApp()));
+
+  // Defer Sentry init to after first frame — doesn't block app startup
+  if (SentryConfig.isEnabled) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await SentryFlutter.init(
+          (options) {
+            options.dsn =
+                const String.fromEnvironment('SENTRY_DSN', defaultValue: '');
+            options.environment = const String.fromEnvironment('ENV',
+                defaultValue: 'development');
+            options.release = 'epi-supervisor@${AppConfig.appVersion}';
+            options.tracesSampleRate = 0.2;
+            options.enableAutoPerformanceTracing = true;
+            options.attachStacktrace = true;
+          },
+        ).timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint('[Sentry] Deferred init failed: $e');
+      }
+    });
   }
 }
 
@@ -227,23 +236,11 @@ class EpiSupervisorApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       builder: (context, child) {
-        // RTL + ensure text direction throughout the app
-        Widget content = Directionality(
+        // RTL direction for Arabic app
+        return Directionality(
           textDirection: TextDirection.rtl,
-          child: MediaQuery(
-            // Allow accessibility text scaling up to 1.3x for readability
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(
-                MediaQuery.of(context).textScaler.scale(1.0) > 2.0
-                    ? 2.0
-                    : MediaQuery.of(context).textScaler.scale(1.0),
-              ),
-            ),
-            child: child!,
-          ),
+          child: child!,
         );
-
-        return content;
       },
     );
   }

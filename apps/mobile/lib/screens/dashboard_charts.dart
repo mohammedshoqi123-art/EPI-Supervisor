@@ -111,20 +111,14 @@ class _AnimatedCounterState extends State<AnimatedCounter>
 class DashboardKPIGrid extends StatelessWidget {
   final int total;
   final int today;
-  final int shortages;
-  final int resolved;
-  final int critical;
-  final int completionRate;
+  final int drafts;
   final AnimationController cardsAnim;
 
   const DashboardKPIGrid({
     super.key,
     required this.total,
     required this.today,
-    required this.shortages,
-    required this.resolved,
-    required this.critical,
-    required this.completionRate,
+    required this.drafts,
     required this.cardsAnim,
   });
 
@@ -132,7 +126,7 @@ class DashboardKPIGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       KPIItem(
-        'الإرساليات',
+        'إرساليات',
         total,
         today,
         Icons.upload_file_rounded,
@@ -140,28 +134,12 @@ class DashboardKPIGrid extends StatelessWidget {
         'اليوم',
       ),
       KPIItem(
-        'النواقص',
-        shortages,
-        resolved,
-        Icons.warning_amber_rounded,
+        'مسودات',
+        drafts,
+        0,
+        Icons.edit_note_rounded,
         AppTheme.warningColor,
-        'محلول',
-      ),
-      KPIItem(
-        'حرج',
-        critical,
-        0,
-        Icons.local_fire_department_rounded,
-        AppTheme.errorColor,
-        critical > 0 ? 'يحتاج تدخل!' : 'لا يوجد',
-      ),
-      KPIItem(
-        'الإنجاز',
-        completionRate,
-        0,
-        Icons.speed_rounded,
-        AppTheme.successColor,
-        '%',
+        drafts > 0 ? 'قيد التحرير' : 'لا يوجد',
       ),
     ];
 
@@ -255,7 +233,7 @@ class DashboardKPIGrid extends StatelessWidget {
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                if (kpi.label != 'الإنجاز')
+                if (kpi.subValue > 0)
                   Text(
                     '${kpi.subValue} ${kpi.subLabel}',
                     style: TextStyle(
@@ -264,7 +242,7 @@ class DashboardKPIGrid extends StatelessWidget {
                       color: kpi.color.withValues(alpha: 0.7),
                     ),
                   ),
-                if (kpi.label == 'الإنجاز')
+                if (kpi.subValue == 0)
                   Text(
                     kpi.subLabel,
                     style: TextStyle(
@@ -277,146 +255,6 @@ class DashboardKPIGrid extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ═══ Health Ring ═══
-class DashboardHealthRing extends StatelessWidget {
-  final Map<String, dynamic> data;
-
-  const DashboardHealthRing({super.key, required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final submissions = data['submissions'] as Map<String, dynamic>? ?? {};
-    final shortages = data['shortages'] as Map<String, dynamic>? ?? {};
-    final bySeverity = shortages['bySeverity'] as Map<String, dynamic>? ?? {};
-
-    final score = LocalAnalyticsEngine.healthScore(
-      totalShortages: shortages['total'] as int? ?? 0,
-      resolvedShortages: shortages['resolved'] as int? ?? 0,
-      criticalShortages: bySeverity['critical'] as int? ?? 0,
-      totalSubmissions: submissions['total'] as int? ?? 0,
-    );
-
-    final color = score >= 80
-        ? AppTheme.successColor
-        : score >= 50
-            ? AppTheme.warningColor
-            : AppTheme.errorColor;
-    final label = score >= 80
-        ? 'أداء ممتاز'
-        : score >= 50
-            ? 'أداء متوسط'
-            : 'يحتاج تحسين';
-    final insights = LocalAnalyticsEngine.generateInsights(data);
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: score / 100),
-            duration: const Duration(milliseconds: 1200),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, _) {
-              return SizedBox(
-                width: 80,
-                height: 80,
-                child: Stack(
-                  children: [
-                    CircularProgressIndicator(
-                      value: value,
-                      strokeWidth: 7,
-                      backgroundColor: Colors.grey.shade100,
-                      valueColor: AlwaysStoppedAnimation(color),
-                    ),
-                    Center(
-                      child: Text(
-                        '$score',
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: color,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                if (insights.isNotEmpty)
-                  Text(
-                    insights.first,
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: insights.skip(1).take(2).map((insight) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        insight.length > 35
-                            ? '${insight.substring(0, 32)}...'
-                            : insight,
-                        style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 10,
-                          color: AppTheme.primaryColor,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -550,157 +388,6 @@ class DashboardQuickActions extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-// ═══ Status Donut ═══
-class DashboardStatusDonut extends StatelessWidget {
-  final Map<String, dynamic> data;
-
-  const DashboardStatusDonut({super.key, required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    if (data.isEmpty) return _emptyCard('لا توجد بيانات');
-
-    final colors = {
-      'draft': Colors.grey.shade400,
-      'submitted': AppTheme.infoColor,
-      'reviewed': AppTheme.warningColor,
-      'approved': AppTheme.successColor,
-      'rejected': AppTheme.errorColor,
-    };
-    final labels = {
-      'draft': 'مسودة',
-      'submitted': 'مرسل',
-      'reviewed': 'مراجعة',
-      'approved': 'معتمد',
-      'rejected': 'مرفوض',
-    };
-
-    final total = data.values.fold<int>(0, (s, v) => s + (v as int));
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 130,
-            height: 130,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 4,
-                centerSpaceRadius: 30,
-                sections: data.entries.map((e) {
-                  final pct = total > 0 ? (e.value as int) / total * 100 : 0;
-                  return PieChartSectionData(
-                    value: (e.value as num).toDouble(),
-                    color: colors[e.key] ?? Colors.grey,
-                    radius: 45,
-                    title: '${pct.toStringAsFixed(0)}%',
-                    titleStyle: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-              children: data.entries.map((e) {
-                final pct = total > 0
-                    ? ((e.value as int) / total * 100).toStringAsFixed(0)
-                    : '0';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: colors[e.key],
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          labels[e.key] ?? e.key,
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${e.value}',
-                        style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '($pct%)',
-                        style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 10,
-                          color: AppTheme.textHint,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _emptyCard(String msg) {
-    return Container(
-      height: 120,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inbox_rounded, size: 32, color: Colors.grey.shade300),
-            const SizedBox(height: 8),
-            Text(
-              msg,
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                color: Colors.grey.shade400,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -867,84 +554,3 @@ class DashboardTrendLine extends StatelessWidget {
   }
 }
 
-// ═══ Activity Feed ═══
-class DashboardActivityFeed extends StatelessWidget {
-  final Map<String, dynamic> data;
-
-  const DashboardActivityFeed({super.key, required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final insights = LocalAnalyticsEngine.generateInsights(data);
-    if (insights.isEmpty) {
-      return Container(
-        height: 120,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Center(
-          child: Text(
-            'لا توجد نشاطات حديثة',
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              color: Colors.grey.shade400,
-              fontSize: 13,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-          ),
-        ],
-      ),
-      child: Column(
-        children: insights.asMap().entries.map((entry) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Center(
-                    child: Text(
-                      entry.value.substring(0, 1),
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    entry.value,
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 13,
-                      color: AppTheme.textPrimary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}

@@ -145,29 +145,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   SliverList _buildDashboardContent(Map<String, dynamic> data) {
     final submissions = data['submissions'] as Map<String, dynamic>? ?? {};
-    final shortages = data['shortages'] as Map<String, dynamic>? ?? {};
     final total = submissions['total'] as int? ?? 0;
     final today = submissions['today'] as int? ?? 0;
-    final totalShortages = shortages['total'] as int? ?? 0;
-    final resolved = shortages['resolved'] as int? ?? 0;
-    final bySeverity = shortages['bySeverity'] as Map<String, dynamic>? ?? {};
-    final critical = bySeverity['critical'] as int? ?? 0;
-    final completionRate =
-        totalShortages > 0 ? ((resolved / totalShortages) * 100).round() : 0;
+    final byStatus = submissions['byStatus'] as Map<String, dynamic>? ?? {};
+    final drafts = byStatus['draft'] as int? ?? 0;
 
     return SliverList(
       delegate: SliverChildListDelegate([
         DashboardKPIGrid(
           total: total,
           today: today,
-          shortages: totalShortages,
-          resolved: resolved,
-          critical: critical,
-          completionRate: completionRate,
+          drafts: drafts,
           cardsAnim: _cardsAnim,
         ),
-        const SizedBox(height: 20),
-        DashboardHealthRing(data: data),
         const SizedBox(height: 20),
         _sectionTitle('إجراءات سريعة'),
         const SizedBox(height: 12),
@@ -178,21 +168,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           onExportPdf: _exportPdfReport,
         ),
         const SizedBox(height: 20),
-        _sectionTitle('توزيع الحالات'),
-        const SizedBox(height: 12),
-        DashboardStatusDonut(
-          data: submissions['byStatus'] as Map<String, dynamic>? ?? {},
-        ),
-        const SizedBox(height: 20),
         _sectionTitle('النشاط الأسبوعي'),
         const SizedBox(height: 12),
         DashboardTrendLine(
           dayData: submissions['byDay'] as Map<String, dynamic>? ?? {},
         ),
-        const SizedBox(height: 20),
-        _sectionTitle('آخر النشاطات'),
-        const SizedBox(height: 12),
-        DashboardActivityFeed(data: data),
         const SizedBox(height: 20),
       ]),
     );

@@ -210,9 +210,13 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     );
     String selectedType = existingField?['type'] ?? 'text';
     bool isRequired = existingField?['required'] ?? false;
+
+    // ✅ FIX: Create controllers ONCE for options, not inline per rebuild
     final List<String> options = List<String>.from(
       existingField?['options'] ?? [],
     );
+    final List<TextEditingController> optionControllers =
+        options.map((o) => TextEditingController(text: o)).toList();
 
     showModalBottomSheet(
       context: context,
@@ -398,9 +402,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                               children: [
                                 Expanded(
                                   child: TextField(
-                                    controller: TextEditingController(
-                                      text: entry.value,
-                                    ),
+                                    controller:
+                                        optionControllers[entry.key],
                                     decoration: InputDecoration(
                                       labelText: 'خيار ${entry.key + 1}',
                                       border: const OutlineInputBorder(),
@@ -416,16 +419,21 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                                     Icons.remove_circle_outline,
                                     color: AppTheme.errorColor,
                                   ),
-                                  onPressed: () => setModalState(
-                                    () => options.removeAt(entry.key),
-                                  ),
+                                  onPressed: () => setModalState(() {
+                                    optionControllers[entry.key].dispose();
+                                    optionControllers.removeAt(entry.key);
+                                    options.removeAt(entry.key);
+                                  }),
                                 ),
                               ],
                             ),
                           ),
                         ),
                     OutlinedButton.icon(
-                      onPressed: () => setModalState(() => options.add('')),
+                      onPressed: () => setModalState(() {
+                        options.add('');
+                        optionControllers.add(TextEditingController());
+                      }),
                       icon: const Icon(Icons.add_rounded),
                       label: const Text(
                         'إضافة خيار',
@@ -465,9 +473,12 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                           field['hint'] = hintController.text.trim();
                         if (selectedType == 'select' ||
                             selectedType == 'multiselect') {
-                          field['options'] = options
-                              .where((o) => o.trim().isNotEmpty)
+                          // ✅ FIX: Read from controllers to get actual typed values
+                          final savedOptions = optionControllers
+                              .map((c) => c.text.trim())
+                              .where((o) => o.isNotEmpty)
                               .toList();
+                          field['options'] = savedOptions;
                         }
 
                         setState(() {
@@ -517,7 +528,12 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
           ),
         ),
       ),
-    );
+    ).whenComplete(() {
+      // ✅ FIX: Dispose all option controllers when dialog closes
+      for (final c in optionControllers) {
+        c.dispose();
+      }
+    });
   }
 
   // ═══════════════════════════════════════

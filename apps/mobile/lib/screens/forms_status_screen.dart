@@ -135,8 +135,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       key: ValueKey('stats_$_refreshKey'),
       future: _loadStats(),
       builder: (context, snapshot) {
-        final stats = snapshot.data ??
-            {'drafts': 0, 'pending': 0, 'submitted': 0};
+        final stats =
+            snapshot.data ?? {'drafts': 0, 'pending': 0, 'submitted': 0};
         return Container(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -217,20 +217,18 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
             (byStatus['rejected'] as int? ?? 0);
       } catch (_) {
         // Fallback: try local cache
-        final cache =
-            await ref.read(offlineDataCacheProvider.future).timeout(
-                  const Duration(seconds: 3),
-                  onTimeout: () => throw Exception('timeout'),
-                );
+        final cache = await ref.read(offlineDataCacheProvider.future).timeout(
+              const Duration(seconds: 3),
+              onTimeout: () => throw Exception('timeout'),
+            );
         final campaign = ref.read(campaignProvider);
         final allFilter = SubmissionsFilter(
           campaignType: campaign.value,
           limit: 100,
           offset: 0,
         );
-        final cachedSubs =
-            cache.getCachedDataList(allFilter.cacheKey) ??
-                cache.getCachedDataList('submissions');
+        final cachedSubs = cache.getCachedDataList(allFilter.cacheKey) ??
+            cache.getCachedDataList('submissions');
         if (cachedSubs != null) {
           submitted = cachedSubs
               .where((s) =>

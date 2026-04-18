@@ -63,9 +63,7 @@ class _ChatPersistence {
   static Future<void> save(List<ChatMsg> msgs) async {
     try {
       // Keep last 50 messages max
-      final trimmed = msgs.length > 50
-          ? msgs.sublist(msgs.length - 50)
-          : msgs;
+      final trimmed = msgs.length > 50 ? msgs.sublist(msgs.length - 50) : msgs;
       final box = await Hive.openBox<String>(_boxName);
       await box.put(_key, jsonEncode(trimmed.map((m) => m.toJson()).toList()));
     } catch (_) {}
@@ -300,8 +298,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       });
 
       if (!_mounted) return;
-      final reply =
-          resp['reply'] as String? ?? 'عذراً، لم أتمكن من المعالجة.';
+      final reply = resp['reply'] as String? ?? 'عذراً، لم أتمكن من المعالجة.';
       final source = resp['source'] as String? ?? 'unknown';
 
       setState(() {
@@ -359,7 +356,9 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
 
       // Build response with HF context if available
       String response = result.response;
-      if (hfIntent != null && hfConfidence > 0.5 && hfIntent != 'general_question') {
+      if (hfIntent != null &&
+          hfConfidence > 0.5 &&
+          hfIntent != 'general_question') {
         response = '💡 (تحليل محلي ذكي)\n\n$result.response';
       }
 
@@ -369,7 +368,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
           ChatMsg(
             role: 'assistant',
             content: response,
-            source: hfIntent != null && hfConfidence > 0.5 ? 'local+hf' : 'local',
+            source:
+                hfIntent != null && hfConfidence > 0.5 ? 'local+hf' : 'local',
           ),
         );
         _loading = false;
@@ -382,8 +382,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         _msgs.add(
           ChatMsg(
             role: 'assistant',
-            content:
-                '⚠️ الخادم غير متاح والتحليل المحلي غير متوفر حالياً.\n'
+            content: '⚠️ الخادم غير متاح والتحليل المحلي غير متوفر حالياً.\n'
                 'تحقق من اتصال الإنترنت وحاول مرة أخرى.',
             source: 'error',
           ),
@@ -624,8 +623,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
     final templates = [
       _Tmpl('daily', '📅', 'التقرير اليومي', 'ملخص شامل ليوم العمل'),
       _Tmpl('weekly', '📊', 'التقرير الأسبوعي', 'تحليل اتجاه الأسبوع'),
-      _Tmpl(
-          'governorate', '🗺️', 'تقرير المحافظات', 'مقارنة أداء المحافظات'),
+      _Tmpl('governorate', '🗺️', 'تقرير المحافظات', 'مقارنة أداء المحافظات'),
       _Tmpl('shortages', '⚠️', 'تقرير النواقص', 'تحليل النواقص والحلول'),
       _Tmpl('quality', '✅', 'تقرير جودة البيانات', 'اكتمال ودقة الإدخال'),
       _Tmpl('coverage', '💉', 'تقرير التغطية', 'تغطية التطعيمات وفجوات'),
@@ -879,20 +877,19 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
                 gradient: (_loading || !canSend)
                     ? null
                     : LinearGradient(colors: [cs.primary, cs.tertiary]),
-                color:
-                    (_loading || !canSend) ? cs.surfaceContainerHigh : null,
+                color: (_loading || !canSend) ? cs.surfaceContainerHigh : null,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: IconButton(
                 icon: Icon(
                   Icons.send_rounded,
-                  color:
-                      (_loading || !canSend) ? cs.onSurfaceVariant : cs.onPrimary,
+                  color: (_loading || !canSend)
+                      ? cs.onSurfaceVariant
+                      : cs.onPrimary,
                   size: 20,
                 ),
-                onPressed: (_loading || !canSend)
-                    ? null
-                    : () => _send(_ctrl.text),
+                onPressed:
+                    (_loading || !canSend) ? null : () => _send(_ctrl.text),
               ),
             ),
           ],

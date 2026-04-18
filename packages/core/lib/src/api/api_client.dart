@@ -118,11 +118,8 @@ class ApiClient {
     String select = '*',
   }) async {
     try {
-      final result = await _safeClient
-          .from(table)
-          .insert(data)
-          .select(select)
-          .single();
+      final result =
+          await _safeClient.from(table).insert(data).select(select).single();
       return result;
     } on PostgrestException catch (e) {
       throw _mapPostgrestException(e);
@@ -187,9 +184,12 @@ class ApiClient {
     String table, {
     required Map<String, dynamic> filters,
   }) async {
-    await update(table, {
-      'deleted_at': DateTime.now().toIso8601String(),
-    }, filters: filters);
+    await update(
+        table,
+        {
+          'deleted_at': DateTime.now().toIso8601String(),
+        },
+        filters: filters);
   }
 
   // ===== Edge Function calls =====
@@ -203,14 +203,13 @@ class ApiClient {
       await _ensureFreshSession();
 
       // Add timeout to prevent hanging (30 seconds)
-      final response = await _safeClient.functions
-          .invoke(functionName, body: body)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () => throw TimeoutException(
-              'Function $functionName timed out after 30s',
-            ),
-          );
+      final response =
+          await _safeClient.functions.invoke(functionName, body: body).timeout(
+                const Duration(seconds: 30),
+                onTimeout: () => throw TimeoutException(
+                  'Function $functionName timed out after 30s',
+                ),
+              );
       final responseData = response.data;
       if (responseData is List) {
         return {'data': responseData};
@@ -275,8 +274,8 @@ class ApiClient {
       if (expiresAt.difference(now).inMinutes < 5) {
         try {
           await _safeClient.auth.refreshSession().timeout(
-            const Duration(seconds: 10),
-          );
+                const Duration(seconds: 10),
+              );
         } on TimeoutException {
           debugPrint(
             '[ApiClient] Session refresh timed out, proceeding with current token',
@@ -296,9 +295,10 @@ class ApiClient {
 
     try {
       final result = await _safeClient.auth.refreshSession().timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw TimeoutException('Session refresh timed out'),
-      );
+            const Duration(seconds: 10),
+            onTimeout: () =>
+                throw TimeoutException('Session refresh timed out'),
+          );
       if (result.session == null) throw const UnauthorizedException();
     } on TimeoutException {
       throw const UnauthorizedException();
@@ -316,9 +316,7 @@ class ApiClient {
     String contentType = 'image/jpeg',
   }) async {
     try {
-      await _safeClient.storage
-          .from(bucket)
-          .uploadBinary(
+      await _safeClient.storage.from(bucket).uploadBinary(
             path,
             Uint8List.fromList(bytes),
             fileOptions: FileOptions(contentType: contentType),

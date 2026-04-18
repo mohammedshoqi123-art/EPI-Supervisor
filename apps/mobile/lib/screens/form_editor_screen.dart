@@ -402,8 +402,7 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                               children: [
                                 Expanded(
                                   child: TextField(
-                                    controller:
-                                        optionControllers[entry.key],
+                                    controller: optionControllers[entry.key],
                                     decoration: InputDecoration(
                                       labelText: 'خيار ${entry.key + 1}',
                                       border: const OutlineInputBorder(),

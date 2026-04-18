@@ -71,21 +71,24 @@ extension SupabaseConfigAI on SupabaseConfig {
     'HF_API_TOKEN',
     defaultValue: '',
   );
-  
+
   static String _envHfToken = '';
-  
+
   static void setHfToken(String token) => _envHfToken = token;
-  
-  static String get hfToken => _compileHfToken.isNotEmpty ? _compileHfToken : _envHfToken;
-  
+
+  static String get hfToken =>
+      _compileHfToken.isNotEmpty ? _compileHfToken : _envHfToken;
+
   static bool get hasHuggingFace => hfToken.isNotEmpty;
 }
 
 // ═══ Groq Configuration ═══
 extension SupabaseConfigGroq on SupabaseConfig {
-  static const String _compileGroqKey = String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
+  static const String _compileGroqKey =
+      String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
   static String _envGroqKey = '';
   static void setGroqKey(String key) => _envGroqKey = key;
-  static String get groqApiKey => _compileGroqKey.isNotEmpty ? _compileGroqKey : _envGroqKey;
+  static String get groqApiKey =>
+      _compileGroqKey.isNotEmpty ? _compileGroqKey : _envGroqKey;
   static bool get hasGroq => groqApiKey.isNotEmpty;
 }

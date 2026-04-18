@@ -553,4 +553,3 @@ class DashboardTrendLine extends StatelessWidget {
     );
   }
 }
-

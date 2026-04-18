@@ -94,8 +94,8 @@ class FormReportGenerator {
                             ),
                             child: pw.Text(
                               '${f['label']} (${f['type']})',
-                              style: pw.TextStyle(
-                                  font: arabicFont, fontSize: 9),
+                              style:
+                                  pw.TextStyle(font: arabicFont, fontSize: 9),
                             ),
                           ))
                       .toList(),
@@ -171,17 +171,12 @@ class FormReportGenerator {
                       runSpacing: 6,
                       children: [
                         _metaItem('المقدم:', subUser, arabicFont, boldFont),
-                        _metaItem(
-                            'التاريخ:',
-                            subDate.substring(0, 16),
-                            arabicFont,
-                            boldFont),
+                        _metaItem('التاريخ:', subDate.substring(0, 16),
+                            arabicFont, boldFont),
                         if (subGov.isNotEmpty)
-                          _metaItem(
-                              'المحافظة:', subGov, arabicFont, boldFont),
+                          _metaItem('المحافظة:', subGov, arabicFont, boldFont),
                         if (subDist.isNotEmpty)
-                          _metaItem(
-                              'المديرية:', subDist, arabicFont, boldFont),
+                          _metaItem('المديرية:', subDist, arabicFont, boldFont),
                         if (sub['gps_lat'] != null)
                           _metaItem(
                               'الموقع:',
@@ -211,15 +206,12 @@ class FormReportGenerator {
                     )
                   else if (fields.isNotEmpty)
                     // Render from schema fields (ordered)
-                    ...fields.map((field) => _buildFieldRow(
-                        field, subData, arabicFont, boldFont))
+                    ...fields.map((field) =>
+                        _buildFieldRow(field, subData, arabicFont, boldFont))
                   else
                     // Fallback: render raw data keys
                     ...subData.entries.map((entry) => _buildRawFieldRow(
-                        entry.key,
-                        entry.value,
-                        arabicFont,
-                        boldFont)),
+                        entry.key, entry.value, arabicFont, boldFont)),
 
                   // Notes
                   if (sub['notes'] != null &&
@@ -237,12 +229,12 @@ class FormReportGenerator {
                         crossAxisAlignment: pw.CrossAxisAlignment.end,
                         children: [
                           pw.Text('ملاحظات:',
-                              style: pw.TextStyle(
-                                  font: boldFont, fontSize: 12)),
+                              style:
+                                  pw.TextStyle(font: boldFont, fontSize: 12)),
                           pw.SizedBox(height: 4),
                           pw.Text(sub['notes'],
-                              style: pw.TextStyle(
-                                  font: arabicFont, fontSize: 11)),
+                              style:
+                                  pw.TextStyle(font: arabicFont, fontSize: 11)),
                         ],
                       ),
                     ),
@@ -304,8 +296,8 @@ class FormReportGenerator {
     required List<Map<String, dynamic>> submissions,
     required String period,
   }) async {
-    final file = await generate(
-        form: form, submissions: submissions, period: period);
+    final file =
+        await generate(form: form, submissions: submissions, period: period);
     return file.readAsBytes();
   }
 
@@ -331,7 +323,8 @@ class FormReportGenerator {
     if (sections != null) {
       for (final section in sections) {
         final sectionMap = section as Map<String, dynamic>;
-        final sectionTitle = sectionMap['title_ar'] ?? sectionMap['title'] ?? '';
+        final sectionTitle =
+            sectionMap['title_ar'] ?? sectionMap['title'] ?? '';
         final sectionFields = sectionMap['fields'] as List? ?? [];
         for (final f in sectionFields) {
           final fieldMap = Map<String, dynamic>.from(f as Map);
@@ -366,21 +359,17 @@ class FormReportGenerator {
       runSpacing: 8,
       children: [
         _statCard('الإجمالي', '$total', PdfColors.blue700, font, boldFont),
-        _statCard(
-            'معتمدة', '$approved', PdfColors.green700, font, boldFont),
-        _statCard(
-            'مرفوضة', '$rejected', PdfColors.red700, font, boldFont),
-        _statCard(
-            'مُرسلة', '$submitted', PdfColors.orange700, font, boldFont),
+        _statCard('معتمدة', '$approved', PdfColors.green700, font, boldFont),
+        _statCard('مرفوضة', '$rejected', PdfColors.red700, font, boldFont),
+        _statCard('مُرسلة', '$submitted', PdfColors.orange700, font, boldFont),
         if (drafts > 0)
-          _statCard(
-              'مسودات', '$drafts', PdfColors.grey700, font, boldFont),
+          _statCard('مسودات', '$drafts', PdfColors.grey700, font, boldFont),
       ],
     );
   }
 
-  static pw.Widget _statCard(
-      String label, String value, PdfColor color, pw.Font font, pw.Font boldFont) {
+  static pw.Widget _statCard(String label, String value, PdfColor color,
+      pw.Font font, pw.Font boldFont) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: pw.BoxDecoration(
@@ -478,8 +467,7 @@ class FormReportGenerator {
             ),
           ),
           pw.SizedBox(width: 8),
-          pw.Text(key,
-              style: pw.TextStyle(font: boldFont, fontSize: 11)),
+          pw.Text(key, style: pw.TextStyle(font: boldFont, fontSize: 11)),
         ],
       ),
     );
@@ -530,7 +518,8 @@ class FormReportGenerator {
 
     return pw.TableHelper.fromTextArray(
       border: pw.TableBorder.all(color: PdfColors.grey300),
-      headerStyle: pw.TextStyle(font: font, color: PdfColors.white, fontSize: 9),
+      headerStyle:
+          pw.TextStyle(font: font, color: PdfColors.white, fontSize: 9),
       headerDecoration: const pw.BoxDecoration(color: PdfColors.blue700),
       cellStyle: pw.TextStyle(font: font, fontSize: 8),
       cellAlignment: pw.Alignment.centerRight,

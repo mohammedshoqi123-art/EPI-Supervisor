@@ -291,7 +291,9 @@ class OfflineDataCache {
   Future<void> invalidate(String key) async {
     _memoryCache.remove(key);
     await _offline.removeCacheKey(key);
-    if (kDebugMode) print('[OfflineDataCache] Invalidated cache for $key (memory + persistent)');
+    if (kDebugMode)
+      print(
+          '[OfflineDataCache] Invalidated cache for $key (memory + persistent)');
   }
 
   /// Invalidate all cached data

@@ -56,13 +56,13 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
           .from('app_settings')
           .select('key, value')
           .inFilter('key', [
-            'ai_enabled',
-            'ai_default_model',
-            'ai_fallback_enabled',
-            'ai_stream_enabled',
-            'ai_max_history',
-            'ai_rate_limit',
-          ]);
+        'ai_enabled',
+        'ai_default_model',
+        'ai_fallback_enabled',
+        'ai_stream_enabled',
+        'ai_max_history',
+        'ai_rate_limit',
+      ]);
 
       // Also get model status via Edge Function
       Map<String, dynamic>? statusResp;
@@ -113,22 +113,16 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
       final client = Supabase.instance.client;
 
       // Clear all defaults
-      await client
-          .from('ai_models')
-          .update({
-            'is_default': false,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .neq('id', '');
+      await client.from('ai_models').update({
+        'is_default': false,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).neq('id', '');
 
       // Set new default
-      await client
-          .from('ai_models')
-          .update({
-            'is_default': true,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', modelId);
+      await client.from('ai_models').update({
+        'is_default': true,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', modelId);
 
       // Update app_settings too
       await client.from('app_settings').upsert({
@@ -160,13 +154,10 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
   Future<void> _toggleModel(String modelId, bool isActive) async {
     HapticFeedback.lightImpact();
     try {
-      await Supabase.instance.client
-          .from('ai_models')
-          .update({
-            'is_active': isActive,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', modelId);
+      await Supabase.instance.client.from('ai_models').update({
+        'is_active': isActive,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', modelId);
 
       await _loadData();
     } catch (e) {
@@ -216,26 +207,26 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? _buildError(cs)
-          : RefreshIndicator(
-              onRefresh: _loadData,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildStatusCard(cs),
-                    const SizedBox(height: 16),
-                    _buildGlobalSettings(cs),
-                    const SizedBox(height: 16),
-                    _buildModelsList(cs),
-                    const SizedBox(height: 16),
-                    _buildUsageStats(cs),
-                  ],
+              ? _buildError(cs)
+              : RefreshIndicator(
+                  onRefresh: _loadData,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildStatusCard(cs),
+                        const SizedBox(height: 16),
+                        _buildGlobalSettings(cs),
+                        const SizedBox(height: 16),
+                        _buildModelsList(cs),
+                        const SizedBox(height: 16),
+                        _buildUsageStats(cs),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
     );
   }
 
@@ -270,9 +261,8 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
 
   Widget _buildStatusCard(ColorScheme cs) {
     final enabledModels = _models.where((m) => m['is_active'] == true).length;
-    final defaultModel = _models
-        .where((m) => m['is_default'] == true)
-        .firstOrNull;
+    final defaultModel =
+        _models.where((m) => m['is_default'] == true).firstOrNull;
     final totalUsage = _models.fold<int>(
       0,
       (sum, m) => sum + ((m['usage_count'] as int?) ?? 0),
@@ -406,9 +396,8 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
           Icon(
             available ? Icons.check_circle_rounded : Icons.cancel_rounded,
             size: 12,
-            color: available
-                ? Colors.greenAccent
-                : cs.onPrimary.withOpacity(0.5),
+            color:
+                available ? Colors.greenAccent : cs.onPrimary.withOpacity(0.5),
           ),
           const SizedBox(width: 4),
           Text(
@@ -646,12 +635,10 @@ class _AiModelsScreenState extends ConsumerState<AiModelsScreen> {
                           style: TextStyle(
                             fontFamily: 'Tajawal',
                             fontSize: 14,
-                            fontWeight: isDefault
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: isActive
-                                ? cs.onSurface
-                                : cs.onSurfaceVariant,
+                            fontWeight:
+                                isDefault ? FontWeight.w700 : FontWeight.w500,
+                            color:
+                                isActive ? cs.onSurface : cs.onSurfaceVariant,
                           ),
                         ),
                       ),

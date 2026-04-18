@@ -96,14 +96,12 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
 
       if (sections.isNotEmpty) {
         _useSections = true;
-        _sections = sections
-            .map((s) => Map<String, dynamic>.from(s as Map))
-            .toList();
+        _sections =
+            sections.map((s) => Map<String, dynamic>.from(s as Map)).toList();
       } else {
         _useSections = false;
-        _fields = flatFields
-            .map((f) => Map<String, dynamic>.from(f as Map))
-            .toList();
+        _fields =
+            flatFields.map((f) => Map<String, dynamic>.from(f as Map)).toList();
       }
     }
   }
@@ -194,9 +192,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     Map<String, dynamic>? existingField;
     if (isEdit) {
       if (sectionIndex != null) {
-        existingField =
-            (_sections[sectionIndex]['fields'] as List)[fieldIndex]
-                as Map<String, dynamic>;
+        existingField = (_sections[sectionIndex]['fields'] as List)[fieldIndex]
+            as Map<String, dynamic>;
       } else {
         existingField = _fields[fieldIndex];
       }
@@ -218,9 +215,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     final List<String> options = List<String>.from(
       existingField?['options'] ?? [],
     );
-    final List<TextEditingController> optionControllers = options
-        .map((o) => TextEditingController(text: o))
-        .toList();
+    final List<TextEditingController> optionControllers =
+        options.map((o) => TextEditingController(text: o)).toList();
 
     showModalBottomSheet(
       context: context,
@@ -400,37 +396,38 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                     ),
                     const SizedBox(height: 8),
                     ...options.asMap().entries.map(
-                      (entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: optionControllers[entry.key],
-                                decoration: InputDecoration(
-                                  labelText: 'خيار ${entry.key + 1}',
-                                  border: const OutlineInputBorder(),
-                                  isDense: true,
+                          (entry) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: optionControllers[entry.key],
+                                    decoration: InputDecoration(
+                                      labelText: 'خيار ${entry.key + 1}',
+                                      border: const OutlineInputBorder(),
+                                      isDense: true,
+                                    ),
+                                    style:
+                                        const TextStyle(fontFamily: 'Tajawal'),
+                                    onChanged: (v) => options[entry.key] = v,
+                                  ),
                                 ),
-                                style: const TextStyle(fontFamily: 'Tajawal'),
-                                onChanged: (v) => options[entry.key] = v,
-                              ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.remove_circle_outline,
+                                    color: AppTheme.errorColor,
+                                  ),
+                                  onPressed: () => setModalState(() {
+                                    optionControllers[entry.key].dispose();
+                                    optionControllers.removeAt(entry.key);
+                                    options.removeAt(entry.key);
+                                  }),
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.remove_circle_outline,
-                                color: AppTheme.errorColor,
-                              ),
-                              onPressed: () => setModalState(() {
-                                optionControllers[entry.key].dispose();
-                                optionControllers.removeAt(entry.key);
-                                options.removeAt(entry.key);
-                              }),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
                     OutlinedButton.icon(
                       onPressed: () => setModalState(() {
                         options.add('');
@@ -879,8 +876,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
               _sectionTitle('📂 الأقسام (${_sections.length})'),
               const SizedBox(height: 8),
               ..._sections.asMap().entries.map(
-                (entry) => _buildSectionCard(entry.key, entry.value),
-              ),
+                    (entry) => _buildSectionCard(entry.key, entry.value),
+                  ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _addSection,

@@ -8,13 +8,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 final auditLogsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-      final response = await Supabase.instance.client.functions.invoke(
-        'get-advanced-reports',
-        body: {'report_type': 'audit', 'limit': 100},
-      );
-      if (response.status != 200) throw Exception('فشل تحميل السجل');
-      return List<Map<String, dynamic>>.from(response.data['logs'] ?? []);
-    });
+  final response = await Supabase.instance.client.functions.invoke(
+    'get-advanced-reports',
+    body: {'report_type': 'audit', 'limit': 100},
+  );
+  if (response.status != 200) throw Exception('فشل تحميل السجل');
+  return List<Map<String, dynamic>>.from(response.data['logs'] ?? []);
+});
 
 class AuditLogScreen extends ConsumerStatefulWidget {
   const AuditLogScreen({super.key});
@@ -144,8 +144,8 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
       if (_tableFilter != 'all' && l['table_name'] != _tableFilter)
         return false;
       if (_searchQuery.isNotEmpty) {
-        final name = (l['profiles']?['full_name'] as String? ?? '')
-            .toLowerCase();
+        final name =
+            (l['profiles']?['full_name'] as String? ?? '').toLowerCase();
         if (!name.contains(_searchQuery.toLowerCase())) return false;
       }
       return true;

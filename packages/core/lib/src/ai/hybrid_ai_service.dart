@@ -14,9 +14,9 @@ class HybridAIService {
     required LocalAIEngine local,
     GeminiService? gemini,
     required OfflineManager offline,
-  }) : _local = local,
-       _gemini = gemini,
-       _offline = offline;
+  })  : _local = local,
+        _gemini = gemini,
+        _offline = offline;
 
   /// Send a chat message. Uses Gemini when online, falls back to local engine.
   Future<String> chat(String message, {Map<String, dynamic>? data}) async {

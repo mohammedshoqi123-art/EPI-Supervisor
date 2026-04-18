@@ -19,14 +19,14 @@ class GroqService {
   DateTime _windowStart = DateTime.now();
 
   GroqService(this._apiKey, {http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client();
+      : _httpClient = httpClient ?? http.Client();
 
   bool get isAvailable => _apiKey.isNotEmpty;
 
   Map<String, String> get _headers => {
-    'Authorization': 'Bearer $_apiKey',
-    'Content-Type': 'application/json',
-  };
+        'Authorization': 'Bearer $_apiKey',
+        'Content-Type': 'application/json',
+      };
 
   // ═══════════════════════════════════════════════════════════
   // CHAT

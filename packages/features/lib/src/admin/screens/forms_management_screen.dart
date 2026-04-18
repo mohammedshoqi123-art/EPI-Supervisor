@@ -31,9 +31,8 @@ final formsStatsProvider = FutureProvider<Map<String, Map<String, int>>>((
   final client = Supabase.instance.client;
   try {
     final forms = await client.from('forms').select('id');
-    final formIds = (forms as List<dynamic>)
-        .map((f) => f['id'] as String)
-        .toList();
+    final formIds =
+        (forms as List<dynamic>).map((f) => f['id'] as String).toList();
 
     final Map<String, Map<String, int>> stats = {};
     for (final fid in formIds) {

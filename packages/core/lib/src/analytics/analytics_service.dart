@@ -96,10 +96,8 @@ class AnalyticsService {
     // Shortages — filter via submission_id if campaign is set
     List<String>? submissionIdsForCampaign;
     if (campaignFormIds != null) {
-      submissionIdsForCampaign = submissions
-          .map((s) => s['id'] as String)
-          .toSet()
-          .toList();
+      submissionIdsForCampaign =
+          submissions.map((s) => s['id'] as String).toSet().toList();
     }
 
     var shortages = await _api.select(
@@ -134,9 +132,8 @@ class AnalyticsService {
       bySeverity[sev] = (bySeverity[sev] ?? 0) + 1;
     }
 
-    final resolvedCount = shortages
-        .where((s) => s['is_resolved'] == true)
-        .length;
+    final resolvedCount =
+        shortages.where((s) => s['is_resolved'] == true).length;
 
     // Submissions by day (last 7 days)
     final byDay = _groupByDay(submissions, 7);

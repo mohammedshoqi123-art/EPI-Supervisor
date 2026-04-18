@@ -43,12 +43,12 @@ class UnifiedAIProvider {
     RagPipeline? rag,
     FunctionCallingEngine? fnCall,
     OfflineManager? offline,
-  }) : _groq = groq,
-       _hf = hf,
-       _rag = rag,
-       _fnCall = fnCall,
-       _local = EnhancedLocalAI(),
-       _offline = offline ?? OfflineManager(EncryptionService());
+  })  : _groq = groq,
+        _hf = hf,
+        _rag = rag,
+        _fnCall = fnCall,
+        _local = EnhancedLocalAI(),
+        _offline = offline ?? OfflineManager(EncryptionService());
 
   bool get isOnline => _offline.isOnline;
   bool get hasGroq => _groq?.isAvailable ?? false;
@@ -278,20 +278,20 @@ Health Score: 80+=ممتاز, 50-79=متوسط, <50=ضعيف.
   }
 
   bool _isDataQuery(String intent) => [
-    'query_submissions',
-    'query_shortages',
-    'query_analytics',
-    'query_governorates',
-    'query_users',
-  ].contains(intent);
+        'query_submissions',
+        'query_shortages',
+        'query_analytics',
+        'query_governorates',
+        'query_users',
+      ].contains(intent);
 
   String? _intentToQueryType(String intent) => {
-    'query_submissions': 'submissions',
-    'query_shortages': 'shortages',
-    'query_analytics': 'analytics',
-    'query_governorates': 'governorates',
-    'query_users': 'users',
-  }[intent];
+        'query_submissions': 'submissions',
+        'query_shortages': 'shortages',
+        'query_analytics': 'analytics',
+        'query_governorates': 'governorates',
+        'query_users': 'users',
+      }[intent];
 
   String _formatDBResult(String intent, dynamic data) {
     if (data is Map) {
@@ -321,20 +321,20 @@ Health Score: 80+=ممتاز, 50-79=متوسط, <50=ضعيف.
   }
 
   List<String> _defaultSuggestions() => [
-    '📊 ما حالة الإرساليات اليوم؟',
-    '⚠️ أين النواقص الحرجة؟',
-    '📈 اعرض تقرير أسبوعي',
-    '🗺️ أي المحافظات تحتاج دعم؟',
-    '💉 ما تغطية التطعيم؟',
-  ];
+        '📊 ما حالة الإرساليات اليوم؟',
+        '⚠️ أين النواقص الحرجة؟',
+        '📈 اعرض تقرير أسبوعي',
+        '🗺️ أي المحافظات تحتاج دعم؟',
+        '💉 ما تغطية التطعيم؟',
+      ];
 
   Map<String, dynamic> get status => {
-    'groq': hasGroq,
-    'huggingface': hasHF,
-    'rag': hasRAG,
-    'online': isOnline,
-    'cache_size': _cache.length,
-  };
+        'groq': hasGroq,
+        'huggingface': hasHF,
+        'rag': hasRAG,
+        'online': isOnline,
+        'cache_size': _cache.length,
+      };
 }
 
 class _CacheEntry {

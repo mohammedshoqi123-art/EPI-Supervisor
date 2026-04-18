@@ -712,13 +712,10 @@ class _ReferencesManagementScreenState
 
   Future<void> _toggleReference(String id, bool active) async {
     try {
-      await Supabase.instance.client
-          .from('doc_references')
-          .update({
-            'is_active': active,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', id);
+      await Supabase.instance.client.from('doc_references').update({
+        'is_active': active,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', id);
       ref.invalidate(referencesListProvider);
     } catch (_) {}
   }

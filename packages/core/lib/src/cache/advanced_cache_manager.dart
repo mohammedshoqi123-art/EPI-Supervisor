@@ -21,8 +21,8 @@ class CacheEntry {
     this.accessCount = 0,
     DateTime? lastAccessed,
     this.sizeBytes = 0,
-  }) : createdAt = createdAt ?? DateTime.now(),
-       lastAccessed = lastAccessed ?? DateTime.now();
+  })  : createdAt = createdAt ?? DateTime.now(),
+        lastAccessed = lastAccessed ?? DateTime.now();
 
   bool get isExpired => DateTime.now().isAfter(expiry);
 
@@ -34,35 +34,36 @@ class CacheEntry {
   }
 
   CacheEntry copyWithAccess() => CacheEntry(
-    value: value,
-    expiry: expiry,
-    hash: hash,
-    createdAt: createdAt,
-    accessCount: accessCount + 1,
-    lastAccessed: DateTime.now(),
-    sizeBytes: sizeBytes,
-  );
+        value: value,
+        expiry: expiry,
+        hash: hash,
+        createdAt: createdAt,
+        accessCount: accessCount + 1,
+        lastAccessed: DateTime.now(),
+        sizeBytes: sizeBytes,
+      );
 
   Map<String, dynamic> toJson() => {
-    'value': value,
-    'expiry': expiry.toIso8601String(),
-    'hash': hash,
-    'created_at': createdAt.toIso8601String(),
-    'access_count': accessCount,
-    'last_accessed': lastAccessed.toIso8601String(),
-    'size_bytes': sizeBytes,
-  };
+        'value': value,
+        'expiry': expiry.toIso8601String(),
+        'hash': hash,
+        'created_at': createdAt.toIso8601String(),
+        'access_count': accessCount,
+        'last_accessed': lastAccessed.toIso8601String(),
+        'size_bytes': sizeBytes,
+      };
 
   factory CacheEntry.fromJson(Map<String, dynamic> json) => CacheEntry(
-    value: json['value'],
-    expiry: DateTime.parse(json['expiry']),
-    hash: json['hash'],
-    createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-    accessCount: json['access_count'] ?? 0,
-    lastAccessed:
-        DateTime.tryParse(json['last_accessed'] ?? '') ?? DateTime.now(),
-    sizeBytes: json['size_bytes'] ?? 0,
-  );
+        value: json['value'],
+        expiry: DateTime.parse(json['expiry']),
+        hash: json['hash'],
+        createdAt:
+            DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+        accessCount: json['access_count'] ?? 0,
+        lastAccessed:
+            DateTime.tryParse(json['last_accessed'] ?? '') ?? DateTime.now(),
+        sizeBytes: json['size_bytes'] ?? 0,
+      );
 
   static String _computeHash(dynamic value) {
     final jsonStr = jsonEncode(value);
@@ -126,9 +127,9 @@ class AdvancedCacheManager {
     EvictionStrategy strategy = EvictionStrategy.lru,
     int maxEntries = 500,
     int maxSizeBytes = 50 * 1024 * 1024, // 50MB
-  }) : _strategy = strategy,
-       _maxEntries = maxEntries,
-       _maxSizeBytes = maxSizeBytes;
+  })  : _strategy = strategy,
+        _maxEntries = maxEntries,
+        _maxSizeBytes = maxSizeBytes;
 
   void init() {
     // Periodic cleanup every 5 minutes
@@ -151,10 +152,8 @@ class AdvancedCacheManager {
     // Check if we need to evict
     await _ensureCapacity(sizeBytes);
 
-    final hash = sha256
-        .convert(utf8.encode(jsonString))
-        .toString()
-        .substring(0, 16);
+    final hash =
+        sha256.convert(utf8.encode(jsonString)).toString().substring(0, 16);
 
     _cache[fullKey] = CacheEntry(
       value: value,
@@ -309,13 +308,13 @@ class AdvancedCacheManager {
 
   /// Get cache statistics
   CacheStats get stats => CacheStats(
-    totalEntries: _cache.length,
-    totalSizeBytes: _cache.values.fold(0, (sum, e) => sum + e.sizeBytes),
-    hitCount: _hitCount,
-    missCount: _missCount,
-    evictionCount: _evictionCount,
-    expiredCount: _expiredCount,
-  );
+        totalEntries: _cache.length,
+        totalSizeBytes: _cache.values.fold(0, (sum, e) => sum + e.sizeBytes),
+        hitCount: _hitCount,
+        missCount: _missCount,
+        evictionCount: _evictionCount,
+        expiredCount: _expiredCount,
+      );
 
   /// Get all keys in a partition
   List<String> getPartitionKeys(String partition) {
@@ -352,8 +351,8 @@ class AdvancedCacheManager {
 
     // Check total size
     final currentSize = _cache.values.fold(0, (sum, e) => sum + e.sizeBytes);
-    while (currentSize + newEntrySizeBytes > _maxSizeBytes &&
-        _cache.isNotEmpty) {
+    while (
+        currentSize + newEntrySizeBytes > _maxSizeBytes && _cache.isNotEmpty) {
       _evictOne();
     }
   }

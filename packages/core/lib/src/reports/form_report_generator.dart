@@ -122,8 +122,8 @@ class FormReportGenerator {
     for (final sub in submissions.take(50)) {
       final subData = sub['data'] as Map<String, dynamic>? ?? {};
       final subStatus = sub['status'] ?? '-';
-      final subDate = (sub['submitted_at'] ?? sub['created_at'] ?? '')
-          .toString();
+      final subDate =
+          (sub['submitted_at'] ?? sub['created_at'] ?? '').toString();
       final subUser = sub['profiles']?['full_name'] ?? '-';
       final subGov = sub['governorates']?['name_ar'] ?? '';
       final subDist = sub['districts']?['name_ar'] ?? '';

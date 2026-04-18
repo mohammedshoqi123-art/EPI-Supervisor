@@ -85,23 +85,17 @@ class LocalAIService {
     if (data.isEmpty) return List.filled(10, 0.0);
 
     final total = data.length.toDouble();
-    final submitted = data
-        .where((d) => d['status'] == 'submitted')
-        .length
-        .toDouble();
-    final rejected = data
-        .where((d) => d['status'] == 'rejected')
-        .length
-        .toDouble();
+    final submitted =
+        data.where((d) => d['status'] == 'submitted').length.toDouble();
+    final rejected =
+        data.where((d) => d['status'] == 'rejected').length.toDouble();
 
     // Coverage rate
     final coverageRate = total > 0 ? submitted / total : 0.0;
 
     // Dropout rate (items that were started but not completed)
-    final pending = data
-        .where((d) => d['status'] == 'pending')
-        .length
-        .toDouble();
+    final pending =
+        data.where((d) => d['status'] == 'pending').length.toDouble();
     final dropoutRate = total > 0 ? pending / total : 0.0;
 
     // Temporal features
@@ -248,9 +242,8 @@ class LocalAIService {
 
     for (final entry in byArea.entries) {
       final total = entry.value.length;
-      final rejected = entry.value
-          .where((d) => d['status'] == 'rejected')
-          .length;
+      final rejected =
+          entry.value.where((d) => d['status'] == 'rejected').length;
       final rejectedRate = total > 0 ? rejected / total : 0.0;
 
       if (rejectedRate > 0.15) {
@@ -358,9 +351,8 @@ class LocalAIService {
 
   String _generateSummary(List<Map<String, dynamic>> submissions) {
     final total = submissions.length;
-    final submitted = submissions
-        .where((s) => s['status'] == 'submitted')
-        .length;
+    final submitted =
+        submissions.where((s) => s['status'] == 'submitted').length;
     final rejected = submissions.where((s) => s['status'] == 'rejected').length;
     final rate = total > 0 ? (submitted * 100 ~/ total) : 0;
 
@@ -394,13 +386,13 @@ class VaccinationAnalysis {
   });
 
   Map<String, dynamic> toJson() => {
-    'coverage_rate': coverageRate,
-    'dropout_rate': dropoutRate,
-    'wastage_rate': wastageRate,
-    'predicted_shortages': predictedShortages,
-    'risk_score': riskScore,
-    'recommendations': recommendations,
-  };
+        'coverage_rate': coverageRate,
+        'dropout_rate': dropoutRate,
+        'wastage_rate': wastageRate,
+        'predicted_shortages': predictedShortages,
+        'risk_score': riskScore,
+        'recommendations': recommendations,
+      };
 }
 
 class SmartReport {
@@ -421,16 +413,16 @@ class SmartReport {
   });
 
   Map<String, dynamic> toJson() => {
-    'period': {
-      'start': period.start.toIso8601String(),
-      'end': period.end.toIso8601String(),
-    },
-    'summary': summary,
-    'trends': trends.map((t) => t.toJson()).toList(),
-    'critical_points': criticalPoints.map((c) => c.toJson()).toList(),
-    'recommendations': recommendations,
-    'charts_data': chartsData,
-  };
+        'period': {
+          'start': period.start.toIso8601String(),
+          'end': period.end.toIso8601String(),
+        },
+        'summary': summary,
+        'trends': trends.map((t) => t.toJson()).toList(),
+        'critical_points': criticalPoints.map((c) => c.toJson()).toList(),
+        'recommendations': recommendations,
+        'charts_data': chartsData,
+      };
 }
 
 class DateRange {
@@ -467,10 +459,10 @@ class CriticalPoint {
   });
 
   Map<String, dynamic> toJson() => {
-    'area': area,
-    'metric': metric,
-    'value': value,
-    'severity': severity,
-    'description': description,
-  };
+        'area': area,
+        'metric': metric,
+        'value': value,
+        'severity': severity,
+        'description': description,
+      };
 }

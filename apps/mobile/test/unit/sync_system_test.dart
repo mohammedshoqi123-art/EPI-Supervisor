@@ -9,7 +9,7 @@ import 'package:epi_core/src/security/encryption_service.dart';
 /// Simple mock encryption that passes data through (for testing only).
 class MockEncryptionService extends EncryptionService {
   MockEncryptionService()
-    : super(overrideKey: 'MOCK_TEST_KEY_32_CHARS_MINIMUM________');
+      : super(overrideKey: 'MOCK_TEST_KEY_32_CHARS_MINIMUM________');
 
   @override
   String encrypt(String plaintext) => 'enc:$plaintext';
@@ -364,8 +364,8 @@ void main() {
         final priority = i % 3 == 0
             ? SyncPriority.critical
             : i % 3 == 1
-            ? SyncPriority.high
-            : SyncPriority.normal;
+                ? SyncPriority.high
+                : SyncPriority.normal;
         items.add(
           SyncQueueEntry(
             id: 'item-$i',

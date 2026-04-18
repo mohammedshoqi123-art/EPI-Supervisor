@@ -8,16 +8,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 final notificationsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-      final client = Supabase.instance.client;
-      final response = await client.functions.invoke(
-        'manage-notifications',
-        body: {'action': 'list', 'limit': 100},
-      );
-      if (response.status != 200) throw Exception('فشل تحميل الإشعارات');
-      return List<Map<String, dynamic>>.from(
-        response.data['notifications'] ?? [],
-      );
-    });
+  final client = Supabase.instance.client;
+  final response = await client.functions.invoke(
+    'manage-notifications',
+    body: {'action': 'list', 'limit': 100},
+  );
+  if (response.status != 200) throw Exception('فشل تحميل الإشعارات');
+  return List<Map<String, dynamic>>.from(
+    response.data['notifications'] ?? [],
+  );
+});
 
 class NotificationCenterScreen extends ConsumerStatefulWidget {
   const NotificationCenterScreen({super.key});

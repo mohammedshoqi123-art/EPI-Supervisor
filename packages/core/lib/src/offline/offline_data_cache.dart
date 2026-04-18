@@ -280,30 +280,26 @@ class OfflineDataCache {
     String key,
     Future<List<Map<String, dynamic>>> Function() fetchFn,
   ) {
-    fetchFn()
-        .then((data) async {
-          await _saveToCache(key, data);
-          if (kDebugMode)
-            print('[OfflineDataCache] Background refresh complete for $key');
-        })
-        .catchError((e) {
-          if (kDebugMode)
-            print('[OfflineDataCache] Background refresh failed for $key: $e');
-        });
+    fetchFn().then((data) async {
+      await _saveToCache(key, data);
+      if (kDebugMode)
+        print('[OfflineDataCache] Background refresh complete for $key');
+    }).catchError((e) {
+      if (kDebugMode)
+        print('[OfflineDataCache] Background refresh failed for $key: $e');
+    });
   }
 
   void _refreshMapInBackground(
     String key,
     Future<Map<String, dynamic>> Function() fetchFn,
   ) {
-    fetchFn()
-        .then((data) async {
-          await _saveToCache(key, data);
-        })
-        .catchError((e) {
-          if (kDebugMode)
-            print('[OfflineDataCache] Background refresh failed for $key: $e');
-        });
+    fetchFn().then((data) async {
+      await _saveToCache(key, data);
+    }).catchError((e) {
+      if (kDebugMode)
+        print('[OfflineDataCache] Background refresh failed for $key: $e');
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════

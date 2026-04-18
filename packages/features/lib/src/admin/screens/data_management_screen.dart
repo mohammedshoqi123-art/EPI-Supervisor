@@ -8,16 +8,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 final governoratesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-      final client = Supabase.instance.client;
-      final response = await client.functions.invoke(
-        'manage-data',
-        body: {'resource': 'governorates', 'action': 'list'},
-      );
-      if (response.status != 200) throw Exception('فشل تحميل المحافظات');
-      return List<Map<String, dynamic>>.from(
-        response.data['governorates'] ?? [],
-      );
-    });
+  final client = Supabase.instance.client;
+  final response = await client.functions.invoke(
+    'manage-data',
+    body: {'resource': 'governorates', 'action': 'list'},
+  );
+  if (response.status != 200) throw Exception('فشل تحميل المحافظات');
+  return List<Map<String, dynamic>>.from(
+    response.data['governorates'] ?? [],
+  );
+});
 
 class DataManagementScreen extends ConsumerStatefulWidget {
   const DataManagementScreen({super.key});

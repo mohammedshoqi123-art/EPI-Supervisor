@@ -100,30 +100,30 @@ class DataConflict {
   }) : detectedAt = detectedAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'entity_type': entityType,
-    'entity_id': entityId,
-    'local_data': localData,
-    'server_data': serverData,
-    'detected_at': detectedAt.toIso8601String(),
-    'merged_data': mergedData,
-    'resolved_strategy': resolvedStrategy?.name,
-    'resolved': resolved,
-  };
+        'id': id,
+        'entity_type': entityType,
+        'entity_id': entityId,
+        'local_data': localData,
+        'server_data': serverData,
+        'detected_at': detectedAt.toIso8601String(),
+        'merged_data': mergedData,
+        'resolved_strategy': resolvedStrategy?.name,
+        'resolved': resolved,
+      };
 
   factory DataConflict.fromJson(Map<String, dynamic> json) => DataConflict(
-    id: json['id'],
-    entityType: json['entity_type'],
-    entityId: json['entity_id'],
-    localData: Map<String, dynamic>.from(json['local_data']),
-    serverData: Map<String, dynamic>.from(json['server_data']),
-    detectedAt: DateTime.parse(json['detected_at']),
-    mergedData: json['merged_data'],
-    resolvedStrategy: json['resolved_strategy'] != null
-        ? ConflictStrategy.values.byName(json['resolved_strategy'])
-        : null,
-    resolved: json['resolved'] ?? false,
-  );
+        id: json['id'],
+        entityType: json['entity_type'],
+        entityId: json['entity_id'],
+        localData: Map<String, dynamic>.from(json['local_data']),
+        serverData: Map<String, dynamic>.from(json['server_data']),
+        detectedAt: DateTime.parse(json['detected_at']),
+        mergedData: json['merged_data'],
+        resolvedStrategy: json['resolved_strategy'] != null
+            ? ConflictStrategy.values.byName(json['resolved_strategy'])
+            : null,
+        resolved: json['resolved'] ?? false,
+      );
 }
 
 /// Sync result for a single change
@@ -135,20 +135,20 @@ class ChangeSyncResult {
   final String? error;
 
   ChangeSyncResult.success(this.changeId)
-    : success = true,
-      hasConflict = false,
-      conflict = null,
-      error = null;
+      : success = true,
+        hasConflict = false,
+        conflict = null,
+        error = null;
 
   ChangeSyncResult.conflict(this.changeId, this.conflict)
-    : success = false,
-      hasConflict = true,
-      error = null;
+      : success = false,
+        hasConflict = true,
+        error = null;
 
   ChangeSyncResult.error(this.changeId, this.error)
-    : success = false,
-      hasConflict = false,
-      conflict = null;
+      : success = false,
+        hasConflict = false,
+        conflict = null;
 }
 
 /// Enhanced sync service with intelligent connection management,
@@ -187,23 +187,22 @@ class EnhancedSyncService {
   Stream<SyncBatchResult> get onSyncComplete => _syncResultController.stream;
 
   NetworkState get currentState => NetworkState(
-    isOnline: _isOnline,
-    quality: _measureQuality(),
-    pendingItems: _pendingCount,
-    lastOnline: _lastOnline,
-    lastSync: _lastSync,
-  );
+        isOnline: _isOnline,
+        quality: _measureQuality(),
+        pendingItems: _pendingCount,
+        lastOnline: _lastOnline,
+        lastSync: _lastSync,
+      );
 
   /// Callback to submit a single change to the server
   final Future<Map<String, dynamic>> Function(Map<String, dynamic> change)?
-  onSubmitChange;
+      onSubmitChange;
 
   /// Callback to fetch latest server version for conflict detection
   final Future<Map<String, dynamic>?> Function(
     String entityType,
     String entityId,
-  )?
-  onFetchServerVersion;
+  )? onFetchServerVersion;
 
   EnhancedSyncService(
     this._offlineBox,
@@ -224,8 +223,7 @@ class EnhancedSyncService {
       results,
     ) {
       final wasOffline = !_isOnline;
-      final newOnline =
-          results.isNotEmpty &&
+      final newOnline = results.isNotEmpty &&
           results.any((r) => r != ConnectivityResult.none);
 
       // Deduplicate: skip if status didn't actually change
@@ -248,8 +246,7 @@ class EnhancedSyncService {
 
     // Initial check
     _connectivity.checkConnectivity().then((results) {
-      _isOnline =
-          results.isNotEmpty &&
+      _isOnline = results.isNotEmpty &&
           results.any((r) => r != ConnectivityResult.none);
       if (_isOnline) _lastOnline = DateTime.now();
       _forceEmitState();

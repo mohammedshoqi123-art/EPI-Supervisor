@@ -32,20 +32,17 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
 
   /// Auto-refresh stats when sync completes — so submitted forms appear immediately.
   void _listenForSyncCompletion() {
-    ref
-        .read(syncServiceProvider.future)
-        .then((service) {
-          _syncSub = service.syncState.listen((state) {
-            // When sync finishes (isSyncing goes false after a sync), refresh everything
-            if (!state.isSyncing && mounted) {
-              // Invalidate cached providers so fresh data is fetched
-              ref.invalidate(submissionsProvider);
-              ref.invalidate(formsProvider);
-              setState(() => _refreshKey++);
-            }
-          });
-        })
-        .catchError((_) {});
+    ref.read(syncServiceProvider.future).then((service) {
+      _syncSub = service.syncState.listen((state) {
+        // When sync finishes (isSyncing goes false after a sync), refresh everything
+        if (!state.isSyncing && mounted) {
+          // Invalidate cached providers so fresh data is fetched
+          ref.invalidate(submissionsProvider);
+          ref.invalidate(formsProvider);
+          setState(() => _refreshKey++);
+        }
+      });
+    }).catchError((_) {});
   }
 
   @override
@@ -187,9 +184,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   Future<Map<String, int>> _loadStats() async {
     int drafts = 0, pending = 0, submitted = 0;
     try {
-      final offline = await ref
-          .read(offlineManagerProvider.future)
-          .timeout(
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
             const Duration(seconds: 5),
             onTimeout: () => throw Exception('timeout'),
           );
@@ -214,16 +209,13 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
             );
         final subs = analytics['submissions'] as Map<String, dynamic>? ?? {};
         final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
-        submitted =
-            (byStatus['submitted'] as int? ?? 0) +
+        submitted = (byStatus['submitted'] as int? ?? 0) +
             (byStatus['reviewed'] as int? ?? 0) +
             (byStatus['approved'] as int? ?? 0) +
             (byStatus['rejected'] as int? ?? 0);
       } catch (_) {
         // Fallback: try local cache
-        final cache = await ref
-            .read(offlineDataCacheProvider.future)
-            .timeout(
+        final cache = await ref.read(offlineDataCacheProvider.future).timeout(
               const Duration(seconds: 3),
               onTimeout: () => throw Exception('timeout'),
             );
@@ -233,8 +225,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
           limit: 100,
           offset: 0,
         );
-        final cachedSubs =
-            cache.getCachedDataList(allFilter.cacheKey) ??
+        final cachedSubs = cache.getCachedDataList(allFilter.cacheKey) ??
             cache.getCachedDataList('submissions');
         if (cachedSubs != null) {
           submitted = cachedSubs
@@ -373,9 +364,7 @@ class _DraftsTab extends ConsumerWidget {
   /// FIX: Load drafts from local storage only — no Supabase calls.
   Future<List<Map<String, dynamic>>> _loadDrafts(WidgetRef ref) async {
     try {
-      final offline = await ref
-          .read(offlineManagerProvider.future)
-          .timeout(
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
             const Duration(seconds: 5),
             onTimeout: () => throw Exception('timeout'),
           );
@@ -385,9 +374,7 @@ class _DraftsTab extends ConsumerWidget {
       final drafts = <Map<String, dynamic>>[];
 
       // Try to get form titles from cache (no network call)
-      final cache = await ref
-          .read(offlineDataCacheProvider.future)
-          .timeout(
+      final cache = await ref.read(offlineDataCacheProvider.future).timeout(
             const Duration(seconds: 3),
             onTimeout: () => throw Exception('timeout'),
           );
@@ -478,16 +465,14 @@ class _PendingSyncTabState extends ConsumerState<_PendingSyncTab> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final offline = await ref
-          .read(offlineManagerProvider.future)
-          .timeout(
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
             const Duration(seconds: 5),
             onTimeout: () => throw Exception('timeout'),
           );
       final items = await offline.getPendingItems().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => <Map<String, dynamic>>[],
-      );
+            const Duration(seconds: 5),
+            onTimeout: () => <Map<String, dynamic>>[],
+          );
       if (mounted)
         setState(() {
           _pendingItems = items;
@@ -509,18 +494,16 @@ class _PendingSyncTabState extends ConsumerState<_PendingSyncTab> {
     setState(() => _isSyncing = true);
 
     try {
-      final syncService = await ref
-          .read(syncServiceProvider.future)
-          .timeout(
+      final syncService = await ref.read(syncServiceProvider.future).timeout(
             const Duration(seconds: 10),
             onTimeout: () => throw Exception('انتهت مهلة تحميل خدمة المزامنة'),
           );
 
       final result = await syncService.sync().timeout(
-        const Duration(minutes: 2),
-        onTimeout: () =>
-            throw Exception('انتهت مهلة المزامنة - تحقق من الاتصال'),
-      );
+            const Duration(minutes: 2),
+            onTimeout: () =>
+                throw Exception('انتهت مهلة المزامنة - تحقق من الاتصال'),
+          );
 
       if (mounted) {
         final msg =
@@ -944,11 +927,10 @@ class _PendingSyncTile extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color:
-                              (hasErrors
-                                      ? AppTheme.errorColor
-                                      : AppTheme.infoColor)
-                                  .withValues(alpha: 0.1),
+                          color: (hasErrors
+                                  ? AppTheme.errorColor
+                                  : AppTheme.infoColor)
+                              .withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(

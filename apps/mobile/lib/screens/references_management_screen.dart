@@ -130,16 +130,13 @@ class _ReferencesManagementScreenState
 
     try {
       final client = Supabase.instance.client;
-      await client
-          .from('doc_references')
-          .update({
-            'title_ar': result['title_ar'],
-            'title_en': result['title_en'] ?? '',
-            'description_ar': result['description_ar'],
-            'category': result['category'],
-            'file_url': result['file_url'],
-          })
-          .eq('id', ref['id']);
+      await client.from('doc_references').update({
+        'title_ar': result['title_ar'],
+        'title_en': result['title_en'] ?? '',
+        'description_ar': result['description_ar'],
+        'category': result['category'],
+        'file_url': result['file_url'],
+      }).eq('id', ref['id']);
       _loadReferences();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -219,13 +216,10 @@ class _ReferencesManagementScreenState
 
     try {
       final client = Supabase.instance.client;
-      await client
-          .from('doc_references')
-          .update({
-            'deleted_at': DateTime.now().toIso8601String(),
-            'is_active': false,
-          })
-          .eq('id', ref['id']);
+      await client.from('doc_references').update({
+        'deleted_at': DateTime.now().toIso8601String(),
+        'is_active': false,
+      }).eq('id', ref['id']);
       _loadReferences();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -262,8 +256,7 @@ class _ReferencesManagementScreenState
       final newStatus = !(ref['is_active'] as bool? ?? true);
       await client
           .from('doc_references')
-          .update({'is_active': newStatus})
-          .eq('id', ref['id']);
+          .update({'is_active': newStatus}).eq('id', ref['id']);
       _loadReferences();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -272,9 +265,8 @@ class _ReferencesManagementScreenState
               newStatus ? 'تم إظهار المرجع ✅' : 'تم إخفاء المرجع 👁️',
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
-            backgroundColor: newStatus
-                ? AppTheme.successColor
-                : AppTheme.warningColor,
+            backgroundColor:
+                newStatus ? AppTheme.successColor : AppTheme.warningColor,
           ),
         );
       }

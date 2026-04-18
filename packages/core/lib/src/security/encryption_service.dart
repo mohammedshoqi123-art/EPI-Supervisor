@@ -30,7 +30,7 @@ class EncryptionService {
   final String _activeKey;
 
   EncryptionService({String? overrideKey})
-    : _activeKey = overrideKey ?? _envKey {
+      : _activeKey = overrideKey ?? _envKey {
     if (_activeKey.isEmpty) {
       throw StateError(
         'ENCRYPTION_KEY is not set. '

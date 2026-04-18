@@ -24,18 +24,18 @@ class ChatMsg {
   }) : time = time ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-    'role': role,
-    'content': content,
-    'source': source,
-    'time': time.toIso8601String(),
-  };
+        'role': role,
+        'content': content,
+        'source': source,
+        'time': time.toIso8601String(),
+      };
 
   factory ChatMsg.fromJson(Map<String, dynamic> j) => ChatMsg(
-    role: j['role'] ?? 'assistant',
-    content: j['content'] ?? '',
-    source: j['source'],
-    time: DateTime.tryParse(j['time'] ?? ''),
-  );
+        role: j['role'] ?? 'assistant',
+        content: j['content'] ?? '',
+        source: j['source'],
+        time: DateTime.tryParse(j['time'] ?? ''),
+      );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -152,9 +152,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
       final api = ref.read(apiClientProvider);
 
       // Build history (last 6 messages, truncated)
-      final history = _msgs.length > 6
-          ? _msgs.sublist(_msgs.length - 6)
-          : _msgs;
+      final history =
+          _msgs.length > 6 ? _msgs.sublist(_msgs.length - 6) : _msgs;
       final historyJson = history
           .map(
             (m) => {
@@ -167,24 +166,21 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
           .toList();
 
       // ✅ FIX: Wrap in try-catch with specific error messages
-      final resp = await api
-          .callFunction('ai-chat-v3', {
-            'message': text,
-            'history': historyJson,
-            if (template != null) 'template': template,
-          })
-          .timeout(
-            const Duration(seconds: 60),
-            onTimeout: () {
-              throw TimeoutException('انتهت مهلة الطلب');
-            },
-          );
+      final resp = await api.callFunction('ai-chat-v3', {
+        'message': text,
+        'history': historyJson,
+        if (template != null) 'template': template,
+      }).timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          throw TimeoutException('انتهت مهلة الطلب');
+        },
+      );
 
       if (!_mounted) return;
 
       // ✅ FIX: Safe response parsing — handle missing/null fields
-      final reply =
-          resp['reply'] as String? ??
+      final reply = resp['reply'] as String? ??
           resp['message'] as String? ??
           resp['error'] as String? ??
           '';
@@ -209,8 +205,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
         _msgs.add(
           ChatMsg(
             role: 'assistant',
-            content:
-                '⏱️ انتهت مهلة الطلب. قد يكون الخادم بطيئاً حالياً.\n\n'
+            content: '⏱️ انتهت مهلة الطلب. قد يكون الخادم بطيئاً حالياً.\n\n'
                 '💡 نصيحة: حاول مرة أخرى أو اسأل سؤالاً أقصر.',
             source: 'error',
           ),
@@ -233,8 +228,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
         userMessage =
             '📡 لا يوجد اتصال بالإنترنت.\nتحقق من الاتصال وحاول مرة أخرى.';
       } else {
-        userMessage =
-            '⚠️ حدث خطأ أثناء الاتصال.\n\n'
+        userMessage = '⚠️ حدث خطأ أثناء الاتصال.\n\n'
             '🔧 حاول مرة أخرى. إذا استمر، أعد تشغيل التطبيق.';
       }
 
@@ -390,9 +384,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
             childAspectRatio: 1.8,
-            children: reports
-                .map((r) => _reportCard(cs, r.$1, r.$2, r.$3))
-                .toList(),
+            children:
+                reports.map((r) => _reportCard(cs, r.$1, r.$2, r.$3)).toList(),
           ),
         ],
       ),
@@ -507,9 +500,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
@@ -526,9 +518,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isUser
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -585,13 +576,13 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
   }
 
   String _sourceLabel(String s) => switch (s) {
-    'groq' => '⚡ Groq',
-    'mimo' => '🤖 MiMo',
-    'function_call' => '📊 من قاعدة البيانات',
-    'rag' => '📚 من قاعدة المعرفة',
-    'error' => '⚠️ خطأ',
-    _ => '',
-  };
+        'groq' => '⚡ Groq',
+        'mimo' => '🤖 MiMo',
+        'function_call' => '📊 من قاعدة البيانات',
+        'rag' => '📚 من قاعدة المعرفة',
+        'error' => '⚠️ خطأ',
+        _ => '',
+      };
 
   // ═══ TYPING INDICATOR ═══
 

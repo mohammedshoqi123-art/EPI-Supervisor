@@ -408,9 +408,8 @@ class OfflineManager {
     final conflicts = _getConflicts();
     if (conflicts.containsKey(offlineId)) {
       conflicts[offlineId]['resolved'] = true;
-      conflicts[offlineId]['resolution'] = useLocal
-          ? 'local_wins'
-          : 'server_wins';
+      conflicts[offlineId]['resolution'] =
+          useLocal ? 'local_wins' : 'server_wins';
       conflicts[offlineId]['resolved_at'] = DateTime.now().toIso8601String();
       final encrypted = _encryption.encrypt(jsonEncode(conflicts));
       await _safeBox.put(_conflictsKey, encrypted);

@@ -140,9 +140,8 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
             final filtered = _searchQuery.isEmpty
                 ? pages
                 : pages.where((p) {
-                    final title = (p['title_ar'] ?? '')
-                        .toString()
-                        .toLowerCase();
+                    final title =
+                        (p['title_ar'] ?? '').toString().toLowerCase();
                     return title.contains(_searchQuery.toLowerCase());
                   }).toList();
 
@@ -738,13 +737,10 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
 
   Future<void> _togglePageActive(String id, bool active) async {
     try {
-      await Supabase.instance.client
-          .from('pages')
-          .update({
-            'is_active': active,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', id);
+      await Supabase.instance.client.from('pages').update({
+        'is_active': active,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', id);
       ref.invalidate(pagesListProvider);
     } catch (_) {}
   }
@@ -788,13 +784,10 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
       reordered.insert(newIndex, item);
 
       for (int i = 0; i < reordered.length; i++) {
-        await Supabase.instance.client
-            .from('pages')
-            .update({
-              'sort_order': i,
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', reordered[i]['id']);
+        await Supabase.instance.client.from('pages').update({
+          'sort_order': i,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', reordered[i]['id']);
       }
       ref.invalidate(pagesListProvider);
     } catch (_) {}

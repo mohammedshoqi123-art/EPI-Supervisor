@@ -186,9 +186,8 @@ class _SystemMonitorScreenState extends ConsumerState<SystemMonitorScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: count >= 0
-                        ? Colors.grey[700]
-                        : const Color(0xFFE53935),
+                    color:
+                        count >= 0 ? Colors.grey[700] : const Color(0xFFE53935),
                     fontFamily: 'Tajawal',
                   ),
                 ),
@@ -423,11 +422,10 @@ class _SystemMonitorScreenState extends ConsumerState<SystemMonitorScreen> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color:
-                        (b['status'] == 'completed'
-                                ? const Color(0xFF43A047)
-                                : const Color(0xFFFB8C00))
-                            .withOpacity(0.1),
+                    color: (b['status'] == 'completed'
+                            ? const Color(0xFF43A047)
+                            : const Color(0xFFFB8C00))
+                        .withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(

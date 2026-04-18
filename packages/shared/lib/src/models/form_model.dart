@@ -32,7 +32,7 @@ class FormField with _$FormField {
   const factory FormField({
     required String key,
     required String
-    type, // text, number, select, multiselect, date, gps, photo, textarea
+        type, // text, number, select, multiselect, date, gps, photo, textarea
     @JsonKey(name: 'label_ar') required String labelAr,
     @JsonKey(name: 'label_en') String? labelEn,
     @Default(false) bool required,

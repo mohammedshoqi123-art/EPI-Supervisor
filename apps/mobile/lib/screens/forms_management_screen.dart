@@ -85,8 +85,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'requires_gps': result['requires_gps'] ?? false,
         'requires_photo': result['requires_photo'] ?? false,
         'max_photos': result['max_photos'] ?? 5,
-        'allowed_roles':
-            result['allowed_roles'] ??
+        'allowed_roles': result['allowed_roles'] ??
             ['data_entry', 'district', 'governorate', 'central', 'admin'],
         'campaign_type': result['campaign_type'] ?? 'polio_campaign',
         'is_active': true,
@@ -135,25 +134,21 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
 
     try {
       final client = Supabase.instance.client;
-      await client
-          .from('forms')
-          .update({
-            'title_ar': result['title_ar'],
-            'title_en': result['title_en'] ?? result['title_ar'],
-            'description_ar': result['description_ar'],
-            'schema': result['schema'],
-            'requires_gps': result['requires_gps'],
-            'requires_photo': result['requires_photo'],
-            'max_photos': result['max_photos'],
-            'allowed_roles': result['allowed_roles'] ?? form['allowed_roles'],
-            'campaign_type':
-                result['campaign_type'] ??
-                form['campaign_type'] ??
-                'polio_campaign',
-            'version': (form['version'] as int? ?? 1) + 1,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', form['id']);
+      await client.from('forms').update({
+        'title_ar': result['title_ar'],
+        'title_en': result['title_en'] ?? result['title_ar'],
+        'description_ar': result['description_ar'],
+        'schema': result['schema'],
+        'requires_gps': result['requires_gps'],
+        'requires_photo': result['requires_photo'],
+        'max_photos': result['max_photos'],
+        'allowed_roles': result['allowed_roles'] ?? form['allowed_roles'],
+        'campaign_type': result['campaign_type'] ??
+            form['campaign_type'] ??
+            'polio_campaign',
+        'version': (form['version'] as int? ?? 1) + 1,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', form['id']);
       // FIX: Invalidate forms cache so UI shows fresh data
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
@@ -237,13 +232,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
 
     try {
       final client = Supabase.instance.client;
-      await client
-          .from('forms')
-          .update({
-            'deleted_at': DateTime.now().toIso8601String(),
-            'is_active': false,
-          })
-          .eq('id', form['id']);
+      await client.from('forms').update({
+        'deleted_at': DateTime.now().toIso8601String(),
+        'is_active': false,
+      }).eq('id', form['id']);
       // FIX: Invalidate forms cache
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
@@ -284,8 +276,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       final newStatus = !(form['is_active'] as bool? ?? true);
       await client
           .from('forms')
-          .update({'is_active': newStatus})
-          .eq('id', form['id']);
+          .update({'is_active': newStatus}).eq('id', form['id']);
       // FIX: Invalidate forms cache
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);

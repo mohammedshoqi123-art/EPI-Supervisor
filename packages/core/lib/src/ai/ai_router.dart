@@ -27,11 +27,11 @@ class AIRouter {
     RagPipeline? rag,
     FunctionCallingEngine? fnCall,
     OfflineManager? offline,
-  }) : _hf = hf,
-       _rag = rag,
-       _fnCall = fnCall,
-       _localAI = EnhancedLocalAI(),
-       _offline = offline ?? OfflineManager(EncryptionService());
+  })  : _hf = hf,
+        _rag = rag,
+        _fnCall = fnCall,
+        _localAI = EnhancedLocalAI(),
+        _offline = offline ?? OfflineManager(EncryptionService());
 
   /// Initialize the AI system
   Future<void> init() async {
@@ -50,7 +50,7 @@ class AIRouter {
     String message, {
     Map<String, dynamic>? data,
     Future<dynamic> Function(String query, Map<String, dynamic> params)?
-    dbExecutor,
+        dbExecutor,
   }) async {
     final isOnline = _hf != null;
     final hasRAG = _rag?.isReady ?? false;
@@ -101,7 +101,7 @@ class AIRouter {
     String message, {
     Map<String, dynamic>? data,
     Future<dynamic> Function(String query, Map<String, dynamic> params)?
-    dbExecutor,
+        dbExecutor,
     required bool hasRAG,
     required bool hasFnCall,
   }) async {
@@ -298,13 +298,13 @@ class AIRouter {
 
   /// Get system status
   Map<String, dynamic> get systemStatus => {
-    'online': _hf != null,
-    'rag_ready': _rag?.isReady ?? false,
-    'rag_documents': _rag?.documentCount ?? 0,
-    'function_calls': _fnCall?.availableFunctions.length ?? 0,
-    'memory_size': _memory.length,
-    'mode': currentMode,
-  };
+        'online': _hf != null,
+        'rag_ready': _rag?.isReady ?? false,
+        'rag_documents': _rag?.documentCount ?? 0,
+        'function_calls': _fnCall?.availableFunctions.length ?? 0,
+        'memory_size': _memory.length,
+        'mode': currentMode,
+      };
 }
 
 // ═══════════════════════════════════════════════════════════

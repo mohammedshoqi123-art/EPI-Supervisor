@@ -160,11 +160,9 @@ class SyncService {
 
     try {
       // ═══ معالجة العناصر دفعات ═══
-      for (
-        int offset = 0;
-        offset < uniqueItems.length;
-        offset += _maxBatchSize
-      ) {
+      for (int offset = 0;
+          offset < uniqueItems.length;
+          offset += _maxBatchSize) {
         final batchEnd = (offset + _maxBatchSize).clamp(0, uniqueItems.length);
         final batch = uniqueItems.sublist(offset, batchEnd);
 
@@ -212,15 +210,14 @@ class SyncService {
             return payload;
           }).toList();
 
-          final response = await _api
-              .callFunction(SupabaseConfig.fnSyncOffline, {'items': items})
-              .timeout(
-                const Duration(seconds: 90), // ═══ مهلة أطول ═══
-                onTimeout: () {
-                  if (kDebugMode) print('[SyncService] Timeout');
-                  throw TimeoutException('Batch sync timed out');
-                },
-              );
+          final response = await _api.callFunction(
+              SupabaseConfig.fnSyncOffline, {'items': items}).timeout(
+            const Duration(seconds: 90), // ═══ مهلة أطول ═══
+            onTimeout: () {
+              if (kDebugMode) print('[SyncService] Timeout');
+              throw TimeoutException('Batch sync timed out');
+            },
+          );
 
           final serverResults = (response['results'] as List?) ?? [];
           final serverErrors = (response['errors'] as List?) ?? [];
@@ -229,9 +226,9 @@ class SyncService {
             final offlineId = item['offline_id'] as String? ?? '';
 
             final match = serverResults.cast<Map<String, dynamic>>().firstWhere(
-              (r) => r['offline_id'] == offlineId,
-              orElse: () => <String, dynamic>{},
-            );
+                  (r) => r['offline_id'] == offlineId,
+                  orElse: () => <String, dynamic>{},
+                );
 
             if (match.isNotEmpty) {
               final status = match['status'] as String? ?? 'error';
@@ -262,19 +259,17 @@ class SyncService {
                   result.errors.add(
                     SyncError(
                       offlineId: offlineId,
-                      error:
-                          match['error'] ??
+                      error: match['error'] ??
                           'Unknown error (retry ${retryCount + 1}/$_maxRetries in ${backoffSeconds}s)',
                     ),
                   );
               }
             } else {
-              final errMatch = serverErrors
-                  .cast<Map<String, dynamic>>()
-                  .firstWhere(
-                    (e) => e['offline_id'] == offlineId,
-                    orElse: () => <String, dynamic>{},
-                  );
+              final errMatch =
+                  serverErrors.cast<Map<String, dynamic>>().firstWhere(
+                        (e) => e['offline_id'] == offlineId,
+                        orElse: () => <String, dynamic>{},
+                      );
               final retryCount = (item['retry_count'] ?? 0) as int;
               final backoffSeconds = _calculateBackoff(retryCount);
               item['retry_count'] = retryCount + 1;
@@ -286,8 +281,7 @@ class SyncService {
               result.errors.add(
                 SyncError(
                   offlineId: offlineId,
-                  error:
-                      errMatch['error'] ??
+                  error: errMatch['error'] ??
                       'No response (retry ${retryCount + 1}/$_maxRetries)',
                 ),
               );

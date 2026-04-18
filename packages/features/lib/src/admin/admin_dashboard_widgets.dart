@@ -61,11 +61,10 @@ class _KPICard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color:
-                        (trend! >= 0
-                                ? const Color(0xFF43A047)
-                                : const Color(0xFFE53935))
-                            .withOpacity(0.1),
+                    color: (trend! >= 0
+                            ? const Color(0xFF43A047)
+                            : const Color(0xFFE53935))
+                        .withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(

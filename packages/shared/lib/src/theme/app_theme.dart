@@ -56,20 +56,20 @@ class AppTheme {
 
   // ─── Shadows ──────────────────────────────────────────────────────────────
   static List<BoxShadow> get cardShadow => [
-    BoxShadow(
-      color: Colors.black.withValues(alpha: 0.06),
-      blurRadius: 16,
-      offset: const Offset(0, 4),
-    ),
-  ];
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.06),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
+        ),
+      ];
 
   static List<BoxShadow> get elevatedShadow => [
-    BoxShadow(
-      color: primaryColor.withValues(alpha: 0.2),
-      blurRadius: 24,
-      offset: const Offset(0, 8),
-    ),
-  ];
+        BoxShadow(
+          color: primaryColor.withValues(alpha: 0.2),
+          blurRadius: 24,
+          offset: const Offset(0, 8),
+        ),
+      ];
 
   // ─── Border Radius ────────────────────────────────────────────────────────
   static const BorderRadius radiusSmall = BorderRadius.all(Radius.circular(8));
@@ -84,23 +84,25 @@ class AppTheme {
 
   // ─── Glassmorphism ────────────────────────────────────────────────────────
   static BoxDecoration get glassmorphism => BoxDecoration(
-    color: Colors.white.withValues(alpha: 0.15),
-    borderRadius: radiusLarge,
-    border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: 0.08),
-        blurRadius: 20,
-        spreadRadius: -2,
-      ),
-    ],
-  );
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: radiusLarge,
+        border:
+            Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            spreadRadius: -2,
+          ),
+        ],
+      );
 
   static BoxDecoration get glassmorphismDark => BoxDecoration(
-    color: Colors.black.withValues(alpha: 0.2),
-    borderRadius: radiusLarge,
-    border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
-  );
+        color: Colors.black.withValues(alpha: 0.2),
+        borderRadius: radiusLarge,
+        border:
+            Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
+      );
 
   // ─── Text Styles ──────────────────────────────────────────────────────────
   static const String fontPrimary = 'Cairo';

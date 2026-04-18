@@ -31,8 +31,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _reportData == null
-              ? _buildEmptyState()
-              : _buildReportContent(),
+                  ? _buildEmptyState()
+                  : _buildReportContent(),
         ),
       ],
     );

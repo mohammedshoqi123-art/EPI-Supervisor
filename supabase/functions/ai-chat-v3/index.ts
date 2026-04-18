@@ -11,12 +11,6 @@ const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions'
 const HF_API = 'https://router.huggingface.co/hf-inference/models'
 const MIMO_API = 'https://api.xiaomimimo.com/v1/chat/completions'
 
-const HF_MODELS = {
-  embeddings: 'intfloat/multilingual-e5-large',
-  classifier: 'facebook/bart-large-mnli',
-  qa: 'deepset/xlm-roberta-base-squad2',
-}
-
 // Cache for DB model config (refreshed every 5 min)
 let _modelConfigCache: { data: any; ts: number } | null = null
 const MODEL_CONFIG_TTL = 5 * 60 * 1000
@@ -27,7 +21,6 @@ async function getModelConfig(supa: any) {
     return _modelConfigCache.data
   }
   try {
-    // Get active model from ai_models table
     const { data: model } = await supa
       .from('ai_models')
       .select('*')
@@ -35,7 +28,6 @@ async function getModelConfig(supa: any) {
       .eq('is_active', true)
       .single()
 
-    // Get AI settings from app_settings
     const { data: settings } = await supa
       .from('app_settings')
       .select('key, value')
@@ -57,7 +49,6 @@ async function getModelConfig(supa: any) {
     return config
   } catch (e) {
     console.error('Failed to load model config:', e)
-    // Fallback defaults
     return {
       defaultModel: null,
       enabled: true,
@@ -82,7 +73,7 @@ async function logUsage(supa: any, modelId: string, tokens: number, latencyMs: n
 }
 
 // ═══════════════════════════════════════════════════════════
-// KNOWLEDGE BASE
+// KNOWLEDGE BASE — SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════
 
 const SYSTEM_PROMPT = `أنت "مساعد EPI" — متخصص في برنامج التطعيم الموسع في اليمن ومنصة مشرف EPI.
@@ -143,34 +134,49 @@ async function mimoChat(messages: any[], key: string, stream = false) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// INTENT + FUNCTION CALLING
+// IMPROVEMENT 1: KEYWORD-BASED INTENT CLASSIFICATION (0ms, 0 cost)
+// Replaces: classifyIntentGroq() + classifyIntent() — saves 1 API call per message
 // ═══════════════════════════════════════════════════════════
 
-const INTENT_LABELS = ['query_submissions','query_shortages','query_analytics','generate_report','query_governorates','query_users','ask_guide','analyze_trend','compare_data','query_health','general_question']
+const INTENT_RULES: [string, RegExp][] = [
+  ['query_submissions', /إرساليات|إرسال|استمارة|كم عدد|كم إرسالية|كم طلب|إدخالات|نماذج مُرسلة/i],
+  ['query_shortages', /نقص|نواقص|احتياج|مفقود|نواقص حرجة|مخزون/i],
+  ['query_analytics', /إحصائيات|احصائيات|أرقام|نظرة عامة|لوحة|dashboard/i],
+  ['generate_report', /تقرير|إنشاء تقرير|أنشئ|أعد|ملخص/i],
+  ['query_governorates', /محافظة|محافظات|مناطق|ترتيب المحافظات|أداء المحافظات/i],
+  ['query_users', /مستخدم|فريق|مشرف|مدخل بيانات|أعضاء|صلاحيات/i],
+  ['ask_guide', /كيف|شرح|دليل|تعليمات|خطوات|مساعدة|استخدام/i],
+  ['analyze_trend', /اتجاه|تطور|مقارنة|تحسن|تراجع|تغير|نسبة/i],
+  ['query_health', /تغطية|تطعيم|لقاح|وصول|انسحاب|penta|opv|bcg|mr|dropout|تحصين/i],
+  ['compare_data', /قارن|مقارنة|فرق|versus|ضد/i],
+]
+
+function classifyIntentLocal(text: string): { intent: string; confidence: number } {
+  let bestIntent = 'general_question'
+  let bestScore = 0
+
+  for (const [intent, pattern] of INTENT_RULES) {
+    if (pattern.test(text)) {
+      // Count matching keywords for confidence
+      const matches = text.match(pattern)
+      const score = matches ? Math.min(0.95, 0.6 + matches[0].length * 0.02) : 0.6
+      if (score > bestScore) {
+        bestScore = score
+        bestIntent = intent
+      }
+    }
+  }
+
+  return { intent: bestIntent, confidence: bestScore }
+}
+
+// ═══════════════════════════════════════════════════════════
+// FUNCTION CALLING
+// ═══════════════════════════════════════════════════════════
 
 const QUERY_MAP: Record<string, string> = {
   query_submissions: 'submissions', query_shortages: 'shortages',
   query_analytics: 'analytics', query_governorates: 'governorates', query_users: 'users',
-}
-
-async function classifyIntent(text: string, hfToken: string) {
-  try {
-    const r = await hfCall(HF_MODELS.classifier, { inputs: text, parameters: { candidate_labels: INTENT_LABELS } }, hfToken)
-    if (Array.isArray(r) && r[0]?.labels) return { intent: r[0].labels[0], confidence: r[0].scores[0] }
-  } catch {}
-  return { intent: 'general_question', confidence: 0 }
-}
-
-// Alternative: Groq-based intent (faster, no HF needed)
-async function classifyIntentGroq(text: string, groqKey: string) {
-  try {
-    const r = await groqChat([
-      { role: 'system', content: 'Extract intent from Arabic EPI message. Return ONLY the intent name from: query_submissions, query_shortages, query_analytics, generate_report, query_governorates, query_users, ask_guide, analyze_trend, compare_data, query_health, general_question' },
-      { role: 'user', content: text },
-    ], groqKey, { model: 'llama-3.1-8b-instant', maxTokens: 20, temperature: 0 })
-    const intent = r?.choices?.[0]?.message?.content?.trim() || 'general_question'
-    return { intent: INTENT_LABELS.includes(intent) ? intent : 'general_question', confidence: 0.8 }
-  } catch { return { intent: 'general_question', confidence: 0 } }
 }
 
 async function dbQuery(supa: any, type: string) {
@@ -219,52 +225,101 @@ function compressCtx(ctx: any) {
   return `إرسالات: كلي=${s.total ?? '?'} اليوم=${s.today ?? '?'}\nنواقص: كلي=${sh.total ?? '?'} محلول=${sh.resolved ?? '?'}`
 }
 
-// ═══ RAG Helpers ═══
+// ═══════════════════════════════════════════════════════════
+// IMPROVEMENT 2: ENHANCED RAG KEYWORD SEARCH
+// Better Arabic tokenization, EPI term expansion, relevance scoring
+// ═══════════════════════════════════════════════════════════
 
-// Arabic stop words to filter out
 const STOP_WORDS = new Set([
   'في', 'من', 'على', 'إلى', 'هل', 'ما', 'هذا', 'هذه', 'ذلك', 'التي',
   'الذي', 'كيف', 'لماذا', 'متى', 'أين', 'كم', 'ماذا', 'هل', 'لا',
   'نعم', 'أو', 'و', 'ثم', 'أن', 'إن', 'كان', 'كانت', 'يكون', 'تكون',
   'هو', 'هي', 'هم', 'نحن', 'أنت', 'أنا', 'عند', 'بعد', 'قبل', 'بين',
   'حتى', 'عبر', 'حول', 'ضد', 'مع', 'بدون', 'خلال', 'نحو', 'لدى',
+  'هل', 'كل', 'بعض', 'غير', 'أكثر', 'أقل', 'كذلك', 'أيضا', 'فقط',
 ])
 
-function extractKeywords(text: string): string[] {
-  const words = text
-    .replace(/[^\u0600-\u06FF\u0750-\u07FF\s]/g, ' ')
+// EPI term expansion map — if user says X, also search for related terms
+const EPI_EXPANSIONS: Record<string, string[]> = {
+  'تطعيم': ['لقاح', 'تحصين', 'جرعة', 'vac'],
+  'لقاح': ['تطعيم', 'تحصين', 'جرعة'],
+  'تغطية': ['وصول', 'انسحاب', 'dropout', 'penta'],
+  'نواقص': ['نقص', 'احتياج', 'مخزون', 'shortage'],
+  'إرساليات': ['إرسال', 'استمارة', 'نموذج', 'submission'],
+  'محافظة': ['منطقة', 'مكتب', 'governorate'],
+  'penta': ['خماسي', 'تغطية', 'وصول', 'انسحاب'],
+  'opv': ['شلل', 'فموي'],
+  'bcg': ['سل', ' tuberculosis'],
+  'mr': ['حصبة', 'حصبة ألمانية'],
+  'شلل': ['opv', 'فموي', 'ipv'],
+  'حصبة': ['mr', 'ألمانية'],
+  'سل': ['bcg'],
+  'جودة': ['اكتمال', 'رفض', 'خطأ', 'دقة'],
+  'أداء': ['ترتيب', 'مقارنة', 'تقييم'],
+  'تقرير': ['ملخص', 'تحليل', 'إحصائيات'],
+}
+
+function extractKeywordsEnhanced(text: string): string[] {
+  // Normalize Arabic text
+  const normalized = text
+    .replace(/[إأآا]/g, 'ا')
+    .replace(/[ى]/g, 'ي')
+    .replace(/[ة]/g, 'ه')
+    .replace(/[^\u0600-\u06FF\u0750-\u07FFa-zA-Z\s]/g, ' ')
+
+  const words = normalized
     .split(/\s+/)
     .filter(w => w.length > 2 && !STOP_WORDS.has(w))
 
-  const epiTerms = ['تطعيم', 'لقاح', 'تغطية', 'نواقص', 'إرساليات',
-    'محافظة', 'Penta', 'OPV', 'BCG', 'MR', 'IPV', 'PCV',
-    'سل', 'شلل', 'حصبة', 'خماسي', 'رئوي', 'روتا', 'كبد',
-    'تحصين', 'حملة', 'جرعة', 'ولادة', 'تبريد', 'مخزون',
-    'dropout', 'انسحاب', 'تقرير', 'تحليل', 'أداء', 'جودة']
+  // Find EPI terms and expand them
+  const expanded = new Set<string>()
+  for (const word of words) {
+    const lower = word.toLowerCase()
+    expanded.add(lower)
+    // Check expansion map
+    for (const [term, aliases] of Object.entries(EPI_EXPANSIONS)) {
+      if (lower.includes(term) || term.includes(lower)) {
+        aliases.forEach(a => expanded.add(a))
+      }
+    }
+  }
 
-  const found = epiTerms.filter(t => text.includes(t))
-  return [...new Set([...words.slice(0, 5), ...found])].slice(0, 8)
+  return [...expanded].slice(0, 10)
 }
 
-async function keywordSearch(supa: any, message: string): Promise<string> {
-  const keywords = extractKeywords(message)
+async function keywordSearchEnhanced(supa: any, message: string): Promise<string> {
+  const keywords = extractKeywordsEnhanced(message)
   if (keywords.length === 0) return ''
 
-  const conditions = keywords.map(kw =>
+  // Build OR conditions — use top 6 keywords max for query performance
+  const conditions = keywords.slice(0, 6).map(kw =>
     `content.ilike.%${kw}%`
-  ).slice(0, 5)
+  )
 
-  const { data } = await supa
-    .from('ai_chunks')
-    .select('content, metadata')
-    .or(conditions.join(','))
-    .limit(3)
+  try {
+    const { data, error } = await supa
+      .from('ai_chunks')
+      .select('content, metadata, document_id')
+      .or(conditions.join(','))
+      .limit(5)
 
-  if (!data?.length) return ''
+    if (error || !data?.length) return ''
 
-  return data.map((c: any) =>
-    `[${c.metadata?.section || c.metadata?.source || 'مرجع'}]\n${c.content.slice(0, 800)}`
-  ).join('\n\n---\n\n')
+    // Score and rank results by keyword match count
+    const scored = data.map((chunk: any) => {
+      const contentLower = chunk.content.toLowerCase()
+      const matchCount = keywords.filter(kw => contentLower.includes(kw)).length
+      return { ...chunk, score: matchCount }
+    })
+    scored.sort((a: any, b: any) => b.score - a.score)
+
+    // Return top 3
+    return scored.slice(0, 3).map((c: any) =>
+      `[${c.metadata?.section || c.metadata?.source || 'مرجع EPI'}]\n${c.content.slice(0, 800)}`
+    ).join('\n\n---\n\n')
+  } catch {
+    return ''
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -305,6 +360,72 @@ async function handleStream(resp: Response, origin: string | null) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// IMPROVEMENT 3: SINGLE LLM CALL GENERATOR
+// Injects intent + RAG + context into ONE system prompt
+// Instead of: classify → query → fallback → LLM
+// Now: classify (0ms) → query → single LLM call
+// ═══════════════════════════════════════════════════════════
+
+interface ChatRequest {
+  message: string
+  history: any[]
+  context?: any
+  mode?: string
+  template?: string
+  stream: boolean
+}
+
+function buildSystemPrompt(req: ChatRequest, rag: string, dbResult: any | null): string {
+  let sys = SYSTEM_PROMPT
+
+  // Add real-time context
+  if (req.context) sys += `\n\n== بيانات حية ==\n${compressCtx(req.context)}`
+
+  // Add RAG knowledge
+  if (rag) sys += `\n\n== مراجع ==\n${rag}`
+
+  // Add template task
+  if (req.template) {
+    const T: Record<string, string> = {
+      daily: 'أنشئ تقريراً يومياً: ملخص الإرساليات، النواقص الحرجة، 3 توصيات عملية.',
+      weekly: 'حلل اتجاه الأسبوع الحالي: تحسن/تراجع، نسب مقارنة.',
+      governorate: 'رتب المحافظات بالأداء مع تحليل الفجوات.',
+      shortages: 'حلل النواقص حسب الخطورة وقدم توصيات للحل.',
+      quality: 'حلل جودة الإدخال: نسبة الرفض، اكتمال الحقول.',
+      coverage: 'حلل تغطية التطعيم: Penta3، Dropout، فجوات.',
+    }
+    sys += `\n\n== مهمة ==\n${T[req.template] ?? 'أنشئ تقريراً مفصلاً.'}`
+  }
+
+  // Guide mode
+  if (req.mode === 'guide') sys += '\n\nاشرح بخطوات مختصرة وواضحة (3-5 خطوات).'
+
+  // If we have DB data, include it directly
+  if (dbResult) {
+    sys += `\n\n== بيانات من قاعدة البيانات ==\n${JSON.stringify(dbResult)}`
+  }
+
+  return sys
+}
+
+function buildMessages(req: ChatRequest, systemPrompt: string): any[] {
+  const messages: any[] = [{ role: 'system', content: systemPrompt }]
+
+  // Add trimmed history
+  for (const m of (req.history || []).slice(-6)) {
+    messages.push({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: String(m.content).slice(0, 1200),
+    })
+  }
+
+  // Add current message
+  messages.push({ role: 'user', content: req.message ?? req.template })
+
+  return messages
+}
+
+// ═══════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════
 
@@ -325,53 +446,48 @@ serve(async (req) => {
       if (!data?.[0]?.allowed) return jsonResponse({ error: 'Rate limit' }, 429, origin)
     } catch { return jsonResponse({ error: 'Rate limit check failed' }, 429, origin) }
 
-    // Load model config from database
+    // Load model config
     const modelConfig = await getModelConfig(supabase)
-
     if (!modelConfig.enabled) {
       return jsonResponse({ error: 'AI service is disabled', source: 'disabled' }, 503, origin)
     }
 
-    const { message, history = [], context, mode, template, stream = false } = await req.json()
+    const body = await req.json()
+    const { message, history = [], context, mode, template, stream = false } = body
     if (!message && !template) return jsonResponse({ error: 'Message required' }, 400, origin)
 
     const groqKey = Deno.env.get('GROQ_API_KEY')
     const hfToken = Deno.env.get('HF_API_TOKEN')
     const mimoKey = Deno.env.get('MIMO_API_KEY') ?? Deno.env.get('GEMINI_API_KEY')
 
-    // Determine which model/provider to use from DB config
+    // Model config from DB
     const dbModel = modelConfig.defaultModel
     const dbProvider = dbModel?.provider
     const dbModelId = dbModel?.model_id
     const dbMaxTokens = dbModel?.max_tokens || 800
     const dbTemperature = Number(dbModel?.temperature) || 0.4
 
-    // ─── MODE: Suggestions ───
+    // ─── MODE: Suggestions (static fallback, no API call) ───
     if (mode === 'suggestions') {
-      const key = groqKey || mimoKey
-      if (key) {
-        const useGroq = !!groqKey
-        const chatFn = useGroq ? groqChat : mimoChat
-        const startMs = Date.now()
-        const r = await chatFn([
-          { role: 'system', content: 'اقترح 5 اقتراحات متنوعة لمستخدم منصة مشرف EPI اليمن. سطر واحد لكل اقتراح بدون ترقيم.' },
-          { role: 'user', content: 'اقتراحات' },
-        ], key, useGroq ? { model: 'llama-3.1-8b-instant', maxTokens: 200 } : false)
-        const text = r?.choices?.[0]?.message?.content ?? ''
-        await logUsage(supabase, useGroq ? 'groq-8b' : 'mimo-v2', r?.usage?.total_tokens || 0, Date.now() - startMs, true)
-        return jsonResponse({ suggestions: text.split('\n').filter((s: string) => s.trim().length > 5).slice(0, 5) }, 200, origin)
-      }
-      return jsonResponse({ suggestions: ['📊 ما حالة الإرساليات؟', '⚠️ أين النواقص الحرجة؟', '📈 اعرض تقرير أسبوعي', '🗺️ أي المحافظات تحتاج دعم؟', '💉 ما تغطية التطعيم؟'] }, 200, origin)
+      return jsonResponse({
+        suggestions: [
+          '📊 ما حالة الإرساليات؟',
+          '⚠️ أين النواقص الحرجة؟',
+          '📈 اعرض تقرير أسبوعي',
+          '🗺️ أي المحافظات تحتاج دعم؟',
+          '💉 ما تغطية التطعيم؟',
+        ],
+      }, 200, origin)
     }
 
-    // ─── MODE: Knowledge base status (for admin) ───
+    // ─── MODE: Knowledge base status (admin) ───
     if (mode === 'knowledge_status') {
-      const { data: docs } = await supa
+      const { data: docs } = await supabase
         .from('ai_documents')
         .select('id, title, doc_type, total_chunks, is_indexed, created_at')
         .order('created_at', { ascending: false })
 
-      const { data: chunkCount } = await supa
+      const { data: chunkCount } = await supabase
         .from('ai_chunks')
         .select('id', { count: 'exact', head: true })
 
@@ -379,12 +495,12 @@ serve(async (req) => {
         documents: docs || [],
         totalChunks: chunkCount || 0,
         searchable: true,
-        searchMethod: 'keyword_matching',
-        note: 'HuggingFace embeddings pending — using keyword search',
+        searchMethod: 'keyword_enhanced',
+        note: 'RAG: keyword matching with EPI term expansion',
       }, 200, origin)
     }
 
-    // ─── MODE: Model status (for admin) ───
+    // ─── MODE: Model status (admin) ───
     if (mode === 'model_status') {
       const { data: models } = await supabase
         .from('ai_models')
@@ -414,101 +530,47 @@ serve(async (req) => {
       }, 200, origin)
     }
 
-    // ─── STEP 1: Intent ───
-    let intent = 'general_question'
+    // ═══════════════════════════════════════════════════════
+    // STEP 1: Intent Classification (LOCAL — 0ms, 0 cost)
+    // ═══════════════════════════════════════════════════════
+    const { intent, confidence } = message ? classifyIntentLocal(message) : { intent: 'general_question', confidence: 0 }
+
+    // ─── STEP 2: Function Calling (DB query) ───
     let dbResult = null
+    const qt = QUERY_MAP[intent]
+    if (qt) dbResult = await dbQuery(supabase, qt)
 
-    if (message) {
-      if (groqKey) {
-        const classified = await classifyIntentGroq(message, groqKey)
-        intent = classified.intent
-      } else if (hfToken) {
-        const classified = await classifyIntent(message, hfToken)
-        intent = classified.intent
-      }
-
-      // ─── STEP 2: Function Calling ───
-      const qt = QUERY_MAP[intent]
-      if (qt) dbResult = await dbQuery(supabase, qt)
-    }
-
-    // Return DB result immediately if found
-    if (dbResult && intent !== 'general_question') {
-      return jsonResponse({ reply: formatResult(intent, dbResult), source: 'function_call', intent, data: dbResult }, 200, origin)
-    }
-
-    // ─── STEP 3: RAG — Semantic Knowledge Search ───
+    // ─── STEP 3: RAG — Enhanced Keyword Search ───
     let rag = ''
-    let ragSource = 'none'
-
-    if (message && hfToken) {
-      try {
-        // Generate query embedding
-        const queryEmb = await hfCall(
-          HF_MODELS.embeddings,
-          { inputs: [`query: ${message.slice(0, 512)}`] },
-          hfToken
-        )
-
-        if (queryEmb && Array.isArray(queryEmb) && queryEmb[0]?.length === 1024) {
-          // Semantic search using pgvector
-          const embStr = `[${queryEmb[0].join(',')}]`
-          const { data: results } = await supa.rpc('search_knowledge', {
-            query_embedding: embStr,
-            match_count: 3,
-            similarity_threshold: 0.4,
-          })
-
-          if (results && results.length > 0) {
-            rag = results.map((r: any) =>
-              `[${r.doc_title} - ${r.metadata?.section || r.doc_type}]\n${r.content.slice(0, 800)}`
-            ).join('\n\n---\n\n')
-            ragSource = 'semantic'
-          }
-        }
-
-        // Fallback to keyword if semantic found nothing
-        if (!rag) {
-          rag = await keywordSearch(supa, message)
-          if (rag) ragSource = 'keyword'
-        }
-      } catch (e) {
-        console.error('RAG search failed:', e)
-        rag = await keywordSearch(supa, message).catch(() => '')
-        if (rag) ragSource = 'keyword_fallback'
-      }
-    } else if (message) {
-      // No HF token — keyword only
-      rag = await keywordSearch(supa, message).catch(() => '')
-      if (rag) ragSource = 'keyword'
+    if (message) {
+      rag = await keywordSearchEnhanced(supabase, message).catch(() => '')
     }
 
-    // ─── STEP 4: LLM Response ───
-    const messages: any[] = []
-    let sys = SYSTEM_PROMPT
-    if (context) sys += `\n\n${compressCtx(context)}`
-    if (rag) sys += `\n\n${rag}`
-    if (template) {
-      const T: Record<string, string> = {
-        daily: 'أنشئ تقريراً يومياً: ملخص الإرساليات، النواقص الحرجة، 3 توصيات.',
-        weekly: 'حلل اتجاه الأسبوع.',
-        governorate: 'رتب المحافظات بالأداء.',
-        shortages: 'حلل النواقص حسب الخطورة.',
-        quality: 'حلل جودة الإدخال.',
-        coverage: 'حلل تغطية التطعيم.',
-      }
-      sys += `\n\nمهمة: ${T[template] ?? 'أنشئ تقريراً.'}`
-    }
-    if (mode === 'guide') sys += '\n\nاشرح بخطوات مختصرة (3-5).'
+    // ═══════════════════════════════════════════════════════
+    // STEP 4: SINGLE LLM CALL (the only API call)
+    // ═══════════════════════════════════════════════════════
+    const chatReq: ChatRequest = { message, history, context, mode, template, stream }
+    const systemPrompt = buildSystemPrompt(chatReq, rag, dbResult)
+    const messages = buildMessages(chatReq, systemPrompt)
 
-    messages.push({ role: 'system', content: sys })
-    for (const m of history.slice(-modelConfig.maxHistory)) messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content).slice(0, 1200) })
-    messages.push({ role: 'user', content: message ?? template })
-
-    // ═══ Model selection: DB config → provider fallback ═══
     const startMs = Date.now()
 
-    // If DB config specifies Groq
+    // If we have DB data AND intent is a query type, return formatted immediately
+    if (dbResult && intent !== 'general_question' && confidence > 0.7) {
+      const formatted = formatResult(intent, dbResult)
+      await logUsage(supabase, 'function_call', 0, Date.now() - startMs, true)
+      return jsonResponse({
+        reply: formatted,
+        source: 'function_call',
+        intent,
+        data: dbResult,
+        confidence,
+      }, 200, origin)
+    }
+
+    // ═══ Model selection: DB config → provider fallback ═══
+
+    // Provider: Groq (from DB config)
     if (dbProvider === 'groq' && groqKey) {
       const useStream = stream && modelConfig.streamEnabled
       if (useStream) {
@@ -519,10 +581,10 @@ serve(async (req) => {
       const text = r?.choices?.[0]?.message?.content ?? ''
       const tokens = r?.usage?.total_tokens || 0
       await logUsage(supabase, dbModel?.id || 'groq-70b', tokens, Date.now() - startMs, !!text)
-      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', model: dbModelId, intent }, 200, origin)
+      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', model: dbModelId, intent, confidence }, 200, origin)
     }
 
-    // If DB config specifies MiMo
+    // Provider: MiMo (from DB config)
     if (dbProvider === 'mimo' && mimoKey) {
       const useStream = stream && modelConfig.streamEnabled
       if (useStream) {
@@ -532,33 +594,36 @@ serve(async (req) => {
       const r = await mimoChat(messages, mimoKey)
       const text = r?.choices?.[0]?.message?.content ?? ''
       await logUsage(supabase, dbModel?.id || 'mimo-v2', 0, Date.now() - startMs, !!text)
-      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', model: dbModelId, intent }, 200, origin)
+      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', model: dbModelId, intent, confidence }, 200, origin)
     }
 
-    // ═══ Default priority fallback: Groq → MiMo → error ═══
-    if (groqKey && modelConfig.fallbackEnabled) {
-      if (stream && modelConfig.streamEnabled) {
-        const resp = await groqChat(messages, groqKey, { stream: true, model: 'llama-3.1-8b-instant', maxTokens: dbMaxTokens })
+    // ═══ Default fallback: Groq 70B → MiMo ═══
+    if (groqKey) {
+      const useStream = stream && modelConfig.streamEnabled
+      if (useStream) {
+        const resp = await groqChat(messages, groqKey, { stream: true, model: 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens })
         if (resp) return handleStream(resp as Response, origin)
       }
       const r = await groqChat(messages, groqKey, { model: 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens, temperature: dbTemperature })
       const text = r?.choices?.[0]?.message?.content ?? ''
       const tokens = r?.usage?.total_tokens || 0
       await logUsage(supabase, 'groq-70b', tokens, Date.now() - startMs, !!text)
-      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', model: 'llama-3.3-70b-versatile', intent }, 200, origin)
+      return jsonResponse({ reply: text || 'عذراً.', source: 'groq', model: 'llama-3.3-70b-versatile', intent, confidence }, 200, origin)
     }
 
-    if (mimoKey && modelConfig.fallbackEnabled) {
-      if (stream && modelConfig.streamEnabled) {
+    if (mimoKey) {
+      const useStream = stream && modelConfig.streamEnabled
+      if (useStream) {
         const resp = await mimoChat(messages, mimoKey, true)
         if (resp) return handleStream(resp as Response, origin)
       }
       const r = await mimoChat(messages, mimoKey)
       const text = r?.choices?.[0]?.message?.content ?? ''
       await logUsage(supabase, 'mimo-v2', 0, Date.now() - startMs, !!text)
-      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', model: 'mimo-v2-pro', intent }, 200, origin)
+      return jsonResponse({ reply: text || 'عذراً.', source: 'mimo', model: 'mimo-v2-pro', intent, confidence }, 200, origin)
     }
 
+    // No provider available
     await logUsage(supabase, 'local-ai', 0, Date.now() - startMs, false, 'No AI provider available')
     return jsonResponse({ reply: 'خدمة AI غير مُعدّة. تأكد من إعداد مفتاح API.', source: 'fallback' }, 200, origin)
 

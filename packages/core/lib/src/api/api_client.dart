@@ -200,50 +200,48 @@ class ApiClient {
   ) async {
     try {
       // Ensure token is fresh before calling the function
+      // ✅ This has its own 8s timeout and never blocks indefinitely
       await _ensureFreshSession();
 
-      // Add timeout to prevent hanging (30 seconds)
+      // ✅ FIX: Use 45s timeout for first call (Edge Function cold start can be slow)
+      // Subsequent calls are usually <5s. 45s gives enough headroom for cold starts.
       final response =
           await _safeClient.functions.invoke(functionName, body: body).timeout(
-                const Duration(seconds: 30),
+                const Duration(seconds: 45),
                 onTimeout: () => throw TimeoutException(
-                  'Function $functionName timed out after 30s',
+                  'Function $functionName timed out after 45s',
                 ),
               );
-      final responseData = response.data;
-      if (responseData is List) {
-        return {'data': responseData};
-      }
-      return Map<String, dynamic>.from(responseData);
+
+      // ✅ FIX: Safe response parsing — handle all possible response types
+      return _parseFunctionResponse(response.data, functionName);
     } on TimeoutException {
       throw NetworkException(
-        'Request timed out. Please check your internet connection and try again.',
+        'انتهت مهلة الطلب. تحقق من اتصال الإنترنت وحاول مرة أخرى.',
       );
     } on FunctionException catch (e) {
       // If 401, try refreshing the token ONCE and retry
       if (e.status == 401) {
+        debugPrint('[ApiClient] Got 401, refreshing token and retrying...');
         try {
           await _forceRefreshSession();
           final response = await _safeClient.functions
               .invoke(functionName, body: body)
               .timeout(
-                const Duration(seconds: 30),
+                const Duration(seconds: 45),
                 onTimeout: () => throw TimeoutException(
-                  'Function $functionName timed out after 30s',
+                  'Function $functionName timed out after 45s (retry)',
                 ),
               );
-          final retryData = response.data;
-          if (retryData is List) {
-            return {'data': retryData};
-          }
-          return Map<String, dynamic>.from(retryData);
+          return _parseFunctionResponse(response.data, functionName);
         } on TimeoutException {
           throw NetworkException(
-            'Request timed out after retry. Please try again.',
+            'انتهت مهلة الطلب بعد إعادة المحاولة. حاول مرة أخرى.',
           );
         } on FunctionException catch (retryError) {
           throw _mapFunctionException(retryError);
         } catch (retryError) {
+          debugPrint('[ApiClient] Retry after 401 failed: $retryError');
           throw const UnauthorizedException();
         }
       }
@@ -252,14 +250,57 @@ class ApiClient {
       _reportUnexpectedError(e, stack, context: 'callFunction($functionName)');
       if (_isNetworkError(e)) throw const NetworkException();
       throw ApiException(
-        'Unexpected error calling $functionName: ${e.runtimeType}',
+        'خطأ غير متوقع: ${e.runtimeType}',
         code: 'unknown',
       );
     }
   }
 
+  /// Safely parse function response into a Map.
+  /// Handles: Map, List, String (JSON), String (non-JSON), null.
+  Map<String, dynamic> _parseFunctionResponse(
+    dynamic responseData,
+    String functionName,
+  ) {
+    if (responseData == null) {
+      debugPrint('[ApiClient] $functionName returned null response');
+      return {'reply': '', 'source': 'empty'};
+    }
+
+    if (responseData is Map<String, dynamic>) {
+      return responseData;
+    }
+
+    if (responseData is Map) {
+      return Map<String, dynamic>.from(responseData);
+    }
+
+    if (responseData is List) {
+      return {'data': responseData};
+    }
+
+    if (responseData is String) {
+      try {
+        final parsed = jsonDecode(responseData);
+        if (parsed is Map<String, dynamic>) return parsed;
+        if (parsed is Map) return Map<String, dynamic>.from(parsed);
+        if (parsed is List) return {'data': parsed};
+      } catch (_) {
+        // Not valid JSON — wrap as-is
+        debugPrint('[ApiClient] $functionName returned non-JSON string');
+        return {'reply': responseData, 'source': 'raw'};
+      }
+    }
+
+    // Fallback: unknown type
+    debugPrint(
+      '[ApiClient] $functionName returned unexpected type: ${responseData.runtimeType}',
+    );
+    return {'reply': responseData.toString(), 'source': 'unknown'};
+  }
+
   /// Ensure the current session has a fresh token (refresh if expiring within 5 min).
-  /// ✅ FIX: Added timeout to prevent hanging on slow networks
+  /// ✅ FIX: Robust timeout with fallback — never hangs indefinitely.
   Future<void> _ensureFreshSession() async {
     try {
       final session = _safeClient.auth.currentSession;
@@ -270,39 +311,45 @@ class ApiClient {
       );
       final now = DateTime.now();
 
-      // Refresh if token expires within 5 minutes
+      // Only refresh if token expires within 5 minutes
       if (expiresAt.difference(now).inMinutes < 5) {
+        debugPrint('[ApiClient] Token expiring soon, refreshing...');
         try {
-          await _safeClient.auth.refreshSession().timeout(
-                const Duration(seconds: 10),
-              );
+          await _safeClient.auth
+              .refreshSession()
+              .timeout(const Duration(seconds: 8));
+          debugPrint('[ApiClient] Session refreshed successfully');
         } on TimeoutException {
           debugPrint(
-            '[ApiClient] Session refresh timed out, proceeding with current token',
+            '[ApiClient] Session refresh timed out — proceeding with current token (401 retry will handle it)',
           );
+        } catch (e) {
+          debugPrint('[ApiClient] Session refresh failed: $e — proceeding');
         }
       }
-    } catch (_) {
-      // If refresh fails here, the main call will handle the 401
+    } catch (e) {
+      debugPrint(
+        '[ApiClient] _ensureFreshSession outer error: $e — proceeding',
+      );
     }
   }
 
   /// Force a session refresh (used as retry after 401).
-  /// ✅ FIX: Added timeout to prevent hanging on slow networks
+  /// ✅ FIX: Strict timeout — throws UnauthorizedException on any failure.
   Future<void> _forceRefreshSession() async {
     final session = _safeClient.auth.currentSession;
     if (session == null) throw const UnauthorizedException();
 
     try {
-      final result = await _safeClient.auth.refreshSession().timeout(
-            const Duration(seconds: 10),
-            onTimeout: () =>
-                throw TimeoutException('Session refresh timed out'),
-          );
+      final result = await _safeClient.auth
+          .refreshSession()
+          .timeout(const Duration(seconds: 8));
       if (result.session == null) throw const UnauthorizedException();
     } on TimeoutException {
+      debugPrint('[ApiClient] Force refresh timed out');
       throw const UnauthorizedException();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ApiClient] Force refresh failed: $e');
       throw const UnauthorizedException();
     }
   }

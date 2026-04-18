@@ -116,45 +116,77 @@ async function groqChat(messages: any[], key: string, opts: any = {}) {
     ...(opts.stream ? { stream: true } : {}),
   }
 
-  const r = await fetch(GROQ_API, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  // ✅ FIX: Add AbortController for timeout protection
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 25_000)
 
-  if (!r.ok) {
-    const errText = await r.text().catch(() => 'unknown')
-    console.error(`Groq API error ${r.status}:`, errText)
+  try {
+    const r = await fetch(GROQ_API, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+
+    if (!r.ok) {
+      const errText = await r.text().catch(() => 'unknown')
+      console.error(`Groq API error ${r.status}:`, errText)
+      return null
+    }
+
+    if (opts.stream) return r
+
+    const json = await r.json().catch((e) => {
+      console.error('Groq JSON parse error:', e)
+      return null
+    })
+
+    if (!json) return null
+
+    // Validate response structure
+    const content = json.choices?.[0]?.message?.content
+    if (!content || content.trim().length === 0) {
+      console.error('Groq returned empty content. Full response:', JSON.stringify(json).slice(0, 500))
+      return null
+    }
+
+    return json
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      console.error('Groq API timed out after 25s')
+      return null
+    }
+    console.error('Groq API error:', e)
     return null
+  } finally {
+    clearTimeout(timeoutId)
   }
-
-  if (opts.stream) return r
-
-  const json = await r.json().catch((e) => {
-    console.error('Groq JSON parse error:', e)
-    return null
-  })
-
-  if (!json) return null
-
-  // Validate response structure
-  const content = json.choices?.[0]?.message?.content
-  if (!content || content.trim().length === 0) {
-    console.error('Groq returned empty content. Full response:', JSON.stringify(json).slice(0, 500))
-    return null
-  }
-
-  return json
 }
 
 async function mimoChat(messages: any[], key: string, stream = false) {
-  const r = await fetch(MIMO_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-    body: JSON.stringify({ model: 'mimo-v2-pro', messages, max_tokens: 800, temperature: 0.4, stream }),
-  })
-  if (!r.ok) return null
-  return stream ? r : r.json()
+  // ✅ FIX: Add AbortController for timeout protection
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 25_000)
+
+  try {
+    const r = await fetch(MIMO_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ model: 'mimo-v2-pro', messages, max_tokens: 800, temperature: 0.4, stream }),
+      signal: controller.signal,
+    })
+    if (!r.ok) return null
+    return stream ? r : r.json()
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      console.error('MiMo API timed out after 25s')
+      return null
+    }
+    console.error('MiMo API error:', e)
+    return null
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -205,30 +237,45 @@ const QUERY_MAP: Record<string, string> = {
 
 async function dbQuery(supa: any, type: string) {
   try {
+    // ✅ FIX: Add timeout wrapper for all DB queries
+    const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
+      return Promise.race([
+        promise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+      ]) as Promise<T | null>
+    }
+
     switch (type) {
       case 'submissions': {
-        const { data } = await supa.from('form_submissions').select('status').is('deleted_at', null)
+        const { data } = await withTimeout(supa.from('form_submissions').select('status').is('deleted_at', null), 5_000) ?? {}
+        if (!data) return null
         const by: Record<string, number> = {}
         data?.forEach((s: any) => { by[s.status] = (by[s.status] ?? 0) + 1 })
         return { total: data?.length ?? 0, byStatus: by }
       }
       case 'shortages': {
-        const { data } = await supa.from('supply_shortages').select('severity,is_resolved').is('deleted_at', null)
+        const { data } = await withTimeout(supa.from('supply_shortages').select('severity,is_resolved').is('deleted_at', null), 5_000) ?? {}
+        if (!data) return null
         const by: Record<string, number> = {}
         data?.forEach((s: any) => { by[s.severity] = (by[s.severity] ?? 0) + 1 })
         return { total: data?.length ?? 0, resolved: data?.filter((s: any) => s.is_resolved).length ?? 0, bySeverity: by }
       }
       case 'analytics': {
-        const [s, sh, u] = await Promise.all([
+        const results = await withTimeout(Promise.all([
           supa.from('form_submissions').select('id', { count: 'exact' }).is('deleted_at', null),
           supa.from('supply_shortages').select('id', { count: 'exact' }).is('deleted_at', null).eq('is_resolved', false),
           supa.from('profiles').select('id', { count: 'exact' }).eq('is_active', true),
-        ])
+        ]), 5_000)
+        if (!results) return null
+        const [s, sh, u] = results
         return { total_submissions: s.count, active_shortages: sh.count, active_users: u.count }
       }
       default: return null
     }
-  } catch { return null }
+  } catch (e) {
+    console.error('DB query error:', e)
+    return null
+  }
 }
 
 function formatResult(intent: string, data: any): string {
@@ -460,18 +507,26 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
+
+    // ✅ FIX: Add timeout to auth to prevent hanging on cold start
     const supabase = createUserClient(authHeader)
-    const auth = await authenticateRequest(supabase, authHeader)
+    const authPromise = authenticateRequest(supabase, authHeader)
+    const authTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000))
+    const auth = await Promise.race([authPromise, authTimeout])
     if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
 
-    // Rate limit
+    // Rate limit — non-blocking, fail-open if DB is slow
     try {
-      const { data } = await supabase.rpc('check_and_increment_rate_limit', { p_user_id: auth.userId, p_endpoint: 'ai-chat-v3', p_window_seconds: 60, p_max_requests: 25 })
-      if (!data?.[0]?.allowed) return jsonResponse({ error: 'Rate limit' }, 429, origin)
-    } catch { return jsonResponse({ error: 'Rate limit check failed' }, 429, origin) }
+      const rlPromise = supabase.rpc('check_and_increment_rate_limit', { p_user_id: auth.userId, p_endpoint: 'ai-chat-v3', p_window_seconds: 60, p_max_requests: 25 })
+      const rlTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3_000))
+      const rlResult = await Promise.race([rlPromise, rlTimeout])
+      if (rlResult && !rlResult.data?.[0]?.allowed) return jsonResponse({ error: 'Rate limit' }, 429, origin)
+    } catch { /* fail-open: allow request if rate limit check fails */ }
 
-    // Load model config
-    const modelConfig = await getModelConfig(supabase)
+    // Load model config — non-blocking with fallback
+    const modelConfig = await getModelConfig(supabase).catch(() => ({
+      defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 6, rateLimit: 25,
+    }))
     if (!modelConfig.enabled) {
       return jsonResponse({ error: 'AI service is disabled', source: 'disabled' }, 503, origin)
     }

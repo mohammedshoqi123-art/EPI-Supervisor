@@ -163,15 +163,25 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
               })
           .toList();
 
+      // ✅ FIX: Wrap in try-catch with specific error messages
       final resp = await api.callFunction('ai-chat-v3', {
         'message': text,
         'history': historyJson,
         if (template != null) 'template': template,
-      });
+      }).timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          throw TimeoutException('انتهت مهلة الطلب');
+        },
+      );
 
       if (!_mounted) return;
 
-      final reply = resp['reply'] as String? ?? '';
+      // ✅ FIX: Safe response parsing — handle missing/null fields
+      final reply = resp['reply'] as String? ??
+          resp['message'] as String? ??
+          resp['error'] as String? ??
+          '';
       final source = resp['source'] as String? ?? 'unknown';
 
       setState(() {
@@ -184,13 +194,42 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2> {
         _loading = false;
       });
       await _ChatStore.save(_msgs);
-    } catch (e) {
+    } on TimeoutException {
       if (!_mounted) return;
       setState(() {
         _msgs.add(ChatMsg(
           role: 'assistant',
           content:
-              '⚠️ فشل الاتصال بالخادم.\nتحقق من اتصال الإنترنت وحاول مرة أخرى.',
+              '⏱️ انتهت مهلة الطلب. قد يكون الخادم بطيئاً حالياً.\n\n'
+              '💡 نصيحة: حاول مرة أخرى أو اسأل سؤالاً أقصر.',
+          source: 'error',
+        ));
+        _loading = false;
+      });
+      await _ChatStore.save(_msgs);
+    } catch (e) {
+      if (!_mounted) return;
+      final errorMsg = e.toString();
+      String userMessage;
+
+      if (errorMsg.contains('Unauthorized') || errorMsg.contains('401')) {
+        userMessage = '🔒 انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.';
+      } else if (errorMsg.contains('Rate limit') || errorMsg.contains('429')) {
+        userMessage = '⏳ أرسلت رسائل كثيرة. انتظر دقيقة وحاول مرة أخرى.';
+      } else if (errorMsg.contains('Network') ||
+          errorMsg.contains('Socket') ||
+          errorMsg.contains('Failed host')) {
+        userMessage = '📡 لا يوجد اتصال بالإنترنت.\nتحقق من الاتصال وحاول مرة أخرى.';
+      } else {
+        userMessage =
+            '⚠️ حدث خطأ أثناء الاتصال.\n\n'
+            '🔧 حاول مرة أخرى. إذا استمر، أعد تشغيل التطبيق.';
+      }
+
+      setState(() {
+        _msgs.add(ChatMsg(
+          role: 'assistant',
+          content: userMessage,
           source: 'error',
         ));
         _loading = false;

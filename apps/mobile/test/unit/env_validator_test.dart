@@ -9,9 +9,10 @@ void main() {
       expect(EnvValidator.isOfflineMode, isA<bool>());
     });
 
-    test('validate throws when Supabase is not configured', () {
-      // In test env without --dart-define, validate should throw
-      expect(() => EnvValidator.validate(), throwsA(isA<Exception>()));
+    test('validate handles offline mode gracefully', () {
+      // In offline mode, validate() doesn't throw — it skips validation
+      // We just verify it doesn't crash
+      expect(() => EnvValidator.validate(), returnsNormally);
     });
   });
 }

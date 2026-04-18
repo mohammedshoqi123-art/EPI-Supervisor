@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
+import '../providers/app_providers.dart';
 import 'form_editor_screen.dart';
 
 /// إدارة النماذج — Forms Management (Add + Full Edit + Schema Editor + Toggle)
@@ -90,6 +91,13 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'is_active': true,
         'created_by': user?.id,
       });
+      // FIX: Invalidate forms cache so UI shows fresh data
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final campaign = ref.read(campaignProvider);
+        await cache.invalidate('forms_${campaign.value}');
+      } catch (_) {}
+      ref.invalidate(formsProvider);
       _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -141,6 +149,13 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'version': (form['version'] as int? ?? 1) + 1,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', form['id']);
+      // FIX: Invalidate forms cache so UI shows fresh data
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final campaign = ref.read(campaignProvider);
+        await cache.invalidate('forms_${campaign.value}');
+      } catch (_) {}
+      ref.invalidate(formsProvider);
       _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -221,6 +236,13 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'deleted_at': DateTime.now().toIso8601String(),
         'is_active': false,
       }).eq('id', form['id']);
+      // FIX: Invalidate forms cache
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final campaign = ref.read(campaignProvider);
+        await cache.invalidate('forms_${campaign.value}');
+      } catch (_) {}
+      ref.invalidate(formsProvider);
       _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -255,6 +277,13 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       await client
           .from('forms')
           .update({'is_active': newStatus}).eq('id', form['id']);
+      // FIX: Invalidate forms cache
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final campaign = ref.read(campaignProvider);
+        await cache.invalidate('forms_${campaign.value}');
+      } catch (_) {}
+      ref.invalidate(formsProvider);
       _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

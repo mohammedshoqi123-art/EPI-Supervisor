@@ -123,18 +123,16 @@ final forceRefreshProvider = Provider<Future<void> Function(String cacheKey)>((
 });
 
 /// Pending items count for UI badges and banners.
-/// ═══ FIX: Use stream-based polling with longer interval to reduce PBKDF2 overhead ═══
+/// Uses .distinct() to skip rebuilds when count hasn't changed.
 final syncPendingCountProvider = StreamProvider<int>((ref) async* {
   final offline = await ref.watch(offlineManagerProvider.future);
   // Emit current count immediately
   yield offline.pendingCount;
-  // ═══ FIX: Poll every 120s instead of 60s — reduces PBKDF2 decrypt overhead ═══
-  // PBKDF2 with 100k iterations is expensive; 120s is responsive enough for badges
-  // and avoids UI stutter caused by frequent decryption
+  // Poll every 120s — distinct() prevents rebuilds when count is the same
   yield* Stream.periodic(
     const Duration(seconds: 120),
     (_) => offline.pendingCount,
-  );
+  ).distinct();
 });
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -454,6 +452,39 @@ final governorateRankingProvider = FutureProvider<List<Map<String, dynamic>>>((
     () => ref.read(analyticsServiceProvider).getGovernorateRanking(),
     maxAge: const Duration(hours: 1),
   );
+});
+
+// ═══════════════════════════════════════════════════════════════
+// NOTIFICATIONS — reactive unread count with polling
+// ═══════════════════════════════════════════════════════════════
+
+/// Reactive notification unread count — polls every 60s when online.
+/// Used by dashboard header badge and notification icon.
+final notificationCountProvider = StreamProvider<int>((ref) async* {
+  // Emit 0 immediately
+  yield 0;
+
+  // Load from DB and start polling
+  final api = ref.read(apiClientProvider);
+  NotificationService.init(api);
+
+  // Initial load
+  try {
+    await NotificationService.loadFromDB(refresh: true);
+    yield NotificationService.unreadCount;
+  } catch (_) {
+    yield 0;
+  }
+
+  // Poll every 60 seconds
+  yield* Stream.periodic(const Duration(seconds: 60), (_) async {
+    try {
+      if (ConnectivityUtils.isOnline) {
+        await NotificationService.loadFromDB(refresh: true);
+      }
+    } catch (_) {}
+    return NotificationService.unreadCount;
+  }).asyncMap((f) => f).distinct();
 });
 
 // ═══════════════════════════════════════════════════════════════

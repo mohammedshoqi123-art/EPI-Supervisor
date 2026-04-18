@@ -1,8 +1,15 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
+
+// ═══════════════════════════════════════════════════════════
+// CHAT MESSAGE MODEL
+// ═══════════════════════════════════════════════════════════
 
 class ChatMsg {
   final String role;
@@ -15,7 +22,66 @@ class ChatMsg {
     this.source,
     DateTime? time,
   }) : time = time ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'role': role,
+        'content': content,
+        'source': source,
+        'time': time.toIso8601String(),
+      };
+
+  factory ChatMsg.fromJson(Map<String, dynamic> j) => ChatMsg(
+        role: j['role'] ?? 'assistant',
+        content: j['content'] ?? '',
+        source: j['source'],
+        time: DateTime.tryParse(j['time'] ?? ''),
+      );
 }
+
+// ═══════════════════════════════════════════════════════════
+// CHAT PERSISTENCE — saves/restores conversation in Hive
+// ═══════════════════════════════════════════════════════════
+
+class _ChatPersistence {
+  static const _boxName = 'ai_chat_history';
+  static const _key = 'messages';
+
+  static Future<List<ChatMsg>> load() async {
+    try {
+      final box = await Hive.openBox<String>(_boxName);
+      final raw = box.get(_key);
+      if (raw == null || raw.isEmpty) return [];
+      final list = jsonDecode(raw) as List;
+      return list
+          .map((j) => ChatMsg.fromJson(Map<String, dynamic>.from(j)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> save(List<ChatMsg> msgs) async {
+    try {
+      // Keep last 50 messages max
+      final trimmed = msgs.length > 50
+          ? msgs.sublist(msgs.length - 50)
+          : msgs;
+      final box = await Hive.openBox<String>(_boxName);
+      await box.put(_key, jsonEncode(trimmed.map((m) => m.toJson()).toList()));
+    } catch (_) {}
+  }
+
+  static Future<void> clear() async {
+    try {
+      final box = await Hive.openBox<String>(_boxName);
+      await box.delete(_key);
+    } catch (_) {}
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// AI CHAT SCREEN
+// ═══════════════════════════════════════════════════════════
 
 class AiChatScreenV2 extends ConsumerStatefulWidget {
   const AiChatScreenV2({super.key});
@@ -28,31 +94,62 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
     with TickerProviderStateMixin {
   final _ctrl = TextEditingController();
   final _scroll = ScrollController();
-  final List<ChatMsg> _msgs = [];
+  List<ChatMsg> _msgs = [];
   bool _loading = false;
   String? _streamingText;
   late TabController _tabCtrl;
+
+  // FIX: Rate limiting — prevent rapid clicks
+  DateTime? _lastSendTime;
+  static const _minSendInterval = Duration(seconds: 1);
+
+  // FIX: Track if widget is mounted for async safety
+  bool _mounted = true;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
+    _restoreChat();
   }
 
   @override
   void dispose() {
+    _mounted = false;
     _ctrl.dispose();
     _scroll.dispose();
     _tabCtrl.dispose();
     super.dispose();
   }
 
+  /// FIX: Restore conversation from Hive on page load
+  Future<void> _restoreChat() async {
+    final saved = await _ChatPersistence.load();
+    if (saved.isNotEmpty && _mounted) {
+      setState(() => _msgs = saved);
+    }
+  }
+
+  /// FIX: Save conversation to Hive after every change
+  Future<void> _saveChat() async {
+    await _ChatPersistence.save(_msgs);
+  }
+
   // ═══════════════════════════════════════════════════════════
-  // SEND MESSAGE
+  // SEND MESSAGE — with rate limiting, offline fallback, context trimming
   // ═══════════════════════════════════════════════════════════
 
   Future<void> _send(String text, {String? mode, String? template}) async {
     if (text.trim().isEmpty || _loading) return;
+
+    // FIX: Rate limit — minimum 1 second between sends
+    final now = DateTime.now();
+    if (_lastSendTime != null &&
+        now.difference(_lastSendTime!) < _minSendInterval) {
+      return;
+    }
+    _lastSendTime = now;
+
     _ctrl.clear();
 
     setState(() {
@@ -63,6 +160,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       _streamingText = '';
     });
     _scrollDown();
+    _saveChat();
 
     try {
       final api = ref.read(apiClientProvider);
@@ -73,10 +171,11 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         ),
       );
 
+      // FIX: Build compact context — only essential numbers, not full data
       Map<String, dynamic>? ctx;
-      analytics.whenData((d) => ctx = d);
+      analytics.whenData((d) => ctx = _compactContext(d));
 
-      // Try streaming first
+      // Try streaming first (only for normal chat, not templates/modes)
       final useStream = mode == null && template == null;
 
       if (useStream) {
@@ -97,16 +196,34 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         );
       }
     } catch (e) {
-      setState(() {
-        _msgs.add(
-          ChatMsg(role: 'assistant', content: 'حدث خطأ: $e', source: 'error'),
-        );
-        _loading = false;
-        _streamingText = null;
-      });
+      // FIX: On any error, fall back to local AI (offline)
+      await _sendOffline(text);
     }
     _scrollDown();
   }
+
+  /// FIX: Build compact context — only key numbers, not full JSON
+  Map<String, dynamic> _compactContext(Map<String, dynamic> data) {
+    final subs = data['submissions'] as Map<String, dynamic>? ?? {};
+    final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
+    final shorts = data['shortages'] as Map<String, dynamic>? ?? {};
+
+    return {
+      'submissions': {
+        'total': subs['total'] ?? 0,
+        'today': subs['today'] ?? 0,
+        'byStatus': byStatus,
+      },
+      'shortages': {
+        'total': shorts['total'] ?? 0,
+        'resolved': shorts['resolved'] ?? 0,
+      },
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // STREAMING — with fallback to normal, then offline
+  // ═══════════════════════════════════════════════════════════
 
   Future<void> _sendStreaming(
     ApiClient api,
@@ -120,20 +237,20 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
     try {
       await for (final chunk in api.callFunctionStream('ai-chat-v3', {
         'message': text,
-        'history': _msgs
-            .take(10)
-            .map((m) => {'role': m.role, 'content': m.content})
-            .toList(),
+        // FIX: Last 3 pairs only (was 10 — too expensive)
+        'history': _buildHistory(6),
         if (context != null) 'context': context,
         if (mode != null) 'mode': mode,
         if (template != null) 'template': template,
         'stream': true,
       })) {
+        if (!_mounted) return;
         buffer.write(chunk);
         setState(() => _streamingText = buffer.toString());
         _scrollDown();
       }
 
+      if (!_mounted) return;
       setState(() {
         _msgs.add(
           ChatMsg(
@@ -145,17 +262,26 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         _loading = false;
         _streamingText = null;
       });
+      _saveChat();
     } catch (_) {
-      // Fallback to normal
-      await _sendNormal(
-        api,
-        text,
-        context: context,
-        mode: mode,
-        template: template,
-      );
+      // FIX: Fallback chain: streaming → normal → offline
+      try {
+        await _sendNormal(
+          api,
+          text,
+          context: context,
+          mode: mode,
+          template: template,
+        );
+      } catch (_) {
+        await _sendOffline(text);
+      }
     }
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // NORMAL REQUEST — with fallback to offline
+  // ═══════════════════════════════════════════════════════════
 
   Future<void> _sendNormal(
     ApiClient api,
@@ -164,25 +290,129 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
     String? mode,
     String? template,
   }) async {
-    final resp = await api.callFunction('ai-chat-v3', {
-      'message': text,
-      'history': _msgs
-          .take(10)
-          .map((m) => {'role': m.role, 'content': m.content})
-          .toList(),
-      if (context != null) 'context': context,
-      if (mode != null) 'mode': mode,
-      if (template != null) 'template': template,
-    });
+    try {
+      final resp = await api.callFunction('ai-chat-v3', {
+        'message': text,
+        'history': _buildHistory(6),
+        if (context != null) 'context': context,
+        if (mode != null) 'mode': mode,
+        if (template != null) 'template': template,
+      });
 
-    final reply = resp['reply'] as String? ?? 'عذراً، لم أتمكن من المعالجة.';
-    final source = resp['source'] as String? ?? 'unknown';
+      if (!_mounted) return;
+      final reply =
+          resp['reply'] as String? ?? 'عذراً، لم أتمكن من المعالجة.';
+      final source = resp['source'] as String? ?? 'unknown';
 
-    setState(() {
-      _msgs.add(ChatMsg(role: 'assistant', content: reply, source: source));
-      _loading = false;
-      _streamingText = null;
-    });
+      setState(() {
+        _msgs.add(
+          ChatMsg(role: 'assistant', content: reply, source: source),
+        );
+        _loading = false;
+        _streamingText = null;
+      });
+      _saveChat();
+    } catch (_) {
+      // FIX: Fall back to offline AI
+      await _sendOffline(text);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // OFFLINE FALLBACK — uses EnhancedLocalAI + optional HF intent
+  // ═══════════════════════════════════════════════════════════
+
+  Future<void> _sendOffline(String text) async {
+    if (!_mounted) return;
+
+    try {
+      // Get cached data for local analysis
+      Map<String, dynamic> data = {};
+      try {
+        final campaign = ref.read(campaignProvider);
+        final analytics = ref.read(
+          dashboardAnalyticsProvider(
+            AnalyticsFilter(campaignType: campaign.value),
+          ),
+        );
+        analytics.whenData((d) => data = _compactContext(d));
+      } catch (_) {}
+
+      // Try HF intent classification first (better routing for local AI)
+      String? hfIntent;
+      double hfConfidence = 0;
+      try {
+        final hf = ref.read(huggingFaceServiceProvider);
+        if (hf != null && ConnectivityUtils.isOnline) {
+          final intent = await hf.getTopIntent(text).timeout(
+                const Duration(seconds: 5),
+                onTimeout: () => (intent: 'general_question', confidence: 0.0),
+              );
+          hfIntent = intent.intent;
+          hfConfidence = intent.confidence;
+        }
+      } catch (_) {}
+
+      // Use EnhancedLocalAI with the data
+      final localAI = EnhancedLocalAI();
+      final result = localAI.processQuery(text, data);
+
+      // Build response with HF context if available
+      String response = result.response;
+      if (hfIntent != null && hfConfidence > 0.5 && hfIntent != 'general_question') {
+        response = '💡 (تحليل محلي ذكي)\n\n$result.response';
+      }
+
+      if (!_mounted) return;
+      setState(() {
+        _msgs.add(
+          ChatMsg(
+            role: 'assistant',
+            content: response,
+            source: hfIntent != null && hfConfidence > 0.5 ? 'local+hf' : 'local',
+          ),
+        );
+        _loading = false;
+        _streamingText = null;
+      });
+      _saveChat();
+    } catch (e) {
+      if (!_mounted) return;
+      setState(() {
+        _msgs.add(
+          ChatMsg(
+            role: 'assistant',
+            content:
+                '⚠️ الخادم غير متاح والتحليل المحلي غير متوفر حالياً.\n'
+                'تحقق من اتصال الإنترنت وحاول مرة أخرى.',
+            source: 'error',
+          ),
+        );
+        _loading = false;
+        _streamingText = null;
+      });
+      _saveChat();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════════════════════════════
+
+  /// FIX: Build trimmed history — last N messages, content truncated to 500 chars
+  List<Map<String, String>> _buildHistory(int maxMessages) {
+    final recent = _msgs.length > maxMessages
+        ? _msgs.sublist(_msgs.length - maxMessages)
+        : _msgs;
+    return recent
+        .where((m) => m.role == 'user' || m.role == 'assistant')
+        .map((m) => {
+              'role': m.role,
+              'content': m.content.length > 500
+                  ? '${m.content.substring(0, 500)}...'
+                  : m.content,
+            })
+        .toList();
   }
 
   void _scrollDown() {
@@ -248,7 +478,7 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
                 ),
               ),
               Text(
-                'Groq + MiMo + HuggingFace',
+                'Groq + HuggingFace + Offline',
                 style: TextStyle(
                   fontSize: 10,
                   fontFamily: 'Tajawal',
@@ -263,7 +493,10 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         if (_msgs.isNotEmpty)
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, size: 22),
-            onPressed: () => setState(() => _msgs.clear()),
+            onPressed: () async {
+              setState(() => _msgs.clear());
+              await _ChatPersistence.clear();
+            },
             tooltip: 'مسح المحادثة',
           ),
         const SizedBox(width: 4),
@@ -330,7 +563,6 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       padding: const EdgeInsets.all(20),
       children: [
         const SizedBox(height: 12),
-        // AI Icon
         Center(
           child: Container(
             width: 80,
@@ -392,7 +624,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
     final templates = [
       _Tmpl('daily', '📅', 'التقرير اليومي', 'ملخص شامل ليوم العمل'),
       _Tmpl('weekly', '📊', 'التقرير الأسبوعي', 'تحليل اتجاه الأسبوع'),
-      _Tmpl('governorate', '🗺️', 'تقرير المحافظات', 'مقارنة أداء المحافظات'),
+      _Tmpl(
+          'governorate', '🗺️', 'تقرير المحافظات', 'مقارنة أداء المحافظات'),
       _Tmpl('shortages', '⚠️', 'تقرير النواقص', 'تحليل النواقص والحلول'),
       _Tmpl('quality', '✅', 'تقرير جودة البيانات', 'اكتمال ودقة الإدخال'),
       _Tmpl('coverage', '💉', 'تقرير التغطية', 'تغطية التطعيمات وفجوات'),
@@ -574,6 +807,9 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
   // ═══════════════════════════════════════════════════════════
 
   Widget _buildInputBar(ColorScheme cs) {
+    final canSend = _lastSendTime == null ||
+        DateTime.now().difference(_lastSendTime!) > _minSendInterval;
+
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -589,7 +825,6 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         ),
         child: Row(
           children: [
-            // Guide button
             Container(
               decoration: BoxDecoration(
                 color: cs.primaryContainer,
@@ -611,7 +846,6 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
               ),
             ),
             const SizedBox(width: 10),
-            // Text field
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -640,22 +874,25 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
               ),
             ),
             const SizedBox(width: 8),
-            // Send button
             Container(
               decoration: BoxDecoration(
-                gradient: _loading
+                gradient: (_loading || !canSend)
                     ? null
                     : LinearGradient(colors: [cs.primary, cs.tertiary]),
-                color: _loading ? cs.surfaceContainerHigh : null,
+                color:
+                    (_loading || !canSend) ? cs.surfaceContainerHigh : null,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: IconButton(
                 icon: Icon(
                   Icons.send_rounded,
-                  color: _loading ? cs.onSurfaceVariant : cs.onPrimary,
+                  color:
+                      (_loading || !canSend) ? cs.onSurfaceVariant : cs.onPrimary,
                   size: 20,
                 ),
-                onPressed: _loading ? null : () => _send(_ctrl.text),
+                onPressed: (_loading || !canSend)
+                    ? null
+                    : () => _send(_ctrl.text),
               ),
             ),
           ],
@@ -767,7 +1004,10 @@ class _MsgBubble extends StatelessWidget {
         'mimo' => '🤖 MiMo',
         'function_call' => '📊 من قاعدة البيانات',
         'rag' => '📚 من قاعدة المعرفة',
+        'local' => '📱 بدون إنترنت',
+        'local+hf' => '📱⚡ بدون إنترنت + HF',
         'streaming' => '⚡ جارٍ الكتابة...',
+        'error' => '⚠️ خطأ',
         _ => '',
       };
 }

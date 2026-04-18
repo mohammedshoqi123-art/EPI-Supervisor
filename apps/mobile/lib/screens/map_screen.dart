@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:epi_shared/epi_shared.dart';
 import '../providers/app_providers.dart';
@@ -64,38 +62,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
     }
   }
 
-  IconData _statusIcon(String? status) {
-    switch (status) {
-      case 'approved':
-        return Icons.check_circle_rounded;
-      case 'submitted':
-        return Icons.send_rounded;
-      case 'reviewed':
-        return Icons.rate_review_rounded;
-      case 'rejected':
-        return Icons.cancel_rounded;
-      case 'draft':
-        return Icons.edit_note_rounded;
-      default:
-        return Icons.description_rounded;
-    }
-  }
-
-  Color _severityColor(String? severity) {
-    switch (severity) {
-      case 'critical':
-        return const Color(0xFFDC2626);
-      case 'high':
-        return const Color(0xFFF97316);
-      case 'medium':
-        return const Color(0xFFFBBF24);
-      case 'low':
-        return const Color(0xFF22C55E);
-      default:
-        return const Color(0xFF6B7280);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -112,9 +78,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
           // Stats overlay
           if (_showStats) _buildStatsOverlay(),
-
-          // Legend
-          _buildLegend(),
 
           // FABs
           _buildFABs(),
@@ -382,67 +345,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
   }
 
-  // ─── Legend ───────────────────────────────────────────────────────────
-
-  Widget _buildLegend() {
-    return Positioned(
-      bottom: 90,
-      left: 16,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: _submissionLegend(),
-      ),
-    );
-  }
-
-  Widget _submissionLegend() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _legendDot(const Color(0xFF10B981), 'معتمد'),
-        const SizedBox(width: 12),
-        _legendDot(const Color(0xFF3B82F6), 'مُرسل'),
-        const SizedBox(width: 12),
-        _legendDot(const Color(0xFFF59E0B), 'قيد المراجعة'),
-        const SizedBox(width: 12),
-        _legendDot(const Color(0xFFEF4444), 'مرفوض'),
-      ],
-    );
-  }
-
-  Widget _legendDot(Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Tajawal',
-            fontSize: 10,
-            color: Color(0xFF6B7280),
-          ),
-        ),
-      ],
-    );
-  }
-
   // ─── FABs ─────────────────────────────────────────────────────────────
 
   Widget _buildFABs() {
@@ -586,15 +488,42 @@ class _MapScreenState extends ConsumerState<MapScreen>
       loading: () => const MarkerLayer(markers: []),
       error: (_, __) => const MarkerLayer(markers: []),
       data: (submissions) {
-        final markers = <Marker>[];
+        // Group submissions by governorate
+        final grouped = <String, List<Map<String, dynamic>>>{};
+        final govInfo = <String, Map<String, dynamic>>{};
 
         for (final sub in submissions) {
-          final lat = sub['gps_lat'] as double?;
-          final lng = sub['gps_lng'] as double?;
+          final govId = sub['governorate_id'] as String?;
+          if (govId == null) continue;
+          grouped.putIfAbsent(govId, () => []).add(sub);
+          if (!govInfo.containsKey(govId)) {
+            govInfo[govId] = {
+              'name': sub['governorates']?['name_ar'] ?? '',
+              'lat': sub['gps_lat'],
+              'lng': sub['gps_lng'],
+            };
+          }
+        }
+
+        if (grouped.isEmpty) return _buildGovernorateMarkers();
+
+        final markers = <Marker>[];
+        for (final entry in grouped.entries) {
+          final govId = entry.key;
+          final subs = entry.value;
+          final info = govInfo[govId]!;
+          final lat = info['lat'] as double?;
+          final lng = info['lng'] as double?;
           if (lat == null || lng == null) continue;
 
-          final status = sub['status'] as String? ?? 'draft';
-          final color = _statusColor(status);
+          final count = subs.length;
+          final color = count > 20
+              ? const Color(0xFF10B981)
+              : count > 5
+                  ? const Color(0xFF3B82F6)
+                  : count > 0
+                      ? const Color(0xFFF59E0B)
+                      : const Color(0xFF9CA3AF);
 
           markers.add(
             Marker(
@@ -602,84 +531,38 @@ class _MapScreenState extends ConsumerState<MapScreen>
               width: 48,
               height: 48,
               child: GestureDetector(
-                onTap: () => _showSubmissionInfo(sub),
-                child: _animatedMarker(color, _statusIcon(status)),
+                onTap: () => _showGroupInfo(info['name'] as String, subs),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.4),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ),
             ),
           );
         }
 
-        if (markers.isEmpty) {
-          return _buildGovernorateMarkers();
-        }
-
-        // Cluster if many markers
-        if (markers.length > 20) {
-          return MarkerClusterLayerWidget(
-            options: MarkerClusterLayerOptions(
-              maxClusterRadius: 50,
-              size: const Size(40, 40),
-              alignment: Alignment.center,
-              padding: const EdgeInsets.all(50),
-              markers: markers,
-              builder: (context, clusterMarkers) {
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF00897B), Color(0xFF00695C)],
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF00897B).withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${clusterMarkers.length}',
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          );
-        }
-
+        if (markers.isEmpty) return _buildGovernorateMarkers();
         return MarkerLayer(markers: markers);
       },
-    );
-  }
-
-  Widget _animatedMarker(Color color, IconData icon) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.4),
-            blurRadius: 8,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: Container(
-        margin: const EdgeInsets.all(3),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: color, size: 20),
-      ),
     );
   }
 
@@ -749,13 +632,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   // ─── Info Bottom Sheets ──────────────────────────────────────────────
 
-  void _showSubmissionInfo(Map<String, dynamic> sub) {
-    final formTitle = sub['forms']?['title_ar'] ?? 'نموذج';
-    final status = sub['status'] ?? 'draft';
-    final date = sub['created_at']?.toString().split('T')[0] ?? '';
-    final gov = sub['governorates']?['name_ar'] ?? '';
-    final dist = sub['districts']?['name_ar'] ?? '';
-    final color = _statusColor(status);
+  void _showGroupInfo(String govName, List<Map<String, dynamic>> subs) {
+    // Count by status
+    final byStatus = <String, int>{};
+    for (final s in subs) {
+      final st = s['status'] as String? ?? 'draft';
+      byStatus[st] = (byStatus[st] ?? 0) + 1;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -770,7 +653,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle
               Container(
                 width: 40,
                 height: 4,
@@ -780,95 +662,62 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ),
               ),
               const SizedBox(height: 20),
-              // Icon
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(_statusIcon(status), color: color, size: 36),
-              ),
-              const SizedBox(height: 16),
               Text(
-                formTitle,
+                govName.isNotEmpty ? govName : 'إرساليات',
                 style: const TextStyle(
                   fontFamily: 'Cairo',
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.w700,
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
-              EpiStatusChip(status: status),
+              const SizedBox(height: 8),
+              Text(
+                '${subs.length} إرسالية',
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 14,
+                  color: Color(0xFF9CA3AF),
+                ),
+              ),
               const SizedBox(height: 16),
-              // Details row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (gov.isNotEmpty) ...[
-                    _detailChip(Icons.location_city_rounded, gov),
-                    const SizedBox(width: 12),
-                  ],
-                  if (dist.isNotEmpty) ...[
-                    _detailChip(Icons.map_rounded, dist),
-                    const SizedBox(width: 12),
-                  ],
-                  if (date.isNotEmpty)
-                    _detailChip(Icons.calendar_today_rounded, date),
-                ],
-              ),
-              const SizedBox(height: 20),
+              // Status breakdown
+              ...byStatus.entries.map((e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        EpiStatusChip(status: e.key, small: true),
+                        const Spacer(),
+                        Text(
+                          '${e.value}',
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    context.go('/forms/status/submission/${sub['id']}');
-                  },
-                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: const Text(
-                    'عرض التفاصيل',
-                    style: TextStyle(fontFamily: 'Tajawal'),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00897B),
-                    foregroundColor: Colors.white,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
+                  ),
+                  child: const Text(
+                    'إغلاق',
+                    style: TextStyle(fontFamily: 'Tajawal'),
                   ),
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _detailChip(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: const Color(0xFF6B7280)),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: const TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 12,
-              color: Color(0xFF6B7280),
-            ),
-          ),
-        ],
       ),
     );
   }

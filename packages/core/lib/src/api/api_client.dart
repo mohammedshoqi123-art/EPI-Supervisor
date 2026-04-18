@@ -363,13 +363,13 @@ class ApiClient {
     String functionName,
     Map<String, dynamic> body,
   ) async* {
+    final httpClient = http.Client();
     try {
       await _ensureFreshSession();
       final session = _safeClient.auth.currentSession;
       if (session == null) throw const UnauthorizedException();
 
       final url = '${SupabaseConfig.url}/functions/v1/$functionName';
-      final httpClient = http.Client();
       final request = http.Request('POST', Uri.parse(url))
         ..headers.addAll({
           'Authorization': 'Bearer ${session.accessToken}',
@@ -390,10 +390,7 @@ class ApiClient {
           final trimmed = line.trim();
           if (!trimmed.startsWith('data: ')) continue;
           final data = trimmed.substring(6);
-          if (data == '[DONE]') {
-            httpClient.close();
-            return;
-          }
+          if (data == '[DONE]') return;
           try {
             final json = jsonDecode(data);
             final text = json['text'];
@@ -403,13 +400,16 @@ class ApiClient {
           } catch (_) {}
         }
       }
-      httpClient.close();
     } catch (e, stack) {
       _reportUnexpectedError(
         e,
         stack,
         context: 'callFunctionStream($functionName)',
       );
+      rethrow;
+    } finally {
+      // FIX: Always close HTTP client to prevent resource leaks
+      httpClient.close();
     }
   }
 

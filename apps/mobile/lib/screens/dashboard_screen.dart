@@ -73,6 +73,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final authState = ref.watch(authStateProvider);
     final pendingAsync = ref.watch(syncPendingCountProvider);
     final pendingCount = pendingAsync.valueOrNull ?? 0;
+    final notifAsync = ref.watch(notificationCountProvider);
+    final unreadNotifs = notifAsync.valueOrNull ?? 0;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -94,6 +96,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               child: DashboardHeroHeader(
                 userName: authState.valueOrNull?.fullName ?? 'مستخدم',
                 campaignLabel: ref.read(campaignProvider).displayLabel,
+                unreadNotifications: unreadNotifs,
                 headerAnim: _headerAnim,
                 pulseAnim: _pulseAnim,
                 onNotificationsTap: () => context.go('/notifications'),

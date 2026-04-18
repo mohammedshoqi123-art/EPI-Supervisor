@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 class DashboardHeroHeader extends StatelessWidget {
   final String userName;
   final String campaignLabel;
+  final int unreadNotifications;
   final AnimationController headerAnim;
   final AnimationController pulseAnim;
   final VoidCallback onNotificationsTap;
@@ -13,6 +14,7 @@ class DashboardHeroHeader extends StatelessWidget {
     super.key,
     required this.userName,
     required this.campaignLabel,
+    this.unreadNotifications = 0,
     required this.headerAnim,
     required this.pulseAnim,
     required this.onNotificationsTap,
@@ -107,24 +109,72 @@ class DashboardHeroHeader extends StatelessWidget {
                       ],
                     ),
                   ),
+                  // Notification bell with badge
                   GestureDetector(
                     onTap: onNotificationsTap,
                     child: AnimatedBuilder(
                       animation: pulseAnim,
                       builder: (context, _) {
-                        return Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(
-                              alpha: 0.15 + 0.05 * pulseAnim.value,
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(
+                                  alpha: 0.15 + 0.05 * pulseAnim.value,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Icon(
+                                unreadNotifications > 0
+                                    ? Icons.notifications_active_rounded
+                                    : Icons.notifications_none_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
                             ),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(
-                            Icons.notifications_active_rounded,
-                            color: Colors.white,
-                            size: 24,
-                          ),
+                            // Badge — shows count when > 0
+                            if (unreadNotifications > 0)
+                              Positioned(
+                                top: -4,
+                                right: -4,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE53935),
+                                    borderRadius: BorderRadius.circular(10),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFE53935)
+                                            .withValues(alpha: 0.4),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 20,
+                                    minHeight: 20,
+                                  ),
+                                  child: Text(
+                                    unreadNotifications > 99
+                                        ? '99+'
+                                        : '$unreadNotifications',
+                                    style: const TextStyle(
+                                      fontFamily: 'Cairo',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
                         );
                       },
                     ),

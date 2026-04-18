@@ -148,7 +148,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// Reactive connectivity provider — watches ConnectivityUtils stream
 /// so the UI rebuilds when connectivity changes.
 final connectivityProvider = StreamProvider<bool>((ref) {
-  return ConnectivityUtils.onConnectivityChanged;
+  return ConnectivityUtils.onConnectivityChanged.distinct();
 });
 
 class MainShell extends ConsumerStatefulWidget {
@@ -246,8 +246,9 @@ class _MainShellState extends ConsumerState<MainShell> {
             ),
             const SizedBox(height: 12),
           ],
-          // ═══ AI Assistant — always visible, beautiful, interactive ═══
-          _AiFab(onTap: () => context.go('/ai')),
+          // ═══ AI Assistant — hidden on /ai page ═══
+          if (!GoRouterState.of(context).matchedLocation.startsWith('/ai'))
+            _AiFab(onTap: () => context.go('/ai')),
         ],
       ),
       bottomNavigationBar: EpiBottomNav(
@@ -389,26 +390,37 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   }
 }
 
-/// Makes GoRouter rebuild when a stream emits a new value.
-/// FIX: Debounce rapid emissions to prevent redirect loops and visual restarts.
+/// Makes GoRouter rebuild ONLY when auth status actually changes
+/// (login/logout), not on every profile metadata update.
 class GoRouterRefreshStream extends ChangeNotifier {
   StreamSubscription? _subscription;
-  DateTime? _lastNotify;
-  // Minimum 500ms between router rebuilds to prevent flickering/restarts
-  static const _debounceMs = 500;
+  bool? _lastIsAuth;
+  String? _lastUserId;
 
   GoRouterRefreshStream(Stream<dynamic> stream) {
-    // Emit once immediately for initial state
-    notifyListeners();
-    _subscription = stream.asBroadcastStream().listen((_) {
-      final now = DateTime.now();
-      if (_lastNotify != null &&
-          now.difference(_lastNotify!).inMilliseconds < _debounceMs) {
-        return; // Skip if too frequent
+    _subscription = stream.asBroadcastStream().listen((event) {
+      bool isAuth = false;
+      String? userId;
+      if (event is AuthState) {
+        isAuth = event.isAuthenticated;
+        userId = event.userId;
+      } else {
+        try {
+          isAuth = (event as dynamic).isAuthenticated as bool? ?? false;
+          userId = (event as dynamic).userId as String?;
+        } catch (_) {
+          notifyListeners();
+          return;
+        }
       }
-      _lastNotify = now;
-      notifyListeners();
+      final changed = isAuth != _lastIsAuth || userId != _lastUserId;
+      if (changed) {
+        _lastIsAuth = isAuth;
+        _lastUserId = userId;
+        notifyListeners();
+      }
     });
+    notifyListeners();
   }
 
   @override

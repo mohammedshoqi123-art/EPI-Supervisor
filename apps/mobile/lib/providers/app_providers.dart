@@ -25,40 +25,47 @@ final geminiServiceProvider = Provider<GeminiService>(
 // ─── Offline / Sync ───────────────────────────────────────────────────────────
 
 /// ═══ FIX: Robust offline manager initialization with connectivity bridge ═══
+/// On web (kIsWeb): Hive is not initialized — runs in online-only mode.
 final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
   final manager = OfflineManager(ref.read(encryptionServiceProvider));
-  try {
-    // Add timeout to prevent infinite hang if Hive initialization fails
-    await manager.init().timeout(
-      const Duration(seconds: 15),
-      onTimeout: () {
-        debugPrint('[offlineManagerProvider] Hive init timed out after 15s');
-        throw TimeoutException('Offline storage initialization timed out');
-      },
-    );
-  } catch (e) {
-    debugPrint('[offlineManagerProvider] Init failed: $e');
-    rethrow;
+
+  // On web, skip Hive initialization entirely (online-only mode)
+  if (!kIsWeb) {
+    try {
+      await manager.init().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          debugPrint('[offlineManagerProvider] Hive init timed out after 15s');
+          throw TimeoutException('Offline storage initialization timed out');
+        },
+      );
+    } catch (e) {
+      debugPrint('[offlineManagerProvider] Init failed: $e');
+      rethrow;
+    }
+  } else {
+    debugPrint('[offlineManagerProvider] Web mode — skipping Hive init');
   }
 
   // ═══ FIX: Set initial connectivity from ConnectivityUtils ═══
-  // Without this, OfflineManager defaults to isOnline=true which may be wrong
-  manager.updateConnectivity(ConnectivityUtils.isOnline);
+  // On web: always online; on mobile use the connectivity stream.
+  manager.updateConnectivity(kIsWeb ? true : ConnectivityUtils.isOnline);
 
   // ═══ FIX: Bridge ConnectivityUtils updates to OfflineManager ═══
-  // This ensures OfflineManager always has the correct connectivity state.
   StreamSubscription? connSub;
-  try {
-    connSub = ConnectivityUtils.onConnectivityChanged.listen(
-      (online) {
-        manager.updateConnectivity(online);
-      },
-      onError: (e) {
-        debugPrint('[offlineManagerProvider] Connectivity bridge error: $e');
-      },
-    );
-  } catch (e) {
-    debugPrint('[offlineManagerProvider] Connectivity bridge failed: $e');
+  if (!kIsWeb) {
+    try {
+      connSub = ConnectivityUtils.onConnectivityChanged.listen(
+        (online) {
+          manager.updateConnectivity(online);
+        },
+        onError: (e) {
+          debugPrint('[offlineManagerProvider] Connectivity bridge error: $e');
+        },
+      );
+    } catch (e) {
+      debugPrint('[offlineManagerProvider] Connectivity bridge failed: $e');
+    }
   }
 
   ref.onDispose(() {
@@ -67,6 +74,7 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
   });
   return manager;
 });
+
 
 /// Offline-first data cache — stores Supabase query results locally.
 final offlineDataCacheProvider = FutureProvider<OfflineDataCache>((ref) async {

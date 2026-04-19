@@ -118,20 +118,80 @@ function generateId(): string {
   return `f_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
-function parseFormSchema(schema: Record<string, unknown>): FormSchema {
-  if (!schema || typeof schema !== 'object') return { fields: [] }
-  const s = schema as Partial<FormSchema>
+/** Normalize a single raw field coming from mobile or web format */
+function normalizeField(raw: Record<string, unknown>, index: number): FormField {
+  // Mobile fields use 'key' as id, web fields use 'id'
+  const id = (raw.id as string) || (raw.key as string) || generateId()
+  // Mobile: label_ar exists; if only 'label' fallback
+  const label_ar = (raw.label_ar as string) || (raw.label as string) || ''
+  const label_en = (raw.label_en as string) || (raw.label_en as string) || label_ar
+  // Map mobile types to web types
+  const typeMap: Record<string, FormFieldType> = {
+    text: 'text', number: 'number', phone: 'number',
+    textarea: 'text', select: 'select', multiselect: 'multi_select',
+    multi_select: 'multi_select', yesno: 'select', date: 'date',
+    time: 'time', gps: 'gps', photo: 'photo', signature: 'signature',
+    barcode: 'barcode',
+  }
+  const rawType = (raw.type as string) || 'text'
+  const type: FormFieldType = typeMap[rawType] || 'text'
+  // For yesno — synthesize options
+  let options = raw.options as FormFieldOption[] | undefined
+  if (rawType === 'yesno' && !options) {
+    options = [
+      { value: 'yes', label_ar: 'نعم', label_en: 'Yes' },
+      { value: 'no', label_ar: 'لا', label_en: 'No' },
+    ]
+  }
   return {
-    fields: Array.isArray(s.fields) ? s.fields : [],
-    category: s.category,
-    submission_deadline: s.submission_deadline,
-    is_recurring: s.is_recurring,
-    recurring_schedule: s.recurring_schedule,
-    notify_on_submit: s.notify_on_submit,
-    notify_on_review: s.notify_on_review,
-    gps_accuracy: s.gps_accuracy,
+    id,
+    type,
+    label_ar,
+    label_en,
+    required: (raw.required as boolean) ?? false,
+    placeholder_ar: raw.hint as string | undefined,
+    placeholder_en: raw.hint_en as string | undefined,
+    options,
+    order: (raw.order as number) ?? index,
   }
 }
+
+function parseFormSchema(schema: Record<string, unknown>): FormSchema {
+  if (!schema || typeof schema !== 'object') return { fields: [] }
+  const s = schema as Record<string, unknown>
+
+  let rawFields: unknown[] = []
+
+  // Support flat fields array
+  if (Array.isArray(s.fields)) {
+    rawFields = s.fields
+  }
+
+  // Support mobile sections format — flatten all section fields
+  if (Array.isArray(s.sections) && s.sections.length > 0) {
+    for (const section of s.sections as Record<string, unknown>[]) {
+      if (Array.isArray(section.fields)) {
+        rawFields = rawFields.concat(section.fields)
+      }
+    }
+  }
+
+  const fields: FormField[] = rawFields
+    .filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null)
+    .map((f, i) => normalizeField(f, i))
+
+  return {
+    fields,
+    category: s.category as string | undefined,
+    submission_deadline: s.submission_deadline as string | undefined,
+    is_recurring: s.is_recurring as boolean | undefined,
+    recurring_schedule: s.recurring_schedule as string | undefined,
+    notify_on_submit: s.notify_on_submit as boolean | undefined,
+    notify_on_review: s.notify_on_review as boolean | undefined,
+    gps_accuracy: s.gps_accuracy as 'low' | 'medium' | 'high' | undefined,
+  }
+}
+
 
 // ==================== Main Page ====================
 

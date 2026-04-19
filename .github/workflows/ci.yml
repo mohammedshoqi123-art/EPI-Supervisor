@@ -174,23 +174,75 @@ jobs:
           path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
-  # ─── Build Web ───────────────────────────────────────────
-  # DISABLED: Admin dashboard (React) handles GitHub Pages deployment
-  # See: .github/workflows/deploy-admin.yml
-  build-web:
-    name: Build Web (Disabled)
+  # ─── Build Flutter Web ───────────────────────────────────────────
+  build-web-flutter:
+    name: Build Flutter Web (Online-Only)
     runs-on: ubuntu-latest
-    if: false  # Disabled — admin dashboard deploys instead
+    needs: analyze
+    if: github.ref == 'refs/heads/main'
     steps:
-      - run: echo "Skipped"
+      - uses: actions/checkout@v4
 
-  # ─── Deploy to GitHub Pages ─────────────────────────────
-  deploy-pages:
-    name: Deploy to GitHub Pages (Disabled)
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Setup project
+        run: |
+          cd packages/core && flutter pub get
+          cd $GITHUB_WORKSPACE/packages/shared && flutter pub get && dart run build_runner build --delete-conflicting-outputs
+          cd $GITHUB_WORKSPACE/packages/features && flutter pub get
+          cd $GITHUB_WORKSPACE/apps/mobile && flutter pub get
+
+      - name: Build Flutter Web
+        working-directory: apps/mobile
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build web --release \
+            --web-renderer canvaskit \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} \
+            --dart-define=HF_API_TOKEN=${{ secrets.HF_API_TOKEN }} \
+            --dart-define=ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }} \
+            --base-href /EPI-Supervisor/app/
+
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: epi-supervisor-web
+          path: apps/mobile/build/web/
+          retention-days: 30
+
+  # ─── Deploy Flutter Web to GitHub Pages ─────────────────────────
+  deploy-flutter-web:
+    name: Deploy Flutter Web to GitHub Pages
     runs-on: ubuntu-latest
-    if: false  # Disabled — admin dashboard deploys instead
+    needs: build-web-flutter
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     steps:
-      - run: echo "Skipped"
+      - uses: actions/checkout@v4
+
+      - name: Download Web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: epi-supervisor-web
+          path: flutter-web-dist/
+
+      - name: Deploy to gh-pages branch (app/ subfolder)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./flutter-web-dist
+          destination_dir: app
+          keep_files: true
+          commit_message: "deploy: Flutter Web update [skip ci]"
 
   # ─── Deploy Edge Functions ───────────────────────────────
   deploy-functions:

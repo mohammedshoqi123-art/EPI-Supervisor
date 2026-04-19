@@ -144,21 +144,10 @@ class UnifiedAIProvider {
     return Future.value(_handleOffline('تقرير $templateType', data).text);
   }
 
-  /// Suggestions
+  /// Suggestions — delegates to Groq for context-aware suggestions
   Future<List<String>> getSuggestions({Map<String, dynamic>? context}) async {
     if (hasGroq) {
-      final resp = await _groq!.chat(
-        'اقترح 5 اقتراحات متنوعة لمستخدم منصة مشرف EPI. كل سطر اقتراح واحد بدون ترقيم.',
-        systemPrompt: 'أنت مساعد ذكي لمنصة إشراف التطعيم اليمن.',
-        model: 'llama-3.1-8b-instant',
-        maxTokens: 200,
-        clearHistory: true,
-      );
-      return resp
-          .split('\n')
-          .where((s) => s.trim().length > 5)
-          .take(5)
-          .toList();
+      return _groq!.getSmartSuggestions(context: context);
     }
     return _defaultSuggestions();
   }
@@ -259,7 +248,7 @@ class UnifiedAIProvider {
     );
   }
 
-  String _buildSystemPrompt({String ragContext = ''}) {
+  String _buildSystemPrompt({String ragContext = '', String extraContext = ''}) {
     var prompt =
         '''أنت "مساعد EPI" — متخصص في برنامج التطعيم الموسع في اليمن ومنصة مشرف EPI.
 
@@ -267,11 +256,15 @@ class UnifiedAIProvider {
 المؤشرات: Penta3=وصول, Dropout=استمرارية, الحصبة=حماية جماعية.
 Health Score: 80+=ممتاز, 50-79=متوسط, <50=ضعيف.
 المنصة: 5 أدوار (admin>central>governorate>district>data_entry).
+الحملات: polio_campaign (شلل الأطفال) و integrated_activity (نشاط إيصالي تكاملي).
 
 قواعد: مختصر (≤120 كلمة). أرقام من البيانات. توصيات عملية. العربية.''';
 
+    if (extraContext.isNotEmpty) {
+      prompt += '\n\nبيانات النظام الحالية:\n$extraContext';
+    }
     if (ragContext.isNotEmpty) {
-      prompt += '\n\nمعلومات ذات صلة:\n$ragContext';
+      prompt += '\n\nمعلومات ذات صلة من قاعدة المعرفة:\n$ragContext';
     }
 
     return prompt;
@@ -341,7 +334,7 @@ class _CacheEntry {
   final String text;
   final AIProvider provider;
   final DateTime timestamp;
-  static const Duration _ttl = Duration(minutes: 3);
+  static const Duration _ttl = Duration(minutes: 10);
 
   _CacheEntry(this.text, this.provider, this.timestamp);
   bool get isExpired => DateTime.now().difference(timestamp) > _ttl;

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -176,11 +177,13 @@ Future<void> main() async {
     debugPrint('NotificationService init failed: $e');
   }
 
-  // Lock to portrait on mobile
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  // Lock to portrait on mobile only (web supports all orientations)
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  }
 
   // Set system overlay style
   SystemChrome.setSystemUIOverlayStyle(
@@ -193,8 +196,8 @@ Future<void> main() async {
   // Run app first — Sentry will init after first frame (non-blocking)
   runApp(const ProviderScope(child: EpiSupervisorApp()));
 
-  // Defer Sentry init to after first frame — doesn't block app startup
-  if (SentryConfig.isEnabled) {
+  // Defer Sentry init — skip on web (not supported)
+  if (SentryConfig.isEnabled && !kIsWeb) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         await SentryFlutter.init((options) {
@@ -208,7 +211,6 @@ Future<void> main() async {
           );
           options.release = 'epi-supervisor@${AppConfig.appVersion}';
           options.tracesSampleRate = 0.2;
-          // إيقاف التتبع التلقائي للأداء لمنع بطء واجهة المستخدم وتعليق التطبيق
           options.enableAutoPerformanceTracing = false;
           options.attachStacktrace = true;
         }).timeout(const Duration(seconds: 8));

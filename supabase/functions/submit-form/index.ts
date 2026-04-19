@@ -136,7 +136,7 @@ serve(async (req) => {
       return jsonResponse({ error: 'form_id is required and must be a string' }, 400, origin)
     }
 
-    const validStatuses = ['draft', 'submitted', 'reviewed', 'approved', 'rejected']
+    const validStatuses = ['draft', 'submitted']
     if (!validStatuses.includes(status)) {
       return jsonResponse({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }, 400, origin)
     }

@@ -52,8 +52,7 @@ serve(async (req) => {
       { count: totalSubmissions },
       { count: todaySubmissions },
       { count: pendingSubmissions },
-      { count: approvedSubmissions },
-      { count: rejectedSubmissions },
+
       { count: draftSubmissions },
       { count: totalShortages },
       { count: criticalShortages },
@@ -68,8 +67,7 @@ serve(async (req) => {
       db.from('form_submissions').select('*', { count: 'exact', head: true }).is('deleted_at', null),
       db.from('form_submissions').select('*', { count: 'exact', head: true }).gte('created_at', todayStart).is('deleted_at', null),
       db.from('form_submissions').select('*', { count: 'exact', head: true }).eq('status', 'submitted').is('deleted_at', null),
-      db.from('form_submissions').select('*', { count: 'exact', head: true }).eq('status', 'approved').is('deleted_at', null),
-      db.from('form_submissions').select('*', { count: 'exact', head: true }).eq('status', 'rejected').is('deleted_at', null),
+
       db.from('form_submissions').select('*', { count: 'exact', head: true }).eq('status', 'draft').is('deleted_at', null),
       db.from('supply_shortages').select('*', { count: 'exact', head: true }).is('deleted_at', null),
       db.from('supply_shortages').select('*', { count: 'exact', head: true }).eq('severity', 'critical').eq('is_resolved', false).is('deleted_at', null),
@@ -89,20 +87,19 @@ serve(async (req) => {
       .order('created_at', { ascending: true })
 
     // Group by day
-    const timelineMap = new Map<string, { total: number; approved: number; rejected: number; pending: number }>()
+    const timelineMap = new Map<string, { total: number; submitted: number; draft: number }>()
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
       const key = d.toISOString().split('T')[0]
-      timelineMap.set(key, { total: 0, approved: 0, rejected: 0, pending: 0 })
+      timelineMap.set(key, { total: 0, submitted: 0, draft: 0 })
     }
     for (const sub of timelineData ?? []) {
       const key = sub.created_at.split('T')[0]
       const entry = timelineMap.get(key)
       if (entry) {
         entry.total++
-        if (sub.status === 'approved') entry.approved++
-        else if (sub.status === 'rejected') entry.rejected++
-        else if (sub.status === 'submitted') entry.pending++
+        if (sub.status === 'submitted') entry.submitted++
+        else if (sub.status === 'draft') entry.draft++
       }
     }
     const submissionsTimeline = Array.from(timelineMap.entries()).map(([date, data]) => ({ date, ...data }))
@@ -179,9 +176,9 @@ serve(async (req) => {
         active_users: activeUsers ?? 0,
         total_submissions: totalSubmissions ?? 0,
         today_submissions: todaySubmissions ?? 0,
-        pending_submissions: pendingSubmissions ?? 0,
-        approved_submissions: approvedSubmissions ?? 0,
-        rejected_submissions: rejectedSubmissions ?? 0,
+        
+        
+        
         draft_submissions: draftSubmissions ?? 0,
         total_shortages: totalShortages ?? 0,
         critical_shortages: criticalShortages ?? 0,
@@ -200,9 +197,7 @@ serve(async (req) => {
         shortages_by_severity: Object.fromEntries(severityDistribution),
         status_distribution: {
           draft: draftSubmissions ?? 0,
-          submitted: pendingSubmissions ?? 0,
-          approved: approvedSubmissions ?? 0,
-          rejected: rejectedSubmissions ?? 0,
+          submitted: totalSubmissions - (draftSubmissions ?? 0),
         },
       },
       recent_activity: (recentActivity ?? []).map(a => ({

@@ -92,13 +92,13 @@ serve(async (req) => {
           .order('name_ar')
 
         const performance = await Promise.all((governorates ?? []).map(async (gov) => {
-          const [total, approved, rejected, pending, districtsCount, facilitiesCount, usersCount] = await Promise.all([
+          const [total, submitted, draft, districtsCount, facilitiesCount, usersCount] = await Promise.all([
             db.from('form_submissions').select('*', { count: 'exact', head: true })
               .eq('governorate_id', gov.id).gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
             db.from('form_submissions').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).eq('status', 'approved').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
+              .eq('governorate_id', gov.id).eq('status', 'submitted').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
             db.from('form_submissions').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).eq('status', 'rejected').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
+              .eq('governorate_id', gov.id).eq('status', 'draft').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
             db.from('form_submissions').select('*', { count: 'exact', head: true })
               .eq('governorate_id', gov.id).eq('status', 'submitted').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
             db.from('districts').select('*', { count: 'exact', head: true })
@@ -110,15 +110,15 @@ serve(async (req) => {
           ])
 
           const totalCount = total.count ?? 0
-          const approvedCount = approved.count ?? 0
+          const submittedCount = submitted.count ?? 0
           return {
             ...gov,
             submissions: {
               total: totalCount,
-              approved: approvedCount,
-              rejected: rejected.count ?? 0,
+              submitted: submittedCount,
+              draft: draft.count ?? 0,
               pending: pending.count ?? 0,
-              approval_rate: totalCount > 0 ? Math.round(approvedCount / totalCount * 100) : 0,
+
             },
             districts: districtsCount.count ?? 0,
             facilities: facilitiesCount.count ?? 0,

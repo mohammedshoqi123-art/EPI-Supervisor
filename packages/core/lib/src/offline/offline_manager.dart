@@ -408,8 +408,9 @@ class OfflineManager {
     final conflicts = _getConflicts();
     if (conflicts.containsKey(offlineId)) {
       conflicts[offlineId]['resolved'] = true;
-      conflicts[offlineId]['resolution'] =
-          useLocal ? 'local_wins' : 'server_wins';
+      conflicts[offlineId]['resolution'] = useLocal
+          ? 'local_wins'
+          : 'server_wins';
       conflicts[offlineId]['resolved_at'] = DateTime.now().toIso8601String();
       final encrypted = _encryption.encrypt(jsonEncode(conflicts));
       await _safeBox.put(_conflictsKey, encrypted);
@@ -488,7 +489,7 @@ class OfflineManager {
                 'draftId': _uuid.v4(),
                 'data': entry.value['data'],
                 'saved_at': entry.value['saved_at'],
-              }
+              },
             ];
           } else if (entry.value is List) {
             // New format — keep as is
@@ -496,8 +497,7 @@ class OfflineManager {
           }
         }
         // If migration happened, save back
-        if (result.isNotEmpty &&
-            decoded.values.any((v) => v is Map)) {
+        if (result.isNotEmpty && decoded.values.any((v) => v is Map)) {
           final encrypted = _encryption.encrypt(jsonEncode(result));
           _safeBox.put(_draftsKey, encrypted);
         }

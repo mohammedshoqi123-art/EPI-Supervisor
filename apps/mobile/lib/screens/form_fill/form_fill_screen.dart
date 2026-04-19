@@ -59,7 +59,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     Map<String, dynamic>? form;
 
     try {
-      final cache = await ref.read(offlineDataCacheProvider.future).timeout(
+      final cache = await ref
+          .read(offlineDataCacheProvider.future)
+          .timeout(
             const Duration(seconds: 5),
             onTimeout: () => throw Exception('timeout'),
           );
@@ -75,7 +77,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
       if (form == null) {
         final db = ref.read(databaseServiceProvider);
-        form = await db.getForm(widget.formId).timeout(
+        form = await db
+            .getForm(widget.formId)
+            .timeout(
               const Duration(seconds: 15),
               onTimeout: () => throw TimeoutException('Network timeout'),
             );
@@ -108,14 +112,16 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   Future<void> _loadDraft() async {
     try {
-      final offline = await ref.read(offlineManagerProvider.future).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException(
-            'Offline storage not ready for draft loading',
+      final offline = await ref
+          .read(offlineManagerProvider.future)
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              throw TimeoutException(
+                'Offline storage not ready for draft loading',
+              );
+            },
           );
-        },
-      );
 
       // Get all drafts for this form
       final formDrafts = offline.getDraftsForForm(widget.formId);
@@ -280,8 +286,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
                     final draft = drafts[index];
                     final savedAt = draft['saved_at'] as String? ?? '';
-                    final fieldCount =
-                        (draft['data'] as Map?)?.length ?? 0;
+                    final fieldCount = (draft['data'] as Map?)?.length ?? 0;
                     final timeAgo = _formatTimeAgo(savedAt);
 
                     return ListTile(
@@ -322,8 +327,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                           size: 20,
                         ),
                         onPressed: () async {
-                          final offline = await ref
-                              .read(offlineManagerProvider.future);
+                          final offline = await ref.read(
+                            offlineManagerProvider.future,
+                          );
                           await offline.removeDraft(
                             widget.formId,
                             draft['draftId'] as String,
@@ -577,12 +583,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
     final OfflineManager offline;
     try {
-      offline = await ref.read(offlineManagerProvider.future).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException('Offline storage not ready');
-        },
-      );
+      offline = await ref
+          .read(offlineManagerProvider.future)
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              throw TimeoutException('Offline storage not ready');
+            },
+          );
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -607,26 +615,30 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       );
 
       if (offline.isOnline) {
-        ref.read(syncServiceProvider.future).then((syncService) async {
-          try {
-            final result = await syncService.sync();
-            if (kDebugMode) {
-              print(
-                '[FormSubmit] Immediate sync: ${result.synced} synced, ${result.failed} failed',
-              );
-            }
-            if (result.synced > 0) {
+        ref
+            .read(syncServiceProvider.future)
+            .then((syncService) async {
               try {
-                await offline.removeAllDraftsForForm(widget.formId);
-              } catch (_) {}
-            }
-          } catch (e) {
-            if (kDebugMode)
-              print('[FormSubmit] Immediate sync failed (will retry): $e');
-          }
-        }).catchError((e) {
-          if (kDebugMode) print('[FormSubmit] SyncService not available: $e');
-        });
+                final result = await syncService.sync();
+                if (kDebugMode) {
+                  print(
+                    '[FormSubmit] Immediate sync: ${result.synced} synced, ${result.failed} failed',
+                  );
+                }
+                if (result.synced > 0) {
+                  try {
+                    await offline.removeAllDraftsForForm(widget.formId);
+                  } catch (_) {}
+                }
+              } catch (e) {
+                if (kDebugMode)
+                  print('[FormSubmit] Immediate sync failed (will retry): $e');
+              }
+            })
+            .catchError((e) {
+              if (kDebugMode)
+                print('[FormSubmit] SyncService not available: $e');
+            });
       }
 
       if (mounted) {
@@ -655,12 +667,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     }
     setState(() => _isSavingDraft = true);
     try {
-      final offline = await ref.read(offlineManagerProvider.future).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException('Offline storage not ready');
-        },
-      );
+      final offline = await ref
+          .read(offlineManagerProvider.future)
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              throw TimeoutException('Offline storage not ready');
+            },
+          );
       final savedId = await offline.saveDraft(
         widget.formId,
         Map<String, dynamic>.from(_formData),
@@ -691,12 +705,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     if (_formData.isEmpty) return;
 
     try {
-      final offline = await ref.read(offlineManagerProvider.future).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          throw TimeoutException('Offline storage not ready for auto-save');
-        },
-      );
+      final offline = await ref
+          .read(offlineManagerProvider.future)
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              throw TimeoutException('Offline storage not ready for auto-save');
+            },
+          );
       final savedId = await offline.saveDraft(
         widget.formId,
         Map<String, dynamic>.from(_formData),
@@ -746,68 +762,68 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       body: _isLoading && _formSchema == null
           ? const EpiLoading()
           : _allFields.isEmpty
-              ? const EpiEmptyState(
-                  icon: Icons.description,
-                  title: 'لا توجد حقول في النموذج',
-                )
-              : Form(
-                  key: _formKey,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      if (_formSchema?['description_ar'] != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            _formSchema!['description_ar'],
-                            style: const TextStyle(
-                              fontFamily: 'Tajawal',
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
+          ? const EpiEmptyState(
+              icon: Icons.description,
+              title: 'لا توجد حقول في النموذج',
+            )
+          : Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (_formSchema?['description_ar'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        _formSchema!['description_ar'],
+                        style: const TextStyle(
+                          fontFamily: 'Tajawal',
+                          color: AppTheme.textSecondary,
                         ),
-                      if (_sections.isNotEmpty)
-                        ...buildFormSections(
-                          sections: _sections,
-                          formData: _formData,
-                          textControllers: _textControllers,
-                          isGettingLocation: _isGettingLocation,
-                          gpsLat: _gpsLat,
-                          gpsLng: _gpsLng,
-                          flatFields: _flatFields,
-                          markChanged: _markChanged,
-                          getLocation: _getLocation,
-                          runSetState: (fn) => setState(fn),
-                          formSchema: _formSchema,
-                          pickedPhotos: _pickedPhotos,
-                        )
-                      else
-                        ..._flatFields.map(
-                          (field) => buildFormField(
-                            field: field as Map<String, dynamic>,
-                            formData: _formData,
-                            textControllers: _textControllers,
-                            isGettingLocation: _isGettingLocation,
-                            gpsLat: _gpsLat,
-                            gpsLng: _gpsLng,
-                            markChanged: _markChanged,
-                            getLocation: _getLocation,
-                            runSetState: (fn) => setState(fn),
-                            formSchema: _formSchema,
-                            pickedPhotos: _pickedPhotos,
-                          ),
-                        ),
-                      const SizedBox(height: 24),
-                      EpiButton(
-                        text: AppStrings.submit,
-                        isLoading: _isLoading,
-                        onPressed: _submit,
-                        width: double.infinity,
-                        icon: Icons.send,
                       ),
-                    ],
+                    ),
+                  if (_sections.isNotEmpty)
+                    ...buildFormSections(
+                      sections: _sections,
+                      formData: _formData,
+                      textControllers: _textControllers,
+                      isGettingLocation: _isGettingLocation,
+                      gpsLat: _gpsLat,
+                      gpsLng: _gpsLng,
+                      flatFields: _flatFields,
+                      markChanged: _markChanged,
+                      getLocation: _getLocation,
+                      runSetState: (fn) => setState(fn),
+                      formSchema: _formSchema,
+                      pickedPhotos: _pickedPhotos,
+                    )
+                  else
+                    ..._flatFields.map(
+                      (field) => buildFormField(
+                        field: field as Map<String, dynamic>,
+                        formData: _formData,
+                        textControllers: _textControllers,
+                        isGettingLocation: _isGettingLocation,
+                        gpsLat: _gpsLat,
+                        gpsLng: _gpsLng,
+                        markChanged: _markChanged,
+                        getLocation: _getLocation,
+                        runSetState: (fn) => setState(fn),
+                        formSchema: _formSchema,
+                        pickedPhotos: _pickedPhotos,
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  EpiButton(
+                    text: AppStrings.submit,
+                    isLoading: _isLoading,
+                    onPressed: _submit,
+                    width: double.infinity,
+                    icon: Icons.send,
                   ),
-                ),
+                ],
+              ),
+            ),
     );
   }
 }

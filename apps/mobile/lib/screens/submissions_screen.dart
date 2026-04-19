@@ -276,9 +276,6 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
               children: [
                 'draft',
                 'submitted',
-                'reviewed',
-                'approved',
-                'rejected',
               ].map((s) {
                 return ChoiceChip(
                   label: EpiStatusChip(status: s, small: true),

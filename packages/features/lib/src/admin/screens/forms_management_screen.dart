@@ -367,7 +367,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                   if ((stats['submitted'] ?? 0) > 0)
                     _buildInfoChip(
                       Icons.pending_actions,
-                      '${stats['submitted']} قيد المراجعة',
+                      '${stats['submitted']} مرسل',
                       color: AppTheme.warningColor,
                     ),
                   _buildInfoChip(Icons.calendar_today_outlined, createdAt),

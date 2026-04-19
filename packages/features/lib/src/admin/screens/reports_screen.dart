@@ -180,18 +180,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             children: [
               _SummaryCard('إجمالي', '$total', const Color(0xFF00897B)),
               _SummaryCard(
-                'مقبول',
-                '${aggregates['by_status']?['approved'] ?? 0}',
-                const Color(0xFF43A047),
-              ),
-              _SummaryCard(
-                'مرفوض',
-                '${aggregates['by_status']?['rejected'] ?? 0}',
-                const Color(0xFFE53935),
-              ),
-              _SummaryCard(
-                'معلق',
+                'مرسل',
                 '${aggregates['by_status']?['submitted'] ?? 0}',
+                const Color(0xFF3B82F6),
+              ),
+              _SummaryCard(
+                'مسودة',
+                '${aggregates['by_status']?['draft'] ?? 0}',
                 const Color(0xFFFB8C00),
               ),
             ],
@@ -286,9 +281,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     ),
                   ),
                   DataCell(Text('${sub['total'] ?? 0}')),
-                  DataCell(Text('${sub['approved'] ?? 0}')),
-                  DataCell(Text('${sub['rejected'] ?? 0}')),
-                  DataCell(Text('${sub['approval_rate'] ?? 0}%')),
+                  DataCell(Text('${sub['submitted'] ?? 0}')),
+                  DataCell(Text('${sub['draft'] ?? 0}')),
                   DataCell(Text('${g['districts'] ?? 0}')),
                   DataCell(Text('${g['facilities'] ?? 0}')),
                   DataCell(Text('${g['users'] ?? 0}')),
@@ -418,21 +412,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     Color color;
     String label;
     switch (status) {
-      case 'approved':
-        color = const Color(0xFF43A047);
-        label = 'مقبول';
-        break;
-      case 'rejected':
-        color = const Color(0xFFE53935);
-        label = 'مرفوض';
-        break;
       case 'submitted':
-        color = const Color(0xFFFB8C00);
-        label = 'معلق';
+        color = const Color(0xFF3B82F6);
+        label = 'مرسل';
         break;
-      case 'reviewed':
-        color = const Color(0xFF1E88E5);
-        label = 'تمت المراجعة';
+      case 'draft':
+        color = const Color(0xFFFB8C00);
+        label = 'مسودة';
         break;
       default:
         color = Colors.grey;

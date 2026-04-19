@@ -74,16 +74,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   Color _statusColor(String? status) {
     switch (status) {
-      case 'approved':
-        return const Color(0xFF10B981);
       case 'submitted':
         return const Color(0xFF3B82F6);
-      case 'reviewed':
-        return const Color(0xFFF59E0B);
-      case 'rejected':
-        return const Color(0xFFEF4444);
       case 'draft':
-        return const Color(0xFF94A3B8);
+        return const Color(0xFFFB8C00);
       default:
         return const Color(0xFF6B7280);
     }
@@ -91,14 +85,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   String _statusLabel(String? status) {
     switch (status) {
-      case 'approved':
-        return 'معتمدة';
       case 'submitted':
         return 'مرسلة';
-      case 'reviewed':
-        return 'تمت المراجعة';
-      case 'rejected':
-        return 'مرفوضة';
       case 'draft':
         return 'مسودة';
       default:
@@ -393,10 +381,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 (s) => s['gps_lat'] != null && s['gps_lng'] != null,
               )
               .length;
-          final approved =
-              subs.where((s) => s['status'] == 'approved').length;
-          final rejected =
-              subs.where((s) => s['status'] == 'rejected').length;
+          final drafts =
+              subs.where((s) => s['status'] == 'draft').length;
           final govCount = governoratesAsync.valueOrNull?.length ?? 0;
 
           return Row(
@@ -416,17 +402,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
               ),
               const SizedBox(width: 8),
               _statCard(
-                'معتمدة',
-                '$approved',
-                Icons.check_circle_rounded,
-                const Color(0xFF059669),
+                'مسودات',
+                '$drafts',
+                Icons.edit_note_rounded,
+                const Color(0xFFFB8C00),
               ),
               const SizedBox(width: 8),
               _statCard(
-                'مرفوضة',
-                '$rejected',
-                Icons.cancel_rounded,
-                const Color(0xFFEF4444),
+                'محافظات',
+                '$govCount',
+                Icons.location_city_rounded,
+                const Color(0xFF00897B),
               ),
             ],
           );
@@ -1238,10 +1224,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
           if (lat == null || lng == null) continue;
 
           final count = subs.length;
-          final approved =
-              subs.where((s) => s['status'] == 'approved').length;
-          final rejected =
-              subs.where((s) => s['status'] == 'rejected').length;
           final color = _clusterColor(count);
 
           markers.add(
@@ -1289,27 +1271,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
                           height: 1.0,
                         ),
                       ),
-                      if (rejected > 0)
-                        Container(
-                          margin: const EdgeInsets.only(top: 1),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEF4444),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '✗$rejected',
-                            style: const TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ),

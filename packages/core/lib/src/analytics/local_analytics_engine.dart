@@ -170,7 +170,6 @@ class LocalAnalyticsEngine {
     final bySeverity = shortages['bySeverity'] as Map<String, dynamic>? ?? {};
     final critical = bySeverity['critical'] as int? ?? 0;
     final byStatus = submissions['byStatus'] as Map<String, dynamic>? ?? {};
-    final rejected = byStatus['rejected'] as int? ?? 0;
 
     // Health score
     final score = healthScore(
@@ -198,12 +197,6 @@ class LocalAnalyticsEngine {
     // Critical shortages
     if (critical > 0) {
       insights.add('🔴 يوجد $critical نقص حرج يحتاج معالجة فورية');
-    }
-
-    // Rejection rate
-    if (total > 0 && rejected > 0) {
-      final rejectRate = (rejected / total * 100).toStringAsFixed(1);
-      insights.add('❌ نسبة الرفض $rejectRate% — راجع جودة الإدخال');
     }
 
     // Resolution rate

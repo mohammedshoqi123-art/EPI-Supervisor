@@ -199,12 +199,6 @@ class FunctionCallingEngine {
   }
 
   String? _extractStatus(String msg) {
-    if (msg.contains('مرفوض') || msg.contains('رفض')) return 'rejected';
-    if (msg.contains('مقبول') ||
-        msg.contains('موافقة') ||
-        msg.contains('معتمد')) return 'approved';
-    if (msg.contains('قيد المراجعة') || msg.contains('مراجعة'))
-      return 'reviewed';
     if (msg.contains('مرسل') || msg.contains('إرسال')) return 'submitted';
     if (msg.contains('مسودة')) return 'draft';
     return null;
@@ -259,9 +253,8 @@ class FunctionCallingEngine {
           }
           final where = conditions.join(' AND ');
           return 'SELECT COUNT(*) as total, '
-              'COUNT(*) FILTER (WHERE status = \'approved\') as approved, '
-              'COUNT(*) FILTER (WHERE status = \'rejected\') as rejected, '
-              'COUNT(*) FILTER (WHERE status = \'submitted\') as pending '
+              'COUNT(*) FILTER (WHERE status = \'submitted\') as submitted, '
+              'COUNT(*) FILTER (WHERE status = \'draft\') as draft '
               'FROM form_submissions WHERE $where';
         },
       ),
@@ -280,8 +273,8 @@ class FunctionCallingEngine {
         ],
         buildQuery: (_) => '''
           SELECT g.name_ar, COUNT(fs.id) as total,
-            COUNT(fs.id) FILTER (WHERE fs.status = 'approved') as approved,
-            COUNT(fs.id) FILTER (WHERE fs.status = 'rejected') as rejected
+            COUNT(fs.id) FILTER (WHERE fs.status = 'submitted') as submitted,
+            COUNT(fs.id) FILTER (WHERE fs.status = 'draft') as draft
           FROM form_submissions fs
           JOIN governorates g ON fs.governorate_id = g.id
           WHERE fs.deleted_at IS NULL

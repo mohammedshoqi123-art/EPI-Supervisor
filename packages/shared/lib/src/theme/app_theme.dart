@@ -340,14 +340,8 @@ class AppTheme {
   // ─── Status Color ─────────────────────────────────────────────────────────
   static Color statusColor(String? status) {
     switch (status) {
-      case 'approved':
-        return successColor;
-      case 'rejected':
-        return errorColor;
       case 'submitted':
         return infoColor;
-      case 'reviewed':
-        return warningColor;
       case 'draft':
         return textSecondary;
       default:

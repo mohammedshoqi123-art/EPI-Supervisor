@@ -572,10 +572,10 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
         trend: kpis['weekly_change_percent'],
       ),
       _KPICard(
-        icon: Icons.pending_actions_rounded,
-        title: 'بانتظار المراجعة',
-        value: '${kpis['pending_submissions'] ?? 0}',
-        subtitle: '${kpis['draft_submissions'] ?? 0} مسودة',
+        icon: Icons.edit_note_rounded,
+        title: 'المسودات',
+        value: '${kpis['draft_submissions'] ?? 0}',
+        subtitle: 'قيد الإعداد — اضغط للتفاصيل',
         color: const Color(0xFFFB8C00),
         trend: null,
       ),
@@ -694,13 +694,13 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
                     ),
                     _buildLineData(
                       timeline,
-                      'approved',
-                      const Color(0xFF43A047),
+                      'submitted',
+                      const Color(0xFF3B82F6),
                       2,
                     ),
                     _buildLineData(
                       timeline,
-                      'pending',
+                      'draft',
                       const Color(0xFFFB8C00),
                       2,
                     ),
@@ -782,10 +782,8 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
     }
 
     final sections = [
-      _PieSection('approved', 'مقبول', const Color(0xFF43A047)),
-      _PieSection('submitted', 'معلق', const Color(0xFFFB8C00)),
-      _PieSection('rejected', 'مرفوض', const Color(0xFFE53935)),
-      _PieSection('draft', 'مسودة', const Color(0xFF9E9E9E)),
+      _PieSection('submitted', 'مرسلة', const Color(0xFF3B82F6)),
+      _PieSection('draft', 'مسودة', const Color(0xFFFB8C00)),
     ];
 
     return _DashboardCard(

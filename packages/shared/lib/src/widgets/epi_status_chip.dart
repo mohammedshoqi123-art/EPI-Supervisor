@@ -46,12 +46,6 @@ class EpiStatusChip extends StatelessWidget {
         return 'مسودة';
       case 'submitted':
         return 'مرسل';
-      case 'reviewed':
-        return 'قيد المراجعة';
-      case 'approved':
-        return 'معتمد';
-      case 'rejected':
-        return 'مرفوض';
       case 'critical':
         return 'حرج';
       case 'high':

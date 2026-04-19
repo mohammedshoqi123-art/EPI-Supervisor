@@ -292,9 +292,8 @@ Health Score: 80+=ممتاز, 50-79=متوسط, <50=ضعيف.
         final byStatus = data['byStatus'] as Map? ?? {};
         return '📊 الإرساليات:\n'
             '• الإجمالي: ${data['total'] ?? 0}\n'
-            '• معتمدة: ${byStatus['approved'] ?? 0}\n'
-            '• مرفوضة: ${byStatus['rejected'] ?? 0}\n'
-            '• قيد المراجعة: ${byStatus['submitted'] ?? 0}';
+            '• مرسلة: ${byStatus['submitted'] ?? 0}\n'
+            '• مسودات: ${byStatus['draft'] ?? 0}';
       }
       if (intent == 'query_shortages') {
         final bySev = data['bySeverity'] as Map? ?? {};

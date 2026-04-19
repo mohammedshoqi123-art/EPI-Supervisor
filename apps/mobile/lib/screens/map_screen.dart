@@ -401,10 +401,10 @@ class _ClusterMarkers extends StatelessWidget {
           final color = count > 20
               ? const Color(0xFF10B981)
               : count > 5
-              ? const Color(0xFF3B82F6)
-              : count > 0
-              ? const Color(0xFFF59E0B)
-              : const Color(0xFF94A3B8);
+                  ? const Color(0xFF3B82F6)
+                  : count > 0
+                      ? const Color(0xFFF59E0B)
+                      : const Color(0xFF94A3B8);
 
           markers.add(
             Marker(
@@ -465,49 +465,48 @@ class _GovernorateMarkers extends StatelessWidget {
         final markers = governorates
             .where((g) => g['center_lat'] != null && g['center_lng'] != null)
             .map((gov) {
-              final lat = (gov['center_lat'] as num).toDouble();
-              final lng = (gov['center_lng'] as num).toDouble();
-              final count = (gov['submission_count'] as num?)?.toInt() ?? 0;
+          final lat = (gov['center_lat'] as num).toDouble();
+          final lng = (gov['center_lng'] as num).toDouble();
+          final count = (gov['submission_count'] as num?)?.toInt() ?? 0;
 
-              final color = count > 20
-                  ? const Color(0xFF10B981)
-                  : count > 5
+          final color = count > 20
+              ? const Color(0xFF10B981)
+              : count > 5
                   ? const Color(0xFF3B82F6)
                   : count > 0
-                  ? const Color(0xFFF59E0B)
-                  : const Color(0xFF94A3B8);
+                      ? const Color(0xFFF59E0B)
+                      : const Color(0xFF94A3B8);
 
-              return Marker(
-                point: LatLng(lat, lng),
-                width: 56,
-                height: 56,
-                child: Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.4),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
+          return Marker(
+            point: LatLng(lat, lng),
+            width: 56,
+            height: 56,
+            child: Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
-                  child: Text(
-                    '$count',
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
+                ],
+              ),
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
                 ),
-              );
-            })
-            .toList();
+              ),
+            ),
+          );
+        }).toList();
 
         return MarkerLayer(markers: markers);
       },
@@ -710,9 +709,8 @@ class _StatsOverlay extends ConsumerWidget {
     final governoratesAsync = ref.watch(governoratesProvider);
 
     final subs = submissionsAsync.valueOrNull ?? [];
-    final withGps = subs
-        .where((s) => s['gps_lat'] != null && s['gps_lng'] != null)
-        .length;
+    final withGps =
+        subs.where((s) => s['gps_lat'] != null && s['gps_lng'] != null).length;
     final govCount = governoratesAsync.valueOrNull?.length ?? 0;
 
     return Positioned(

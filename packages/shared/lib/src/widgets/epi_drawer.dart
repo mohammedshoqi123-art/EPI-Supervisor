@@ -260,36 +260,6 @@ class EpiDrawer extends StatelessWidget {
                     'المساعد الذكي',
                     '/ai',
                   ),
-
-                  // Admin-only sections
-                  if (userRoleLevel >= 4) ...[
-                    const Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Divider(height: 1),
-                    ),
-                    _SectionLabel(label: 'الإدارة'),
-                    _buildItem(
-                      context,
-                      Icons.people_rounded,
-                      'إدارة المستخدمين',
-                      '/users',
-                    ),
-                    _buildItem(
-                      context,
-                      Icons.settings_applications_rounded,
-                      'إدارة النماذج',
-                      '/forms-management',
-                    ),
-                    _buildItem(
-                      context,
-                      Icons.library_books_rounded,
-                      'إدارة المراجع',
-                      '/references-management',
-                    ),
-                  ],
                 ],
               ),
             ),

@@ -33,7 +33,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _initUser();
       _loadMessages();
       _pollTimer = Timer.periodic(
-        const Duration(seconds: 4),
+        const Duration(seconds: 20),
         (_) => _loadMessages(silent: true),
       );
     } else {
@@ -74,11 +74,14 @@ class _ChatScreenState extends State<ChatScreen> {
           .limit(200);
 
       if (mounted) {
+        final newMessages = (response as List).cast<Map<String, dynamic>>();
+        final hadNewMessages = newMessages.length != _messages.length;
         setState(() {
-          _messages = (response as List).cast<Map<String, dynamic>>();
+          _messages = newMessages;
           if (!silent) _isLoading = false;
         });
-        _scrollToBottom();
+        // Only scroll to bottom when actual new messages arrive
+        if (hadNewMessages) _scrollToBottom();
       }
     } catch (e) {
       if (mounted && !silent) {

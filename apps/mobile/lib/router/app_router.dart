@@ -251,14 +251,20 @@ class _MainShellState extends ConsumerState<MainShell> {
             _AiFab(onTap: () => context.go('/ai')),
         ],
       ),
-      bottomNavigationBar: EpiBottomNav(
-        currentIndex: _getSelectedIndex(context),
-        onTap: (index) => _onItemTapped(context, index),
-      ),
+      bottomNavigationBar: _getSelectedIndex(context) >= 0
+          ? EpiBottomNav(
+              currentIndex: _getSelectedIndex(context),
+              onTap: (index) => _onItemTapped(context, index),
+            )
+          : null,
       drawer: const AppDrawer(),
     );
   }
 
+  /// Returns the bottom nav index for the current route, or -1 if the route
+  /// is NOT part of the 5-tab bottom navigation. Returning -1 hides the
+  /// bottom bar entirely so non-tab screens (AI, profile, notifications, etc.)
+  /// get a clean full-screen layout without a false "Dashboard" highlight.
   int _getSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith('/dashboard')) return 0;
@@ -266,7 +272,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     if (location.startsWith('/forms')) return 1; // النماذج
     if (location.startsWith('/map')) return 3; // الخريطة
     if (location.startsWith('/chat')) return 4; // الشات
-    return 0;
+    return -1; // Not a bottom-nav route → hide the bar
   }
 
   void _onItemTapped(BuildContext context, int index) {

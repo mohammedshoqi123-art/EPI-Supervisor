@@ -101,7 +101,6 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
     with TickerProviderStateMixin {
   final _ctrl = TextEditingController();
   final _scroll = ScrollController();
-  final _listKey = GlobalKey<AnimatedListState>();
   final List<ChatMsg> _msgs = [];
   bool _loading = false;
   bool _mounted = true;

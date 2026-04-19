@@ -57,8 +57,6 @@ class _SubmissionDetailScreenState
             PopupMenuButton<String>(
               onSelected: _handleAction,
               itemBuilder: (_) => [
-                const PopupMenuItem(value: 'approve', child: Text('اعتماد')),
-                const PopupMenuItem(value: 'reject', child: Text('رفض')),
                 const PopupMenuItem(value: 'share', child: Text('مشاركة')),
                 const PopupMenuItem(value: 'copy', child: Text('نسخ البيانات')),
               ],
@@ -123,23 +121,6 @@ class _SubmissionDetailScreenState
 
                       // Form data
                       _buildSection('بيانات النموذج', _buildFormData()),
-                      const SizedBox(height: 16),
-
-                      // Review info
-                      if (_submission!['reviewed_by'] != null)
-                        _buildSection('المراجعة', [
-                          _infoRow(
-                            'راجع بواسطة',
-                            _submission!['profiles']?['full_name'] ?? '-',
-                          ),
-                          _infoRow(
-                            'تاريخ المراجعة',
-                            _formatDate(_submission!['reviewed_at']),
-                          ),
-                          if (_submission!['review_notes'] != null)
-                            _infoRow('ملاحظات', _submission!['review_notes']),
-                        ]),
-
                       const SizedBox(height: 16),
 
                       // ═══ PDF Download Button (prominent) ═══
@@ -389,29 +370,12 @@ class _SubmissionDetailScreenState
 
   void _handleAction(String action) {
     switch (action) {
-      case 'approve':
-        _updateStatus('approved');
-        break;
-      case 'reject':
-        _updateStatus('rejected');
-        break;
       case 'share':
         _shareSubmission();
         break;
       case 'copy':
         _copyData();
         break;
-    }
-  }
-
-  Future<void> _updateStatus(String status) async {
-    try {
-      final db = ref.read(databaseServiceProvider);
-      await db.updateSubmissionStatus(widget.id, status);
-      _loadSubmission();
-      if (mounted) context.showSuccess('تم تحديث الحالة');
-    } catch (e) {
-      if (mounted) context.showError('فشل التحديث');
     }
   }
 

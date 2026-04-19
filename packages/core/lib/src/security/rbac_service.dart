@@ -48,10 +48,6 @@ class RBACService {
         return role.hierarchyLevel >= 4; // central+
       case RBACAction.manageForms:
         return role.hierarchyLevel >= 4; // central+
-      case RBACAction.approveSubmissions:
-        return role.hierarchyLevel >= 3; // governorate+
-      case RBACAction.rejectSubmissions:
-        return role.hierarchyLevel >= 3; // governorate+
       case RBACAction.exportData:
         return true; // all authenticated users
       case RBACAction.viewAnalytics:
@@ -101,8 +97,6 @@ enum RBACAction {
   viewAllData,
   manageUsers,
   manageForms,
-  approveSubmissions,
-  rejectSubmissions,
   exportData,
   viewAnalytics,
   submitForms,

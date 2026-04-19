@@ -45,7 +45,6 @@ serve(async (req) => {
           .from('form_submissions')
           .select(`
             id, status, data, gps_lat, gps_lng, notes, created_at, submitted_at,
-            reviewed_at, review_notes,
             forms(title_ar),
             profiles!submitted_by(full_name, role),
             governorates(name_ar),

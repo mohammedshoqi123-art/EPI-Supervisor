@@ -263,9 +263,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             columns: const [
               DataColumn(label: Text('المحافظة')),
               DataColumn(label: Text('الإرساليات'), numeric: true),
-              DataColumn(label: Text('مقبول'), numeric: true),
-              DataColumn(label: Text('مرفوض'), numeric: true),
-              DataColumn(label: Text('معدل القبول'), numeric: true),
+              DataColumn(label: Text('مرسل'), numeric: true),
+              DataColumn(label: Text('مسودة'), numeric: true),
               DataColumn(label: Text('المديريات'), numeric: true),
               DataColumn(label: Text('المنشآت'), numeric: true),
               DataColumn(label: Text('المستخدمون'), numeric: true),

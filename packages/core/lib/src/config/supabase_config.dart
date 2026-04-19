@@ -55,6 +55,7 @@ class SupabaseConfig {
   // Edge Function names
   static const String fnSubmitForm = 'submit-form';
   static const String fnSyncOffline = 'sync-offline';
+  static const String fnGetForms = 'get-forms';
   static const String fnGetAnalytics = 'get-analytics';
   static const String fnAiChat = 'ai-chat-v3';
   static const String fnCreateAdmin = 'create-admin';

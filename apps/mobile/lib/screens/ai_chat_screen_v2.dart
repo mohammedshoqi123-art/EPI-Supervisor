@@ -1018,17 +1018,73 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
             ? cs.onErrorContainer
             : cs.onSurface;
 
-    // Simple markdown-like formatting
-    final lines = msg.content.split('\n');
-    return SelectableText(
-      msg.content,
-      style: TextStyle(
-        fontFamily: 'Tajawal',
-        color: textColor,
-        fontSize: 14,
-        height: 1.8,
-      ),
+    if (isUser) {
+      return Text(
+        msg.content,
+        style: TextStyle(
+          fontFamily: 'Tajawal',
+          color: textColor,
+          fontSize: 14,
+          height: 1.6,
+        ),
+      );
+    }
+
+    final TextStyle baseStyle = TextStyle(
+      fontFamily: 'Tajawal',
+      color: textColor,
+      fontSize: 14,
+      height: 1.8,
     );
+
+    final TextStyle boldStyle = baseStyle.copyWith(
+      fontWeight: FontWeight.w800,
+      fontFamily: 'Cairo',
+    );
+
+    return SelectableText.rich(
+      TextSpan(
+        children: _parseMarkdown(msg.content, baseStyle, boldStyle, cs),
+      ),
+      textDirection: TextDirection.rtl,
+    );
+  }
+
+  List<TextSpan> _parseMarkdown(
+      String text, TextStyle baseStyle, TextStyle boldStyle, ColorScheme cs) {
+    final List<TextSpan> spans = [];
+    final RegExp exp = RegExp(r'(\*\*[^*]+\*\*|_[^_]+_|`[^`]+`)');
+    int start = 0;
+
+    for (final match in exp.allMatches(text)) {
+      if (match.start > start) {
+        spans.add(TextSpan(text: text.substring(start, match.start), style: baseStyle));
+      }
+
+      final String matched = match.group(0)!;
+      if (matched.startsWith('**') && matched.endsWith('**')) {
+        spans.add(TextSpan(
+            text: matched.substring(2, matched.length - 2), style: boldStyle));
+      } else if (matched.startsWith('_') && matched.endsWith('_')) {
+        spans.add(TextSpan(
+            text: matched.substring(1, matched.length - 1),
+            style: baseStyle.copyWith(fontStyle: FontStyle.italic)));
+      } else if (matched.startsWith('`') && matched.endsWith('`')) {
+        spans.add(TextSpan(
+            text: matched.substring(1, matched.length - 1),
+            style: baseStyle.copyWith(
+                fontFamily: 'monospace',
+                backgroundColor: cs.onSurface.withValues(alpha: 0.05),
+                color: cs.primary)));
+      }
+      start = match.end;
+    }
+
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start), style: baseStyle));
+    }
+
+    return spans;
   }
 
   String _sourceLabel(String s) => switch (s) {

@@ -434,10 +434,12 @@ class OfflineManager {
 
   // ===== DRAFTS =====
 
-  Future<void> saveDraft(String formId, Map<String, dynamic> data) async {
+  /// Save a draft using a unique [draftId]. Also stores the [formId] so we can identify which form it belongs to.
+  Future<void> saveDraft(String draftId, String formId, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
       final drafts = _getDrafts();
-      drafts[formId] = {
+      drafts[draftId] = {
+        'form_id': formId,
         'data': data,
         'saved_at': DateTime.now().toIso8601String(),
       };
@@ -457,19 +459,34 @@ class OfflineManager {
     }
   }
 
-  Map<String, dynamic>? getDraft(String formId) {
+  Map<String, dynamic>? getDraft(String draftId) {
     final drafts = _getDrafts();
-    return drafts[formId];
+    return drafts[draftId];
   }
 
+  /// Returns all saved drafts, supporting legacy drafts which used formId as the key.
+  List<Map<String, dynamic>> getAllDrafts() {
+    final drafts = _getDrafts();
+    return drafts.entries.map((e) {
+      final v = e.value as Map<String, dynamic>? ?? {};
+      return {
+        'draft_id': e.key,
+        'form_id': v['form_id'] ?? e.key, // Legacy fallback
+        'data': v['data'],
+        'saved_at': v['saved_at'],
+      };
+    }).toList();
+  }
+
+  /// Deprecated, use getAllDrafts instead.
   Set<String> getDraftFormIds() {
     return _getDrafts().keys.toSet();
   }
 
-  Future<void> removeDraft(String formId) async {
+  Future<void> removeDraft(String draftId) async {
     return _withWriteLock(() async {
       final drafts = _getDrafts();
-      drafts.remove(formId);
+      drafts.remove(draftId);
       final encrypted = _encryption.encrypt(jsonEncode(drafts));
       await _safeBox.put(_draftsKey, encrypted);
     });

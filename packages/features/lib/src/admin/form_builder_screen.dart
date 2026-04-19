@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Available form field types for the dynamic form builder
 enum FormFieldType {
@@ -679,7 +680,7 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
     );
   }
 
-  void _saveForm() {
+  Future<void> _saveForm() async {
     if (_formName.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -687,25 +688,51 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
       return;
     }
 
-    final template = FormTemplate(
-      id: widget.existingForm?.id ??
-          DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _formName,
-      description: _formDescription,
-      fields: _fields,
-    );
+    final formId = widget.existingForm?.id;
 
-    // ═══ Save form to Supabase ═══
-    // Note: Full Supabase integration pending. Currently saves locally for preview.
-    if (kDebugMode) print('Saving form: ${template.toJson()}');
+    final schema = {
+      'fields': _fields.map((f) => f.toJson()).toList(),
+    };
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'تم حفظ الاستمارة (معاينة) — راجع تطبيق الموبايل للحفظ النهائي',
-        ),
-      ),
-    );
+    try {
+      final client = Supabase.instance.client;
+      if (formId != null) {
+        await client.from('forms').update({
+          'name_ar': _formName,
+          'name_en': _formName,
+          'description_ar': _formDescription,
+          'schema': schema,
+          'updated_at': DateTime.now().toIso8601String()
+        }).eq('id', formId);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم حفظ وتحديث الاستمارة في قاعدة البيانات بنجاح ✅'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(
+               content: Text('الرجاء إنشاء النموذج الأساسي أولاً من الشاشة السابقة.'),
+               backgroundColor: Colors.orange,
+             ),
+           );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ أثناء الحفظ: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 

@@ -86,6 +86,7 @@ class _ReferencesManagementScreenState
         'is_active': true,
         'created_by': user?.id,
       });
+      await Future.delayed(const Duration(milliseconds: 500));
       _loadReferences();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -137,6 +138,7 @@ class _ReferencesManagementScreenState
         'category': result['category'],
         'file_url': result['file_url'],
       }).eq('id', ref['id']);
+      await Future.delayed(const Duration(milliseconds: 500));
       _loadReferences();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -220,6 +222,7 @@ class _ReferencesManagementScreenState
         'deleted_at': DateTime.now().toIso8601String(),
         'is_active': false,
       }).eq('id', ref['id']);
+      await Future.delayed(const Duration(milliseconds: 500));
       _loadReferences();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

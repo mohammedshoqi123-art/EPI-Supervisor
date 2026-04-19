@@ -91,7 +91,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'fill/:formId',
                 builder: (context, state) =>
-                    FormFillScreen(formId: state.pathParameters['formId']!),
+                    FormFillScreen(
+                      formId: state.pathParameters['formId']!,
+                      draftId: state.uri.queryParameters['draftId'],
+                    ),
               ),
               GoRoute(
                 path: 'status',

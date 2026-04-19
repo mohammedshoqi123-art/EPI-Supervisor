@@ -520,7 +520,7 @@ class _ReferencesManagementScreenState
       text: ref?['title_ar'] ?? ref?['title'] ?? '',
     );
     final descController = TextEditingController(
-      text: ref?['description'] ?? '',
+      text: ref?['description_ar'] ?? ref?['description'] ?? '',
     );
     final authorController = TextEditingController(text: ref?['author'] ?? '');
     final urlController = TextEditingController(text: ref?['file_url'] ?? '');
@@ -667,8 +667,10 @@ class _ReferencesManagementScreenState
       final data = {
         'title_ar': title,
         'title': title,
+        'title_en': title, // Fallback
         'category': category,
         'description': description.isNotEmpty ? description : null,
+        'description_ar': description.isNotEmpty ? description : null,
         'author': author.isNotEmpty ? author : null,
         'file_url': url.isNotEmpty ? url : null,
         'is_active': isActive,

@@ -13,7 +13,8 @@ import 'form_field_builders.dart';
 
 class FormFillScreen extends ConsumerStatefulWidget {
   final String formId;
-  const FormFillScreen({super.key, required this.formId});
+  final String? draftId;
+  const FormFillScreen({super.key, required this.formId, this.draftId});
 
   @override
   ConsumerState<FormFillScreen> createState() => _FormFillScreenState();
@@ -40,9 +41,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   // Auto-save timer
   Timer? _autoSaveTimer;
 
+  late String _draftId;
+
   @override
   void initState() {
     super.initState();
+    _draftId = widget.draftId ?? const Uuid().v4();
     _loadForm();
     // ═══ FIX: Auto-save every 60s instead of 30s — reduces Hive encryption overhead ═══
     // PBKDF2 encryption is expensive; 60s still protects against data loss
@@ -115,7 +119,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           );
         },
       );
-      final draft = offline.getDraft(widget.formId);
+      final draft = offline.getDraft(_draftId);
       if (draft != null && draft['data'] != null) {
         final draftData = Map<String, dynamic>.from(draft['data']);
         setState(() {
@@ -401,6 +405,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
       await offline.addToSyncQueue(submissionData);
       await offline.saveDraft(
+        _draftId,
         widget.formId,
         Map<String, dynamic>.from(_formData),
       );
@@ -416,7 +421,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
             }
             if (result.synced > 0) {
               try {
-                await offline.removeDraft(widget.formId);
+                await offline.removeDraft(_draftId);
               } catch (_) {}
             }
           } catch (e) {
@@ -461,6 +466,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         },
       );
       await offline.saveDraft(
+        _draftId,
         widget.formId,
         Map<String, dynamic>.from(_formData),
       );
@@ -495,6 +501,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         },
       );
       await offline.saveDraft(
+        _draftId,
         widget.formId,
         Map<String, dynamic>.from(_formData),
       );

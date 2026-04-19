@@ -110,8 +110,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
         final campaign = ref.read(campaignProvider);
-        await cache.invalidate('forms_${campaign.value}');
-        await cache.invalidate('forms_all');
+        await cache.forceInvalidate('forms_${campaign.value}');
+        await cache.forceInvalidate('forms_all');
+        await cache.forceInvalidate('forms');
       } catch (_) {}
       ref.invalidate(formsProvider);
 
@@ -179,8 +180,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
         final campaign = ref.read(campaignProvider);
-        await cache.invalidate('forms_${campaign.value}');
-        await cache.invalidate('forms_all');
+        await cache.forceInvalidate('forms_${campaign.value}');
+        await cache.forceInvalidate('forms_all');
+        await cache.forceInvalidate('forms');
       } catch (_) {}
       ref.invalidate(formsProvider);
 

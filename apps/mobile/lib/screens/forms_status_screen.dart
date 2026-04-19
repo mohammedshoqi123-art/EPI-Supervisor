@@ -346,13 +346,12 @@ class _DraftsTab extends ConsumerWidget {
             itemBuilder: (context, index) {
               final draft = drafts[index];
               return _DraftTile(
-                formId: draft['form_id'] as String,
                 formTitle: draft['form_title'] as String? ?? 'نموذج',
                 savedAt: draft['saved_at'] as String?,
                 fieldCount: draft['field_count'] as int? ?? 0,
-                onContinue: () => context.go('/forms/fill/${draft['form_id']}'),
+                onContinue: () => context.go('/forms/fill/${draft['form_id']}?draftId=${draft['draft_id']}'),
                 onDelete: () =>
-                    _deleteDraft(context, ref, draft['form_id'] as String),
+                    _deleteDraft(context, ref, draft['draft_id'] as String),
               );
             },
           ),
@@ -369,8 +368,8 @@ class _DraftsTab extends ConsumerWidget {
             onTimeout: () => throw Exception('timeout'),
           );
 
-      // Get draft IDs from local storage
-      final draftIds = offline.getDraftFormIds();
+      // Get all drafts from local storage
+      final offlineDrafts = offline.getAllDrafts();
       final drafts = <Map<String, dynamic>>[];
 
       // Try to get form titles from cache (no network call)
@@ -380,9 +379,9 @@ class _DraftsTab extends ConsumerWidget {
           );
       final cachedForms = cache.getCachedDataList('forms') ?? [];
 
-      for (final formId in draftIds) {
-        final draft = offline.getDraft(formId);
-        if (draft == null) continue;
+      for (final draft in offlineDrafts) {
+        final draftId = draft['draft_id'] as String;
+        final formId = draft['form_id'] as String;
 
         // Find title from cached forms
         String formTitle = 'نموذج';
@@ -394,6 +393,7 @@ class _DraftsTab extends ConsumerWidget {
         }
 
         drafts.add({
+          'draft_id': draftId,
           'form_id': formId,
           'form_title': formTitle,
           'saved_at': draft['saved_at'],
@@ -416,7 +416,7 @@ class _DraftsTab extends ConsumerWidget {
     }
   }
 
-  void _deleteDraft(BuildContext context, WidgetRef ref, String formId) async {
+  void _deleteDraft(BuildContext context, WidgetRef ref, String draftId) async {
     final confirm = await context.showConfirmDialog(
       title: 'حذف المسودة',
       message: 'هل أنت متأكد من حذف هذه المسودة؟ لا يمكن التراجع.',
@@ -426,7 +426,7 @@ class _DraftsTab extends ConsumerWidget {
     if (confirm == true) {
       try {
         final offline = await ref.read(offlineManagerProvider.future);
-        await offline.removeDraft(formId);
+        await offline.removeDraft(draftId);
         if (context.mounted) {
           context.showSuccess('تم حذف المسودة');
           (context as Element).markNeedsBuild();
@@ -676,7 +676,6 @@ class _SubmittedTab extends ConsumerWidget {
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _DraftTile extends StatelessWidget {
-  final String formId;
   final String formTitle;
   final String? savedAt;
   final int fieldCount;
@@ -684,7 +683,6 @@ class _DraftTile extends StatelessWidget {
   final VoidCallback onDelete;
 
   const _DraftTile({
-    required this.formId,
     required this.formTitle,
     this.savedAt,
     required this.fieldCount,

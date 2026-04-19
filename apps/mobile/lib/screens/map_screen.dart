@@ -3,8 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:epi_shared/epi_shared.dart';
-import 'package:epi_core/src/auth/auth_state.dart';
+import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
@@ -1178,7 +1177,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
         SubmissionsFilter(campaignType: ref.read(campaignProvider).value),
       ),
     );
-    final governoratesAsync = ref.watch(governoratesProvider);
 
     return submissionsAsync.when(
       loading: () => const MarkerLayer(markers: []),

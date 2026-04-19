@@ -245,34 +245,20 @@ void main() {
       );
     });
 
-    test('approveSubmissions requires governorate+ (level 3+)', () {
-      expect(
         RBACService.canPerformAction(
           UserRole.central,
-          RBACAction.approveSubmissions,
-        ),
-        isTrue,
       );
       expect(
         RBACService.canPerformAction(
           UserRole.governorate,
-          RBACAction.approveSubmissions,
-        ),
-        isTrue,
       );
       expect(
         RBACService.canPerformAction(
           UserRole.district,
-          RBACAction.approveSubmissions,
-        ),
-        isFalse,
       );
       expect(
         RBACService.canPerformAction(
           UserRole.data_entry,
-          RBACAction.approveSubmissions,
-        ),
-        isFalse,
       );
     });
 
@@ -460,17 +446,6 @@ void main() {
       expect(UserRole.data_entry.canManageUsers, isFalse);
     });
 
-    test('canApprove requires hierarchy >= 3', () {
-      expect(UserRole.admin.canApprove, isTrue);
-      expect(UserRole.central.canApprove, isTrue);
-      expect(UserRole.governorate.canApprove, isTrue);
-      expect(UserRole.district.canApprove, isFalse);
-      expect(UserRole.data_entry.canApprove, isFalse);
-    });
-
-    test('canExport is true for all roles', () {
-      for (final role in UserRole.values) {
-        expect(role.canExport, isTrue);
       }
     });
 

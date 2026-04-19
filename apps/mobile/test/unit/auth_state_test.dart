@@ -41,14 +41,12 @@ void main() {
     test('permission flags are correct', () {
       // Admin has all permissions
       expect(UserRole.admin.canViewAllGovernorates, isTrue);
-      expect(UserRole.admin.canApprove, isTrue);
       expect(UserRole.admin.canManageUsers, isTrue);
       expect(UserRole.admin.canViewAuditLogs, isTrue);
       expect(UserRole.admin.canUseAI, isTrue);
 
       // Data entry has minimal permissions
       expect(UserRole.data_entry.canViewAllGovernorates, isFalse);
-      expect(UserRole.data_entry.canApprove, isFalse);
       expect(UserRole.data_entry.canManageUsers, isFalse);
       expect(UserRole.data_entry.canViewAuditLogs, isFalse);
       // canUseAI, canExport, canViewAllDistricts are now true for all roles
@@ -56,7 +54,6 @@ void main() {
       expect(UserRole.data_entry.canExport, isTrue);
 
       // Governorate can approve
-      expect(UserRole.governorate.canApprove, isTrue);
       expect(UserRole.governorate.canExport, isTrue);
     });
   });

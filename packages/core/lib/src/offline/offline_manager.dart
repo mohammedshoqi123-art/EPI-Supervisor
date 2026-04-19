@@ -432,45 +432,162 @@ class OfflineManager {
     }
   }
 
-  // ===== DRAFTS =====
+  // ===== DRAFTS (Multi-draft per form) =====
 
-  Future<void> saveDraft(String formId, Map<String, dynamic> data) async {
+  /// Save a draft for a form. If [draftId] is provided, updates the existing
+  /// draft; otherwise creates a new one with a generated UUID.
+  /// Returns the draftId used.
+  Future<String> saveDraft(
+    String formId,
+    Map<String, dynamic> data, {
+    String? draftId,
+  }) async {
     return _withWriteLock(() async {
-      final drafts = _getDrafts();
-      drafts[formId] = {
-        'data': data,
-        'saved_at': DateTime.now().toIso8601String(),
-      };
-      final encrypted = _encryption.encrypt(jsonEncode(drafts));
+      final allDrafts = _getAllDraftsRaw();
+      final formDrafts =
+          (allDrafts[formId] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+      final now = DateTime.now().toIso8601String();
+      final id = draftId ?? _uuid.v4();
+
+      if (draftId != null) {
+        // Update existing draft
+        final idx = formDrafts.indexWhere((d) => d['draftId'] == draftId);
+        if (idx >= 0) {
+          formDrafts[idx] = {'draftId': id, 'data': data, 'saved_at': now};
+        } else {
+          // DraftId not found — create new entry
+          formDrafts.add({'draftId': id, 'data': data, 'saved_at': now});
+        }
+      } else {
+        // Create new draft
+        formDrafts.add({'draftId': id, 'data': data, 'saved_at': now});
+      }
+
+      allDrafts[formId] = formDrafts;
+      final encrypted = _encryption.encrypt(jsonEncode(allDrafts));
       await _safeBox.put(_draftsKey, encrypted);
+      return id;
     });
   }
 
-  Map<String, dynamic> _getDrafts() {
+  /// Raw storage reader — returns {formId: [{draftId, data, saved_at}, ...]}
+  Map<String, dynamic> _getAllDraftsRaw() {
     final data = _safeBox.get(_draftsKey);
     if (data == null || data.isEmpty) return {};
     try {
-      return Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
+      final decoded = jsonDecode(_encryption.decrypt(data));
+      // Migration: if old format (formId → {data, saved_at}), convert to list
+      if (decoded is Map<String, dynamic>) {
+        final result = <String, dynamic>{};
+        for (final entry in decoded.entries) {
+          if (entry.value is Map) {
+            // Old format — migrate to list
+            result[entry.key] = [
+              {
+                'draftId': _uuid.v4(),
+                'data': entry.value['data'],
+                'saved_at': entry.value['saved_at'],
+              }
+            ];
+          } else if (entry.value is List) {
+            // New format — keep as is
+            result[entry.key] = entry.value;
+          }
+        }
+        // If migration happened, save back
+        if (result.isNotEmpty &&
+            decoded.values.any((v) => v is Map)) {
+          final encrypted = _encryption.encrypt(jsonEncode(result));
+          _safeBox.put(_draftsKey, encrypted);
+        }
+        return result.isNotEmpty ? result : decoded;
+      }
+      return {};
     } catch (e) {
       if (kDebugMode) print('[OfflineManager] Drafts decrypt error: $e');
       return {};
     }
   }
 
-  Map<String, dynamic>? getDraft(String formId) {
-    final drafts = _getDrafts();
-    return drafts[formId];
+  /// Get a specific draft by formId and draftId.
+  Map<String, dynamic>? getDraft(String formId, String draftId) {
+    final allDrafts = _getAllDraftsRaw();
+    final formDrafts = allDrafts[formId];
+    if (formDrafts is! List) return null;
+    for (final d in formDrafts) {
+      if (d is Map && d['draftId'] == draftId) {
+        return Map<String, dynamic>.from(d);
+      }
+    }
+    return null;
   }
 
+  /// Get all drafts for a specific form.
+  List<Map<String, dynamic>> getDraftsForForm(String formId) {
+    final allDrafts = _getAllDraftsRaw();
+    final formDrafts = allDrafts[formId];
+    if (formDrafts is! List) return [];
+    return formDrafts
+        .whereType<Map>()
+        .map((d) => Map<String, dynamic>.from(d))
+        .toList();
+  }
+
+  /// Get ALL drafts across all forms as a flat list with formId attached.
+  List<Map<String, dynamic>> getAllDrafts() {
+    final allDrafts = _getAllDraftsRaw();
+    final result = <Map<String, dynamic>>[];
+    for (final entry in allDrafts.entries) {
+      final formId = entry.key;
+      final drafts = entry.value;
+      if (drafts is List) {
+        for (final d in drafts) {
+          if (d is Map) {
+            final draft = Map<String, dynamic>.from(d);
+            draft['form_id'] = formId;
+            result.add(draft);
+          }
+        }
+      }
+    }
+    // Sort by saved_at descending
+    result.sort((a, b) {
+      final aDate = DateTime.tryParse(a['saved_at'] ?? '') ?? DateTime(2000);
+      final bDate = DateTime.tryParse(b['saved_at'] ?? '') ?? DateTime(2000);
+      return bDate.compareTo(aDate);
+    });
+    return result;
+  }
+
+  /// Get set of form IDs that have at least one draft.
   Set<String> getDraftFormIds() {
-    return _getDrafts().keys.toSet();
+    return _getAllDraftsRaw().keys.toSet();
   }
 
-  Future<void> removeDraft(String formId) async {
+  /// Remove a specific draft by formId and draftId.
+  Future<void> removeDraft(String formId, String draftId) async {
     return _withWriteLock(() async {
-      final drafts = _getDrafts();
-      drafts.remove(formId);
-      final encrypted = _encryption.encrypt(jsonEncode(drafts));
+      final allDrafts = _getAllDraftsRaw();
+      final formDrafts =
+          (allDrafts[formId] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      formDrafts.removeWhere((d) => d['draftId'] == draftId);
+      if (formDrafts.isEmpty) {
+        allDrafts.remove(formId);
+      } else {
+        allDrafts[formId] = formDrafts;
+      }
+      final encrypted = _encryption.encrypt(jsonEncode(allDrafts));
+      await _safeBox.put(_draftsKey, encrypted);
+    });
+  }
+
+  /// Remove ALL drafts for a form (used after successful submission).
+  Future<void> removeAllDraftsForForm(String formId) async {
+    return _withWriteLock(() async {
+      final allDrafts = _getAllDraftsRaw();
+      allDrafts.remove(formId);
+      final encrypted = _encryption.encrypt(jsonEncode(allDrafts));
       await _safeBox.put(_draftsKey, encrypted);
     });
   }

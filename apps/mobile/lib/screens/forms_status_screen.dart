@@ -190,9 +190,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
           );
       pending = offline.pendingCount;
 
-      // Drafts from local storage
-      final draftIds = offline.getDraftFormIds();
-      drafts = draftIds.length;
+      // Drafts from local storage — count ALL drafts, not just unique forms
+      final allDrafts = offline.getAllDrafts();
+      drafts = allDrafts.length;
 
       // Submitted count from analytics (same source as dashboard)
       try {
@@ -352,7 +352,7 @@ class _DraftsTab extends ConsumerWidget {
                 fieldCount: draft['field_count'] as int? ?? 0,
                 onContinue: () => context.go('/forms/fill/${draft['form_id']}'),
                 onDelete: () =>
-                    _deleteDraft(context, ref, draft['form_id'] as String),
+                    _deleteDraft(context, ref, draft['form_id'] as String, draft['draftId'] as String),
               );
             },
           ),
@@ -361,7 +361,7 @@ class _DraftsTab extends ConsumerWidget {
     );
   }
 
-  /// FIX: Load drafts from local storage only — no Supabase calls.
+  /// Load ALL drafts from local storage (multi-draft per form).
   Future<List<Map<String, dynamic>>> _loadDrafts(WidgetRef ref) async {
     try {
       final offline = await ref.read(offlineManagerProvider.future).timeout(
@@ -369,9 +369,8 @@ class _DraftsTab extends ConsumerWidget {
             onTimeout: () => throw Exception('timeout'),
           );
 
-      // Get draft IDs from local storage
-      final draftIds = offline.getDraftFormIds();
-      final drafts = <Map<String, dynamic>>[];
+      // Get all drafts across all forms
+      final allDrafts = offline.getAllDrafts();
 
       // Try to get form titles from cache (no network call)
       final cache = await ref.read(offlineDataCacheProvider.future).timeout(
@@ -380,11 +379,9 @@ class _DraftsTab extends ConsumerWidget {
           );
       final cachedForms = cache.getCachedDataList('forms') ?? [];
 
-      for (final formId in draftIds) {
-        final draft = offline.getDraft(formId);
-        if (draft == null) continue;
-
-        // Find title from cached forms
+      // Enrich with form titles
+      for (final draft in allDrafts) {
+        final formId = draft['form_id'] as String;
         String formTitle = 'نموذج';
         for (final f in cachedForms) {
           if (f['id'] == formId) {
@@ -392,31 +389,19 @@ class _DraftsTab extends ConsumerWidget {
             break;
           }
         }
-
-        drafts.add({
-          'form_id': formId,
-          'form_title': formTitle,
-          'saved_at': draft['saved_at'],
-          'field_count': (draft['data'] as Map?)?.length ?? 0,
-          'data': draft['data'],
-        });
+        draft['form_title'] = formTitle;
+        draft['field_count'] = (draft['data'] as Map?)?.length ?? 0;
       }
 
-      // Sort by saved_at descending
-      drafts.sort((a, b) {
-        final aDate = DateTime.tryParse(a['saved_at'] ?? '') ?? DateTime(2000);
-        final bDate = DateTime.tryParse(b['saved_at'] ?? '') ?? DateTime(2000);
-        return bDate.compareTo(aDate);
-      });
-
-      return drafts;
+      // Already sorted by saved_at descending from getAllDrafts()
+      return allDrafts;
     } catch (e) {
       debugPrint('[DraftsTab] Load error: $e');
       return [];
     }
   }
 
-  void _deleteDraft(BuildContext context, WidgetRef ref, String formId) async {
+  void _deleteDraft(BuildContext context, WidgetRef ref, String formId, String draftId) async {
     final confirm = await context.showConfirmDialog(
       title: 'حذف المسودة',
       message: 'هل أنت متأكد من حذف هذه المسودة؟ لا يمكن التراجع.',
@@ -426,7 +411,7 @@ class _DraftsTab extends ConsumerWidget {
     if (confirm == true) {
       try {
         final offline = await ref.read(offlineManagerProvider.future);
-        await offline.removeDraft(formId);
+        await offline.removeDraft(formId, draftId);
         if (context.mounted) {
           context.showSuccess('تم حذف المسودة');
           (context as Element).markNeedsBuild();

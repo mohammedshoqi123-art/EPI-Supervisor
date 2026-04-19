@@ -28,6 +28,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   bool _isGettingLocation = false;
   bool _hasUnsavedChanges = false;
   Map<String, dynamic>? _formSchema;
+  String? _currentDraftId; // Active draft ID for multi-draft support
 
   // Support both formats: sections (new) and flat fields (old)
   List<dynamic> _sections = [];
@@ -115,49 +116,248 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           );
         },
       );
-      final draft = offline.getDraft(widget.formId);
-      if (draft != null && draft['data'] != null) {
-        final draftData = Map<String, dynamic>.from(draft['data']);
-        setState(() {
-          _formData.addAll(draftData);
-          _hasUnsavedChanges = false;
-        });
-        for (final entry in draftData.entries) {
-          if (_textControllers.containsKey(entry.key)) {
-            _textControllers[entry.key]!.text = entry.value?.toString() ?? '';
-          }
-        }
 
-        // ═══ FIX: Restore GPS coordinates from draft data ═══
-        // GPS fields store "lat, lng" as a string in _formData
-        // We must restore _gpsLat/_gpsLng so the UI shows "تم تحديد الموقع ✓"
-        for (final field in _allFields) {
-          if (field['type'] == 'gps') {
-            final key = field['key'] as String;
-            final gpsStr = _formData[key] as String?;
-            if (gpsStr != null && gpsStr.contains(',')) {
-              final parts = gpsStr.split(',').map((s) => s.trim()).toList();
-              if (parts.length == 2) {
-                final lat = double.tryParse(parts[0]);
-                final lng = double.tryParse(parts[1]);
-                if (lat != null && lng != null) {
-                  _gpsLat = lat;
-                  _gpsLng = lng;
-                }
-              }
-            }
-          }
-        }
+      // Get all drafts for this form
+      final formDrafts = offline.getDraftsForForm(widget.formId);
 
-        if (mounted) {
-          context.showInfo('تم استعادة المسودة السابقة');
-        }
+      if (formDrafts.isEmpty) {
+        // No drafts — start fresh
+        return;
+      }
+
+      if (formDrafts.length == 1) {
+        // Single draft — load directly
+        _applyDraft(formDrafts.first);
+        return;
+      }
+
+      // Multiple drafts — show picker dialog
+      if (!mounted) return;
+      final selected = await _showDraftPickerDialog(formDrafts);
+      if (selected != null) {
+        _applyDraft(selected);
       }
     } on TimeoutException {
       // Non-critical
     } catch (_) {
       // Non-critical
     }
+  }
+
+  /// Apply a draft's data to the form fields.
+  void _applyDraft(Map<String, dynamic> draft) {
+    final draftData = Map<String, dynamic>.from(draft['data'] ?? {});
+    _currentDraftId = draft['draftId'] as String?;
+
+    setState(() {
+      _formData.addAll(draftData);
+      _hasUnsavedChanges = false;
+    });
+
+    for (final entry in draftData.entries) {
+      if (_textControllers.containsKey(entry.key)) {
+        _textControllers[entry.key]!.text = entry.value?.toString() ?? '';
+      }
+    }
+
+    // Restore GPS coordinates from draft data
+    for (final field in _allFields) {
+      if (field['type'] == 'gps') {
+        final key = field['key'] as String;
+        final gpsStr = _formData[key] as String?;
+        if (gpsStr != null && gpsStr.contains(',')) {
+          final parts = gpsStr.split(',').map((s) => s.trim()).toList();
+          if (parts.length == 2) {
+            final lat = double.tryParse(parts[0]);
+            final lng = double.tryParse(parts[1]);
+            if (lat != null && lng != null) {
+              _gpsLat = lat;
+              _gpsLng = lng;
+            }
+          }
+        }
+      }
+    }
+
+    if (mounted) {
+      context.showInfo('تم استعادة المسودة السابقة');
+    }
+  }
+
+  /// Show dialog to pick from multiple drafts.
+  Future<Map<String, dynamic>?> _showDraftPickerDialog(
+    List<Map<String, dynamic>> drafts,
+  ) async {
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.6,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'اختر مسودة للاستمرار',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'يوجد ${drafts.length} مسودات محفوظة لهذا النموذج',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: drafts.length + 1, // +1 for "start fresh" option
+                  itemBuilder: (ctx, index) {
+                    if (index == drafts.length) {
+                      // "Start fresh" option
+                      return ListTile(
+                        leading: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.add_rounded,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        title: const Text(
+                          'بدء مسودة جديدة',
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'بدون استعادة بيانات سابقة',
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                        onTap: () => Navigator.pop(ctx),
+                      );
+                    }
+
+                    final draft = drafts[index];
+                    final savedAt = draft['saved_at'] as String? ?? '';
+                    final fieldCount =
+                        (draft['data'] as Map?)?.length ?? 0;
+                    final timeAgo = _formatTimeAgo(savedAt);
+
+                    return ListTile(
+                      leading: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFB8C00), Color(0xFFF57C00)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.edit_note,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      title: Text(
+                        'مسودة ${index + 1}',
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '$fieldCount حقول — $timeAgo',
+                        style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                      trailing: IconButton(
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: Colors.red.shade400,
+                          size: 20,
+                        ),
+                        onPressed: () async {
+                          final offline = await ref
+                              .read(offlineManagerProvider.future);
+                          await offline.removeDraft(
+                            widget.formId,
+                            draft['draftId'] as String,
+                          );
+                          drafts.removeAt(index);
+                          if (drafts.isEmpty) {
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          } else {
+                            (ctx as Element).markNeedsBuild();
+                          }
+                        },
+                      ),
+                      onTap: () => Navigator.pop(ctx, draft),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Format a timestamp as relative time (e.g. "منذ 5 دقائق").
+  String _formatTimeAgo(String isoTime) {
+    final date = DateTime.tryParse(isoTime);
+    if (date == null) return '';
+    final diff = DateTime.now().difference(date);
+    if (diff.inMinutes < 1) return 'الآن';
+    if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
+    if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
+    return 'منذ ${diff.inDays} يوم';
   }
 
   /// Auto-fill form fields from the authenticated user's profile.
@@ -417,7 +617,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
             }
             if (result.synced > 0) {
               try {
-                await offline.removeDraft(widget.formId);
+                await offline.removeAllDraftsForForm(widget.formId);
               } catch (_) {}
             }
           } catch (e) {
@@ -461,10 +661,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           throw TimeoutException('Offline storage not ready');
         },
       );
-      await offline.saveDraft(
+      final savedId = await offline.saveDraft(
         widget.formId,
         Map<String, dynamic>.from(_formData),
+        draftId: _currentDraftId,
       );
+      _currentDraftId ??= savedId; // Store ID for subsequent saves
       _hasUnsavedChanges = false;
       if (mounted) context.showSuccess(AppStrings.draftSaved);
     } on TimeoutException {
@@ -495,10 +697,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           throw TimeoutException('Offline storage not ready for auto-save');
         },
       );
-      await offline.saveDraft(
+      final savedId = await offline.saveDraft(
         widget.formId,
         Map<String, dynamic>.from(_formData),
+        draftId: _currentDraftId,
       );
+      _currentDraftId ??= savedId;
       _hasUnsavedChanges = false;
       if (showFeedback && mounted) {
         context.showSuccess('تم الحفظ التلقائي');

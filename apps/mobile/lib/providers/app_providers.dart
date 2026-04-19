@@ -300,18 +300,25 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
       // Save to Supabase
       final db = _ref.read(databaseServiceProvider);
       await db.setActiveCampaign(campaign.value);
-      // Invalidate ALL campaign-dependent caches
-      final cache = await _ref.read(offlineDataCacheProvider.future);
-      for (final c in CampaignType.values) {
-        await cache.invalidate('forms_${c.value}');
-      }
+
+      // ═══ FIX: DO NOT invalidate the persistent cache here! ═══
+      // Calling cache.invalidate() deletes the Hive entries for forms, 
+      // preventing offline access to the "other" campaign type.
+      // Instead, we only invalidate the Riverpod providers themselves. 
+      // This clears the app's memory but preserves the disk cache (Hive).
+
       // Invalidate all providers that depend on campaign
       _ref.invalidate(formsProvider);
       _ref.invalidate(dashboardAnalyticsProvider);
       _ref.invalidate(submissionTrendProvider);
       _ref.invalidate(governorateRankingProvider);
       _ref.invalidate(shortagesProvider);
+      
+      if (kDebugMode) {
+        print('[CampaignNotifier] Campaign changed to ${campaign.value} - Providers invalidated');
+      }
     } catch (e) {
+
       debugPrint('[CampaignNotifier] Save failed: $e');
     }
   }

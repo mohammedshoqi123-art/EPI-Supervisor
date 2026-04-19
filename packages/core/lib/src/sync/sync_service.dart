@@ -333,6 +333,13 @@ class SyncService {
             );
         }
       }
+
+      // ═══ FIX: Warm up forms cache for all campaign types ═══
+      // Ensures both 'polio_campaign' and 'integrated_activity' forms 
+      // are cached locally whenever we are online.
+      if (_offline.isOnline) {
+        await _warmUpFormsCache();
+      }
     } catch (e) {
       if (kDebugMode) print('[SyncService] Cycle error: $e');
       result.errors.add(SyncError(error: e.toString()));
@@ -368,6 +375,29 @@ class SyncService {
     }
 
     return result;
+  }
+
+  /// ═══ Warm up forms cache for all campaign types ═══
+  Future<void> _warmUpFormsCache() async {
+    final cache = _dataCache;
+    if (cache == null) return;
+
+    try {
+      const types = ['polio_campaign', 'integrated_activity'];
+      for (final type in types) {
+        // Fetch and cache each type
+        await cache.getList(
+          'forms_$type',
+          () => _api.callFunction(SupabaseConfig.fnGetForms, {'campaign_type': type}).then(
+            (resp) => List<Map<String, dynamic>>.from(resp['forms'] ?? []),
+          ),
+          maxAge: const Duration(hours: 12), // Refresh every 12h if online
+        );
+      }
+      if (kDebugMode) print('[SyncService] Forms cache warmed up for all campaign types');
+    } catch (e) {
+      if (kDebugMode) print('[SyncService] Warm-up failed: $e');
+    }
   }
 
   /// ═══ Backoff أسي: 10s → 20s → 40s → 80s → 160s ═══

@@ -26,7 +26,7 @@ class NotFoundException extends AppException {
 
 class UnauthorizedException extends AppException {
   const UnauthorizedException([super.message = 'Unauthorized'])
-      : super(code: '401');
+    : super(code: '401');
 }
 
 class ForbiddenException extends AppException {
@@ -39,17 +39,17 @@ class ConflictException extends AppException {
 
 class FileStorageException extends AppException {
   FileStorageException([String message = 'فشل في رفع أو تحميل الملف'])
-      : super(message, code: 'storage_error');
+    : super(message, code: 'storage_error');
 }
 
 class ServerException extends AppException {
   const ServerException([super.message = 'Internal server error'])
-      : super(code: '500');
+    : super(code: '500');
 }
 
 class NetworkException extends AppException {
   const NetworkException([super.message = 'No internet connection'])
-      : super(code: 'NETWORK');
+    : super(code: 'NETWORK');
 }
 
 // ─── Auth Exceptions ───────────────────────────────────────────────────────
@@ -59,12 +59,12 @@ class AuthException extends AppException {
 
 class InvalidCredentialsException extends AuthException {
   const InvalidCredentialsException()
-      : super('Invalid email or password', code: 'INVALID_CREDENTIALS');
+    : super('Invalid email or password', code: 'INVALID_CREDENTIALS');
 }
 
 class SessionExpiredException extends AuthException {
   const SessionExpiredException()
-      : super('Session expired, please login again', code: 'SESSION_EXPIRED');
+    : super('Session expired, please login again', code: 'SESSION_EXPIRED');
 }
 
 // ─── Permission Exceptions ─────────────────────────────────────────────────
@@ -75,7 +75,7 @@ class PermissionException extends AppException {
 // ─── Offline/Sync Exceptions ───────────────────────────────────────────────
 class OfflineException extends AppException {
   const OfflineException([super.message = 'Device is offline'])
-      : super(code: 'OFFLINE');
+    : super(code: 'OFFLINE');
 }
 
 class SyncException extends AppException {
@@ -84,7 +84,7 @@ class SyncException extends AppException {
 
 class ConflictResolutionException extends SyncException {
   const ConflictResolutionException(super.message)
-      : super(code: 'SYNC_CONFLICT');
+    : super(code: 'SYNC_CONFLICT');
 }
 
 // ─── Storage Exceptions ────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ class ValidationException extends AppException {
   final Map<String, String>? fieldErrors;
 
   const ValidationException(super.message, {this.fieldErrors})
-      : super(code: 'VALIDATION_ERROR');
+    : super(code: 'VALIDATION_ERROR');
 }
 
 // ─── AI Exceptions ────────────────────────────────────────────────────────

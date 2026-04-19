@@ -21,93 +21,95 @@ final productionSyncQueueProvider = FutureProvider<ProductionSyncQueue>((
 /// The intelligent offline manager — the single entry point for all offline operations.
 final intelligentOfflineManagerProvider =
     FutureProvider<IntelligentOfflineManager>((ref) async {
-  final queue = await ref.watch(productionSyncQueueProvider.future);
-  final connectivity = Connectivity();
+      final queue = await ref.watch(productionSyncQueueProvider.future);
+      final connectivity = Connectivity();
 
-  final manager = IntelligentOfflineManager(
-    queue,
-    connectivity,
-    defaultConflictStrategy: ConflictStrategy.smartMerge,
-  );
-
-  // Wire up the server submission callback
-  final api = ref.read(apiClientProvider);
-  manager.onSubmitBatch = (items) async {
-    try {
-      final response = await api.callFunction(
-        SupabaseConfig.fnSyncOffline,
-        {
-          'items': items
-              .map(
-                (item) => {
-                  ...item.payload,
-                  'offline_id': item.id,
-                  'entity_type': item.type,
-                },
-              )
-              .toList(),
-        },
+      final manager = IntelligentOfflineManager(
+        queue,
+        connectivity,
+        defaultConflictStrategy: ConflictStrategy.smartMerge,
       );
 
-      final results = (response['results'] as List?) ?? [];
-      final serverErrors = (response['errors'] as List?) ?? [];
+      // Wire up the server submission callback
+      final api = ref.read(apiClientProvider);
+      manager.onSubmitBatch = (items) async {
+        try {
+          final response = await api.callFunction(
+            SupabaseConfig.fnSyncOffline,
+            {
+              'items': items
+                  .map(
+                    (item) => {
+                      ...item.payload,
+                      'offline_id': item.id,
+                      'entity_type': item.type,
+                    },
+                  )
+                  .toList(),
+            },
+          );
 
-      final itemResults = <SyncItemResult>[];
-      for (int i = 0; i < items.length; i++) {
-        final item = items[i];
+          final results = (response['results'] as List?) ?? [];
+          final serverErrors = (response['errors'] as List?) ?? [];
 
-        // Find matching result by offline_id
-        final match = results.cast<Map<String, dynamic>>().firstWhere(
+          final itemResults = <SyncItemResult>[];
+          for (int i = 0; i < items.length; i++) {
+            final item = items[i];
+
+            // Find matching result by offline_id
+            final match = results.cast<Map<String, dynamic>>().firstWhere(
               (r) => r['offline_id'] == item.id,
               orElse: () => <String, dynamic>{},
             );
 
-        if (match.isNotEmpty) {
-          final status = match['status'] as String? ?? 'error';
-          switch (status) {
-            case 'synced':
-              itemResults.add(SyncItemResult.ok(item.id, match));
-            case 'duplicate':
-              itemResults.add(SyncItemResult.duplicate(item.id, match));
-            case 'conflict':
+            if (match.isNotEmpty) {
+              final status = match['status'] as String? ?? 'error';
+              switch (status) {
+                case 'synced':
+                  itemResults.add(SyncItemResult.ok(item.id, match));
+                case 'duplicate':
+                  itemResults.add(SyncItemResult.duplicate(item.id, match));
+                case 'conflict':
+                  itemResults.add(
+                    SyncItemResult.conflict(
+                      item.id,
+                      Map<String, dynamic>.from(match['server_data'] ?? {}),
+                    ),
+                  );
+                default:
+                  itemResults.add(
+                    SyncItemResult.error(item.id, match['error'] ?? 'Unknown'),
+                  );
+              }
+            } else {
+              // Check if there's an error for this item
+              final errMatch = serverErrors
+                  .cast<Map<String, dynamic>>()
+                  .firstWhere(
+                    (e) => e['offline_id'] == item.id,
+                    orElse: () => <String, dynamic>{},
+                  );
               itemResults.add(
-                SyncItemResult.conflict(
+                SyncItemResult.error(
                   item.id,
-                  Map<String, dynamic>.from(match['server_data'] ?? {}),
+                  errMatch['error'] ?? 'No response for item',
                 ),
               );
-            default:
-              itemResults.add(
-                SyncItemResult.error(item.id, match['error'] ?? 'Unknown'),
-              );
+            }
           }
-        } else {
-          // Check if there's an error for this item
-          final errMatch = serverErrors.cast<Map<String, dynamic>>().firstWhere(
-                (e) => e['offline_id'] == item.id,
-                orElse: () => <String, dynamic>{},
-              );
-          itemResults.add(
-            SyncItemResult.error(
-              item.id,
-              errMatch['error'] ?? 'No response for item',
-            ),
-          );
+          return itemResults;
+        } catch (e) {
+          // Batch-level failure: return error for all items
+          return items
+              .map((item) => SyncItemResult.error(item.id, e.toString()))
+              .toList();
         }
-      }
-      return itemResults;
-    } catch (e) {
-      // Batch-level failure: return error for all items
-      return items
-          .map((item) => SyncItemResult.error(item.id, e.toString()))
-          .toList();
-    }
-  };
+      };
 
-  await manager.init();
-  ref.onDispose(manager.dispose);
-  return manager;
-});
+      await manager.init();
+      ref.onDispose(manager.dispose);
+      return manager;
+    });
 
 /// Stream provider for reactive UI updates on network state.
 final networkSnapshotProvider = StreamProvider<NetworkSnapshot>((ref) async* {

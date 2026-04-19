@@ -266,12 +266,15 @@ class ProductionSyncQueue {
 
   QueueCounts getCounts() {
     final entries = _getAllEntries();
-    final pending =
-        entries.where((e) => e.status == QueueItemStatus.pending).length;
-    final retrying =
-        entries.where((e) => e.status == QueueItemStatus.retrying).length;
-    final syncing =
-        entries.where((e) => e.status == QueueItemStatus.syncing).length;
+    final pending = entries
+        .where((e) => e.status == QueueItemStatus.pending)
+        .length;
+    final retrying = entries
+        .where((e) => e.status == QueueItemStatus.retrying)
+        .length;
+    final syncing = entries
+        .where((e) => e.status == QueueItemStatus.syncing)
+        .length;
     final failed = getFailedItems().length;
 
     return QueueCounts(

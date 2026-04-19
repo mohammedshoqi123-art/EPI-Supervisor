@@ -30,16 +30,19 @@ class LocalRepository {
 
   Future<List<Map<String, dynamic>>> getForms({bool activeOnly = true}) async {
     final box = Hive.box<String>(_formsBox);
-    return box.values.map((v) {
-      try {
-        return Map<String, dynamic>.from(jsonDecode(_enc.decrypt(v)));
-      } catch (_) {
-        return <String, dynamic>{};
-      }
-    }).where((f) {
-      if (f.isEmpty) return false;
-      return !activeOnly || f['is_active'] == true;
-    }).toList();
+    return box.values
+        .map((v) {
+          try {
+            return Map<String, dynamic>.from(jsonDecode(_enc.decrypt(v)));
+          } catch (_) {
+            return <String, dynamic>{};
+          }
+        })
+        .where((f) {
+          if (f.isEmpty) return false;
+          return !activeOnly || f['is_active'] == true;
+        })
+        .toList();
   }
 
   // ─── Submissions ──────────────────────────────────────────────────────────
@@ -68,8 +71,7 @@ class LocalRepository {
 
   /// Compute analytics entirely on-device, no server needed.
   Map<String, dynamic> computeLocalAnalytics() {
-    final subs = Hive.box<String>(_subsBox)
-        .values
+    final subs = Hive.box<String>(_subsBox).values
         .map((v) {
           try {
             return Map<String, dynamic>.from(jsonDecode(_enc.decrypt(v)));
@@ -91,8 +93,9 @@ class LocalRepository {
     return {
       'submissions': {
         'total': subs.length,
-        'today':
-            subs.where((s) => (s['created_at'] ?? '').startsWith(today)).length,
+        'today': subs
+            .where((s) => (s['created_at'] ?? '').startsWith(today))
+            .length,
         'byStatus': byStatus,
       },
     };

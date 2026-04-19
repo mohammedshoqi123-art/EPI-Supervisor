@@ -27,12 +27,12 @@ class EnhancedLocalAI {
     // Pattern matching with confidence scores
     final patterns = <String, double Function()>{
       'submissions': () => _matchPattern(query, [
-            'إرساليات',
-            'إرسال',
-            'استمارة',
-            'كم عدد',
-            'كم إرسالية',
-          ]),
+        'إرساليات',
+        'إرسال',
+        'استمارة',
+        'كم عدد',
+        'كم إرسالية',
+      ]),
       'shortages': () =>
           _matchPattern(query, ['نقص', 'نواقص', 'احتياج', 'مفقود']),
       'trend': () =>
@@ -98,8 +98,9 @@ class EnhancedLocalAI {
     final rejected = byStatus['rejected'] ?? 0;
     final pending = byStatus['submitted'] ?? 0;
 
-    final approvalRate =
-        total > 0 ? ((approved / total) * 100).toStringAsFixed(1) : '0';
+    final approvalRate = total > 0
+        ? ((approved / total) * 100).toStringAsFixed(1)
+        : '0';
 
     final buffer = StringBuffer();
     buffer.writeln('📊 تحليل الإرساليات:');
@@ -187,8 +188,9 @@ class EnhancedLocalAI {
     final predictions = LocalAnalyticsEngine.predictNext(counts, 3);
     buffer.writeln('\n🔮 التوقعات (3 أيام):');
     for (int i = 0; i < predictions.length; i++) {
-      final predicted =
-          predictions[i].clamp(0, double.infinity).toStringAsFixed(0);
+      final predicted = predictions[i]
+          .clamp(0, double.infinity)
+          .toStringAsFixed(0);
       buffer.writeln('  اليوم ${i + 1}: ~$predicted إرسالية');
     }
 

@@ -19,7 +19,8 @@ _$FormModelImpl _$$FormModelImplFromJson(Map<String, dynamic> json) =>
       requiresGps: json['requires_gps'] as bool? ?? false,
       requiresPhoto: json['requires_photo'] as bool? ?? false,
       maxPhotos: (json['max_photos'] as num?)?.toInt() ?? 5,
-      allowedRoles: (json['allowed_roles'] as List<dynamic>?)
+      allowedRoles:
+          (json['allowed_roles'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           const [],

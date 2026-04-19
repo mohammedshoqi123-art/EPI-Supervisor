@@ -23,8 +23,9 @@ class WordReportGenerator {
   ) {
     final title = form['title_ar'] ?? form['title'] ?? 'تقرير';
     final today = DateTime.now().toIso8601String().substring(0, 10);
-    final todayCount =
-        subs.where((s) => (s['created_at'] ?? '').startsWith(today)).length;
+    final todayCount = subs
+        .where((s) => (s['created_at'] ?? '').startsWith(today))
+        .length;
     final submitted = subs.where((s) => s['status'] == 'submitted').length;
     final rejected = subs.where((s) => s['status'] == 'rejected').length;
     final completionRate = subs.isEmpty ? 0 : (submitted * 100 ~/ subs.length);
@@ -80,9 +81,7 @@ class WordReportGenerator {
     <th>الجهة</th>
   </tr>
 ${subs.take(200).map((s) {
-      final date = (s['created_at'] ?? '').toString().length >= 10
-          ? s['created_at'].toString().substring(0, 10)
-          : '-';
+      final date = (s['created_at'] ?? '').toString().length >= 10 ? s['created_at'].toString().substring(0, 10) : '-';
       final status = s['status'] ?? '-';
       final facility = s['facility_name'] ?? '-';
       final idx = subs.indexOf(s) + 1;

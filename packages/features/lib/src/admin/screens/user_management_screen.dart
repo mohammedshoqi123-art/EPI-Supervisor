@@ -16,32 +16,34 @@ import '../shared_providers.dart';
 
 final usersListProvider =
     FutureProvider.family<List<Map<String, dynamic>>, UserFilters>((
-  ref,
-  filters,
-) async {
-  final client = Supabase.instance.client;
-  var query = client
-      .from('profiles')
-      .select('*, governorates(name_ar), districts(name_ar)');
+      ref,
+      filters,
+    ) async {
+      final client = Supabase.instance.client;
+      var query = client
+          .from('profiles')
+          .select('*, governorates(name_ar), districts(name_ar)');
 
-  if (filters.search.isNotEmpty) {
-    query = query.or(
-      'full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%',
-    );
-  }
-  if (filters.role != null) {
-    query = query.eq('role', filters.role!);
-  }
-  if (filters.governorateId != null) {
-    query = query.eq('governorate_id', filters.governorateId!);
-  }
-  if (filters.isActive != null) {
-    query = query.eq('is_active', filters.isActive!);
-  }
+      if (filters.search.isNotEmpty) {
+        query = query.or(
+          'full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%',
+        );
+      }
+      if (filters.role != null) {
+        query = query.eq('role', filters.role!);
+      }
+      if (filters.governorateId != null) {
+        query = query.eq('governorate_id', filters.governorateId!);
+      }
+      if (filters.isActive != null) {
+        query = query.eq('is_active', filters.isActive!);
+      }
 
-  final response = await query.order('created_at', ascending: false).limit(200);
-  return (response as List<dynamic>).cast<Map<String, dynamic>>();
-});
+      final response = await query
+          .order('created_at', ascending: false)
+          .limit(200);
+      return (response as List<dynamic>).cast<Map<String, dynamic>>();
+    });
 
 // ─── Filters Model ─────────────────────────────────────────────────────────
 
@@ -450,15 +452,18 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               );
             }
 
-            final paged =
-                users.skip(_currentPage * _pageSize).take(_pageSize).toList();
+            final paged = users
+                .skip(_currentPage * _pageSize)
+                .take(_pageSize)
+                .toList();
             final totalPages = (users.length / _pageSize).ceil();
 
             return Column(
               children: [
                 Expanded(
-                  child:
-                      isWide ? _buildDataTable(paged) : _buildCardsList(paged),
+                  child: isWide
+                      ? _buildDataTable(paged)
+                      : _buildCardsList(paged),
                 ),
                 _buildPagination(totalPages, users.length),
               ],
@@ -796,12 +801,12 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     final color = role == 'admin'
         ? AppTheme.errorColor
         : role == 'central'
-            ? AppTheme.secondaryColor
-            : role == 'governorate'
-                ? AppTheme.warningColor
-                : role == 'district'
-                    ? AppTheme.infoColor
-                    : AppTheme.textSecondary;
+        ? AppTheme.secondaryColor
+        : role == 'governorate'
+        ? AppTheme.warningColor
+        : role == 'district'
+        ? AppTheme.infoColor
+        : AppTheme.textSecondary;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1146,14 +1151,17 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     try {
       final client = Supabase.instance.client;
       if (userId != null) {
-        await client.from('profiles').update({
-          'full_name': name,
-          'phone': phone.isNotEmpty ? phone : null,
-          'role': role,
-          'governorate_id': govId,
-          'district_id': distId,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', userId);
+        await client
+            .from('profiles')
+            .update({
+              'full_name': name,
+              'phone': phone.isNotEmpty ? phone : null,
+              'role': role,
+              'governorate_id': govId,
+              'district_id': distId,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', userId);
       } else {
         await client.functions.invoke(
           'admin-actions',
@@ -1201,10 +1209,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
   Future<void> _toggleUserActive(String id, bool active) async {
     try {
-      await Supabase.instance.client.from('profiles').update({
-        'is_active': active,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', id);
+      await Supabase.instance.client
+          .from('profiles')
+          .update({
+            'is_active': active,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', id);
 
       ref.invalidate(usersListProvider);
       if (mounted) {
@@ -1214,8 +1225,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               active ? 'تم تفعيل المستخدم' : 'تم تعطيل المستخدم',
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
-            backgroundColor:
-                active ? AppTheme.successColor : AppTheme.warningColor,
+            backgroundColor: active
+                ? AppTheme.successColor
+                : AppTheme.warningColor,
           ),
         );
       }
@@ -1283,10 +1295,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   Future<void> _bulkToggleActive(bool active) async {
     try {
       for (final id in _selectedUserIds) {
-        await Supabase.instance.client.from('profiles').update({
-          'is_active': active,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', id);
+        await Supabase.instance.client
+            .from('profiles')
+            .update({
+              'is_active': active,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', id);
       }
       setState(() => _selectedUserIds.clear());
       ref.invalidate(usersListProvider);

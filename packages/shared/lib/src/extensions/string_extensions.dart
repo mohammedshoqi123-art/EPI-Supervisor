@@ -2,8 +2,8 @@
 extension StringExtensions on String {
   // ─── Email ────────────────────────────────────────────────────────────────
   bool get isValidEmail => RegExp(
-        r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
-      ).hasMatch(this);
+    r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
+  ).hasMatch(this);
 
   // ─── Phone (Yemeni) ───────────────────────────────────────────────────────
   bool get isValidYemeniPhone => RegExp(r'^7\d{8}$').hasMatch(this);

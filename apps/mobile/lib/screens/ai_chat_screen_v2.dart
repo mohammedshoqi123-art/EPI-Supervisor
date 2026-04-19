@@ -23,24 +23,24 @@ class ChatMsg {
     this.source,
     DateTime? time,
     String? id,
-  })  : time = time ?? DateTime.now(),
-        id = id ?? DateTime.now().millisecondsSinceEpoch.toString();
+  }) : time = time ?? DateTime.now(),
+       id = id ?? DateTime.now().millisecondsSinceEpoch.toString();
 
   Map<String, dynamic> toJson() => {
-        'role': role,
-        'content': content,
-        'source': source,
-        'time': time.toIso8601String(),
-        'id': id,
-      };
+    'role': role,
+    'content': content,
+    'source': source,
+    'time': time.toIso8601String(),
+    'id': id,
+  };
 
   factory ChatMsg.fromJson(Map<String, dynamic> j) => ChatMsg(
-        role: j['role'] ?? 'assistant',
-        content: j['content'] ?? '',
-        source: j['source'],
-        time: DateTime.tryParse(j['time'] ?? ''),
-        id: j['id'],
-      );
+    role: j['role'] ?? 'assistant',
+    content: j['content'] ?? '',
+    source: j['source'],
+    time: DateTime.tryParse(j['time'] ?? ''),
+    id: j['id'],
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -180,8 +180,9 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
     try {
       final api = ref.read(apiClientProvider);
 
-      final history =
-          _msgs.length > 6 ? _msgs.sublist(_msgs.length - 6) : _msgs;
+      final history = _msgs.length > 6
+          ? _msgs.sublist(_msgs.length - 6)
+          : _msgs;
       final historyJson = history
           .map(
             (m) => {
@@ -193,20 +194,23 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
           )
           .toList();
 
-      final resp = await api.callFunction('ai-chat-v3', {
-        'message': text,
-        'history': historyJson,
-        if (template != null) 'template': template,
-      }).timeout(
-        const Duration(seconds: 60),
-        onTimeout: () {
-          throw TimeoutException('انتهت مهلة الطلب');
-        },
-      );
+      final resp = await api
+          .callFunction('ai-chat-v3', {
+            'message': text,
+            'history': historyJson,
+            if (template != null) 'template': template,
+          })
+          .timeout(
+            const Duration(seconds: 60),
+            onTimeout: () {
+              throw TimeoutException('انتهت مهلة الطلب');
+            },
+          );
 
       if (!_mounted) return;
 
-      final reply = resp['reply'] as String? ??
+      final reply =
+          resp['reply'] as String? ??
           resp['message'] as String? ??
           resp['error'] as String? ??
           '';
@@ -231,7 +235,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         _msgs.add(
           ChatMsg(
             role: 'assistant',
-            content: '⏱️ انتهت مهلة الطلب. قد يكون الخادم بطيئاً حالياً.\n\n'
+            content:
+                '⏱️ انتهت مهلة الطلب. قد يكون الخادم بطيئاً حالياً.\n\n'
                 '💡 نصيحة: حاول مرة أخرى أو اسأل سؤالاً أقصر.',
             source: 'error',
           ),
@@ -254,7 +259,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         userMessage =
             '📡 لا يوجد اتصال بالإنترنت.\nتحقق من الاتصال وحاول مرة أخرى.';
       } else {
-        userMessage = '⚠️ حدث خطأ أثناء الاتصال.\n\n'
+        userMessage =
+            '⚠️ حدث خطأ أثناء الاتصال.\n\n'
             '🔧 حاول مرة أخرى. إذا استمر، أعد تشغيل التطبيق.';
       }
 
@@ -880,8 +886,9 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       child: Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: Row(
-          mainAxisAlignment:
-              isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: isUser
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!isUser) ...[
@@ -890,8 +897,9 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
             ],
             Flexible(
               child: Column(
-                crossAxisAlignment:
-                    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isUser
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 children: [
                   // Message bubble
                   GestureDetector(
@@ -905,10 +913,10 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
                         color: isUser
                             ? cs.primary
                             : isError
-                                ? cs.errorContainer
-                                : isData
-                                    ? cs.primaryContainer.withValues(alpha: 0.5)
-                                    : cs.surfaceContainerHigh,
+                            ? cs.errorContainer
+                            : isData
+                            ? cs.primaryContainer.withValues(alpha: 0.5)
+                            : cs.surfaceContainerHigh,
                         borderRadius: BorderRadius.only(
                           topLeft: const Radius.circular(20),
                           topRight: const Radius.circular(20),
@@ -959,8 +967,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
           colors: isError
               ? [cs.errorContainer, cs.error.withValues(alpha: 0.3)]
               : isData
-                  ? [cs.primaryContainer, cs.primary.withValues(alpha: 0.2)]
-                  : [cs.primaryContainer, cs.tertiaryContainer],
+              ? [cs.primaryContainer, cs.primary.withValues(alpha: 0.2)]
+              : [cs.primaryContainer, cs.tertiaryContainer],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -977,14 +985,14 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
         isError
             ? Icons.warning_rounded
             : isData
-                ? Icons.analytics_rounded
-                : Icons.auto_awesome_rounded,
+            ? Icons.analytics_rounded
+            : Icons.auto_awesome_rounded,
         size: 18,
         color: isError
             ? cs.error
             : isData
-                ? cs.primary
-                : cs.primary,
+            ? cs.primary
+            : cs.primary,
       ),
     );
   }
@@ -1014,8 +1022,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
     final textColor = isUser
         ? cs.onPrimary
         : isError
-            ? cs.onErrorContainer
-            : cs.onSurface;
+        ? cs.onErrorContainer
+        : cs.onSurface;
 
     // Simple markdown-like formatting
     final lines = msg.content.split('\n');
@@ -1031,12 +1039,12 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
   }
 
   String _sourceLabel(String s) => switch (s) {
-        'groq' => '⚡ Groq AI',
-        'mimo' => '🤖 MiMo AI',
-        'function_call' => '📊 من بيانات النظام',
-        'rag' => '📚 من قاعدة المعرفة',
-        _ => '',
-      };
+    'groq' => '⚡ Groq AI',
+    'mimo' => '🤖 MiMo AI',
+    'function_call' => '📊 من بيانات النظام',
+    'rag' => '📚 من قاعدة المعرفة',
+    _ => '',
+  };
 
   // ═══ TYPING INDICATOR ═══
 

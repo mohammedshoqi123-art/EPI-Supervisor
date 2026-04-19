@@ -54,7 +54,8 @@ final realtimeSubmissionsProvider = StreamProvider.autoDispose<int>((ref) {
   final client = Supabase.instance.client;
   return client
       .from('form_submissions')
-      .stream(primaryKey: ['id']).map((data) => data.length);
+      .stream(primaryKey: ['id'])
+      .map((data) => data.length);
 });
 
 // ═══════════════════════════════════════════
@@ -235,8 +236,9 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
                         style: TextStyle(
                           color: isSelected ? Colors.white : Colors.white70,
                           fontSize: 14,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                           fontFamily: 'Tajawal',
                         ),
                       ),
@@ -709,15 +711,15 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
                     touchTooltipData: LineTouchTooltipData(
                       getTooltipItems: (touchedSpots) =>
                           touchedSpots.map((spot) {
-                        return LineTooltipItem(
-                          '${spot.y.toInt()}',
-                          TextStyle(
-                            color: spot.bar.color,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        );
-                      }).toList(),
+                            return LineTooltipItem(
+                              '${spot.y.toInt()}',
+                              TextStyle(
+                                color: spot.bar.color,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            );
+                          }).toList(),
                     ),
                   ),
                 ),
@@ -871,7 +873,8 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
             : BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
-                  maxY: data
+                  maxY:
+                      data
                           .fold<num>(
                             0,
                             (max, e) => math.max(max, e['count'] ?? 0),
@@ -1151,8 +1154,8 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
               color: isHealthy
                   ? const Color(0xFF43A047)
                   : isWarning
-                      ? const Color(0xFFFB8C00)
-                      : const Color(0xFFE53935),
+                  ? const Color(0xFFFB8C00)
+                  : const Color(0xFFE53935),
               size: 22,
             ),
             title: Text(
@@ -1162,27 +1165,28 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
             trailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: (isHealthy
-                        ? const Color(0xFF43A047)
-                        : isWarning
+                color:
+                    (isHealthy
+                            ? const Color(0xFF43A047)
+                            : isWarning
                             ? const Color(0xFFFB8C00)
                             : const Color(0xFFE53935))
-                    .withOpacity(0.1),
+                        .withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
                 isHealthy
                     ? 'سليم'
                     : isWarning
-                        ? 'تحذير'
-                        : 'خطأ',
+                    ? 'تحذير'
+                    : 'خطأ',
                 style: TextStyle(
                   fontSize: 12,
                   color: isHealthy
                       ? const Color(0xFF43A047)
                       : isWarning
-                          ? const Color(0xFFFB8C00)
-                          : const Color(0xFFE53935),
+                      ? const Color(0xFFFB8C00)
+                      : const Color(0xFFE53935),
                   fontWeight: FontWeight.w600,
                   fontFamily: 'Tajawal',
                 ),

@@ -58,7 +58,8 @@ class EpiDialog extends StatelessWidget {
           if (icon != null) ...[
             Icon(
               icon,
-              color: iconColor ??
+              color:
+                  iconColor ??
                   (isDanger ? AppTheme.errorColor : AppTheme.primaryColor),
             ),
             const SizedBox(width: 12),

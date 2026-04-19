@@ -127,10 +127,12 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
     final filtered = _searchQuery.isEmpty
         ? _items
         : _items.where((sub) {
-            final formTitle =
-                (sub['forms']?['title_ar'] ?? '').toString().toLowerCase();
-            final userName =
-                (sub['profiles']?['full_name'] ?? '').toString().toLowerCase();
+            final formTitle = (sub['forms']?['title_ar'] ?? '')
+                .toString()
+                .toLowerCase();
+            final userName = (sub['profiles']?['full_name'] ?? '')
+                .toString()
+                .toLowerCase();
             final status = (sub['status'] ?? '').toString().toLowerCase();
             return formTitle.contains(_searchQuery) ||
                 userName.contains(_searchQuery) ||
@@ -273,22 +275,23 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [
-                'draft',
-                'submitted',
-                'reviewed',
-                'approved',
-                'rejected',
-              ].map((s) {
-                return ChoiceChip(
-                  label: EpiStatusChip(status: s, small: true),
-                  selected: _statusFilter == s,
-                  onSelected: (selected) {
-                    _onFilterChanged(selected ? s : null);
-                    Navigator.pop(context);
-                  },
-                );
-              }).toList(),
+              children:
+                  [
+                    'draft',
+                    'submitted',
+                    'reviewed',
+                    'approved',
+                    'rejected',
+                  ].map((s) {
+                    return ChoiceChip(
+                      label: EpiStatusChip(status: s, small: true),
+                      selected: _statusFilter == s,
+                      onSelected: (selected) {
+                        _onFilterChanged(selected ? s : null);
+                        Navigator.pop(context);
+                      },
+                    );
+                  }).toList(),
             ),
             const SizedBox(height: 16),
           ],

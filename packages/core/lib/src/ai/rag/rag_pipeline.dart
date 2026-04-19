@@ -19,11 +19,11 @@ class KnowledgeDocument {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'content': content,
-        'category': category,
-        'metadata': metadata,
-      };
+    'id': id,
+    'content': content,
+    'category': category,
+    'metadata': metadata,
+  };
 
   factory KnowledgeDocument.fromJson(Map<String, dynamic> json) =>
       KnowledgeDocument(

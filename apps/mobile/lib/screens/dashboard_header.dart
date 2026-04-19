@@ -26,19 +26,19 @@ class DashboardHeroHeader extends StatelessWidget {
     final greeting = hour < 12
         ? 'صباح الخير'
         : hour < 17
-            ? 'مساء الخير'
-            : 'تصبح على خير';
+        ? 'مساء الخير'
+        : 'تصبح على خير';
     final emoji = hour < 12
         ? '☀️'
         : hour < 17
-            ? '🌤️'
-            : '🌙';
+        ? '🌤️'
+        : '🌙';
 
     return SlideTransition(
-      position:
-          Tween<Offset>(begin: const Offset(0, -0.3), end: Offset.zero).animate(
-        CurvedAnimation(parent: headerAnim, curve: Curves.easeOutCubic),
-      ),
+      position: Tween<Offset>(begin: const Offset(0, -0.3), end: Offset.zero)
+          .animate(
+            CurvedAnimation(parent: headerAnim, curve: Curves.easeOutCubic),
+          ),
       child: FadeTransition(
         opacity: headerAnim,
         child: Container(

@@ -103,8 +103,9 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F7FA),
-        body:
-            _activeChannelId == null ? _buildChannelsView() : _buildChatView(),
+        body: _activeChannelId == null
+            ? _buildChannelsView()
+            : _buildChatView(),
       ),
     );
   }
@@ -586,14 +587,16 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
             DateTime.tryParse(messages[i - 1]['created_at'] ?? '') ??
                 DateTime.now(),
           )) {
-        final date = DateTime.tryParse(messages[i]['created_at'] ?? '') ??
+        final date =
+            DateTime.tryParse(messages[i]['created_at'] ?? '') ??
             DateTime.now();
         items.add(_dateSeparator(_dateLabel(date)));
       }
 
       final msg = messages[i];
       final isMe = msg['sender_id'] == currentUserId;
-      final showAvatar = i == messages.length - 1 ||
+      final showAvatar =
+          i == messages.length - 1 ||
           messages[i + 1]['sender_id'] != msg['sender_id'];
       final showName =
           i == 0 || messages[i - 1]['sender_id'] != msg['sender_id'];
@@ -659,8 +662,9 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
         right: isMe ? 0 : 60,
       ),
       child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Avatar
@@ -672,8 +676,9 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
 
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 // Name
                 if (!isMe && showName)
@@ -725,8 +730,9 @@ class _InternalChatScreenState extends ConsumerState<InternalChatScreen>
                             fontFamily: 'Tajawal',
                             fontSize: 14.5,
                             height: 1.5,
-                            color:
-                                isMe ? Colors.white : const Color(0xFF1A2332),
+                            color: isMe
+                                ? Colors.white
+                                : const Color(0xFF1A2332),
                           ),
                         ),
                         const SizedBox(height: 4),

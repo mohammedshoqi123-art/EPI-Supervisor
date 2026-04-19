@@ -119,30 +119,30 @@ class AuthState {
   }
 
   Map<String, dynamic> toJson() => {
-        'is_authenticated': isAuthenticated,
-        'user_id': userId,
-        'email': email,
-        'role': role?.name,
-        'governorate_id': governorateId,
-        'district_id': districtId,
-        'full_name': fullName,
-        'phone': phone,
-        'avatar_url': avatarUrl,
-        'national_id': nationalId,
-      };
+    'is_authenticated': isAuthenticated,
+    'user_id': userId,
+    'email': email,
+    'role': role?.name,
+    'governorate_id': governorateId,
+    'district_id': districtId,
+    'full_name': fullName,
+    'phone': phone,
+    'avatar_url': avatarUrl,
+    'national_id': nationalId,
+  };
 
   factory AuthState.fromJson(Map<String, dynamic> json) => AuthState(
-        isAuthenticated: json['is_authenticated'] as bool? ?? false,
-        userId: json['user_id'] as String?,
-        email: json['email'] as String?,
-        role: _parseRole(json['role'] as String?),
-        governorateId: json['governorate_id'] as String?,
-        districtId: json['district_id'] as String?,
-        fullName: json['full_name'] as String?,
-        phone: json['phone'] as String?,
-        avatarUrl: json['avatar_url'] as String?,
-        nationalId: json['national_id'] as String?,
-      );
+    isAuthenticated: json['is_authenticated'] as bool? ?? false,
+    userId: json['user_id'] as String?,
+    email: json['email'] as String?,
+    role: _parseRole(json['role'] as String?),
+    governorateId: json['governorate_id'] as String?,
+    districtId: json['district_id'] as String?,
+    fullName: json['full_name'] as String?,
+    phone: json['phone'] as String?,
+    avatarUrl: json['avatar_url'] as String?,
+    nationalId: json['national_id'] as String?,
+  );
 
   static UserRole? _parseRole(String? role) {
     if (role == null) return null;

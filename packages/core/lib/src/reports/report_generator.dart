@@ -603,8 +603,9 @@ class ReportGenerator {
 
     final rows = entries.map((e) {
       final count = e.value as int;
-      final barWidth =
-          maxCount > 0 ? (count / maxCount * 100).toStringAsFixed(0) : '0';
+      final barWidth = maxCount > 0
+          ? (count / maxCount * 100).toStringAsFixed(0)
+          : '0';
       return ['$barWidth%', '$count', e.key];
     }).toList();
 

@@ -127,17 +127,17 @@ class SyncQueueEntry {
 
   /// Convert to JSON for Hive storage.
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'type': type,
-        'payload': payload,
-        'priority': priority.name,
-        'status': status.name,
-        'created_at': createdAt.toIso8601String(),
-        'last_attempt_at': lastAttemptAt?.toIso8601String(),
-        'retry_count': retryCount,
-        'last_error': lastError,
-        'metadata': metadata,
-      };
+    'id': id,
+    'type': type,
+    'payload': payload,
+    'priority': priority.name,
+    'status': status.name,
+    'created_at': createdAt.toIso8601String(),
+    'last_attempt_at': lastAttemptAt?.toIso8601String(),
+    'retry_count': retryCount,
+    'last_error': lastError,
+    'metadata': metadata,
+  };
 
   /// Restore from JSON.
   factory SyncQueueEntry.fromJson(Map<String, dynamic> json) {
@@ -274,17 +274,17 @@ class OfflineSyncResult {
   final Map<String, dynamic>? serverResponse;
 
   OfflineSyncResult.success(this.offlineId, [this.serverResponse])
-      : status = OfflineSyncStatus.success,
-        errorMessage = null;
+    : status = OfflineSyncStatus.success,
+      errorMessage = null;
   OfflineSyncResult.conflict(this.offlineId, [this.serverResponse])
-      : status = OfflineSyncStatus.conflict,
-        errorMessage = null;
+    : status = OfflineSyncStatus.conflict,
+      errorMessage = null;
   OfflineSyncResult.error(this.offlineId, this.errorMessage)
-      : status = OfflineSyncStatus.error,
-        serverResponse = null;
+    : status = OfflineSyncStatus.error,
+      serverResponse = null;
   OfflineSyncResult.duplicate(this.offlineId, [this.serverResponse])
-      : status = OfflineSyncStatus.duplicate,
-        errorMessage = null;
+    : status = OfflineSyncStatus.duplicate,
+      errorMessage = null;
 
   bool get isSuccess => status == OfflineSyncStatus.success;
   bool get isConflict => status == OfflineSyncStatus.conflict;
@@ -364,33 +364,32 @@ class DataConflictV2 {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'entity_type': entityType,
-        'entity_id': entityId,
-        'local_data': localData,
-        'server_data': serverData,
-        'detected_at': detectedAt.toIso8601String(),
-        'resolved_strategy': resolvedStrategy?.name,
-        'resolved_data': resolvedData,
-        'resolved': resolved,
-      };
+    'id': id,
+    'entity_type': entityType,
+    'entity_id': entityId,
+    'local_data': localData,
+    'server_data': serverData,
+    'detected_at': detectedAt.toIso8601String(),
+    'resolved_strategy': resolvedStrategy?.name,
+    'resolved_data': resolvedData,
+    'resolved': resolved,
+  };
 
   factory DataConflictV2.fromJson(Map<String, dynamic> json) => DataConflictV2(
-        id: json['id'] as String,
-        entityType: json['entity_type'] as String,
-        entityId: json['entity_id'] as String,
-        localData: Map<String, dynamic>.from(json['local_data'] as Map),
-        serverData: Map<String, dynamic>.from(json['server_data'] as Map),
-        detectedAt: DateTime.parse(json['detected_at'] as String),
-        resolvedStrategy: json['resolved_strategy'] != null
-            ? ConflictStrategy.values
-                .byName(json['resolved_strategy'] as String)
-            : null,
-        resolvedData: json['resolved_data'] != null
-            ? Map<String, dynamic>.from(json['resolved_data'] as Map)
-            : null,
-        resolved: json['resolved'] as bool? ?? false,
-      );
+    id: json['id'] as String,
+    entityType: json['entity_type'] as String,
+    entityId: json['entity_id'] as String,
+    localData: Map<String, dynamic>.from(json['local_data'] as Map),
+    serverData: Map<String, dynamic>.from(json['server_data'] as Map),
+    detectedAt: DateTime.parse(json['detected_at'] as String),
+    resolvedStrategy: json['resolved_strategy'] != null
+        ? ConflictStrategy.values.byName(json['resolved_strategy'] as String)
+        : null,
+    resolvedData: json['resolved_data'] != null
+        ? Map<String, dynamic>.from(json['resolved_data'] as Map)
+        : null,
+    resolved: json['resolved'] as bool? ?? false,
+  );
 }
 
 /// Conflict resolver with multiple strategies.
@@ -528,19 +527,21 @@ class NetworkSnapshot {
 
   /// Emoji indicator for simple UI
   String get indicator => switch (status) {
-        NetworkStatus.online => hasPending ? '🟡' : '🟢',
-        NetworkStatus.syncing => '🟡',
-        NetworkStatus.offline => '🔴',
-      };
+    NetworkStatus.online => hasPending ? '🟡' : '🟢',
+    NetworkStatus.syncing => '🟡',
+    NetworkStatus.offline => '🔴',
+  };
 
   /// Arabic status text
   String get statusText => switch (status) {
-        NetworkStatus.online => hasPending
-            ? 'متصل - $pendingItems سجل في الانتظار'
-            : 'متصل - كل البيانات مزامنة',
-        NetworkStatus.syncing => 'جاري رفع $pendingItems سجل...',
-        NetworkStatus.offline => pendingItems > 0
-            ? 'غير متصل - $pendingItems سجل بانتظار المزامنة'
-            : 'غير متصل - العمل بدون إنترنت',
-      };
+    NetworkStatus.online =>
+      hasPending
+          ? 'متصل - $pendingItems سجل في الانتظار'
+          : 'متصل - كل البيانات مزامنة',
+    NetworkStatus.syncing => 'جاري رفع $pendingItems سجل...',
+    NetworkStatus.offline =>
+      pendingItems > 0
+          ? 'غير متصل - $pendingItems سجل بانتظار المزامنة'
+          : 'غير متصل - العمل بدون إنترنت',
+  };
 }

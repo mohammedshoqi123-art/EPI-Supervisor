@@ -20,12 +20,12 @@ export 'sync_models.dart'
 
 /// Callback type: submit a batch of items to the server.
 /// Must return a list of results, one per item.
-typedef BatchSubmitFn = Future<List<SyncItemResult>> Function(
-    List<SyncQueueEntry> items);
+typedef BatchSubmitFn =
+    Future<List<SyncItemResult>> Function(List<SyncQueueEntry> items);
 
 /// Callback type: fetch the latest server version of an entity.
-typedef FetchServerVersionFn = Future<Map<String, dynamic>?> Function(
-    String entityType, String entityId);
+typedef FetchServerVersionFn =
+    Future<Map<String, dynamic>?> Function(String entityType, String entityId);
 
 /// The core offline-first manager.
 ///
@@ -66,17 +66,17 @@ class IntelligentOfflineManager {
 
   /// Current network snapshot.
   NetworkSnapshot get currentSnapshot => NetworkSnapshot(
-        status: _isSyncing
-            ? NetworkStatus.syncing
-            : _isOnline
-                ? NetworkStatus.online
-                : NetworkStatus.offline,
-        pendingItems: _queue.getCounts().total,
-        failedItems: _queue.getCounts().failed,
-        lastSyncAt: _lastSyncAt,
-        lastOnlineAt: _lastOnlineAt,
-        currentError: _lastError,
-      );
+    status: _isSyncing
+        ? NetworkStatus.syncing
+        : _isOnline
+        ? NetworkStatus.online
+        : NetworkStatus.offline,
+    pendingItems: _queue.getCounts().total,
+    failedItems: _queue.getCounts().failed,
+    lastSyncAt: _lastSyncAt,
+    lastOnlineAt: _lastOnlineAt,
+    currentError: _lastError,
+  );
 
   IntelligentOfflineManager(
     this._queue,
@@ -98,7 +98,8 @@ class IntelligentOfflineManager {
     _connSub?.cancel();
     _connSub = _connectivity.onConnectivityChanged.listen((results) {
       final wasOffline = !_isOnline;
-      _isOnline = results.isNotEmpty &&
+      _isOnline =
+          results.isNotEmpty &&
           results.any((r) => r != ConnectivityResult.none);
 
       if (_isOnline) _lastOnlineAt = DateTime.now();
@@ -114,12 +115,16 @@ class IntelligentOfflineManager {
     });
 
     // Initial check
-    _connectivity.checkConnectivity().then((results) {
-      _isOnline = results.isNotEmpty &&
-          results.any((r) => r != ConnectivityResult.none);
-      if (_isOnline) _lastOnlineAt = DateTime.now();
-      _emitState();
-    }).catchError((_) {});
+    _connectivity
+        .checkConnectivity()
+        .then((results) {
+          _isOnline =
+              results.isNotEmpty &&
+              results.any((r) => r != ConnectivityResult.none);
+          if (_isOnline) _lastOnlineAt = DateTime.now();
+          _emitState();
+        })
+        .catchError((_) {});
   }
 
   /// Auto-sync every 5 minutes when online.

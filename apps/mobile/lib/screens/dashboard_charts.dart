@@ -342,8 +342,9 @@ class DashboardQuickActions extends StatelessWidget {
               width: 82,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               decoration: BoxDecoration(
-                color:
-                    isSelected ? a.color.withValues(alpha: 0.12) : Colors.white,
+                color: isSelected
+                    ? a.color.withValues(alpha: 0.12)
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: isSelected
@@ -377,8 +378,9 @@ class DashboardQuickActions extends StatelessWidget {
                     style: TextStyle(
                       fontFamily: 'Tajawal',
                       fontSize: 10,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                       color: a.color,
                     ),
                     textAlign: TextAlign.center,
@@ -424,8 +426,9 @@ class DashboardTrendLine extends StatelessWidget {
     }
 
     final entries = dayData.entries.toList();
-    final maxY =
-        entries.fold<num>(1, (m, e) => e.value > m ? e.value : m).toDouble();
+    final maxY = entries
+        .fold<num>(1, (m, e) => e.value > m ? e.value : m)
+        .toDouble();
 
     return RepaintBoundary(
       child: Container(

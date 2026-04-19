@@ -139,14 +139,18 @@ class AuthRepository {
       } else {
         // Profile missing — try to create it
         try {
-          await _client!.from('profiles').upsert({
-            'id': userId,
-            'email': user.email,
-            'full_name': user.userMetadata?['full_name'] ??
-                (user.email?.split('@').first ?? 'مستخدم'),
-            'role': 'data_entry',
-            'is_active': true,
-          }, onConflict: 'id').timeout(const Duration(seconds: 10));
+          await _client!
+              .from('profiles')
+              .upsert({
+                'id': userId,
+                'email': user.email,
+                'full_name':
+                    user.userMetadata?['full_name'] ??
+                    (user.email?.split('@').first ?? 'مستخدم'),
+                'role': 'data_entry',
+                'is_active': true,
+              }, onConflict: 'id')
+              .timeout(const Duration(seconds: 10));
 
           // Re-fetch after creation
           final newResponse = await _client!
@@ -291,14 +295,17 @@ class AuthRepository {
     final fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
     final storagePath = 'avatars/$userId/$fileName';
 
-    await _client!.storage.from('avatars').uploadBinary(
+    await _client!.storage
+        .from('avatars')
+        .uploadBinary(
           storagePath,
           fileBytes,
           fileOptions: FileOptions(contentType: 'image/$ext', upsert: true),
         );
 
-    final publicUrl =
-        _client!.storage.from('avatars').getPublicUrl(storagePath);
+    final publicUrl = _client!.storage
+        .from('avatars')
+        .getPublicUrl(storagePath);
 
     // Update profile with new avatar URL
     await updateProfile(avatarUrl: publicUrl);

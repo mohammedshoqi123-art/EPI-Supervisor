@@ -154,8 +154,9 @@ extension ContextExtensions on BuildContext {
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  isDangerous ? AppTheme.errorColor : AppTheme.primaryColor,
+              backgroundColor: isDangerous
+                  ? AppTheme.errorColor
+                  : AppTheme.primaryColor,
             ),
             child: Text(
               confirmText,

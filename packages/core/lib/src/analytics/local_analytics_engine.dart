@@ -139,18 +139,21 @@ class LocalAnalyticsEngine {
     if (totalShortages == 0 && totalSubmissions == 0) return 50;
 
     // Resolution rate: 0-40 points
-    final resolutionRate =
-        totalShortages > 0 ? resolvedShortages / totalShortages : 1.0;
+    final resolutionRate = totalShortages > 0
+        ? resolvedShortages / totalShortages
+        : 1.0;
     final resolutionScore = (resolutionRate * 40).round();
 
     // Critical penalty: 0-30 points lost
-    final criticalRatio =
-        totalShortages > 0 ? criticalShortages / totalShortages : 0.0;
+    final criticalRatio = totalShortages > 0
+        ? criticalShortages / totalShortages
+        : 0.0;
     final criticalPenalty = (criticalRatio * 30).round();
 
     // Activity score: 0-30 points
-    final activityScore =
-        totalSubmissions > 10 ? 30 : (totalSubmissions / 10 * 30).round();
+    final activityScore = totalSubmissions > 10
+        ? 30
+        : (totalSubmissions / 10 * 30).round();
 
     return (resolutionScore + activityScore - criticalPenalty).clamp(0, 100);
   }

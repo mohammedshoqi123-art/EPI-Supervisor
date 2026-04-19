@@ -131,17 +131,17 @@ class FormFieldDefinition {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'label': label,
-        'type': type.name,
-        'required': required,
-        'validation': validation,
-        'options': options,
-        'default_value': defaultValue,
-        'help_text': helpText,
-        'order': order,
-      };
+    'id': id,
+    'name': name,
+    'label': label,
+    'type': type.name,
+    'required': required,
+    'validation': validation,
+    'options': options,
+    'default_value': defaultValue,
+    'help_text': helpText,
+    'order': order,
+  };
 
   factory FormFieldDefinition.fromJson(Map<String, dynamic> json) {
     return FormFieldDefinition(
@@ -209,14 +209,14 @@ class FormTemplate {
   }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'description': description,
-        'fields': fields.map((f) => f.toJson()).toList(),
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt?.toIso8601String(),
-        'is_active': isActive,
-      };
+    'id': id,
+    'name': name,
+    'description': description,
+    'fields': fields.map((f) => f.toJson()).toList(),
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt?.toIso8601String(),
+    'is_active': isActive,
+  };
 }
 
 /// Dynamic form builder screen for creating and editing forms.
@@ -688,7 +688,8 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
     }
 
     final template = FormTemplate(
-      id: widget.existingForm?.id ??
+      id:
+          widget.existingForm?.id ??
           DateTime.now().millisecondsSinceEpoch.toString(),
       name: _formName,
       description: _formDescription,
@@ -794,16 +795,15 @@ class _FieldEditDialogState extends State<_FieldEditDialog> {
                 ),
                 const SizedBox(height: 8),
                 ..._options.asMap().entries.map(
-                      (e) => ListTile(
-                        dense: true,
-                        title: Text(e.value),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.remove_circle, size: 18),
-                          onPressed: () =>
-                              setState(() => _options.removeAt(e.key)),
-                        ),
-                      ),
+                  (e) => ListTile(
+                    dense: true,
+                    title: Text(e.value),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.remove_circle, size: 18),
+                      onPressed: () => setState(() => _options.removeAt(e.key)),
                     ),
+                  ),
+                ),
                 TextButton.icon(
                   onPressed: () {
                     final controller = TextEditingController();
@@ -855,8 +855,9 @@ class _FieldEditDialogState extends State<_FieldEditDialog> {
               widget.field.copyWith(
                 label: _labelController.text,
                 name: _nameController.text,
-                helpText:
-                    _helpController.text.isEmpty ? null : _helpController.text,
+                helpText: _helpController.text.isEmpty
+                    ? null
+                    : _helpController.text,
                 required: _required,
                 options: _options.isNotEmpty ? {'items': _options} : {},
               ),

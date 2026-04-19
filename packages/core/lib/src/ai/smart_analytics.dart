@@ -51,8 +51,9 @@ class SmartAnalytics {
     int forecastDays = 7,
   }) {
     if (data.length < windowSize) {
-      final avg =
-          data.isEmpty ? 0.0 : data.reduce((a, b) => a + b) / data.length;
+      final avg = data.isEmpty
+          ? 0.0
+          : data.reduce((a, b) => a + b) / data.length;
       return List.filled(forecastDays, avg);
     }
 
@@ -102,7 +103,8 @@ class SmartAnalytics {
       final names = indices
           .map((i) => governorateData[i]['name_ar'] as String? ?? '')
           .toList();
-      final avgApproval = indices
+      final avgApproval =
+          indices
               .map(
                 (i) =>
                     (governorateData[i]['approval_rate'] as num?)?.toDouble() ??
@@ -114,8 +116,8 @@ class SmartAnalytics {
       final label = avgApproval >= 80
           ? 'ممتاز'
           : avgApproval >= 50
-              ? 'متوسط'
-              : 'يحتاج دعم';
+          ? 'متوسط'
+          : 'يحتاج دعم';
 
       clusters.add(
         GovernorateCluster(
@@ -206,7 +208,7 @@ class SmartAnalytics {
         for (int d = 0; d < dims; d++) {
           centroids[c][d] =
               members.map((i) => data[i][d]).reduce((a, b) => a + b) /
-                  members.length;
+              members.length;
         }
       }
     }
@@ -270,8 +272,9 @@ class SmartAnalytics {
     final subs = currentData['submissions'] as Map<String, dynamic>? ?? {};
     final shorts = currentData['shortages'] as Map<String, dynamic>? ?? {};
 
-    final dailyCounts =
-        historicalData.map<num>((d) => d['count'] as num? ?? 0).toList();
+    final dailyCounts = historicalData
+        .map<num>((d) => d['count'] as num? ?? 0)
+        .toList();
 
     final forecasts = exponentialSmoothing(dailyCounts, forecastDays: 7);
     final anomalies = detectSubmissionAnomalies(historicalData);
@@ -279,8 +282,9 @@ class SmartAnalytics {
     final healthScore = LocalAnalyticsEngine.healthScore(
       totalShortages: shorts['total'] as int? ?? 0,
       resolvedShortages: shorts['resolved'] as int? ?? 0,
-      criticalShortages: (shorts['bySeverity']
-              as Map<String, dynamic>?)?['critical'] as int? ??
+      criticalShortages:
+          (shorts['bySeverity'] as Map<String, dynamic>?)?['critical']
+              as int? ??
           0,
       totalSubmissions: subs['total'] as int? ?? 0,
     );

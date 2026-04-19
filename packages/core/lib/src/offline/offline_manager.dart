@@ -509,13 +509,30 @@ class OfflineManager {
   Map<String, dynamic> _getCache() {
     final data = _safeBox.get(_cacheKey);
     if (data == null || data.isEmpty) return {};
+
+    // 1. Try decrypting with current key
     try {
       final decrypted = _encryption.decrypt(data);
       return Map<String, dynamic>.from(jsonDecode(decrypted));
-    } catch (_) {
+    } catch (decryptError) {
+      // 2. Decryption failed — try reading as plain JSON
+      //    (handles migration from unencrypted versions)
       try {
         return Map<String, dynamic>.from(jsonDecode(data));
       } catch (_) {
+        // 3. Both failed — data is corrupted or key changed.
+        //    Clear it so we start fresh, but LOG the issue.
+        if (kDebugMode) {
+          print(
+            '[OfflineManager] ⚠️ Cache corrupted or encryption key changed!',
+          );
+          print('[OfflineManager]    Decrypt error: $decryptError');
+          print(
+            '[OfflineManager]    Clearing cache — will re-fetch on next request.',
+          );
+        }
+        // Clear the corrupted data so next cacheData() writes clean
+        _safeBox.delete(_cacheKey);
         return {};
       }
     }

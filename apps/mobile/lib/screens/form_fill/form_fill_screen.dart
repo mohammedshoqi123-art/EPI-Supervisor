@@ -234,6 +234,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       controller.dispose();
     }
     _textControllers.clear();
+    _pickedPhotos.clear(); // Release photo references to prevent OOM
     super.dispose();
   }
 

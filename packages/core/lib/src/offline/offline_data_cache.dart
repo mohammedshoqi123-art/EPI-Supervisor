@@ -292,7 +292,7 @@ class OfflineDataCache {
     String formId,
     Map<String, dynamic> formData,
   ) async {
-    final cachedForms = getCachedDataList('forms') ?? [];
+    final cachedForms = getCachedDataList('forms_all') ?? [];
     // Update or add the form in the cached list
     bool found = false;
     for (int i = 0; i < cachedForms.length; i++) {
@@ -305,7 +305,7 @@ class OfflineDataCache {
     if (!found) {
       cachedForms.add(formData);
     }
-    await _saveToCache('forms', cachedForms);
+    await _saveToCache('forms_all', cachedForms);
   }
 
   /// Get cached data as a list (handles the list wrapper format).

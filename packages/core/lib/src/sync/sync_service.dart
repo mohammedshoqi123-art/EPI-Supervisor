@@ -383,9 +383,18 @@ class SyncService {
     if (cache == null) return;
 
     try {
+      // Cache ALL active forms (for draft title lookups and cross-campaign access)
+      await cache.getList(
+        'forms_all',
+        () => _api.callFunction(SupabaseConfig.fnGetForms, {}).then(
+          (resp) => List<Map<String, dynamic>>.from(resp['forms'] ?? []),
+        ),
+        maxAge: const Duration(hours: 12),
+      );
+
+      // Cache per-campaign forms (for filtered listing in the UI)
       const types = ['polio_campaign', 'integrated_activity'];
       for (final type in types) {
-        // Fetch and cache each type
         await cache.getList(
           'forms_$type',
           () => _api.callFunction(SupabaseConfig.fnGetForms, {'campaign_type': type}).then(

@@ -377,7 +377,7 @@ class _DraftsTab extends ConsumerWidget {
             const Duration(seconds: 3),
             onTimeout: () => throw Exception('timeout'),
           );
-      final cachedForms = cache.getCachedDataList('forms') ?? [];
+      final cachedForms = cache.getCachedDataList('forms_all') ?? [];
 
       for (final draft in offlineDrafts) {
         final draftId = draft['draft_id'] as String;

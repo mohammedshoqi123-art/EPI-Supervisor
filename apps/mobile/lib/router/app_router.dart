@@ -328,7 +328,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     try {
       // 1. مسح كاش النماذج والاستمارات فقط
       final cache = await ref.read(offlineDataCacheProvider.future);
-      await cache.forceInvalidate('forms');
+      final campaign = ref.read(campaignProvider);
+      await cache.forceInvalidate('forms_${campaign.value}');
+      await cache.forceInvalidate('forms_all');
 
       // 2. طلب بيانات جديدة من السيرفر
       ref.invalidate(formsProvider);

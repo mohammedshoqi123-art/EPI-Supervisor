@@ -523,11 +523,11 @@ class OfflineManager {
 
   /// Get cached data by key.
   ///
-  /// When [forceStale] is true (used for offline fallback), returns cached data
-  /// regardless of age — up to [AppConfig.maxOfflineRetention] (30 days).
-  /// When offline, cached data is NEVER discarded due to staleness.
+  /// Always returns data if it exists and is within maxOfflineRetention (30 days).
+  /// The freshness/staleness decision is made by the CALLER (OfflineDataCache),
+  /// NOT here — so this layer never silently drops data.
   ///
-  /// [offlineOverride] — if true, ignores normal cacheExpiry and uses maxOfflineRetention.
+  /// [offlineOverride] — kept for API compatibility, no longer changes behavior.
   Map<String, dynamic>? getCachedData(
     String key, {
     bool offlineOverride = false,
@@ -539,22 +539,13 @@ class OfflineManager {
     final cachedAt = DateTime.tryParse(entry['cached_at'] ?? '');
     if (cachedAt != null) {
       final age = DateTime.now().difference(cachedAt);
-
-      // When offline or forceStale: allow data up to 30 days old
-      if (offlineOverride || !_isOnline) {
-        if (age > AppConfig.maxOfflineRetention) {
-          if (kDebugMode)
-            print(
-              '[OfflineManager] Cache expired (>${AppConfig.maxOfflineRetention.inDays} days) for $key',
-            );
-          return null;
+      // Only discard data older than the hard retention limit (30 days)
+      if (age > AppConfig.maxOfflineRetention) {
+        if (kDebugMode) {
+          print(
+            '[OfflineManager] Cache expired (>${AppConfig.maxOfflineRetention.inDays}d) for $key — discarded',
+          );
         }
-        // Return stale data when offline — stale is better than nothing
-        return entry['data'];
-      }
-
-      // Online: normal expiry check
-      if (age > AppConfig.cacheExpiry) {
         return null;
       }
     }

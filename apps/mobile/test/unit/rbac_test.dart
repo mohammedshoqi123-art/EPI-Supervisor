@@ -245,20 +245,34 @@ void main() {
       );
     });
 
+    test('viewAllData requires central+ (level 4+)', () {
+      expect(
         RBACService.canPerformAction(
           UserRole.central,
+          RBACAction.viewAllData,
+        ),
+        isTrue,
       );
       expect(
         RBACService.canPerformAction(
           UserRole.governorate,
+          RBACAction.viewAllData,
+        ),
+        isFalse,
       );
       expect(
         RBACService.canPerformAction(
           UserRole.district,
+          RBACAction.viewAllData,
+        ),
+        isFalse,
       );
       expect(
         RBACService.canPerformAction(
           UserRole.data_entry,
+          RBACAction.viewAllData,
+        ),
+        isFalse,
       );
     });
 
@@ -444,9 +458,6 @@ void main() {
       expect(UserRole.governorate.canManageUsers, isFalse);
       expect(UserRole.district.canManageUsers, isFalse);
       expect(UserRole.data_entry.canManageUsers, isFalse);
-    });
-
-      }
     });
 
     test('canUseAI is true for all roles', () {

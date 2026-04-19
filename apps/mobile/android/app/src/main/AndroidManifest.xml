@@ -50,6 +50,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
+
+        <!-- تعطيل محرك Impeller لحل مشكلة خشخشة وتكسر الشاشة في أجهزة الأندرويد -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
 
     <queries>

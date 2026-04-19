@@ -208,7 +208,8 @@ Future<void> main() async {
           );
           options.release = 'epi-supervisor@${AppConfig.appVersion}';
           options.tracesSampleRate = 0.2;
-          options.enableAutoPerformanceTracing = true;
+          // إيقاف التتبع التلقائي للأداء لمنع بطء واجهة المستخدم وتعليق التطبيق
+          options.enableAutoPerformanceTracing = false;
           options.attachStacktrace = true;
         }).timeout(const Duration(seconds: 8));
       } catch (e) {

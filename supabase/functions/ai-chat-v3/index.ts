@@ -296,23 +296,27 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
 
 async function vectorSearch(supa: any, query: string): Promise<string> {
   const embedding = await generateEmbedding(query)
-  if (!embedding) return keywordSearchEnhanced(supa, query)
+  let vectorDocs = ''
 
-  try {
-    const { data, error } = await supa.rpc('search_knowledge', {
-      query_embedding: embedding,
-      match_count: 5,
-      similarity_threshold: 0.4,
-    })
+  if (embedding) {
+    try {
+      const { data, error } = await supa.rpc('search_knowledge', {
+        query_embedding: embedding,
+        match_count: 5,
+        similarity_threshold: 0.4,
+      })
 
-    if (error || !data?.length) return keywordSearchEnhanced(supa, query)
-
-    return data.map((r: any) =>
-      `[${r.doc_title || 'مرجع'}] (صلة: ${(r.similarity * 100).toFixed(0)}%)\n${r.content.slice(0, 800)}`
-    ).join('\n\n---\n\n')
-  } catch {
-    return keywordSearchEnhanced(supa, query)
+      if (!error && data?.length) {
+        vectorDocs = data.map((r: any) =>
+          `[${r.doc_title || 'مرجع'}] (صلة: ${(r.similarity * 100).toFixed(0)}%)\n${r.content.slice(0, 800)}`
+        ).join('\n\n---\n\n')
+      }
+    } catch {}
   }
+  
+  const keywordDocs = await keywordSearchEnhanced(supa, query)
+  if (!vectorDocs && !keywordDocs) return ''
+  return [keywordDocs, vectorDocs].filter(Boolean).join('\n\n---\n\n')
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -373,7 +377,7 @@ async function keywordSearchEnhanced(supa: any, message: string): Promise<string
   try {
     const scored: any[] = []
     
-    // Fallback directly to the fast local JSON array instead of DB
+    // 1. Fallback directly to the fast local JSON array
     for (const chunk of _allChunks) {
       const contentLower = chunk.content.toLowerCase()
       let matchCount = 0
@@ -381,15 +385,35 @@ async function keywordSearchEnhanced(supa: any, message: string): Promise<string
         if (contentLower.includes(kw)) matchCount++
       }
       if (matchCount > 0) {
-        // Boost score if the entire message is fully matched
         scored.push({ ...chunk, score: matchCount + (contentLower.includes(message.trim()) ? 5 : 0) })
       }
     }
     
+    // 2. Search DB in case the user uploaded via UI without generating embeddings
+    try {
+      const conditions = keywords.slice(0, 6).map(kw => `content.ilike.%${kw}%`)
+      const { data: dbChunks, error } = await supa
+        .from('ai_chunks')
+        .select('content, metadata, document_id')
+        .or(conditions.join(','))
+        .limit(5)
+      
+      if (!error && dbChunks?.length) {
+        for (const chunk of dbChunks) {
+           const contentLower = chunk.content.toLowerCase()
+           let matchCount = 0
+           for (const kw of keywords) {
+             if (contentLower.includes(kw)) matchCount++
+           }
+           scored.push({ ...chunk, score: matchCount, source: chunk.metadata?.source || chunk.document_id })
+        }
+      }
+    } catch {}
+    
     if (scored.length > 0) {
       scored.sort((a, b) => b.score - a.score)
       return scored.slice(0, 4).map(c => 
-        `[المصدر: ${c.title} - ${c.section}]\n${c.content}`
+        `[المصدر: ${c.title || c.source || 'مرجع EPI'} - ${c.section || ''}]\n${c.content.slice(0, 800)}`
       ).join('\n\n---\n\n')
     }
     
@@ -1141,6 +1165,35 @@ serve(async (req) => {
           stream: true,
         })
         if (streamResult instanceof Response) return handleStream(streamResult, origin)
+      }
+    }
+
+    // ═══ FALLBACK 1: HuggingFace LLM
+    if (hfToken) {
+      try {
+        const resp = await fetch('https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: "meta-llama/Meta-Llama-3-8B-Instruct",
+            messages,
+            max_tokens: 800,
+            temperature: 0.6
+          })
+        })
+        if (resp.ok) {
+          const json = await resp.json()
+          if (json.choices?.[0]?.message) {
+            return jsonResponse({
+              reply: json.choices[0].message.content,
+              source: 'huggingface_fallback',
+              model: 'llama-3-8b-hf',
+              intent, confidence, messageId: crypto.randomUUID()
+            }, 200, origin)
+          }
+        }
+      } catch (e) {
+        console.warn('HuggingFace fallback failed:', e)
       }
     }
 

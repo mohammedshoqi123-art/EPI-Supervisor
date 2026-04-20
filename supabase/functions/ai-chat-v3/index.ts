@@ -237,7 +237,8 @@ function buildDynamicSystemPrompt(
 • ابدأ بالخلاصة العملية مباشرة بدون مقدمات طويلة.
 • استخدم أرقام حقيقية — لا تختلق.
 • كن المستشار الذكي والخبير (استخدم أسلوباً احترافياً ومحفزاً - "حلاوة").
-• اعتمد بشكل أساسي ومطلق على (مراجع من قاعدة المعرفة) متى ما توفرت ولا تقدم معلومات طبية من خارجها.
+• اعتمد أولاً على مراجع قاعدة المعرفة. إن لم تتوفر، يمكن الاستعانة بمعرفتك العامة الموثوقة (WHO, UNICEF, MoHP) مع الإشارة لذلك (مثلاً: "وفقاً لقاعدة المعرفة..." أو "حسب إرشادات WHO..."). لا تقدم تشخيصات طبية فردية أبداً.
+• الحملات المتاحة: شلل الأطفال (polio_campaign) + النشاط الإيصالي التكاملي (integrated_activity). عند الحديث عن البيانات، وضّح أي حملة.
 • جداول مختصرة، قوائم، رموز (📊⚠️✅💡🚨)
 • توصيات عملية ميدانية تدعم أداء العمل
 • الحد الأقصى: 250 كلمة للأسئلة المباشرة.
@@ -300,7 +301,11 @@ async function vectorSearch(supa: any, query: string): Promise<string> {
 
   if (embedding) {
     try {
-      const { data, error } = await supa.rpc('search_knowledge', {
+      // Use admin client to bypass RLS
+      const adminSupa = createAdminClient()
+      const client = adminSupa || supa
+
+      const { data, error } = await client.rpc('search_knowledge', {
         query_embedding: embedding,
         match_count: 5,
         similarity_threshold: 0.4,
@@ -311,9 +316,11 @@ async function vectorSearch(supa: any, query: string): Promise<string> {
           `[${r.doc_title || 'مرجع'}] (صلة: ${(r.similarity * 100).toFixed(0)}%)\n${r.content.slice(0, 800)}`
         ).join('\n\n---\n\n')
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Vector search failed:', e)
+    }
   }
-  
+
   const keywordDocs = await keywordSearchEnhanced(supa, query)
   if (!vectorDocs && !keywordDocs) return ''
   return [keywordDocs, vectorDocs].filter(Boolean).join('\n\n---\n\n')
@@ -376,8 +383,8 @@ async function keywordSearchEnhanced(supa: any, message: string): Promise<string
 
   try {
     const scored: any[] = []
-    
-    // 1. Fallback directly to the fast local JSON array
+
+    // 1. Search local embedded knowledge (always available)
     for (const chunk of _allChunks) {
       const contentLower = chunk.content.toLowerCase()
       let matchCount = 0
@@ -388,16 +395,19 @@ async function keywordSearchEnhanced(supa: any, message: string): Promise<string
         scored.push({ ...chunk, score: matchCount + (contentLower.includes(message.trim()) ? 5 : 0) })
       }
     }
-    
-    // 2. Search DB in case the user uploaded via UI without generating embeddings
+
+    // 2. Search DB knowledge base (use admin client to bypass RLS)
     try {
+      const adminSupa = createAdminClient()
+      const client = adminSupa || supa
+
       const conditions = keywords.slice(0, 6).map(kw => `content.ilike.%${kw}%`)
-      const { data: dbChunks, error } = await supa
+      const { data: dbChunks, error } = await client
         .from('ai_chunks')
         .select('content, metadata, document_id')
         .or(conditions.join(','))
         .limit(5)
-      
+
       if (!error && dbChunks?.length) {
         for (const chunk of dbChunks) {
            const contentLower = chunk.content.toLowerCase()
@@ -408,15 +418,17 @@ async function keywordSearchEnhanced(supa: any, message: string): Promise<string
            scored.push({ ...chunk, score: matchCount, source: chunk.metadata?.source || chunk.document_id })
         }
       }
-    } catch {}
-    
+    } catch (e) {
+      console.warn('DB knowledge search failed:', e)
+    }
+
     if (scored.length > 0) {
       scored.sort((a, b) => b.score - a.score)
-      return scored.slice(0, 4).map(c => 
+      return scored.slice(0, 4).map(c =>
         `[المصدر: ${c.title || c.source || 'مرجع EPI'} - ${c.section || ''}]\n${c.content.slice(0, 800)}`
       ).join('\n\n---\n\n')
     }
-    
+
     return ''
   } catch {
     return ''
@@ -467,13 +479,14 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'get_submissions',
-      description: 'جلب إحصائيات الإرساليات — يمكن فلترة حسب الحالة أو المحافظة أو الفترة',
+      description: 'جلب إحصائيات الإرساليات — يمكن فلترة حسب الحالة أو المحافظة أو الفترة أو الحملة. campaign_type: polio_campaign (شلل الأطفال) أو integrated_activity (النشاط الإيصالي التكاملي)',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', enum: ['draft', 'submitted', 'approved', 'rejected'], description: 'حالة الإرسالية' },
           governorate_name: { type: 'string', description: 'اسم المحافظة (عربي)' },
           days: { type: 'number', description: 'عدد الأيام الماضية (مثلاً 7 لأسبوع)' },
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة: polio_campaign (شلل) أو integrated_activity (إيصالي تكاملي) أو all (الكل)' },
         },
         required: [],
       },
@@ -483,13 +496,14 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'get_shortages',
-      description: 'جلب إحصائيات النواقص الميدانية',
+      description: 'جلب إحصائيات النواقص الميدانية — يمكن فلترة حسب الحملة',
       parameters: {
         type: 'object',
         properties: {
           severity: { type: 'string', enum: ['critical', 'high', 'medium', 'low'], description: 'مستوى الخطورة' },
           governorate_name: { type: 'string', description: 'اسم المحافظة' },
           resolved: { type: 'boolean', description: 'هل تم الحل؟' },
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
         },
         required: [],
       },
@@ -499,7 +513,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'get_analytics',
-      description: 'جلب إحصائيات لوحة التحكم (عدد الإرساليات، النواقص، المستخدمين)',
+      description: 'جلب إحصائيات لوحة التحكم — يعرض بيانات كل حملة بشكل منفصل',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -507,8 +521,14 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'get_governorate_performance',
-      description: 'جلب ترتيب المحافظات حسب الإرساليات ونسبة الاعتماد',
-      parameters: { type: 'object', properties: {}, required: [] },
+      description: 'جلب ترتيب المحافظات حسب الإرساليات ونسبة الاعتماد — لكل حملة',
+      parameters: {
+        type: 'object',
+        properties: {
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+        },
+        required: [],
+      },
     },
   },
   {
@@ -523,8 +543,63 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'get_submission_trend',
-      description: 'اتجاه الإرساليات آخر 30 يوم (يوم بيوم)',
-      parameters: { type: 'object', properties: {}, required: [] },
+      description: 'اتجاه الإرساليات آخر 30 يوم — يعرض كل حملة بشكل منفصل',
+      parameters: {
+        type: 'object',
+        properties: {
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_submission_details',
+      description: 'جلب تفاصيل إرسالية واحدة بما فيها محتوى الحقول الفعلية (data JSONB). يُستخدم عندما يريد المستخدم معرفة محتوى استمارة محددة.',
+      parameters: {
+        type: 'object',
+        properties: {
+          submission_id: { type: 'string', description: 'معرف الإرسالية (UUID)' },
+          limit: { type: 'number', description: 'عدد الإرساليات (افتراضي 5)' },
+          governorate_name: { type: 'string', description: 'اسم المحافظة' },
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+          status: { type: 'string', enum: ['draft', 'submitted', 'approved', 'rejected'], description: 'الحالة' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_form_schemas',
+      description: 'جلب تعريفات النماذج (أسماء الحقول، الأنواع، الخيارات). يُستخدم عندما يريد المستخدم معرفة إيش الحقول الموجودة في كل استمارة.',
+      parameters: {
+        type: 'object',
+        properties: {
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'aggregate_form_data',
+      description: 'تجميع أرقام من حقول النماذج (مجموع، متوسط، عدد). مثلاً: مجموع جرعات BCG، متوسط عدد الفريق. يحتاج form_id واسم الحقل.',
+      parameters: {
+        type: 'object',
+        properties: {
+          form_id: { type: 'string', description: 'معرف النموذج (UUID)' },
+          field_key: { type: 'string', description: 'مفتاح الحقل في data JSONB (مثل: doses_bcg, immunization_children)' },
+          aggregation: { type: 'string', enum: ['sum', 'avg', 'count', 'min', 'max'], description: 'نوع التجميع' },
+          days: { type: 'number', description: 'آخر كم يوم (افتراضي كل الفترات)' },
+        },
+        required: ['form_id', 'field_key', 'aggregation'],
+      },
     },
   },
 ]
@@ -534,15 +609,37 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
     return Promise.race([promise, new Promise<null>((r) => setTimeout(() => r(null), ms))]) as Promise<T | null>
   }
 
+  // Helper: Get form IDs for a campaign type
+  async function getCampaignFormIds(campaignType: string): Promise<string[] | null> {
+    if (!campaignType || campaignType === 'all') return null
+    const { data } = await supa.from('forms').select('id').eq('campaign_type', campaignType).is('deleted_at', null)
+    return data?.map((f: any) => f.id) ?? null
+  }
+
+  // Helper: Apply campaign filter to submission queries
+  function applyCampaignFilter(query: any, formIds: string[] | null) {
+    if (formIds && formIds.length > 0) return query.in('form_id', formIds)
+    return query
+  }
+
+  const CAMPAIGN_LABELS: Record<string, string> = {
+    polio_campaign: 'شلل الأطفال',
+    integrated_activity: 'النشاط الإيصالي التكاملي',
+  }
+
   try {
     switch (name) {
       case 'get_submissions': {
-        let query = supa.from('form_submissions').select('status, governorate_id, created_at').is('deleted_at', null)
+        const campaignType = args.campaign_type || 'all'
+        const formIds = await getCampaignFormIds(campaignType)
+
+        let query = supa.from('form_submissions').select('status, governorate_id, created_at, form_id').is('deleted_at', null)
         if (args.status) query = query.eq('status', args.status)
         if (args.days) {
           const since = new Date(Date.now() - args.days * 86400000).toISOString()
           query = query.gte('created_at', since)
         }
+        query = applyCampaignFilter(query, formIds)
         const { data } = await withTimeout(query.limit(2000), 8_000) ?? {}
         if (!data) return { error: 'لا توجد بيانات' }
 
@@ -550,25 +647,56 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
         for (const row of data) {
           byStatus[row.status] = (byStatus[row.status] ?? 0) + 1
         }
-        return { total: data.length, byStatus, period_days: args.days || 'كل الفترات' }
+
+        // If showing all campaigns, break down by campaign
+        let byCampaign: Record<string, any> | undefined
+        if (campaignType === 'all' && formIds === null) {
+          const allFormIds = await getCampaignFormIds('polio_campaign')
+          const integratedFormIds = await getCampaignFormIds('integrated_activity')
+          const polioIds = new Set(allFormIds || [])
+          const integratedIds = new Set(integratedFormIds || [])
+
+          const polioCount = data.filter((r: any) => polioIds.has(r.form_id)).length
+          const integratedCount = data.filter((r: any) => integratedIds.has(r.form_id)).length
+          byCampaign = {
+            'شلل الأطفال': { total: polioCount },
+            'النشاط الإيصالي التكاملي': { total: integratedCount },
+          }
+        }
+
+        const label = campaignType !== 'all' ? CAMPAIGN_LABELS[campaignType] || campaignType : 'كل الحملات'
+        return { total: data.length, byStatus, campaign: label, byCampaign, period_days: args.days || 'كل الفترات' }
       }
 
       case 'get_shortages': {
-        let query = supa.from('supply_shortages').select('severity, is_resolved, item_name').is('deleted_at', null)
+        const campaignType = args.campaign_type || 'all'
+        let query = supa.from('supply_shortages').select('severity, is_resolved, item_name, submission_id').is('deleted_at', null)
         if (args.severity) query = query.eq('severity', args.severity)
         if (args.resolved !== undefined) query = query.eq('is_resolved', args.resolved)
         const { data } = await withTimeout(query.limit(1000), 8_000) ?? {}
         if (!data) return { error: 'لا توجد بيانات' }
 
+        // Filter by campaign if needed
+        let filteredData = data
+        if (campaignType !== 'all') {
+          const formIds = await getCampaignFormIds(campaignType)
+          if (formIds && formIds.length > 0) {
+            const { data: subs } = await supa.from('form_submissions').select('id').in('form_id', formIds).limit(10000)
+            const subIdSet = new Set((subs || []).map((s: any) => s.id))
+            filteredData = data.filter((r: any) => !r.submission_id || subIdSet.has(r.submission_id))
+          }
+        }
+
         const bySeverity: Record<string, number> = {}
         let resolved = 0
         const criticalItems: string[] = []
-        for (const row of data) {
+        for (const row of filteredData) {
           bySeverity[row.severity] = (bySeverity[row.severity] ?? 0) + 1
           if (row.is_resolved) resolved++
           if (row.severity === 'critical' && !row.is_resolved) criticalItems.push(row.item_name)
         }
-        return { total: data.length, resolved, pending: data.length - resolved, bySeverity, critical_items: [...new Set(criticalItems)].slice(0, 5) }
+        const label = campaignType !== 'all' ? CAMPAIGN_LABELS[campaignType] || campaignType : 'كل الحملات'
+        return { total: filteredData.length, resolved, pending: filteredData.length - resolved, bySeverity, campaign: label, critical_items: [...new Set(criticalItems)].slice(0, 5) }
       }
 
       case 'get_analytics': {
@@ -579,18 +707,48 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
         ]), 8_000)
         if (!results) return { error: 'لا توجد بيانات' }
         const [s, sh, u] = results
-        return { total_submissions: s.count, active_shortages: sh.count, active_users: u.count }
+
+        // Per-campaign breakdown
+        const polioFormIds = await getCampaignFormIds('polio_campaign')
+        const integratedFormIds = await getCampaignFormIds('integrated_activity')
+
+        let polioCount = 0, integratedCount = 0
+        if (polioFormIds) {
+          const { count } = await withTimeout(
+            supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).in('form_id', polioFormIds), 5_000
+          ) ?? {}
+          polioCount = count || 0
+        }
+        if (integratedFormIds) {
+          const { count } = await withTimeout(
+            supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).in('form_id', integratedFormIds), 5_000
+          ) ?? {}
+          integratedCount = count || 0
+        }
+
+        return {
+          total_submissions: s.count,
+          active_shortages: sh.count,
+          active_users: u.count,
+          by_campaign: {
+            'شلل الأطفال': polioCount,
+            'النشاط الإيصالي التكاملي': integratedCount,
+          }
+        }
       }
 
       case 'get_governorate_performance': {
+        const campaignType = args.campaign_type || 'all'
+        const formIds = await getCampaignFormIds(campaignType)
+
         const { data: govs } = await withTimeout(
           supa.from('governorates').select('id, name_ar').eq('is_active', true).is('deleted_at', null), 5_000
         ) ?? {}
         if (!govs) return { error: 'لا توجد بيانات' }
 
-        const { data: subs } = await withTimeout(
-          supa.from('form_submissions').select('governorate_id, status').is('deleted_at', null).limit(3000), 8_000
-        ) ?? {}
+        let subQuery = supa.from('form_submissions').select('governorate_id, status').is('deleted_at', null).limit(3000)
+        subQuery = applyCampaignFilter(subQuery, formIds)
+        const { data: subs } = await withTimeout(subQuery, 8_000) ?? {}
 
         const govStats: Record<string, { total: number; approved: number }> = {}
         for (const s of subs ?? []) {
@@ -600,11 +758,15 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           if (s.status === 'approved') govStats[s.governorate_id].approved++
         }
 
-        return govs.map((g: any) => ({
-          name: g.name_ar,
-          submissions: govStats[g.id]?.total ?? 0,
-          approved: govStats[g.id]?.approved ?? 0,
-        })).sort((a: any, b: any) => b.submissions - a.submissions).slice(0, 10)
+        const label = campaignType !== 'all' ? CAMPAIGN_LABELS[campaignType] || campaignType : 'كل الحملات'
+        return {
+          campaign: label,
+          governorates: govs.map((g: any) => ({
+            name: g.name_ar,
+            submissions: govStats[g.id]?.total ?? 0,
+            approved: govStats[g.id]?.approved ?? 0,
+          })).sort((a: any, b: any) => b.submissions - a.submissions).slice(0, 10)
+        }
       }
 
       case 'get_users_summary': {
@@ -619,11 +781,15 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
       }
 
       case 'get_submission_trend': {
+        const campaignType = args.campaign_type || 'all'
+        const formIds = await getCampaignFormIds(campaignType)
+
         const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
-        const { data: subs } = await withTimeout(
-          supa.from('form_submissions').select('created_at, status').is('deleted_at', null).gte('created_at', thirtyDaysAgo).limit(5000), 10_000
-        ) ?? {}
+        let trendQuery = supa.from('form_submissions').select('created_at, status, form_id').is('deleted_at', null).gte('created_at', thirtyDaysAgo).limit(5000)
+        trendQuery = applyCampaignFilter(trendQuery, formIds)
+        const { data: subs } = await withTimeout(trendQuery, 10_000) ?? {}
         if (!subs) return { error: 'لا توجد بيانات' }
+
         const byDay: Record<string, { total: number; approved: number }> = {}
         for (const s of subs) {
           const day = s.created_at.split('T')[0]
@@ -631,9 +797,147 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           byDay[day].total++
           if (s.status === 'approved') byDay[day].approved++
         }
+
+        const label = campaignType !== 'all' ? CAMPAIGN_LABELS[campaignType] || campaignType : 'كل الحملات'
         return {
+          campaign: label,
           days: Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b)).slice(-14).map(([date, stats]) => ({ date, ...stats })),
           total_period: subs.length,
+        }
+      }
+
+      case 'get_submission_details': {
+        const campaignType = args.campaign_type || 'all'
+        const formIds = await getCampaignFormIds(campaignType)
+        const limit = args.limit || 5
+
+        let query = supa.from('form_submissions')
+          .select('id, data, status, created_at, governorate_id, district_id, gps_lat, gps_lng, notes, form_id')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(limit)
+
+        if (args.submission_id) query = query.eq('id', args.submission_id)
+        if (args.status) query = query.eq('status', args.status)
+        if (formIds && formIds.length > 0) query = query.in('form_id', formIds)
+
+        const { data: details } = await withTimeout(query, 10_000) ?? {}
+        if (!details || details.length === 0) return { error: 'لا توجد إرساليات' }
+
+        // Get form titles
+        const uniqueFormIds = [...new Set(details.map((d: any) => d.form_id))]
+        const { data: formTitles } = await withTimeout(
+          supa.from('forms').select('id, title_ar').in('id', uniqueFormIds), 5_000
+        ) ?? {}
+        const titleMap: Record<string, string> = {}
+        for (const ft of (formTitles || [])) titleMap[ft.id] = ft.title_ar
+
+        // Get governorate names
+        const uniqueGovIds = [...new Set(details.map((d: any) => d.governorate_id).filter(Boolean))]
+        const { data: govNames } = await withTimeout(
+          supa.from('governorates').select('id, name_ar').in('id', uniqueGovIds), 5_000
+        ) ?? {}
+        const govMap: Record<string, string> = {}
+        for (const g of (govNames || [])) govMap[g.id] = g.name_ar
+
+        return {
+          count: details.length,
+          submissions: details.map((d: any) => ({
+            id: d.id,
+            form: titleMap[d.form_id] || 'غير معروف',
+            status: d.status,
+            governorate: govMap[d.governorate_id] || 'غير محدد',
+            date: d.created_at?.split('T')[0],
+            data: d.data || {},
+            gps: d.gps_lat ? `${d.gps_lat}, ${d.gps_lng}` : null,
+            notes: d.notes,
+          }))
+        }
+      }
+
+      case 'get_form_schemas': {
+        const campaignType = args.campaign_type || 'all'
+        let query = supa.from('forms')
+          .select('id, title_ar, title_en, campaign_type, schema, requires_gps, requires_photo, max_photos, is_active')
+          .is('deleted_at', null)
+          .eq('is_active', true)
+
+        if (campaignType !== 'all') query = query.eq('campaign_type', campaignType)
+
+        const { data: forms } = await withTimeout(query, 10_000) ?? {}
+        if (!forms || forms.length === 0) return { error: 'لا توجد نماذج' }
+
+        return {
+          count: forms.length,
+          forms: forms.map((f: any) => {
+            const sections = f.schema?.sections || []
+            const allFields: any[] = []
+            for (const sec of sections) {
+              for (const field of (sec.fields || [])) {
+                allFields.push({
+                  section: sec.title_ar || sec.id,
+                  key: field.key,
+                  label: field.label_ar,
+                  type: field.type,
+                  required: field.required || false,
+                  options: field.options || null,
+                  showIf: field.showIf || null,
+                  auto_fill: field.auto_fill || null,
+                  auto_detect: field.auto_detect || null,
+                })
+              }
+            }
+            return {
+              id: f.id,
+              title: f.title_ar,
+              campaign: f.campaign_type,
+              requires_gps: f.requires_gps,
+              requires_photo: f.requires_photo,
+              total_fields: allFields.length,
+              sections: sections.map((s: any) => ({ name: s.title_ar, field_count: (s.fields || []).length })),
+              fields: allFields,
+            }
+          })
+        }
+      }
+
+      case 'aggregate_form_data': {
+        const { form_id, field_key, aggregation, days } = args
+        if (!form_id || !field_key || !aggregation) return { error: 'مطلوب: form_id, field_key, aggregation' }
+
+        let query = supa.from('form_submissions')
+          .select('data')
+          .eq('form_id', form_id)
+          .is('deleted_at', null)
+          .not('data->' + field_key, 'is', null)
+
+        if (days) {
+          const since = new Date(Date.now() - days * 86400000).toISOString()
+          query = query.gte('created_at', since)
+        }
+
+        const { data: rows } = await withTimeout(query.limit(5000), 10_000) ?? {}
+        if (!rows || rows.length === 0) return { error: `لا توجد بيانات للحقل ${field_key}` }
+
+        const values = rows.map((r: any) => Number(r.data?.[field_key])).filter((v: number) => !isNaN(v))
+        if (values.length === 0) return { error: `لا توجد قيم رقمية للحقل ${field_key}` }
+
+        let result: number
+        switch (aggregation) {
+          case 'sum': result = values.reduce((a: number, b: number) => a + b, 0); break
+          case 'avg': result = values.reduce((a: number, b: number) => a + b, 0) / values.length; break
+          case 'count': result = values.length; break
+          case 'min': result = Math.min(...values); break
+          case 'max': result = Math.max(...values); break
+          default: result = 0
+        }
+
+        return {
+          field: field_key,
+          aggregation,
+          result: Math.round(result * 100) / 100,
+          data_points: values.length,
+          period: days ? `آخر ${days} يوم` : 'كل الفترات',
         }
       }
 
@@ -675,31 +979,48 @@ async function fetchLiveData(supa: any, profile: UserProfile | null): Promise<st
   const parts: string[] = []
   const isPrivileged = profile && ['admin', 'central', 'governorate'].includes(profile.role)
 
+  // Get campaign form IDs
+  const { data: polioForms } = await withTimeout(
+    supa.from('forms').select('id').eq('campaign_type', 'polio_campaign').is('deleted_at', null), 3_000
+  ) ?? {}
+  const { data: integratedForms } = await withTimeout(
+    supa.from('forms').select('id').eq('campaign_type', 'integrated_activity').is('deleted_at', null), 3_000
+  ) ?? {}
+  const polioFormIds = (polioForms || []).map((f: any) => f.id)
+  const integratedFormIds = (integratedForms || []).map((f: any) => f.id)
+
   try {
     const today = new Date().toISOString().split('T')[0]
-    let subQuery = supa.from('form_submissions')
-      .select('status', { count: 'exact', head: true })
-      .is('deleted_at', null)
-      .gte('created_at', `${today}T00:00:00Z`)
 
-    if (!isPrivileged && profile) {
-      subQuery = subQuery.eq('submitted_by', profile.id)
+    // Today submissions per campaign
+    if (polioFormIds.length > 0) {
+      let q = supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).in('form_id', polioFormIds).gte('created_at', `${today}T00:00:00Z`)
+      if (!isPrivileged && profile) q = q.eq('submitted_by', profile.id)
+      const { count } = await withTimeout(q, 5_000) ?? {}
+      if (count !== null && count !== undefined) parts.push(`📊 إرساليات اليوم (شلل): ${count}`)
     }
-
-    const { count: todayCount } = await withTimeout(subQuery, 5_000) ?? {}
-    if (todayCount !== null && todayCount !== undefined) {
-      parts.push(`📊 إرساليات اليوم: ${todayCount}`)
+    if (integratedFormIds.length > 0) {
+      let q = supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).in('form_id', integratedFormIds).gte('created_at', `${today}T00:00:00Z`)
+      if (!isPrivileged && profile) q = q.eq('submitted_by', profile.id)
+      const { count } = await withTimeout(q, 5_000) ?? {}
+      if (count !== null && count !== undefined) parts.push(`📊 إرساليات اليوم (إيصالي تكاملي): ${count}`)
     }
   } catch {}
 
   if (isPrivileged) {
     try {
-      const { count: pendingCount } = await withTimeout(
-        supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted'),
-        5_000
-      ) ?? {}
-      if (pendingCount !== null && pendingCount !== undefined) {
-        parts.push(`⏳ بانتظار المراجعة: ${pendingCount}`)
+      // Pending per campaign
+      if (polioFormIds.length > 0) {
+        const { count } = await withTimeout(
+          supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted').in('form_id', polioFormIds), 5_000
+        ) ?? {}
+        if (count) parts.push(`⏳ بانتظار المراجعة (شلل): ${count}`)
+      }
+      if (integratedFormIds.length > 0) {
+        const { count } = await withTimeout(
+          supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted').in('form_id', integratedFormIds), 5_000
+        ) ?? {}
+        if (count) parts.push(`⏳ بانتظار المراجعة (إيصالي): ${count}`)
       }
     } catch {}
 

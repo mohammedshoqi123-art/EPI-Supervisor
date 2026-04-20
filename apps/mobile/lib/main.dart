@@ -80,38 +80,7 @@ Future<void> main() async {
   try {
     EnvValidator.validate();
   } catch (e) {
-    runApp(
-      MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'خطأ في الإعدادات',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Cairo',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    e.toString(),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontFamily: 'Tajawal'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    runApp(_ErrorApp(title: 'خطأ في الإعدادات', message: e.toString()));
     return;
   }
 
@@ -130,44 +99,9 @@ Future<void> main() async {
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.anonKey,
         debug: AppConfig.isDevelopment,
-      );
+      ).timeout(const Duration(seconds: 15));
     } catch (e) {
-      runApp(
-        MaterialApp(
-          home: Scaffold(
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'خطأ في إعدادات Supabase',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      e.toString(),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontFamily: 'Tajawal'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
+      runApp(_ErrorApp(title: 'خطأ في إعدادات Supabase', message: e.toString()));
       return;
     }
   }
@@ -314,6 +248,47 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
       builder: (context, child) {
         return Directionality(textDirection: TextDirection.rtl, child: child!);
       },
+    );
+  }
+}
+
+/// Web-safe error app — shows error message with proper MaterialApp setup
+class _ErrorApp extends StatelessWidget {
+  final String title;
+  final String message;
+  const _ErrorApp({required this.title, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      locale: const Locale('ar', 'IQ'),
+      supportedLocales: const [Locale('ar', 'IQ')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                  const SizedBox(height: 8),
+                  Text(message, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Tajawal')),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

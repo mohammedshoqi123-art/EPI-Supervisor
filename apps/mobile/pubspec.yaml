@@ -58,6 +58,12 @@ dependencies:
   geolocator: ^12.0.0
   sentry_flutter: ^8.3.0
 
+  # Auth (biometric)
+  local_auth: ^2.3.0
+
+  # Onboarding
+  shared_preferences: ^2.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -809,8 +809,21 @@ async function logFeedback(supa: any, userId: string, messageId: string, rating:
 // USAGE LOGGING
 // ═══════════════════════════════════════════════════════════
 
-async function logUsage(supa: any, modelId: string, tokens: number, latencyMs: number, success: boolean, error?: string) {
+async function logUsage(supa: any, modelId: string, tokens: number, latencyMs: number, success: boolean, error?: string, source?: string) {
   try {
+    // Use direct insert with service context to avoid RLS issues
+    const adminSupa = createAdminClient()
+    if (adminSupa) {
+      await adminSupa.from('ai_model_usage').insert({
+        model_id: modelId,
+        tokens_used: tokens,
+        latency_ms: latencyMs,
+        success,
+        error_message: error || null,
+        response_source: source || null,
+      })
+    }
+    // Also update model usage count
     await supa.rpc('log_ai_usage', {
       p_model_id: modelId,
       p_tokens: tokens,
@@ -856,7 +869,8 @@ async function groqChat(messages: any[], key: string, opts: any = {}) {
     })
 
     if (!r.ok) {
-      console.error(`Groq API error ${r.status}:`, await r.text().catch(() => 'unknown'))
+      const errorText = await r.text().catch(() => 'unknown')
+      console.error(`[GROQ_FAIL] status=${r.status} model=${opts.model || 'llama-3.3-70b-versatile'} error=${errorText}`)
       return null
     }
 
@@ -1128,7 +1142,7 @@ serve(async (req) => {
 
         if (finalResult?.type === 'message') {
           const latencyMs = Date.now() - startMs
-          await logUsage(supabase, dbModel?.id || 'groq-70b', result.usage?.total_tokens || 0, latencyMs, true)
+          await logUsage(supabase, dbModel?.id || 'groq-70b', result.usage?.total_tokens || 0, latencyMs, true, undefined, 'groq_function_call')
 
           // Update summary in background
           if (messages.length > 6) {
@@ -1149,13 +1163,14 @@ serve(async (req) => {
 
       if (result?.type === 'message') {
         const latencyMs = Date.now() - startMs
-        await logUsage(supabase, dbModel?.id || 'groq-70b', result.usage?.total_tokens || 0, latencyMs, true)
+        await logUsage(supabase, dbModel?.id || 'groq-70b', result.usage?.total_tokens || 0, latencyMs, true, undefined, 'groq')
         return jsonResponse({
           reply: result.content, source: 'groq', model: dbModelId, intent, confidence,
           messageId: crypto.randomUUID(),
         }, 200, origin)
       }
 
+      console.log('[GROQ_DEBUG] groqChat result was null or unexpected type, falling through')
       // Streaming fallback
       if (stream && modelConfig.streamEnabled) {
         const streamResult = await groqChat(messages, groqKey, {
@@ -1184,6 +1199,7 @@ serve(async (req) => {
         if (resp.ok) {
           const json = await resp.json()
           if (json.choices?.[0]?.message) {
+            await logUsage(supabase, 'hf-llama3-8b', 0, Date.now() - startMs, true, undefined, 'huggingface_fallback')
             return jsonResponse({
               reply: json.choices[0].message.content,
               source: 'huggingface_fallback',
@@ -1201,7 +1217,7 @@ serve(async (req) => {
     if (mimoKey) {
       const result = await mimoChat(messages, mimoKey)
       if (result?.choices?.[0]?.message?.content) {
-        await logUsage(supabase, 'mimo-v2', 0, Date.now() - startMs, true)
+        await logUsage(supabase, 'mimo-v2', 0, Date.now() - startMs, true, undefined, 'mimo')
         return jsonResponse({
           reply: result.choices[0].message.content, source: 'mimo', model: 'mimo-v2-pro',
           intent, confidence, messageId: crypto.randomUUID(),
@@ -1210,7 +1226,7 @@ serve(async (req) => {
     }
 
     // Nothing worked
-    await logUsage(supabase, 'none', 0, Date.now() - startMs, false, 'All providers failed')
+    await logUsage(supabase, 'none', 0, Date.now() - startMs, false, 'All providers failed', 'all_failed')
     return jsonResponse({
       reply: '⚠️ لم أتمكن من توليد رد. تحقق من إعدادات مزود AI.',
       source: 'all_failed',

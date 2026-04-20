@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS ai_model_usage (
   latency_ms    INT,
   success       BOOLEAN DEFAULT true,
   error_message TEXT,
+  response_source TEXT,           -- 'groq', 'groq_function_call', 'mimo', 'huggingface_fallback', 'local', 'all_failed'
   created_at    TIMESTAMPTZ DEFAULT now()
 );
 

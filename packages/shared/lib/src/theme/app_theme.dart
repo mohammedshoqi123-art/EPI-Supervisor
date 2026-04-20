@@ -321,6 +321,127 @@ class AppTheme {
     );
   }
 
+  // ─── Dark Mode Colors ─────────────────────────────────────────────────
+  static const Color darkBackground = Color(0xFF0F172A);
+  static const Color darkSurface = Color(0xFF1E293B);
+  static const Color darkSurfaceHigh = Color(0xFF334155);
+  static const Color darkBorder = Color(0xFF334155);
+  static const Color darkTextPrimary = Color(0xFFF1F5F9);
+  static const Color darkTextSecondary = Color(0xFF94A3B8);
+  static const Color darkTextHint = Color(0xFF64748B);
+
+  // ─── Dark Theme ══════════════════════════════════════════════════════
+  static ThemeData get darkTheme {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: primaryColor,
+        brightness: Brightness.dark,
+        primary: primaryLight,
+        secondary: secondaryLight,
+        tertiary: const Color(0xFF9FA8DA),
+        error: const Color(0xFFEF4444),
+        surface: darkSurface,
+        surfaceContainerLow: darkBackground,
+        surfaceContainerHigh: darkSurfaceHigh,
+      ),
+      fontFamily: fontSecondary,
+      scaffoldBackgroundColor: darkBackground,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: darkSurface,
+        foregroundColor: darkTextPrimary,
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: TextStyle(
+          fontFamily: fontPrimary,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: darkTextPrimary,
+        ),
+      ),
+      cardTheme: CardTheme(
+        color: darkSurface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: radiusMedium),
+        margin: EdgeInsets.zero,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: radiusMedium),
+          textStyle: const TextStyle(
+            fontFamily: fontPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+          minimumSize: const Size(double.infinity, 48),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryLight,
+          side: const BorderSide(color: darkBorder),
+          shape: RoundedRectangleBorder(borderRadius: radiusMedium),
+          textStyle: const TextStyle(
+            fontFamily: fontPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: darkSurfaceHigh,
+        border: OutlineInputBorder(
+          borderRadius: radiusMedium,
+          borderSide: const BorderSide(color: darkBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: radiusMedium,
+          borderSide: const BorderSide(color: darkBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: radiusMedium,
+          borderSide: const BorderSide(color: primaryLight, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: radiusMedium,
+          borderSide: const BorderSide(color: Color(0xFFEF4444)),
+        ),
+        labelStyle: const TextStyle(fontFamily: fontSecondary, color: darkTextSecondary),
+        hintStyle: const TextStyle(fontFamily: fontSecondary, color: darkTextHint),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: darkBorder,
+        space: 1,
+        thickness: 1,
+      ),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(borderRadius: radiusSmall),
+        backgroundColor: darkSurfaceHigh,
+        selectedColor: primaryDark,
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: darkSurface,
+        selectedItemColor: primaryLight,
+        unselectedItemColor: darkTextSecondary,
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+        selectedLabelStyle: TextStyle(fontFamily: fontSecondary, fontSize: 11),
+        unselectedLabelStyle: TextStyle(fontFamily: fontSecondary, fontSize: 11),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: radiusMedium),
+        backgroundColor: darkSurfaceHigh,
+      ),
+    );
+  }
+
   // ─── Severity Helper ──────────────────────────────────────────────────────
   static Color severityColor(String? severity) {
     switch (severity) {

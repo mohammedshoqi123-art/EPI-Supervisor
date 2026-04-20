@@ -175,7 +175,6 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       _loading = true;
     });
     _scrollDown();
-    // Save in background — don't block UI
     unawaited(_ChatStore.save(_msgs));
 
     try {
@@ -194,37 +193,81 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
           )
           .toList();
 
-      final resp = await api.callFunction('ai-chat-v3', {
+      // ═══ STREAMING: Add placeholder assistant message ═══
+      setState(() {
+        _msgs.add(ChatMsg(role: 'assistant', content: '', source: 'streaming'));
+      });
+
+      final buffer = StringBuffer();
+      bool gotAnyText = false;
+
+      // Use streaming API — text arrives word by word
+      await for (final chunk in api.callFunctionStream('ai-chat-v3', {
         'message': text,
         'history': historyJson,
+        'stream': true,
         if (template != null) 'template': template,
       }).timeout(
         const Duration(seconds: 60),
-        onTimeout: () {
+        onTimeout: (sink) {
+          sink.close();
           throw TimeoutException('انتهت مهلة الطلب');
         },
-      );
+      )) {
+        if (!_mounted) return;
+        gotAnyText = true;
+        buffer.write(chunk);
+
+        // Update the last message with accumulated text
+        setState(() {
+          if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
+            _msgs[_msgs.length - 1] = ChatMsg(
+              role: 'assistant',
+              content: buffer.toString(),
+              source: 'streaming',
+            );
+          }
+        });
+        _scrollDown();
+      }
 
       if (!_mounted) return;
 
-      final reply = resp['reply'] as String? ??
-          resp['message'] as String? ??
-          resp['error'] as String? ??
-          '';
-      final source = resp['source'] as String? ?? 'unknown';
+      // Finalize: if no streaming text received, try regular API
+      if (!gotAnyText) {
+        final resp = await api.callFunction('ai-chat-v3', {
+          'message': text,
+          'history': historyJson,
+          if (template != null) 'template': template,
+        }).timeout(const Duration(seconds: 45));
 
-      setState(() {
-        _msgs.add(
-          ChatMsg(
-            role: 'assistant',
-            content: reply.isNotEmpty
-                ? reply
-                : '⚠️ تم استلام رد فارغ. حاول مرة أخرى.',
-            source: source,
-          ),
-        );
-        _loading = false;
-      });
+        final reply = resp['reply'] as String? ?? resp['message'] as String? ?? '';
+        final source = resp['source'] as String? ?? 'unknown';
+
+        setState(() {
+          if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
+            _msgs[_msgs.length - 1] = ChatMsg(
+              role: 'assistant',
+              content: reply.isNotEmpty ? reply : '⚠️ تم استلام رد فارغ.',
+              source: source,
+            );
+          }
+          _loading = false;
+        });
+      } else {
+        // Streaming completed successfully
+        HapticFeedback.lightImpact();
+        setState(() {
+          if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
+            _msgs[_msgs.length - 1] = ChatMsg(
+              role: 'assistant',
+              content: buffer.toString(),
+              source: 'groq_stream',
+            );
+          }
+          _loading = false;
+        });
+      }
       unawaited(_ChatStore.save(_msgs));
     } on TimeoutException {
       if (!_mounted) return;
@@ -1018,11 +1061,48 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
       fontFamily: 'Cairo',
     );
 
+    // Streaming: add blinking cursor at the end
+    final isStreaming = msg.source == 'streaming' && _loading;
+
+    if (isStreaming && msg.content.isEmpty) {
+      // Show typing dots while waiting for first token
+      return _buildTypingDots(cs);
+    }
+
     return SelectableText.rich(
       TextSpan(
-        children: _parseMarkdown(msg.content, baseStyle, boldStyle, cs),
+        children: [
+          ..._parseMarkdown(msg.content, baseStyle, boldStyle, cs),
+          if (isStreaming)
+            WidgetSpan(
+              child: _StreamingCursor(color: textColor),
+            ),
+        ],
       ),
       textDirection: TextDirection.rtl,
+    );
+  }
+
+  Widget _buildTypingDots(ColorScheme cs) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (i) {
+        return AnimatedBuilder(
+          animation: _typingAnimCtrl,
+          builder: (context, _) {
+            final progress = (_typingAnimCtrl.value + i * 0.3) % 1.0;
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: 8 + (progress * 4),
+              height: 8 + (progress * 4),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.3 + progress * 0.7),
+                shape: BoxShape.circle,
+              ),
+            );
+          },
+        );
+      }),
     );
   }
 
@@ -1247,6 +1327,47 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ═══ STREAMING CURSOR WIDGET ═══
+
+class _StreamingCursor extends StatefulWidget {
+  final Color color;
+  const _StreamingCursor({required this.color});
+
+  @override
+  State<_StreamingCursor> createState() => _StreamingCursorState();
+}
+
+class _StreamingCursorState extends State<_StreamingCursor>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => Opacity(
+        opacity: _controller.value,
+        child: Text('▌', style: TextStyle(color: widget.color, fontSize: 14)),
       ),
     );
   }

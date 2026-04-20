@@ -104,6 +104,7 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
 
   /// Pull-to-refresh: clear cache and reload
   Future<void> _refresh() async {
+    HapticFeedback.mediumImpact();
     if (!ConnectivityUtils.isOnline) return;
     final campaign = ref.read(campaignProvider);
     final filter = SubmissionsFilter(
@@ -117,6 +118,7 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
 
   /// Filter changed — reload from scratch
   void _onFilterChanged(String? status) {
+    HapticFeedback.selectionClick();
     setState(() => _statusFilter = status);
     _loadInitial();
   }
@@ -144,7 +146,10 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list),
-            onPressed: _showFilterSheet,
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _showFilterSheet();
+            },
           ),
         ],
       ),

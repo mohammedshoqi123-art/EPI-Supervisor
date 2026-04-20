@@ -11,6 +11,10 @@ import 'package:epi_core/epi_core.dart';
 import 'package:epi_shared/epi_shared.dart';
 
 import 'router/app_router.dart';
+import 'screens/onboarding_screen.dart';
+
+// Theme mode provider
+final themeModeProvider = StateProvider<ThemeMode>((_) => ThemeMode.system);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -221,17 +225,72 @@ Future<void> main() async {
   }
 }
 
-class EpiSupervisorApp extends ConsumerWidget {
+class EpiSupervisorApp extends ConsumerStatefulWidget {
   const EpiSupervisorApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EpiSupervisorApp> createState() => _EpiSupervisorAppState();
+}
+
+class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
+  bool _showOnboarding = false;
+  bool _checkingOnboarding = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOnboarding();
+  }
+
+  Future<void> _checkOnboarding() async {
+    final completed = await OnboardingScreen.isCompleted();
+    if (mounted) {
+      setState(() {
+        _showOnboarding = !completed;
+        _checkingOnboarding = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_checkingOnboarding) {
+      return const MaterialApp(
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
+    }
+
+    if (_showOnboarding) {
+      return MaterialApp(
+        title: AppConfig.appNameAr,
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ref.watch(themeModeProvider),
+        locale: const Locale('ar', 'IQ'),
+        supportedLocales: const [Locale('ar', 'IQ'), Locale('en', 'US')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: OnboardingScreen(
+            onComplete: () => setState(() => _showOnboarding = false),
+          ),
+        ),
+      );
+    }
+
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
       title: AppConfig.appNameAr,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
       locale: const Locale('ar', 'IQ'),
       supportedLocales: const [Locale('ar', 'IQ'), Locale('en', 'US')],
@@ -241,7 +300,6 @@ class EpiSupervisorApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       builder: (context, child) {
-        // RTL direction for Arabic app
         return Directionality(textDirection: TextDirection.rtl, child: child!);
       },
     );

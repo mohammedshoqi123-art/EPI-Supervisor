@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 
@@ -19,6 +21,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _biometricLoading = false;
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+  final LocalAuthentication _localAuth = LocalAuthentication();
+
+  Future<bool> _canUseBiometric() async {
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isDeviceSupported = await _localAuth.isDeviceSupported();
+      return canCheck && isDeviceSupported;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _loginWithBiometric() async {
+    setState(() => _biometricLoading = true);
+    HapticFeedback.lightImpact();
+    try {
+      final authenticated = await _localAuth.authenticate(
+        localizedReason: 'تحقق من هويتك لتسجيل الدخول',
+        options: const AuthenticationOptions(
+          stickyAuth: true,
+          biometricOnly: true,
+        ),
+      );
+      if (authenticated) {
+        HapticFeedback.mediumImpact();
+        // Biometric success — the stored session will auto-login via GoRouter redirect
+        // If no stored session, show message
+        context.showError('تم التحقق — سيتم تسجيل الدخول تلقائياً عند وجود جلسة محفوظة');
+      }
+    } catch (e) {
+      HapticFeedback.heavyImpact();
+      if (mounted) context.showError('فشل التحقق: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _biometricLoading = false);
+    }
+  }
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
@@ -47,8 +89,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      HapticFeedback.heavyImpact();
+      return;
+    }
 
+    HapticFeedback.lightImpact();
     setState(() => _isLoading = true);
 
     try {
@@ -59,6 +105,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       // Manual context.go('/dashboard') caused redirect loops.
       // The router's redirect logic will move user to /dashboard automatically.
     } catch (e) {
+      HapticFeedback.heavyImpact();
       if (mounted) {
         context.showError('فشل تسجيل الدخول: ${e.toString()}');
       }
@@ -320,6 +367,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                           ),
                                   ),
                                 ),
+                              ),
+
+                              // Biometric login button
+                              const SizedBox(height: 16),
+                              FutureBuilder<bool>(
+                                future: _canUseBiometric(),
+                                builder: (context, snapshot) {
+                                  if (snapshot.data != true) return const SizedBox.shrink();
+                                  return SizedBox(
+                                    height: 48,
+                                    child: OutlinedButton.icon(
+                                      onPressed: _biometricLoading ? null : _loginWithBiometric,
+                                      icon: _biometricLoading
+                                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                          : const Icon(Icons.fingerprint_rounded, size: 22),
+                                      label: const Text(
+                                        'دخول بالبصمة',
+                                        style: TextStyle(
+                                          fontFamily: 'Cairo',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                        side: BorderSide(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),

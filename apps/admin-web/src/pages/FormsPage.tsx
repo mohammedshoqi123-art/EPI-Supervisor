@@ -732,10 +732,10 @@ function FormDialog({ open, onOpenChange, form, onSuccess }: FormDialogProps) {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 px-6">
           <TabsList className="w-full justify-start gap-1 mb-2 bg-transparent p-0 h-auto flex-wrap">
-            <TabsTrigger value="basic" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md px-3 py-1.5">
-              <Globe className="w-4 h-4 ml-1" />基本信息
+            <TabsTrigger value="basic" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md px-3 py-1.5 transition-all">
+              <Globe className="w-4 h-4 ml-1" />اساسيات النموذج
             </TabsTrigger>
-            <TabsTrigger value="fields" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md px-3 py-1.5">
+            <TabsTrigger value="fields" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md px-3 py-1.5 transition-all">
               <LayoutGrid className="w-4 h-4 ml-1" />الحقول ({fields.length})
             </TabsTrigger>
             <TabsTrigger value="roles" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md px-3 py-1.5">
@@ -932,17 +932,17 @@ function FormDialog({ open, onOpenChange, form, onSuccess }: FormDialogProps) {
 
                     return (
                       <Card key={field.id} className={cn(
-                        'transition-all',
-                        isEditing ? 'ring-2 ring-primary' : ''
+                        'transition-all duration-300 overflow-hidden',
+                        isEditing ? 'border-primary ring-1 ring-primary/20 shadow-md' : 'hover:border-primary/30'
                       )}>
-                        <CardContent className="p-4">
+                        <CardContent className={cn('p-4 transition-colors', isEditing ? 'bg-primary/5' : '')}>
                           {/* Field Header */}
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-3">
                             <div className="flex flex-col gap-0.5">
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                className="h-5 w-5"
+                                className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors"
                                 onClick={() => moveField(field.id, 'up')}
                                 disabled={idx === 0}
                               >
@@ -968,38 +968,40 @@ function FormDialog({ open, onOpenChange, form, onSuccess }: FormDialogProps) {
                             {field.required && (
                               <Badge variant="destructive" className="text-[10px]">مطلوب</Badge>
                             )}
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-1 shrink-0 bg-background/50 rounded-md p-0.5 backdrop-blur-sm">
                               <Button
-                                variant="ghost"
+                                variant={isEditing ? 'default' : 'ghost'}
                                 size="icon-sm"
                                 onClick={() => setEditingFieldId(isEditing ? null : field.id)}
-                                title="تعديل"
+                                className={cn('transition-all h-8 w-8', isEditing ? 'shadow-sm' : '')}
+                                title={isEditing ? 'إغلاق التعديل' : 'تعديل الحقل'}
                               >
-                                <Edit className="w-3.5 h-3.5" />
+                                {isEditing ? <Check className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
                                 onClick={() => duplicateField(field.id)}
-                                title="نسخ"
+                                className="h-8 w-8 hover:text-primary"
+                                title="نسخ החقل"
                               >
-                                <Copy className="w-3.5 h-3.5" />
+                                <Copy className="w-4 h-4" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
                                 onClick={() => removeField(field.id)}
-                                className="text-destructive hover:text-destructive"
-                                title="حذف"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                title="حذف החقل"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
                           </div>
 
                           {/* Expanded Edit Area */}
                           {isEditing && (
-                            <div className="space-y-3 pt-3 border-t">
+                            <div className="space-y-4 pt-4 mt-2 border-t border-primary/10 animate-in slide-in-from-top-2">
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
                                   <Label className="text-xs">التسمية (عربي)</Label>

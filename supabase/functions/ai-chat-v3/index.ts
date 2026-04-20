@@ -18,6 +18,25 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
 import { createClient } from 'npm:@supabase/supabase-js'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { authenticateRequest, createUserClient, createAdminClient } from '../_shared/auth.ts'
+import knowledgeData from './knowledge_chunks.ts'
+
+// Flatten knowledge once on cold start
+const _allChunks: any[] = []
+try {
+  for (const doc of knowledgeData as any[]) {
+    if (doc.chunks) {
+      for (const chunk of doc.chunks) {
+        _allChunks.push({
+          content: chunk.content,
+          title: doc.title,
+          section: chunk.section || chunk.metadata?.section || ''
+        })
+      }
+    }
+  }
+} catch (e) {
+  console.error('Failed to parse local knowledge', e)
+}
 
 // ═══════════════════════════════════════════════════════════
 // CONFIG
@@ -215,13 +234,15 @@ function buildDynamicSystemPrompt(
 • الحديدة: أعلى تغطية شلل 131%
 
 == أسلوب الإجابة ==
-• ابدأ بالخلاصة ثم التفاصيل
-• استخدم أرقام حقيقية — لا تختلق
+• ابدأ بالخلاصة العملية مباشرة بدون مقدمات طويلة.
+• استخدم أرقام حقيقية — لا تختلق.
+• كن المستشار الذكي والخبير (استخدم أسلوباً احترافياً ومحفزاً - "حلاوة").
+• اعتمد بشكل أساسي ومطلق على (مراجع من قاعدة المعرفة) متى ما توفرت ولا تقدم معلومات طبية من خارجها.
 • جداول مختصرة، قوائم، رموز (📊⚠️✅💡🚨)
-• توصيات عملية قابلة للتنفيذ
-• الحد الأقصى: 200 كلمة للأسئلة البسيطة، 400 للتقارير
-• إذا لا توجد بيانات، قل ذلك واقترح مصدرها
-• تكيف مع دور المستخدم: ${profile.role === 'admin' ? 'محلل استراتيجي' : profile.role === 'data_entry' ? 'مساعد عملي مبسط' : 'مستشار ميداني'}`
+• توصيات عملية ميدانية تدعم أداء العمل
+• الحد الأقصى: 250 كلمة للأسئلة المباشرة.
+• إذا لا توجد بيانات، قل ذلك واقترح مصدرها.
+• تكيف مع دور المستخدم: ${profile.role === 'admin' ? 'محلل استراتيجي' : profile.role === 'data_entry' ? 'مساعد عملي مبسط' : 'مستشار ميداني خبير'}`
 
   if (conversationSummary) {
     sys += `\n\n== ذاكرة المحادثة السابقة ==\n${conversationSummary}`
@@ -349,27 +370,30 @@ async function keywordSearchEnhanced(supa: any, message: string): Promise<string
   const keywords = extractKeywordsEnhanced(message)
   if (keywords.length === 0) return ''
 
-  const conditions = keywords.slice(0, 6).map(kw => `content.ilike.%${kw}%`)
-
   try {
-    const { data, error } = await supa
-      .from('ai_chunks')
-      .select('content, metadata, document_id')
-      .or(conditions.join(','))
-      .limit(5)
-
-    if (error || !data?.length) return ''
-
-    const scored = data.map((chunk: any) => {
+    const scored: any[] = []
+    
+    // Fallback directly to the fast local JSON array instead of DB
+    for (const chunk of _allChunks) {
       const contentLower = chunk.content.toLowerCase()
-      const matchCount = keywords.filter(kw => contentLower.includes(kw)).length
-      return { ...chunk, score: matchCount }
-    })
-    scored.sort((a: any, b: any) => b.score - a.score)
-
-    return scored.slice(0, 3).map((c: any) =>
-      `[${c.metadata?.section || c.metadata?.source || 'مرجع EPI'}]\n${c.content.slice(0, 800)}`
-    ).join('\n\n---\n\n')
+      let matchCount = 0
+      for (const kw of keywords) {
+        if (contentLower.includes(kw)) matchCount++
+      }
+      if (matchCount > 0) {
+        // Boost score if the entire message is fully matched
+        scored.push({ ...chunk, score: matchCount + (contentLower.includes(message.trim()) ? 5 : 0) })
+      }
+    }
+    
+    if (scored.length > 0) {
+      scored.sort((a, b) => b.score - a.score)
+      return scored.slice(0, 4).map(c => 
+        `[المصدر: ${c.title} - ${c.section}]\n${c.content}`
+      ).join('\n\n---\n\n')
+    }
+    
+    return ''
   } catch {
     return ''
   }

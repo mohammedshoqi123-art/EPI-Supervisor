@@ -61,9 +61,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       if (mounted) setState(() => _biometricLoading = false);
     }
   }
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
 
   @override
   void initState() {

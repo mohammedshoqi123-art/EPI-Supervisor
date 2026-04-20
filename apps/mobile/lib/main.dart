@@ -243,12 +243,24 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
   }
 
   Future<void> _checkOnboarding() async {
-    final completed = await OnboardingScreen.isCompleted();
-    if (mounted) {
-      setState(() {
-        _showOnboarding = !completed;
-        _checkingOnboarding = false;
-      });
+    try {
+      final completed = await OnboardingScreen.isCompleted()
+          .timeout(const Duration(seconds: 5), onTimeout: () => true);
+      if (mounted) {
+        setState(() {
+          _showOnboarding = !completed;
+          _checkingOnboarding = false;
+        });
+      }
+    } catch (e) {
+      // If onboarding check fails (e.g. on web), skip it
+      debugPrint('Onboarding check failed: $e');
+      if (mounted) {
+        setState(() {
+          _showOnboarding = false;
+          _checkingOnboarding = false;
+        });
+      }
     }
   }
 

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:epi_core/epi_core.dart';
-import 'map_helpers.dart';
 
 enum MapViewMode { aggregated, individual }
 

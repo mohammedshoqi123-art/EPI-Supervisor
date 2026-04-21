@@ -8,8 +8,14 @@ class MapHelpers {
 
   static Color statusColor(String? status) {
     switch (status) {
+      case 'approved':
+        return const Color(0xFF10B981);
       case 'submitted':
         return const Color(0xFF3B82F6);
+      case 'reviewed':
+        return const Color(0xFF8B5CF6);
+      case 'rejected':
+        return const Color(0xFFEF4444);
       case 'draft':
         return const Color(0xFFFB8C00);
       default:
@@ -19,8 +25,14 @@ class MapHelpers {
 
   static String statusLabel(String? status) {
     switch (status) {
+      case 'approved':
+        return 'معتمدة';
       case 'submitted':
         return 'مرسلة';
+      case 'reviewed':
+        return 'تمت المراجعة';
+      case 'rejected':
+        return 'مرفوضة';
       case 'draft':
         return 'مسودة';
       default:

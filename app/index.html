@@ -128,21 +128,23 @@
       }).catch(function() {});
     }
 
-// ═══ Detect if Flutter has started rendering (works for both HTML and CanvasKit renderers) ═══
+    // ═══ Detect if Flutter has started rendering (works for both HTML and CanvasKit renderers) ═══
     function hasFlutterRendered() {
       var fv = document.querySelector('flutter-view');
       if (!fv) return false;
       // CanvasKit renderer
       if (fv.querySelector('canvas') || fv.querySelector('flt-canvas-container') || fv.querySelector('flt-scene-host')) return true;
-      // HTML renderer — flt-glass-pane with children means engine is running
+      // HTML renderer — flt-glass-pane has shadow root with scene content
       var gp = fv.querySelector('flt-glass-pane');
+      if (gp && gp.shadowRoot && gp.shadowRoot.children.length > 0) return true;
       if (gp && gp.children.length > 0) return true;
       // flt-platform-view-slot (hybrid views)
       if (fv.querySelector('flt-platform-view-slot')) return true;
-      // Shadow root check
+      // Shadow root check on flutter-view itself
       if (fv.shadowRoot && fv.shadowRoot.querySelector('canvas')) return true;
-      // Check if any flutter DOM elements exist beyond the initial skeleton
-      if (fv.querySelector('flt-semantics-host:not(:empty)')) return true;
+      // Semantics host with content
+      var sem = fv.querySelector('flt-semantics-host');
+      if (sem && sem.children.length > 0) return true;
       return false;
     }
 

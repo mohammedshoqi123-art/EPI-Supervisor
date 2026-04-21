@@ -30,6 +30,17 @@ serve(async (req) => {
       return jsonResponse({ error: 'Admin access required' }, 403, origin)
     }
 
+    // Rate limiting — 20 requests per minute for data management
+    const { data: rlOk, error: rlErr } = await supabase.rpc('check_and_increment_rate_limit', {
+      p_user_id: auth.userId,
+      p_endpoint: 'manage-data',
+      p_window_seconds: 60,
+      p_max_requests: 20,
+    })
+    if (rlErr || !rlOk) {
+      return jsonResponse({ error: 'Rate limit exceeded. Try again later.' }, 429, origin)
+    }
+
     const adminClient = createAdminClient()
     if (!adminClient) return jsonResponse({ error: 'Admin not configured' }, 500, origin)
 

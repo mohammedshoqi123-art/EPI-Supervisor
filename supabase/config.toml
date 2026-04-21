@@ -38,53 +38,51 @@ double_confirm_changes = false
 enable_confirmations = false
 
 # Edge Functions
-# ═══ SECURITY: verify_jwt = false because the project uses ES256 (asymmetric JWTs)
-# which the Edge Runtime doesn't support by default. All functions validate JWTs
-# manually via _shared/auth.ts → getUser() which verifies against Auth server.
-# This is MORE secure than JWT verification alone (checks token isn't revoked).
+# ═══ SECURITY: verify_jwt = true — Edge Runtime validates JWT at proxy layer.
+# Functions also validate manually via _shared/auth.ts → getUser() for defense-in-depth.
 # ═══
 
 [functions.submit-form]
-verify_jwt = false
+verify_jwt = true
 
 [functions.sync-offline]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-analytics]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-chat-v3]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-admin]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-actions]
-verify_jwt = false
+verify_jwt = true
 
 [functions.manage-data]
-verify_jwt = false
+verify_jwt = true
 
 [functions.manage-notifications]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-admin-dashboard]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-dashboard-stats]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-governorate-report]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-advanced-reports]
-verify_jwt = false
+verify_jwt = true
 
 [functions.export-data]
-verify_jwt = false
+verify_jwt = true
 
 [functions.system-monitor]
-verify_jwt = false
+verify_jwt = true
 
 # Analytics
 [analytics]

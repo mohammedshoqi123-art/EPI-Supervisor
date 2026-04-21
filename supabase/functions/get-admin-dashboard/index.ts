@@ -37,6 +37,17 @@ serve(async (req) => {
       return jsonResponse({ error: 'Admin or Central access required' }, 403, origin)
     }
 
+    // Rate limiting — 15 requests per minute for dashboard queries
+    const { data: rlOk, error: rlErr } = await supabase.rpc('check_and_increment_rate_limit', {
+      p_user_id: auth.userId,
+      p_endpoint: 'get-admin-dashboard',
+      p_window_seconds: 60,
+      p_max_requests: 15,
+    })
+    if (rlErr || !rlOk) {
+      return jsonResponse({ error: 'Rate limit exceeded. Try again later.' }, 429, origin)
+    }
+
     const adminClient = createAdminClient()
     const db = adminClient ?? supabase
 

@@ -461,7 +461,7 @@ CREATE POLICY "facilities_select_all" ON health_facilities FOR SELECT USING (tru
 DROP POLICY IF EXISTS "audit_select_admin" ON audit_logs;
 DROP POLICY IF EXISTS "audit_insert_system" ON audit_logs;
 CREATE POLICY "audit_select_admin" ON audit_logs FOR SELECT USING (public.user_role() IN ('admin','central'));
-CREATE POLICY "audit_insert_system" ON audit_logs FOR INSERT WITH CHECK (true);
+CREATE POLICY "audit_insert_system" ON audit_logs FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
 -- DOC REFERENCES
 DROP POLICY IF EXISTS "references_select_active" ON doc_references;
@@ -542,7 +542,8 @@ GRANT SELECT ON pages TO authenticated;
 GRANT SELECT ON app_settings TO authenticated;
 GRANT SELECT ON doc_references TO authenticated;
 GRANT SELECT ON notifications TO authenticated;
-GRANT INSERT ON profiles TO anon;
+-- Note: profile creation handled by handle_new_user() trigger on auth.users
+-- No direct INSERT grant needed for anon
 
 -- ============================================================
 -- 10. APPLY TRIGGERS

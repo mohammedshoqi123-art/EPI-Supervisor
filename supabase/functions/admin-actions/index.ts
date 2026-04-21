@@ -38,6 +38,17 @@ serve(async (req) => {
       return jsonResponse({ error: 'Admin access required' }, 403, origin)
     }
 
+    // Rate limiting — 10 requests per minute for admin actions
+    const { data: rlOk, error: rlErr } = await supabase.rpc('check_and_increment_rate_limit', {
+      p_user_id: auth.userId,
+      p_endpoint: 'admin-actions',
+      p_window_seconds: 60,
+      p_max_requests: 10,
+    })
+    if (rlErr || !rlOk) {
+      return jsonResponse({ error: 'Rate limit exceeded. Try again later.' }, 429, origin)
+    }
+
     // Admin client (bypasses RLS)
     const supabaseAdmin = createAdminClient()
     if (!supabaseAdmin) {

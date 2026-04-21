@@ -203,8 +203,6 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           flutter build web --release \
-            --web-renderer auto \
-            --base-href /EPI-Supervisor/app/ \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} \

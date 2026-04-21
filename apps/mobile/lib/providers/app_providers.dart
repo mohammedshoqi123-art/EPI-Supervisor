@@ -30,42 +30,42 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
   final manager = OfflineManager(ref.read(encryptionServiceProvider));
 
   // On web, skip Hive initialization entirely (online-only mode)
-  if (!kIsWeb) {
-    try {
-      await manager.init().timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          debugPrint('[offlineManagerProvider] Hive init timed out after 15s');
-          throw TimeoutException('Offline storage initialization timed out');
-        },
-      );
-    } catch (e) {
-      debugPrint('[offlineManagerProvider] Init failed: $e');
-      rethrow;
-    }
-  } else {
-    debugPrint('[offlineManagerProvider] Web mode — skipping Hive init');
+  if (kIsWeb) {
+    debugPrint('[offlineManagerProvider] Web mode — online-only, skipping Hive');
+    manager.updateConnectivity(true);
+    return manager;
+  }
+
+  // On mobile, initialize Hive with timeout
+  try {
+    await manager.init().timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        debugPrint('[offlineManagerProvider] Hive init timed out after 15s');
+        throw TimeoutException('Offline storage initialization timed out');
+      },
+    );
+  } catch (e) {
+    debugPrint('[offlineManagerProvider] Init failed: $e');
+    rethrow;
   }
 
   // ═══ FIX: Set initial connectivity from ConnectivityUtils ═══
-  // On web: always online; on mobile use the connectivity stream.
-  manager.updateConnectivity(kIsWeb ? true : ConnectivityUtils.isOnline);
+  manager.updateConnectivity(ConnectivityUtils.isOnline);
 
   // ═══ FIX: Bridge ConnectivityUtils updates to OfflineManager ═══
   StreamSubscription? connSub;
-  if (!kIsWeb) {
-    try {
-      connSub = ConnectivityUtils.onConnectivityChanged.listen(
-        (online) {
-          manager.updateConnectivity(online);
-        },
-        onError: (e) {
-          debugPrint('[offlineManagerProvider] Connectivity bridge error: $e');
-        },
-      );
-    } catch (e) {
-      debugPrint('[offlineManagerProvider] Connectivity bridge failed: $e');
-    }
+  try {
+    connSub = ConnectivityUtils.onConnectivityChanged.listen(
+      (online) {
+        manager.updateConnectivity(online);
+      },
+      onError: (e) {
+        debugPrint('[offlineManagerProvider] Connectivity bridge error: $e');
+      },
+    );
+  } catch (e) {
+    debugPrint('[offlineManagerProvider] Connectivity bridge failed: $e');
   }
 
   ref.onDispose(() {

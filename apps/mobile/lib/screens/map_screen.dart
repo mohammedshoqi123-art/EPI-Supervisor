@@ -21,7 +21,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
   final MapController _mapController = MapController();
   bool _showStats = true;
   double _currentZoom = 6.0;
-  MapViewMode _viewMode = MapViewMode.aggregated;
+  MapViewMode _viewMode = MapViewMode.individual;
   Map<String, dynamic>? _selectedSubmission;
   Map<String, dynamic>? _selectedCluster;
 
@@ -69,13 +69,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
   // ─── Actions ─────────────────────────────────────────────────
 
   void _toggleMode() {
-    setState(() {
-      _selectedSubmission = null;
-      _selectedCluster = null;
-      _viewMode = _viewMode == MapViewMode.aggregated
-          ? MapViewMode.individual
-          : MapViewMode.aggregated;
-    });
+    // Aggregated mode removed — always individual
   }
 
   void _refresh() {
@@ -270,9 +264,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                 fontWeight: FontWeight.w700,
                                 color: Colors.white)),
                         Text(
-                          _viewMode == MapViewMode.aggregated
-                              ? 'عرض تجميعي — حسب المحافظات'
-                              : 'عرض فردي — دبابيس الإرساليات',
+                          'عرض فردي — دبابيس الإرساليات',
                           style: const TextStyle(
                               fontFamily: 'Tajawal',
                               fontSize: 12,
@@ -321,13 +313,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _iconBtn(
-                    _viewMode == MapViewMode.aggregated
-                        ? Icons.scatter_plot_rounded
-                        : Icons.layers_rounded,
-                    onTap: _toggleMode,
-                  ),
-                  const SizedBox(width: 8),
                   _iconBtn(Icons.refresh_rounded, onTap: _refresh),
                   const SizedBox(width: 8),
                   _iconBtn(
@@ -338,16 +323,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ],
               ),
               const SizedBox(height: 12),
-              // Mode chips
-              Row(
-                children: [
-                  _modeChip(MapViewMode.aggregated, 'تجميعي',
-                      Icons.bubble_chart_rounded),
-                  const SizedBox(width: 8),
-                  _modeChip(
-                      MapViewMode.individual, 'فردي', Icons.place_rounded),
-                  if (_canViewFullCoords) ...[
-                    const SizedBox(width: 8),
+              // GPS accuracy badge
+              if (_canViewFullCoords) ...[
+                Row(
+                  children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 5),
@@ -375,8 +354,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
                       ),
                     ),
                   ],
-                ],
-              ),
+                ),
+              ],
               // ─── Expandable Filter Bar ────────────────────────
               if (_showFilters) ...[
                 const SizedBox(height: 12),
@@ -629,53 +608,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
     );
   }
 
-  Widget _modeChip(MapViewMode mode, String label, IconData icon) {
-    final isSelected = _viewMode == mode;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        _toggleMode();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white
-              : Colors.white.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                      color: const Color(0xFF00897B).withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2))
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon,
-                size: 16,
-                color: isSelected
-                    ? const Color(0xFF00695C)
-                    : Colors.white),
-            const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: isSelected
-                        ? const Color(0xFF00695C)
-                        : Colors.white)),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ─── Stats Overlay ───────────────────────────────────────────
 
   Widget _buildStatsOverlay() {
@@ -683,8 +615,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final withGps =
         subs.where((s) => s['gps_lat'] != null && s['gps_lng'] != null).length;
     final drafts = subs.where((s) => s['status'] == 'draft').length;
-    final approved =
-        subs.where((s) => s['status'] == 'approved').length;
+    final submitted =
+        subs.where((s) => s['status'] == 'submitted').length;
 
     return Positioned(
       top: _showFilters ? 340 : 155,
@@ -698,8 +630,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
           _statCard('بإحداثيات', '$withGps',
               Icons.gps_fixed_rounded, const Color(0xFF10B981)),
           const SizedBox(width: 8),
-          _statCard('معتمدة', '$approved',
-              Icons.check_circle_rounded, const Color(0xFF8B5CF6)),
+          _statCard('مرسلة', '$submitted',
+              Icons.send_rounded, const Color(0xFF6366F1)),
           const SizedBox(width: 8),
           _statCard('مسودات', '$drafts',
               Icons.edit_note_rounded, const Color(0xFFFB8C00)),
@@ -764,9 +696,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.epi.supervisor',
         ),
-        _viewMode == MapViewMode.aggregated
-            ? _buildAggregatedLayer()
-            : _buildIndividualLayer(),
+        _buildIndividualLayer(),
       ],
     );
   }

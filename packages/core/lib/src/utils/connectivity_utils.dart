@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 /// Utility for monitoring internet connectivity status.
@@ -20,7 +21,15 @@ class ConnectivityUtils {
   static final Set<StreamSubscription<bool>> _activeSubs = {};
 
   /// Call once at app startup to start monitoring.
+  /// On web: assumes online and skips connectivity_plus listeners (they can hang).
   static Future<void> initialize() async {
+    // ═══ FIX: On web, skip connectivity_plus entirely — navigator.onLine is sufficient ═══
+    // connectivity_plus on web can hang or emit no events, blocking the whole app.
+    if (kIsWeb) {
+      _isOnline = true;
+      return;
+    }
+
     try {
       final result = await _connectivity.checkConnectivity().timeout(
             const Duration(seconds: 5),

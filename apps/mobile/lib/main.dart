@@ -1,11 +1,7 @@
-import 'dart:async';
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'package:epi_core/epi_core.dart';
 import 'package:epi_shared/epi_shared.dart';
@@ -62,6 +58,7 @@ Future<void> main() async {
       }
     } catch (_) {}
   });
+}
 
 class EpiSupervisorApp extends ConsumerStatefulWidget {
   const EpiSupervisorApp({super.key});

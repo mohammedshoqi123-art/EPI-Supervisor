@@ -19,153 +19,49 @@ final themeModeProvider = StateProvider<ThemeMode>((_) => ThemeMode.system);
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Global error handler for uncaught Flutter errors
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-    debugPrint('Flutter Error: ${details.exception}');
-    debugPrint('Stack: ${details.stack}');
-  };
-
-  // Set error widget builder BEFORE runApp — catches build errors gracefully
-  ErrorWidget.builder = (FlutterErrorDetails details) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Container(
-        color: const Color(0xFFF5F5F5),
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 16),
-              const Text(
-                'حدث خطأ في عرض الصفحة',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF333333),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                details.exceptionAsString(),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 12,
-                  color: Color(0xFF666666),
-                ),
-                maxLines: 5,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  };
-
-  // ─── Load .env file BEFORE any validation ────────────────────
-  final dotenv = await EnvLoader.load();
-  if (dotenv.isNotEmpty) {
-    SupabaseConfig.setFromEnv(
-      url: dotenv['SUPABASE_URL'] ?? '',
-      anonKey: dotenv['SUPABASE_ANON_KEY'] ?? '',
-    );
-  }
-
-  // Validate all environment variables first
-  try {
-    EnvValidator.validate();
-  } catch (e) {
-    // In web, show a nicer error page instead of crashing
-    if (kIsWeb) {
-      runApp(_ErrorApp(
-        title: 'خطأ في الإعدادات',
-        message: 'لم يتم تكوين متغيرات البيئة.\nيرجى إضافة SUPABASE_URL و SUPABASE_ANON_KEY في GitHub Secrets ثم إعادة النشر.',
-      ));
-      return;
-    }
-    runApp(_ErrorApp(title: 'خطأ في الإعدادات', message: e.toString()));
-    return;
-  }
-
-  // Initialize connectivity monitoring
-  try {
-    await ConnectivityUtils.initialize();
-  } catch (e) {
-    debugPrint('ConnectivityUtils init failed: $e');
-  }
-
-  // Initialize Supabase only if online mode is available
-  if (!EnvValidator.isOfflineMode) {
-    try {
-      SupabaseConfig.validate();
-      await Supabase.initialize(
-        url: SupabaseConfig.url,
-        anonKey: SupabaseConfig.anonKey,
-        debug: AppConfig.isDevelopment,
-      ).timeout(const Duration(seconds: 15));
-    } catch (e) {
-      runApp(_ErrorApp(title: 'خطأ في إعدادات Supabase', message: e.toString()));
-      return;
-    }
-  }
-
-  // Initialize Notification Service with API client
-  try {
-    if (SupabaseConfig.isConfigured) {
-      NotificationService.init(ApiClient());
-    }
-  } catch (e) {
-    debugPrint('NotificationService init failed: $e');
-  }
-
-  // Lock to portrait on mobile only (web supports all orientations)
-  if (!kIsWeb) {
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
-  }
-
-  // Set system overlay style
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-    ),
-  );
-
-  // Run app first — Sentry will init after first frame (non-blocking)
+  // Run the app FIRST — don't block on async init
   runApp(const ProviderScope(child: EpiSupervisorApp()));
 
-  // Defer Sentry init — skip on web (not supported)
-  if (SentryConfig.isEnabled && !kIsWeb) {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+  // Deferred init: run async tasks AFTER the first frame
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // Load .env
+    final dotenv = await EnvLoader.load();
+    if (dotenv.isNotEmpty) {
+      SupabaseConfig.setFromEnv(
+        url: dotenv['SUPABASE_URL'] ?? '',
+        anonKey: dotenv['SUPABASE_ANON_KEY'] ?? '',
+      );
+    }
+
+    // Validate env (non-blocking — show warning in UI if needed)
+    try {
+      EnvValidator.validate();
+    } catch (_) {}
+
+    // Init connectivity
+    try {
+      await ConnectivityUtils.initialize().timeout(const Duration(seconds: 5));
+    } catch (_) {}
+
+    // Init Supabase
+    if (!EnvValidator.isOfflineMode && SupabaseConfig.url.isNotEmpty) {
       try {
-        await SentryFlutter.init((options) {
-          options.dsn = const String.fromEnvironment(
-            'SENTRY_DSN',
-            defaultValue: '',
-          );
-          options.environment = const String.fromEnvironment(
-            'ENV',
-            defaultValue: 'development',
-          );
-          options.release = 'epi-supervisor@${AppConfig.appVersion}';
-          options.tracesSampleRate = 0.2;
-          options.enableAutoPerformanceTracing = false;
-          options.attachStacktrace = true;
-        }).timeout(const Duration(seconds: 8));
-      } catch (e) {
-        debugPrint('[Sentry] Deferred init failed: $e');
+        SupabaseConfig.validate();
+        await Supabase.initialize(
+          url: SupabaseConfig.url,
+          anonKey: SupabaseConfig.anonKey,
+          debug: AppConfig.isDevelopment,
+        ).timeout(const Duration(seconds: 15));
+      } catch (_) {}
+    }
+
+    // Init notifications
+    try {
+      if (SupabaseConfig.isConfigured) {
+        NotificationService.init(ApiClient());
       }
-    });
-  }
-}
+    } catch (_) {}
+  });
 
 class EpiSupervisorApp extends ConsumerStatefulWidget {
   const EpiSupervisorApp({super.key});

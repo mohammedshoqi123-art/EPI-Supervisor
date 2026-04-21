@@ -76,6 +76,27 @@ jobs:
           echo "=== Running flutter test ==="
           flutter test --coverage 2>&1
 
+  # ─── Admin Web Tests ──────────────────────────────────────
+  admin-web-test:
+    name: Admin Web Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/admin-web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/admin-web
+        run: npm ci
+
+      - name: Run Vitest
+        working-directory: apps/admin-web
+        run: npm test
+
   # ─── Build APK ───────────────────────────────────────────
   build-apk:
     name: Build Android APK

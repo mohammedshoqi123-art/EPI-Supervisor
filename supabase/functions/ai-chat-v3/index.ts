@@ -21,7 +21,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
 import { createClient } from 'npm:@supabase/supabase-js'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { authenticateRequest, createUserClient, createAdminClient } from '../_shared/auth.ts'
-import knowledgeData from './knowledge_chunks.ts'
+import knowledgeData from './knowledge_chunks.ts' // Fallback — primary source is ai_chunks DB table
 
 // Flatten knowledge once on cold start
 const _allChunks: any[] = []
@@ -465,20 +465,9 @@ async function keywordSearchEnhanced(supa: any, message: string): Promise<string
 
   try {
     const scored: any[] = []
+    let dbSearchSucceeded = false
 
-    // 1. Search local embedded knowledge (always available)
-    for (const chunk of _allChunks) {
-      const contentLower = chunk.content.toLowerCase()
-      let matchCount = 0
-      for (const kw of keywords) {
-        if (contentLower.includes(kw)) matchCount++
-      }
-      if (matchCount > 0) {
-        scored.push({ ...chunk, score: matchCount + (contentLower.includes(message.trim()) ? 5 : 0) })
-      }
-    }
-
-    // 2. Search DB knowledge base (use admin client to bypass RLS)
+    // 1. Search DB knowledge base first (primary source — always up-to-date)
     try {
       const adminSupa = createAdminClient()
       const client = adminSupa || supa
@@ -488,20 +477,39 @@ async function keywordSearchEnhanced(supa: any, message: string): Promise<string
         .from('ai_chunks')
         .select('content, metadata, document_id')
         .or(conditions.join(','))
-        .limit(5)
+        .limit(8)
 
       if (!error && dbChunks?.length) {
+        dbSearchSucceeded = true
         for (const chunk of dbChunks) {
            const contentLower = chunk.content.toLowerCase()
            let matchCount = 0
            for (const kw of keywords) {
              if (contentLower.includes(kw)) matchCount++
            }
-           scored.push({ ...chunk, score: matchCount, source: chunk.metadata?.source || chunk.document_id })
+           scored.push({ content: chunk.content, title: chunk.document_id || '', section: chunk.metadata?.section || '', score: matchCount, source: chunk.metadata?.source || chunk.document_id })
         }
       }
     } catch (e) {
-      console.warn('DB knowledge search failed:', e)
+      console.warn('DB knowledge search failed, falling back to local:', e)
+    }
+
+    // 2. Fall back to local embedded knowledge if DB failed or returned few results
+    if (!dbSearchSucceeded || scored.length < 3) {
+      for (const chunk of _allChunks) {
+        const contentLower = chunk.content.toLowerCase()
+        let matchCount = 0
+        for (const kw of keywords) {
+          if (contentLower.includes(kw)) matchCount++
+        }
+        if (matchCount > 0) {
+          // Avoid duplicates from DB results
+          const isDuplicate = scored.some(s => s.content === chunk.content)
+          if (!isDuplicate) {
+            scored.push({ ...chunk, score: matchCount + (contentLower.includes(message.trim()) ? 5 : 0) })
+          }
+        }
+      }
     }
 
     if (scored.length > 0) {

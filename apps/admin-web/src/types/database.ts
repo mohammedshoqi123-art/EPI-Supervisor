@@ -24,22 +24,16 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   data_entry: 'bg-gray-100 text-gray-800 border-gray-200',
 }
 
-export type SubmissionStatus = 'draft' | 'submitted' | 'reviewed' | 'approved' | 'rejected'
+export type SubmissionStatus = 'draft' | 'submitted'
 
 export const STATUS_LABELS: Record<SubmissionStatus, string> = {
   draft: 'مسودة',
   submitted: 'مرسلة',
-  reviewed: 'تمت المراجعة',
-  approved: 'معتمدة',
-  rejected: 'مرفوضة',
 }
 
 export const STATUS_COLORS: Record<SubmissionStatus, string> = {
-  draft: 'bg-gray-100 text-gray-700',
-  submitted: 'bg-blue-100 text-blue-700',
-  reviewed: 'bg-yellow-100 text-yellow-700',
-  approved: 'bg-emerald-100 text-emerald-700',
-  rejected: 'bg-red-100 text-red-700',
+  draft: 'bg-amber-100 text-amber-700',
+  submitted: 'bg-emerald-100 text-emerald-700',
 }
 
 export type ShortageSeverity = 'critical' | 'high' | 'medium' | 'low'

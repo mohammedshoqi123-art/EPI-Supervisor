@@ -43,9 +43,9 @@ BEGIN
       ELSE v_label := NEW.status::TEXT; v_type := 'info';
     END CASE;
 
-    INSERT INTO notifications (user_id, title, body, type, reference_id, reference_type)
+    INSERT INTO notifications (recipient_id, title, body, type, category, data)
     VALUES (NEW.submitted_by, 'تحديث حالة الاستمارة',
-            v_label, v_type, NEW.id, 'form_submission');
+            v_label, v_type, 'form', json_build_object('submission_id', NEW.id));
   END IF;
   RETURN NEW;
 END;

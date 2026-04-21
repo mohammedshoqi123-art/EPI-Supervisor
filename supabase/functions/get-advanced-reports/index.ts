@@ -91,19 +91,26 @@ serve(async (req) => {
           .order('name_ar')
 
         const performance = await Promise.all((governorates ?? []).map(async (gov) => {
-          const [total, submitted, draft, districtsCount, facilitiesCount, usersCount] = await Promise.all([
+          // Get district IDs for this governorate first
+          const { data: govDistricts } = await db
+            .from('districts')
+            .select('id')
+            .eq('governorate_id', gov.id)
+            .eq('is_active', true)
+            .is('deleted_at', null)
+          const districtIds = (govDistricts ?? []).map(d => d.id)
+
+          const [total, submitted, draft, facilitiesCount, usersCount] = await Promise.all([
             db.from('form_submissions').select('*', { count: 'exact', head: true })
               .eq('governorate_id', gov.id).gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
             db.from('form_submissions').select('*', { count: 'exact', head: true })
               .eq('governorate_id', gov.id).eq('status', 'submitted').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
             db.from('form_submissions').select('*', { count: 'exact', head: true })
               .eq('governorate_id', gov.id).eq('status', 'draft').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
-            db.from('form_submissions').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).eq('status', 'submitted').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
-            db.from('districts').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).eq('is_active', true).is('deleted_at', null),
-            db.from('health_facilities').select('*', { count: 'exact', head: true })
-              .eq('is_active', true).is('deleted_at', null),
+            districtIds.length > 0
+              ? db.from('health_facilities').select('*', { count: 'exact', head: true })
+                  .in('district_id', districtIds).eq('is_active', true).is('deleted_at', null)
+              : Promise.resolve({ count: 0 }),
             db.from('profiles').select('*', { count: 'exact', head: true })
               .eq('governorate_id', gov.id).eq('is_active', true).is('deleted_at', null),
           ])
@@ -116,10 +123,8 @@ serve(async (req) => {
               total: totalCount,
               submitted: submittedCount,
               draft: draft.count ?? 0,
-              pending: pending.count ?? 0,
-
             },
-            districts: districtsCount.count ?? 0,
+            districts: districtIds.length,
             facilities: facilitiesCount.count ?? 0,
             users: usersCount.count ?? 0,
           }

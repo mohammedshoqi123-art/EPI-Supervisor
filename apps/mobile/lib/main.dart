@@ -80,6 +80,14 @@ Future<void> main() async {
   try {
     EnvValidator.validate();
   } catch (e) {
+    // In web, show a nicer error page instead of crashing
+    if (kIsWeb) {
+      runApp(_ErrorApp(
+        title: 'خطأ في الإعدادات',
+        message: 'لم يتم تكوين متغيرات البيئة.\nيرجى إضافة SUPABASE_URL و SUPABASE_ANON_KEY في GitHub Secrets ثم إعادة النشر.',
+      ));
+      return;
+    }
     runApp(_ErrorApp(title: 'خطأ في الإعدادات', message: e.toString()));
     return;
   }

@@ -204,7 +204,7 @@ export default function GovernoratesPage() {
       const completion_rate = maxSub > 0 ? Math.round((submissions / maxSub) * 100) : 0
       const uniqueUsers = new Set(govSubs.map(s => s.submitted_by).filter(Boolean))
       const active_users = uniqueUsers.size || (submissions > 0 ? 1 : 0)
-      const approvedCount = govSubs.filter(s => s.status === 'approved').length
+      const approvedCount = govSubs.filter(s => s.status === 'submitted').length
       const trend = submissions > 0 ? Math.round(((approvedCount / submissions) - 0.5) * 40) : 0
       const lastSub = govSubs.length > 0
         ? govSubs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at
@@ -378,8 +378,6 @@ export default function GovernoratesPage() {
                   <SelectContent>
                     <SelectItem value="all">كل الحالات</SelectItem>
                     <SelectItem value="submitted">مرسلة</SelectItem>
-                    <SelectItem value="approved">معتمدة</SelectItem>
-                    <SelectItem value="rejected">مرفوضة</SelectItem>
                     <SelectItem value="draft">مسودة</SelectItem>
                   </SelectContent>
                 </Select>

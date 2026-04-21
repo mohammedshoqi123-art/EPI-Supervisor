@@ -56,7 +56,7 @@ class EncryptionService {
   /// PBKDF2 key derivation using HMAC-SHA256 (crypto package only).
   static enc.Key _deriveKey(List<int> password, Uint8List salt) {
     // Manual PBKDF2 with crypto package — no pointycastle needed
-    const iterations = 10000;
+    const iterations = 600000;
     final hmac = Hmac(sha256, password);
     var u = Uint8List(32);
     var result = Uint8List(0);

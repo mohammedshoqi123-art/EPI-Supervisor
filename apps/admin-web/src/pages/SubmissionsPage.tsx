@@ -117,9 +117,7 @@ export default function SubmissionsPage() {
             <TabsList>
               <TabsTrigger value="all" className="text-xs">الكل</TabsTrigger>
               <TabsTrigger value="submitted" className="text-xs">مرسلة</TabsTrigger>
-              <TabsTrigger value="reviewed" className="text-xs">تمت المراجعة</TabsTrigger>
-              <TabsTrigger value="approved" className="text-xs">معتمدة</TabsTrigger>
-              <TabsTrigger value="rejected" className="text-xs">مرفوضة</TabsTrigger>
+              <TabsTrigger value="draft" className="text-xs">مسودة</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -238,7 +236,7 @@ function SubmissionDetailDialog({ submission, open, onOpenChange }: {
   const handleAction = (status: SubmissionStatus) => {
     updateStatus.mutate({ id: submission.id, status, review_notes: reviewNotes || undefined }, {
       onSuccess: () => {
-        toast({ title: status === 'approved' ? 'تم الاعتماد' : 'تم الرفض', variant: status === 'approved' ? 'success' : 'destructive' })
+        toast({ title: status === 'submitted' ? 'تم الإرسال' : 'تم الإرجاع لمسودة', variant: 'default' })
         onOpenChange(false)
       },
     })
@@ -289,7 +287,7 @@ function SubmissionDetailDialog({ submission, open, onOpenChange }: {
           </div>
 
           {/* Review Actions */}
-          {(submission.status === 'submitted' || submission.status === 'reviewed') && (
+          {submission.status === 'submitted' && (
             <div className="space-y-3 pt-3 border-t">
               <Input
                 placeholder="ملاحظات المراجعة (اختياري)"
@@ -298,22 +296,13 @@ function SubmissionDetailDialog({ submission, open, onOpenChange }: {
               />
               <div className="flex gap-2">
                 <Button
-                  variant="success"
+                  variant="outline"
                   className="flex-1 gap-2"
-                  onClick={() => handleAction('approved')}
-                  disabled={updateStatus.isPending}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  اعتماد
-                </Button>
-                <Button
-                  variant="destructive"
-                  className="flex-1 gap-2"
-                  onClick={() => handleAction('rejected')}
+                  onClick={() => handleAction('draft')}
                   disabled={updateStatus.isPending}
                 >
                   <XCircle className="w-4 h-4" />
-                  رفض
+                  إرجاع لمسودة
                 </Button>
               </div>
             </div>

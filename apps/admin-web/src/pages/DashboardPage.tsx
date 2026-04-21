@@ -232,9 +232,8 @@ export default function DashboardPage() {
                     <Legend
                       formatter={(value) => <span className="text-xs font-medium">{value}</span>}
                     />
-                    <Area type="monotone" dataKey="approved" name="معتمدة" stroke="#10b981" fill="url(#colorApproved)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
-                    <Area type="monotone" dataKey="pending" name="قيد المراجعة" stroke="#3b82f6" fill="url(#colorPending)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
-                    <Area type="monotone" dataKey="rejected" name="مرفوضة" stroke="#ef4444" fill="url(#colorRejected)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+                    <Area type="monotone" dataKey="submitted" name="مُرسلة" stroke="#10b981" fill="url(#colorApproved)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
+                    <Area type="monotone" dataKey="draft" name="مسودة" stroke="#f59e0b" fill="url(#colorRejected)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               )}

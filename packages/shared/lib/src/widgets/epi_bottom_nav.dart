@@ -36,7 +36,6 @@ class EpiBottomNav extends StatelessWidget {
           icon: Icon(Icons.map_rounded),
           label: 'الخريطة',
         ),
-        BottomNavigationBarItem(icon: Icon(Icons.chat_rounded), label: 'الشات'),
       ],
     );
   }

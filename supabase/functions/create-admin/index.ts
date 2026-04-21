@@ -60,6 +60,26 @@ serve(async (req) => {
       return jsonResponse({ error: 'email, password, and full_name are required' }, 400, origin)
     }
 
+    // Password strength validation
+    if (password.length < 8) {
+      return jsonResponse({ error: 'Password must be at least 8 characters' }, 400, origin)
+    }
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+      return jsonResponse({ error: 'Password must contain uppercase, lowercase, and a number' }, 400, origin)
+    }
+
+    // Rate limiting
+    const { data: rlData, error: rlError } = await supabaseAdmin
+      .rpc('check_and_increment_rate_limit', {
+        p_user_id: auth.userId,
+        p_endpoint: 'create-admin',
+        p_window_seconds: 300,
+        p_max_requests: 10,
+      })
+    if (rlError || !(rlData?.[0]?.allowed ?? false)) {
+      return jsonResponse({ error: 'Rate limit exceeded. Max 10 user creations per 5 minutes.' }, 429, origin)
+    }
+
     if (!VALID_ROLES.includes(role)) {
       return jsonResponse({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` }, 400, origin)
     }

@@ -20,12 +20,16 @@ serve(async (req: Request) => {
 
   try {
     // Authenticate
-    const auth = await authenticateRequest(req)
-    if (!auth) {
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
       return jsonResponse({ error: 'Unauthorized' }, 401, origin)
     }
 
-    const userClient = createUserClient(auth.token)
+    const supabase = createUserClient(authHeader)
+    const auth = await authenticateRequest(supabase, authHeader)
+    if (!auth) {
+      return jsonResponse({ error: 'Unauthorized' }, 401, origin)
+    }
 
     // Parse body
     let body: Record<string, unknown> = {}
@@ -38,7 +42,7 @@ serve(async (req: Request) => {
     const campaignType = body.campaign_type as string | undefined
 
     // Build query
-    let query = userClient
+    let query = supabase
       .from('forms')
       .select('id, title_ar, title_en, description_ar, description_en, schema, requires_gps, requires_photo, max_photos, allowed_roles, campaign_type, is_active, created_at, updated_at')
       .eq('is_active', true)

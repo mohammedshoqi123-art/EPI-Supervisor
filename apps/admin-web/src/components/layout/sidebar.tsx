@@ -5,7 +5,8 @@ import {
   LayoutDashboard, Users, FileText, FileStack, ScrollText,
   MapPin, Shield, ChevronLeft, ChevronRight, Settings, LogOut,
   AlertTriangle, Bell, Moon, Sun, Menu, X, Sparkles, Layout, Clock,
-  MessageSquare, Brain, BookOpen, Filter, Globe
+  Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
+  FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -39,21 +40,20 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: LayoutDashboard, label: 'لوحة التحكم', href: '/dashboard' },
-  { icon: Sparkles, label: 'الرؤى الذكية AI', href: '/insights' },
+  { icon: Gauge, label: 'لوحة التحكم', href: '/dashboard' },
+  { icon: BarChart3, label: 'التحليلات', href: '/insights' },
   { icon: Brain, label: 'إعدادات الذكاء الاصطناعي', href: '/ai-settings', roles: ['admin'] },
   { icon: Users, label: 'المستخدمون', href: '/users' },
-  { icon: FileText, label: 'النماذج', href: '/forms' },
+  { icon: FileSearch, label: 'النماذج', href: '/forms' },
   { icon: FileStack, label: 'الإرساليات', href: '/submissions' },
   { icon: AlertTriangle, label: 'النواقص', href: '/shortages' },
-  { icon: ScrollText, label: 'سجل التدقيق', href: '/audit', roles: ['admin', 'central'] },
-  { icon: MapPin, label: 'المحافظات', href: '/governorates', roles: ['admin'] },
+  { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin', 'central'] },
+  { icon: MapPinned, label: 'المحافظات', href: '/governorates', roles: ['admin'] },
   { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
   { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
   { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
-  { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
-  { icon: Bell, label: 'الإشعارات', href: '/notifications' },
-  { icon: Settings, label: 'الإعدادات', href: '/settings', roles: ['admin'] },
+  { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
+  { icon: Cog, label: 'الإعدادات', href: '/settings', roles: ['admin'] },
 ]
 
 function LiveClock({ collapsed }: { collapsed: boolean }) {

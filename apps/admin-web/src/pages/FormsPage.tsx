@@ -337,7 +337,7 @@ export default function FormsPage() {
 
 interface FormCardProps {
   form: Form
-  submissionCount?: { total: number; approved: number; pending: number; rejected: number }
+  submissionCount?: { total: number; submitted: number; draft: number }
   onEdit: () => void
   onPreview: () => void
   onDelete: () => void

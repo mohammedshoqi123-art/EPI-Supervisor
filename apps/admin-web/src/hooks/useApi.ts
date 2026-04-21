@@ -185,16 +185,16 @@ export function useDashboardStats(campaignType?: string) {
 
       const submissionsToday = submissions.filter((s: any) => new Date(s.created_at) >= today).length
       const submissionsThisWeek = submissions.filter((s: any) => new Date(s.created_at) >= weekAgo).length
-      const approved = submissions.filter((s: any) => s.status === 'approved').length
-      const pending = submissions.filter((s: any) => s.status === 'submitted' || s.status === 'reviewed').length
+      const submitted = submissions.filter((s: any) => s.status === 'submitted').length
+      const pending = submitted // pending = submitted (awaiting review)
 
       return {
         total_users: users.length,
         active_users: users.filter((u: any) => u.is_active).length,
         total_submissions: submissions.length,
         pending_submissions: pending,
-        approved_submissions: approved,
-        rejected_submissions: submissions.filter((s: any) => s.status === 'rejected').length,
+        approved_submissions: 0, // simplified enum: only draft + submitted
+        rejected_submissions: 0, // simplified enum: only draft + submitted
         draft_submissions: submissions.filter((s: any) => s.status === 'draft').length,
         total_forms: forms.length,
         active_forms: forms.filter((f: any) => f.is_active).length,
@@ -234,21 +234,20 @@ export function useSubmissionsChart(campaignType?: string) {
 
       if (!data) return []
 
-      const grouped: Record<string, { date: string; approved: number; rejected: number; pending: number }> = {}
+      const grouped: Record<string, { date: string; submitted: number; draft: number }> = {}
       const now = new Date()
 
       for (let i = 29; i >= 0; i--) {
         const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
         const key = d.toISOString().split('T')[0]
-        grouped[key] = { date: key, approved: 0, rejected: 0, pending: 0 }
+        grouped[key] = { date: key, submitted: 0, draft: 0 }
       }
 
       data.forEach((s) => {
         const key = s.created_at.split('T')[0]
         if (grouped[key]) {
-          if (s.status === 'approved') grouped[key].approved++
-          else if (s.status === 'rejected') grouped[key].rejected++
-          else grouped[key].pending++
+          if (s.status === 'submitted') grouped[key].submitted++
+          else if (s.status === 'draft') grouped[key].draft++
         }
       })
 
@@ -442,15 +441,14 @@ export function useFormSubmissionCounts(campaignType?: string) {
       const { data, error } = await query
       if (error) throw error
 
-      const counts: Record<string, { total: number; approved: number; pending: number; rejected: number }> = {}
+      const counts: Record<string, { total: number; submitted: number; draft: number }> = {}
       for (const row of data || []) {
         if (!counts[row.form_id]) {
-          counts[row.form_id] = { total: 0, approved: 0, pending: 0, rejected: 0 }
+          counts[row.form_id] = { total: 0, submitted: 0, draft: 0 }
         }
         counts[row.form_id].total++
-        if (row.status === 'approved') counts[row.form_id].approved++
-        else if (row.status === 'rejected') counts[row.form_id].rejected++
-        else if (row.status === 'submitted' || row.status === 'reviewed') counts[row.form_id].pending++
+        if (row.status === 'submitted') counts[row.form_id].submitted++
+        else if (row.status === 'draft') counts[row.form_id].draft++
       }
       return counts
     },

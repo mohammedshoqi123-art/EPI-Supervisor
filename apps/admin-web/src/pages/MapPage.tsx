@@ -38,10 +38,7 @@ L.Icon.Default.mergeOptions({
 function createStatusIcon(status: string, isSelected: boolean) {
   const colors: Record<string, string> = {
     draft: '#f59e0b',
-    submitted: '#3b82f6',
-    reviewed: '#8b5cf6',
-    approved: '#10b981',
-    rejected: '#ef4444',
+    submitted: '#10b981',
   }
   const color = colors[status] || '#6b7280'
   const size = isSelected ? 16 : 10
@@ -380,9 +377,7 @@ export default function MapPage() {
                       <SelectItem value="all">كل الحالات</SelectItem>
                       <SelectItem value="draft">مسودة</SelectItem>
                       <SelectItem value="submitted">مرسلة</SelectItem>
-                      <SelectItem value="reviewed">تمت المراجعة</SelectItem>
-                      <SelectItem value="approved">معتمدة</SelectItem>
-                      <SelectItem value="rejected">مرفوضة</SelectItem>
+                      <SelectItem value="draft">مسودة</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -436,8 +431,8 @@ export default function MapPage() {
                 <Target className="w-4 h-4 text-amber-600" />
               </div>
               <div>
-                <p className="text-xl font-heading font-bold">{stats.byStatus['approved'] || 0}</p>
-                <p className="text-[10px] text-muted-foreground">معتمدة</p>
+                <p className="text-xl font-heading font-bold">{stats.byStatus['submitted'] || 0}</p>
+                <p className="text-[10px] text-muted-foreground">مرسلة</p>
               </div>
             </CardContent>
           </Card>
@@ -478,10 +473,9 @@ export default function MapPage() {
                           <div className="min-w-[220px] font-[Cairo]" dir="rtl">
                             <div className="flex items-center gap-2 mb-2">
                               <div className={cn('w-2.5 h-2.5 rounded-full',
-                                sub.status === 'approved' ? 'bg-emerald-500' :
+                                sub.status === 'submitted' ? 'bg-emerald-500' :
                                 sub.status === 'submitted' ? 'bg-blue-500' :
-                                sub.status === 'rejected' ? 'bg-red-500' :
-                                sub.status === 'reviewed' ? 'bg-purple-500' : 'bg-amber-500'
+                                sub.status === 'draft' ? 'bg-amber-500' :
                               )} />
                               <span className="font-bold text-sm">{sub.forms?.title_ar || 'إرسالية'}</span>
                             </div>
@@ -572,11 +566,8 @@ export default function MapPage() {
                   <p className="text-[10px] font-medium text-muted-foreground mb-2">دليل الألوان</p>
                   <div className="space-y-1.5">
                     {[
-                      { status: 'approved', label: 'معتمدة', color: '#10b981' },
-                      { status: 'submitted', label: 'مرسلة', color: '#3b82f6' },
-                      { status: 'reviewed', label: 'تمت المراجعة', color: '#8b5cf6' },
+                      { status: 'submitted', label: 'مرسلة', color: '#10b981' },
                       { status: 'draft', label: 'مسودة', color: '#f59e0b' },
-                      { status: 'rejected', label: 'مرفوضة', color: '#ef4444' },
                     ].map(item => (
                       <div key={item.status} className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full" style={{ background: item.color }} />
@@ -741,10 +732,9 @@ export default function MapPage() {
                   }}
                 >
                   <div className={cn('w-2.5 h-2.5 rounded-full shrink-0',
-                    sub.status === 'approved' ? 'bg-emerald-500' :
+                    sub.status === 'submitted' ? 'bg-emerald-500' :
                     sub.status === 'submitted' ? 'bg-blue-500' :
-                    sub.status === 'rejected' ? 'bg-red-500' :
-                    sub.status === 'reviewed' ? 'bg-purple-500' : 'bg-amber-500'
+                    sub.status === 'draft' ? 'bg-amber-500' :
                   )} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{sub.forms?.title_ar || 'إرسالية'}</p>

@@ -151,10 +151,10 @@ function calculateHealthScore(stats: any): number {
 function generatePredictions(chartData: any[]) {
   if (!chartData || chartData.length < 7) return []
   const last7 = chartData.slice(-7)
-  const avg = last7.reduce((s, d) => s + d.approved + d.pending + d.rejected, 0) / 7
+  const avg = last7.reduce((s, d) => s + d.submitted + d.draft, 0) / 7
   const trend = last7.length >= 2
-    ? ((last7[last7.length - 1].approved + last7[last7.length - 1].pending) -
-       (last7[0].approved + last7[0].pending)) / 7
+    ? ((last7[last7.length - 1].submitted + last7[last7.length - 1].draft) -
+       (last7[0].submitted + last7[0].draft)) / 7
     : 0
 
   return [

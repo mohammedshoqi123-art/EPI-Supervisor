@@ -176,9 +176,7 @@ serve(async (req) => {
         active_users: activeUsers ?? 0,
         total_submissions: totalSubmissions ?? 0,
         today_submissions: todaySubmissions ?? 0,
-        
-        
-        
+        pending_submissions: pendingSubmissions ?? 0,
         draft_submissions: draftSubmissions ?? 0,
         total_shortages: totalShortages ?? 0,
         critical_shortages: criticalShortages ?? 0,

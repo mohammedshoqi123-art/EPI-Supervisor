@@ -6,7 +6,7 @@ import {
   MapPin, Shield, ChevronLeft, ChevronRight, Settings, LogOut,
   AlertTriangle, Bell, Moon, Sun, Menu, X, Sparkles, Layout, Clock,
   Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
-  FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog
+  FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -52,6 +52,7 @@ const navItems: NavItem[] = [
   { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
   { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
   { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
+  { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
   { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
   { icon: Cog, label: 'الإعدادات', href: '/settings', roles: ['admin'] },
 ]

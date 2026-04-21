@@ -128,10 +128,17 @@
       }).catch(function() {});
     }
 
-    // ═══ Loading timeout: if Flutter doesn't start rendering within 30s, show error ═══
+    // ═══ Loading timeout: if Flutter doesn't start rendering within 20s, show error ═══
     setTimeout(function() {
       var fv = document.querySelector('flutter-view');
-      var hasRendered = fv && (fv.querySelector('canvas') || fv.querySelector('flt-canvas-container') || fv.querySelector('flt-scene-host'));
+      var hasRendered = fv && (
+        fv.querySelector('canvas') ||
+        fv.querySelector('flt-canvas-container') ||
+        fv.querySelector('flt-scene-host') ||
+        fv.querySelector('flt-platform-view-slot') ||
+        fv.querySelector('flt-semantics-host:not(:empty)') ||
+        (fv.shadowRoot && fv.shadowRoot.querySelector('canvas'))
+      );
       if (!hasRendered) {
         var loading = document.getElementById('loading');
         var errScreen = document.getElementById('errorScreen');
@@ -139,10 +146,10 @@
         if (loading) loading.classList.add('hidden');
         if (errScreen) {
           errScreen.classList.add('visible');
-          if (errMsg) errMsg.textContent = 'انتهت مهلة تحميل التطبيق. تأكد من اتصال الإنترنت وحاول مرة أخرى.';
+          if (errMsg) errMsg.textContent = 'انتهت مهلة تحميل التطبيق. حاول فتح الموقع في متصفح آخر أو تأكد من دعم WebGL.';
         }
       }
-    }, 30000);
+    }, 20000);
 
     // ═══ Auto-hide loading screen when Flutter renders first frame ═══
     var observer = new MutationObserver(function() {

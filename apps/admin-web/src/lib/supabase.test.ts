@@ -13,6 +13,22 @@ vi.mock('@supabase/supabase-js', () => ({
   })),
 }))
 
+vi.mock('./supabase', async () => {
+  const actual = await vi.importActual<typeof import('./supabase')>('./supabase')
+  return {
+    ...actual,
+    supabase: {
+      auth: {
+        getSession: vi.fn(),
+        signInWithPassword: vi.fn(),
+        signOut: vi.fn(),
+      },
+      from: vi.fn(),
+      functions: { invoke: vi.fn() },
+    },
+  }
+})
+
 describe('Supabase client', () => {
   it('exports supabase client', async () => {
     const { supabase } = await import('./supabase')

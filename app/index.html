@@ -10,6 +10,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="EPI Supervisor's">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <link rel="manifest" href="manifest.json">
   <title>EPI Supervisor's</title>
 
@@ -127,6 +130,10 @@
         registrations.forEach(function(reg) { reg.unregister(); });
       }).catch(function() {});
     }
+    // Clear all caches to prevent stale builds
+    if ('caches' in window) {
+      caches.keys().then(function(names) { names.forEach(function(n) { caches.delete(n); }); });
+    }
 
     // ═══ Detect if Flutter has started rendering (works for both HTML and CanvasKit renderers) ═══
     function hasFlutterRendered() {
@@ -154,7 +161,7 @@
         var loading = document.getElementById('loading');
         var errScreen = document.getElementById('errorScreen');
         var errMsg = document.getElementById('errorMessage');
-        if (loading) loading.classList.add('hidden');
+        if (loading) loading.remove();
         if (errScreen) {
           errScreen.classList.add('visible');
           if (errMsg) errMsg.textContent = 'انتهت مهلة تحميل التطبيق. حاول فتح الموقع في متصفح آخر أو تأكد من دعم WebGL.';
@@ -166,9 +173,9 @@
     var observer = new MutationObserver(function() {
       if (hasFlutterRendered()) {
         var loading = document.getElementById('loading');
-        if (loading && !loading.classList.contains('hidden')) {
-          loading.classList.add('hidden');
-        }
+        if (loading) loading.remove();
+        var error = document.getElementById('errorScreen');
+        if (error) error.remove();
         observer.disconnect();
       }
     });

@@ -457,7 +457,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   icon: Icons.description_rounded,
                   items: forms
                       .map((f) => DropdownMenuItem(
-                            value: f['id'] as String,
+                            value: f['id'] as String? ?? '',
                             child: Text(
                                 f['title_ar'] as String? ?? '',
                                 style: const TextStyle(

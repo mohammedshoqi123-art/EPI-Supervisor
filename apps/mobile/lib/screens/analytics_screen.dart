@@ -227,7 +227,7 @@ class _ReadinessTab extends ConsumerWidget {
       data: (subs) {
         final govNames = <String, String>{};
         for (final g in (govAsync.valueOrNull ?? [])) {
-          govNames[g['id'] as String] = g['name_ar'] as String? ?? '';
+          govNames[g['id'] as String? ?? ''] = g['name_ar'] as String? ?? '';
         }
 
         // Latest submission per governorate
@@ -420,18 +420,18 @@ class _ComplianceTab extends ConsumerWidget {
 
         final govNames = <String, String>{};
         for (final g in (govAsync.valueOrNull ?? [])) {
-          govNames[g['id'] as String] = g['name_ar'] as String? ?? '';
+          govNames[g['id'] as String? ?? ''] = g['name_ar'] as String? ?? '';
         }
         final distNames = <String, String>{};
         for (final d in (distAsync.valueOrNull ?? [])) {
-          distNames[d['id'] as String] = d['name_ar'] as String? ?? '';
+          distNames[d['id'] as String? ?? ''] = d['name_ar'] as String? ?? '';
         }
 
         // Group by governorate
         final byGov = <String, List<Map<String, dynamic>>>{};
         for (final s in realSubs) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
-          final govId = d['governorate_id'] as String;
+          final govId = d['governorate_id'] as String? ?? 'unknown';
           byGov.putIfAbsent(govId, () => []).add(s);
         }
 
@@ -1141,7 +1141,7 @@ class _ReadinessGovCard extends StatelessWidget {
                 ],
                 const SizedBox(height: 16),
                 Row(children: [
-                  Text(data.supervisorTitle, style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey.shade500)),
+                  Text(data.supervisorTitle ?? 'غير محدد', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey.shade500)),
                   const Spacer(),
                   Text('${data.lastUpdated.day}/${data.lastUpdated.month}/${data.lastUpdated.year}',
                       style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey.shade500)),

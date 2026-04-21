@@ -18,16 +18,18 @@ Future<void> main() async {
   // Run the app FIRST — don't block on async init
   runApp(const ProviderScope(child: EpiSupervisorApp()));
 
-  // Deferred init: run async tasks AFTER the first frame
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
+  // Deferred init: use Future.microtask to run AFTER first frame renders
+  Future.microtask(() async {
     // Load .env
-    final dotenv = await EnvLoader.load();
-    if (dotenv.isNotEmpty) {
-      SupabaseConfig.setFromEnv(
-        url: dotenv['SUPABASE_URL'] ?? '',
-        anonKey: dotenv['SUPABASE_ANON_KEY'] ?? '',
-      );
-    }
+    try {
+      final dotenv = await EnvLoader.load();
+      if (dotenv.isNotEmpty) {
+        SupabaseConfig.setFromEnv(
+          url: dotenv['SUPABASE_URL'] ?? '',
+          anonKey: dotenv['SUPABASE_ANON_KEY'] ?? '',
+        );
+      }
+    } catch (_) {}
 
     // Validate env (non-blocking — show warning in UI if needed)
     try {
@@ -40,16 +42,16 @@ Future<void> main() async {
     } catch (_) {}
 
     // Init Supabase
-    if (!EnvValidator.isOfflineMode && SupabaseConfig.url.isNotEmpty) {
-      try {
+    try {
+      if (!EnvValidator.isOfflineMode && SupabaseConfig.url.isNotEmpty) {
         SupabaseConfig.validate();
         await Supabase.initialize(
           url: SupabaseConfig.url,
           anonKey: SupabaseConfig.anonKey,
           debug: AppConfig.isDevelopment,
         ).timeout(const Duration(seconds: 15));
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     // Init notifications
     try {

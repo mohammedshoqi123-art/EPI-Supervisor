@@ -18,6 +18,7 @@ final themeModeProvider = StateProvider<ThemeMode>((_) => ThemeMode.system);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) debugPrint('[INIT] Flutter binding initialized');
 
   // Global error handler for uncaught Flutter errors
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -69,6 +70,7 @@ Future<void> main() async {
 
   // ─── Load .env file BEFORE any validation ────────────────────
   final dotenv = await EnvLoader.load();
+  if (kIsWeb) debugPrint('[INIT] EnvLoader done, dotenv keys: ${dotenv.keys.length}');
   if (dotenv.isNotEmpty) {
     SupabaseConfig.setFromEnv(
       url: dotenv['SUPABASE_URL'] ?? '',
@@ -79,7 +81,9 @@ Future<void> main() async {
   // Validate all environment variables first
   try {
     EnvValidator.validate();
+    if (kIsWeb) debugPrint('[INIT] EnvValidator passed');
   } catch (e) {
+    if (kIsWeb) debugPrint('[INIT] EnvValidator FAILED: $e');
     // In web, show a nicer error page instead of crashing
     if (kIsWeb) {
       runApp(_ErrorApp(
@@ -94,7 +98,9 @@ Future<void> main() async {
 
   // Initialize connectivity monitoring
   try {
+    if (kIsWeb) debugPrint('[INIT] ConnectivityUtils starting...');
     await ConnectivityUtils.initialize();
+    if (kIsWeb) debugPrint('[INIT] ConnectivityUtils done');
   } catch (e) {
     debugPrint('ConnectivityUtils init failed: $e');
   }
@@ -103,21 +109,34 @@ Future<void> main() async {
   if (!EnvValidator.isOfflineMode) {
     try {
       SupabaseConfig.validate();
+      if (kIsWeb) debugPrint('[INIT] Supabase.initialize starting... URL: ${SupabaseConfig.url}');
       await Supabase.initialize(
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.anonKey,
         debug: AppConfig.isDevelopment,
       ).timeout(const Duration(seconds: 15));
+      if (kIsWeb) debugPrint('[INIT] Supabase.initialize done');
     } catch (e) {
+      if (kIsWeb) debugPrint('[INIT] Supabase.initialize FAILED: $e');
       runApp(_ErrorApp(title: 'خطأ في إعدادات Supabase', message: e.toString()));
       return;
     }
+  } else {
+    if (kIsWeb) debugPrint('[INIT] Offline mode, skipping Supabase');
   }
 
   // Initialize Notification Service with API client
   try {
+    if (kIsWeb) debugPrint('[INIT] NotificationService starting...');
     if (SupabaseConfig.isConfigured) {
       NotificationService.init(ApiClient());
+    }
+    if (kIsWeb) debugPrint('[INIT] NotificationService done');
+  } catch (e) {
+    debugPrint('NotificationService init failed: $e');
+  }
+
+  if (kIsWeb) debugPrint('[INIT] runApp() starting...');
     }
   } catch (e) {
     debugPrint('NotificationService init failed: $e');

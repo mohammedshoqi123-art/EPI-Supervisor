@@ -17,8 +17,9 @@ class EpiBottomNav extends StatelessWidget {
       type: BottomNavigationBarType.fixed,
       currentIndex: currentIndex,
       onTap: onTap,
-      selectedItemColor: AppTheme.primaryColor,
-      unselectedItemColor: AppTheme.textHint,
+      backgroundColor: AppTheme.primaryColor,
+      selectedItemColor: Colors.white,
+      unselectedItemColor: Colors.white60,
       items: const [
         BottomNavigationBarItem(
           icon: Icon(Icons.dashboard_rounded),

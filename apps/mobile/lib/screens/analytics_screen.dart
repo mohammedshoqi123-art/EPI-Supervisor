@@ -240,8 +240,8 @@ class _ReadinessTab extends ConsumerWidget {
           countByGov[govId] = (countByGov[govId] ?? 0) + 1;
           final existing = latestByGov[govId];
           if (existing == null ||
-              (s['created_at'] as String? ?? '') >
-                  (existing['created_at'] as String? ?? '')) {
+              (s['created_at'] as String? ?? '')
+                  .compareTo(existing['created_at'] as String? ?? '') > 0) {
             latestByGov[govId] = s;
           }
         }

@@ -152,7 +152,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final submissions = data['submissions'] as Map<String, dynamic>? ?? {};
     final total = submissions['total'] as int? ?? 0;
     final today = submissions['today'] as int? ?? 0;
-    final byStatus = submissions['byStatus'] as Map<String, dynamic>? ?? {};
     // Use local drafts count (Hive) — more accurate than server-only count
     final drafts = localDrafts;
 

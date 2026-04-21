@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html dir="rtl">
+<html dir="ltr">
 <head>
   <base href="/EPI-Supervisor/app/">
   <meta charset="UTF-8">
@@ -181,6 +181,27 @@
     });
     observer.observe(document.body, { childList: true, subtree: true });
   </script>
+
+    // ═══ FIX: Flutter HTML renderer coordinate issue with RTL ═══
+    // The html[dir=rtl] causes Flutter's absolute positioning to place
+    // elements outside the viewport. Force LTR on flutter-view.
+    var _fixFlutterRTL = new MutationObserver(function() {
+      var fv = document.querySelector('flutter-view');
+      if (fv) {
+        fv.setAttribute('dir', 'ltr');
+        fv.style.direction = 'ltr';
+        // Fix canvas z-index so content is visible
+        var gp = fv.querySelector('flt-glass-pane');
+        if (gp && gp.shadowRoot) {
+          gp.shadowRoot.querySelectorAll('canvas').forEach(function(c) {
+            if (c.style.zIndex === '-1') c.style.zIndex = '0';
+          });
+        }
+        _fixFlutterRTL.disconnect();
+      }
+    });
+    _fixFlutterRTL.observe(document.body, {childList: true, subtree: true});
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

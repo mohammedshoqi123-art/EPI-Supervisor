@@ -307,12 +307,15 @@ class SyncService {
           final keys = debugInfo['keys'] as List? ?? [];
 
           // Invalidate all submission + analytics + shortages + trend + ranking caches
+          // Includes integrated activity analytics (readiness + supervision)
           const prefixes = [
             'submissions',
             'dashboard_analytics',
             'shortages',
             'submission_trend',
             'governorate_ranking',
+            'readiness_subs',
+            'supervision_subs',
           ];
 
           int invalidated = 0;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
@@ -159,15 +160,35 @@ class AnalyticsScreen extends ConsumerStatefulWidget {
 class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
+  StreamSubscription? _syncSub;
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 5, vsync: this);
+    // Listen to sync service — invalidate analytics providers after each sync
+    _listenToSync();
+  }
+
+  void _listenToSync() {
+    // Delay to ensure providers are available
+    Future.microtask(() async {
+      try {
+        final syncService = await ref.read(syncServiceProvider.future);
+        _syncSub = syncService.syncState.listen((state) {
+          // When sync finishes, refresh all analytics providers
+          if (!state.isSyncing && mounted) {
+            ref.invalidate(_readinessSubsProvider);
+            ref.invalidate(_supervisionSubsProvider);
+          }
+        });
+      } catch (_) {}
+    });
   }
 
   @override
   void dispose() {
+    _syncSub?.cancel();
     _tab.dispose();
     super.dispose();
   }
@@ -182,13 +203,24 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         bottom: TabBar(
           controller: _tab,
           isScrollable: true,
-          labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(fontFamily: 'Tajawal'),
+          tabAlignment: TabAlignment.start,
+          indicatorColor: Colors.amberAccent,
+          indicatorWeight: 3,
+          indicatorSize: TabBarIndicatorSize.label,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w400, fontSize: 12),
+          indicator: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.white.withValues(alpha: 0.15),
+          ),
+          dividerHeight: 0,
           tabs: const [
             Tab(icon: Icon(Icons.verified_user_rounded), text: 'الجاهزية'),
-            Tab(icon: Icon(Icons.analytics_rounded), text: 'الالتزام'),
-            Tab(icon: Icon(Icons.numbers_rounded), text: 'المترددين'),
-            Tab(icon: Icon(Icons.description_rounded), text: 'التحديات'),
+            Tab(icon: Icon(Icons.checklist_rounded), text: 'الالتزام'),
+            Tab(icon: Icon(Icons.groups_3_rounded), text: 'المترددين'),
+            Tab(icon: Icon(Icons.report_problem_rounded), text: 'التحديات'),
             Tab(icon: Icon(Icons.photo_library_rounded), text: 'الصور'),
           ],
         ),

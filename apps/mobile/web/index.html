@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="EPI Supervisor's - نظام إشراف ميداني لحملات التطعيم">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="EPI Supervisor's">
@@ -19,6 +20,7 @@
       background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 50%, #f0f4ff 100%);
       font-family: 'Tajawal', 'Cairo', sans-serif; z-index: 9999;
     }
+    .loading-screen.hidden { display: none; }
     .loading-logo {
       width: 80px; height: 80px; border-radius: 20px;
       background: linear-gradient(135deg, #1565C0, #1976D2);
@@ -40,7 +42,6 @@
     .loading-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #1976D2, #42A5F5); border-radius: 2px; animation: progress 8s ease-in-out forwards; }
     @keyframes progress { 0% { width: 5%; } 30% { width: 40%; } 60% { width: 70%; } 90% { width: 90%; } 100% { width: 95%; } }
     .loading-hint { color: #999; font-size: 11px; margin-top: 16px; }
-  </style>
     .error-screen {
       display: none;
       padding: 32px;
@@ -48,6 +49,7 @@
       font-family: 'Tajawal', 'Cairo', sans-serif;
       color: #333;
     }
+    .error-screen.visible { display: block; }
     .error-screen h2 { color: #d32f2f; margin-bottom: 12px; }
     .error-screen button {
       margin-top: 16px;
@@ -125,6 +127,35 @@
         registrations.forEach(function(reg) { reg.unregister(); });
       }).catch(function() {});
     }
+
+    // ═══ Loading timeout: if Flutter doesn't start rendering within 30s, show error ═══
+    setTimeout(function() {
+      var fv = document.querySelector('flutter-view');
+      var hasRendered = fv && (fv.querySelector('canvas') || fv.querySelector('flt-canvas-container') || fv.querySelector('flt-scene-host'));
+      if (!hasRendered) {
+        var loading = document.getElementById('loading');
+        var errScreen = document.getElementById('errorScreen');
+        var errMsg = document.getElementById('errorMessage');
+        if (loading) loading.classList.add('hidden');
+        if (errScreen) {
+          errScreen.classList.add('visible');
+          if (errMsg) errMsg.textContent = 'انتهت مهلة تحميل التطبيق. تأكد من اتصال الإنترنت وحاول مرة أخرى.';
+        }
+      }
+    }, 30000);
+
+    // ═══ Auto-hide loading screen when Flutter renders first frame ═══
+    var observer = new MutationObserver(function() {
+      var fv = document.querySelector('flutter-view');
+      if (fv && (fv.querySelector('canvas') || fv.querySelector('flt-scene-host'))) {
+        var loading = document.getElementById('loading');
+        if (loading && !loading.classList.contains('hidden')) {
+          loading.classList.add('hidden');
+        }
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

@@ -272,7 +272,8 @@ class _MainShellState extends ConsumerState<MainShell> {
     if (location.startsWith('/dashboard')) return 0;
     if (location == '/forms/status') return 2; // حالة الاستمارات
     if (location.startsWith('/forms')) return 1; // النماذج
-    if (location.startsWith('/map')) return 3; // الخريطة
+    if (location.startsWith('/analytics')) return 3; // التحليلات
+    if (location.startsWith('/map')) return 4; // الخريطة
     return 0;
   }
 
@@ -288,6 +289,9 @@ class _MainShellState extends ConsumerState<MainShell> {
         context.go('/forms/status');
         break;
       case 3:
+        context.go('/analytics');
+        break;
+      case 4:
         context.go('/map');
         break;
     }

@@ -33,6 +33,10 @@ class EpiBottomNav extends StatelessWidget {
           label: 'الحالة',
         ),
         BottomNavigationBarItem(
+          icon: Icon(Icons.analytics_rounded),
+          label: 'التحليلات',
+        ),
+        BottomNavigationBarItem(
           icon: Icon(Icons.map_rounded),
           label: 'الخريطة',
         ),

@@ -165,7 +165,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 5, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     // Listen to sync service — invalidate analytics providers after each sync
     _listenToSync();
   }
@@ -221,7 +221,6 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             Tab(icon: Icon(Icons.checklist_rounded), text: 'الالتزام'),
             Tab(icon: Icon(Icons.groups_3_rounded), text: 'المترددين'),
             Tab(icon: Icon(Icons.report_problem_rounded), text: 'التحديات'),
-            Tab(icon: Icon(Icons.photo_library_rounded), text: 'الصور'),
           ],
         ),
       ),
@@ -232,7 +231,6 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           _ComplianceTab(),
           _NumbersTab(),
           _ChallengesTab(),
-          _PhotosTab(),
         ],
       ),
     );
@@ -640,85 +638,6 @@ class _ChallengesTab extends ConsumerWidget {
               );
             },
           ),
-        );
-      },
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  TAB 5: PHOTOS
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _PhotosTab extends ConsumerWidget {
-  const _PhotosTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final subsAsync = ref.watch(_supervisionSubsProvider);
-
-    return subsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrRetry(
-          msg: 'فشل تحميل البيانات',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider)),
-      data: (subs) {
-        final photos = <({String url, String supervisor, String date})>[];
-        for (final s in subs) {
-          final d = s['data'] as Map<String, dynamic>? ?? {};
-          final sup = d['supervisor_name'] as String? ?? 'غير محدد';
-          final date = (s['created_at'] as String? ?? '').substring(0, 10);
-          final subPhotos = s['photos'] as List?;
-          if (subPhotos != null) {
-            for (final p in subPhotos) {
-              if (p is String && p.isNotEmpty) {
-                photos.add((url: p, supervisor: sup, date: date));
-              }
-            }
-          }
-          final photoUrl = d['supervision_photo'] as String?;
-          if (photoUrl != null && photoUrl.isNotEmpty) {
-            photos.add((url: photoUrl, supervisor: sup, date: date));
-          }
-        }
-
-        if (photos.isEmpty) {
-          return const _Empty(icon: Icons.photo_library_outlined, msg: 'لا توجد صور توثيقية');
-        }
-
-        return GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 0.85),
-          itemCount: photos.length,
-          itemBuilder: (_, i) {
-            final p = photos[i];
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Stack(fit: StackFit.expand, children: [
-                Image.network(p.url, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        Container(color: Colors.grey.shade200, child: const Icon(Icons.broken_image_rounded, size: 40))),
-                Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent])),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(p.supervisor,
-                              style: const TextStyle(fontFamily: 'Tajawal', color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text(p.date, style: const TextStyle(fontFamily: 'Tajawal', color: Colors.white70, fontSize: 10)),
-                        ]))),
-              ]),
-            );
-          },
         );
       },
     );

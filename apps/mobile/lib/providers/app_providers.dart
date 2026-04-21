@@ -470,6 +470,34 @@ final governorateRankingProvider = FutureProvider<List<Map<String, dynamic>>>((
 });
 
 // ═══════════════════════════════════════════════════════════════
+// LOCAL DRAFTS — count from Hive offline storage
+// ═══════════════════════════════════════════════════════════════
+
+/// Provides the count of locally saved drafts (Hive) — not server drafts.
+/// Dashboard uses this to show accurate draft count.
+final localDraftCountProvider = StreamProvider<int>((ref) async* {
+  // Emit 0 immediately
+  yield 0;
+
+  try {
+    final offline = await ref.watch(offlineManagerProvider.future);
+    // Initial count
+    yield offline.getDraftFormIds().length;
+
+    // Poll every 30s to keep draft badge updated
+    yield* Stream.periodic(const Duration(seconds: 30), (_) {
+      try {
+        return offline.getDraftFormIds().length;
+      } catch (_) {
+        return 0;
+      }
+    }).distinct();
+  } catch (_) {
+    yield 0;
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // NOTIFICATIONS — reactive unread count with polling
 // ═══════════════════════════════════════════════════════════════
 

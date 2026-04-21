@@ -75,6 +75,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final pendingCount = pendingAsync.valueOrNull ?? 0;
     final notifAsync = ref.watch(notificationCountProvider);
     final unreadNotifs = notifAsync.valueOrNull ?? 0;
+    final localDraftsAsync = ref.watch(localDraftCountProvider);
+    final localDrafts = localDraftsAsync.valueOrNull ?? 0;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -136,7 +138,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                   ]),
                 ),
-                data: (data) => _buildDashboardContent(data),
+                data: (data) => _buildDashboardContent(data, localDrafts),
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -146,12 +148,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  SliverList _buildDashboardContent(Map<String, dynamic> data) {
+  SliverList _buildDashboardContent(Map<String, dynamic> data, int localDrafts) {
     final submissions = data['submissions'] as Map<String, dynamic>? ?? {};
     final total = submissions['total'] as int? ?? 0;
     final today = submissions['today'] as int? ?? 0;
     final byStatus = submissions['byStatus'] as Map<String, dynamic>? ?? {};
-    final drafts = byStatus['draft'] as int? ?? 0;
+    // Use local drafts count (Hive) — more accurate than server-only count
+    final drafts = localDrafts;
 
     return SliverList(
       delegate: SliverChildListDelegate([

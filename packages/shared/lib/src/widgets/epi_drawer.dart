@@ -224,6 +224,12 @@ class EpiDrawer extends StatelessWidget {
                   _buildItem(context, Icons.map_rounded, 'الخريطة', '/map'),
                   _buildItem(
                     context,
+                    Icons.analytics_rounded,
+                    'التحليلات',
+                    '/analytics',
+                  ),
+                  _buildItem(
+                    context,
                     Icons.notifications_rounded,
                     'الإشعارات',
                     '/notifications',

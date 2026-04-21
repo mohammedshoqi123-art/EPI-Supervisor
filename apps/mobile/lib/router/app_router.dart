@@ -22,6 +22,7 @@ import '../screens/profile_screen.dart';
 import '../screens/users_screen.dart';
 import '../screens/forms_management_screen.dart';
 import '../screens/references_management_screen.dart';
+import '../screens/analytics_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authAsync = ref.watch(authStateProvider);
@@ -110,6 +111,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
           GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
+          GoRoute(
+            path: '/analytics',
+            builder: (context, state) => const AnalyticsScreen(),
+          ),
           GoRoute(
             path: '/ai',
             builder: (context, state) => const AiChatScreenV2(),

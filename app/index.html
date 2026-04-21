@@ -13,41 +13,34 @@
   <title>EPI Supervisor's</title>
 
   <style>
-    /* Loading screen shown while Flutter boots */
     .loading-screen {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: #ffffff;
-      font-family: 'Tajawal', 'Cairo', sans-serif;
-      z-index: 9999;
-      transition: opacity 0.3s ease;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 50%, #f0f4ff 100%);
+      font-family: 'Tajawal', 'Cairo', sans-serif; z-index: 9999;
     }
-    .loading-screen.hidden {
-      opacity: 0;
-      pointer-events: none;
+    .loading-logo {
+      width: 80px; height: 80px; border-radius: 20px;
+      background: linear-gradient(135deg, #1565C0, #1976D2);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 32px rgba(21,101,192,0.3);
+      margin-bottom: 24px;
     }
+    .loading-logo svg { width: 48px; height: 48px; fill: white; }
     .loading-spinner {
-      width: 48px; height: 48px;
-      border: 4px solid #e0e0e0;
-      border-top-color: #1976D2;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      width: 40px; height: 40px;
+      border: 3px solid #e3e8f0; border-top-color: #1976D2;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+      margin-bottom: 16px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .loading-text {
-      margin-top: 16px;
-      color: #666;
-      font-size: 14px;
-    }
-    .loading-progress {
-      margin-top: 8px;
-      color: #999;
-      font-size: 12px;
-    }
+    .loading-title { color: #1a1a2e; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .loading-subtitle { color: #666; font-size: 13px; margin-bottom: 24px; }
+    .loading-bar { width: 200px; height: 4px; background: #e3e8f0; border-radius: 2px; overflow: hidden; }
+    .loading-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #1976D2, #42A5F5); border-radius: 2px; animation: progress 8s ease-in-out forwards; }
+    @keyframes progress { 0% { width: 5%; } 30% { width: 40%; } 60% { width: 70%; } 90% { width: 90%; } 100% { width: 95%; } }
+    .loading-hint { color: #999; font-size: 11px; margin-top: 16px; }
+  </style>
     .error-screen {
       display: none;
       padding: 32px;
@@ -71,9 +64,14 @@
 <body>
   <!-- Loading screen -->
   <div class="loading-screen" id="loading">
+    <div class="loading-logo">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+    </div>
     <div class="loading-spinner"></div>
-    <div class="loading-text">جاري تحميل EPI Supervisor's...</div>
-    <div class="loading-progress" id="loadProgress">تهيئة التطبيق</div>
+    <div class="loading-title">EPI Supervisor</div>
+    <div class="loading-subtitle">منصة الإشراف الميداني لحملات التطعيم</div>
+    <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+    <div class="loading-hint" id="loadProgress">جاري التحميل...</div>
   </div>
 
   <!-- Error screen (shown if Flutter fails to load) -->
@@ -115,8 +113,10 @@
 
     // Update progress during load
     if (progressEl) {
-      setTimeout(function() { progressEl.textContent = 'تحميل الموارد...'; }, 1000);
-      setTimeout(function() { progressEl.textContent = 'تجهيز المحرك...'; }, 3000);
+      setTimeout(function() { progressEl.textContent = 'تحميل الموارد...'; }, 500);
+      setTimeout(function() { progressEl.textContent = 'تجهيز المحرك...'; }, 2000);
+      setTimeout(function() { progressEl.textContent = 'الاتصال بالخادم...'; }, 4000);
+      setTimeout(function() { progressEl.textContent = 'جاري التهيئة...'; }, 6000);
     }
 
     // Unregister any stale service workers that may cache old builds

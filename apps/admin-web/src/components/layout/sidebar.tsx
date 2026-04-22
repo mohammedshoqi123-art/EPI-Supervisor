@@ -53,6 +53,7 @@ const navItems: NavItem[] = [
   { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
   { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
   { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
+  { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },
   { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
   { icon: Cog, label: 'الإعدادات', href: '/settings', roles: ['admin'] },
 ]

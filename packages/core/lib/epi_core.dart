@@ -49,3 +49,5 @@ export 'src/ai/openrouter_service.dart';
 export 'src/ai/epi_nlp_engine.dart';
 export 'src/ai/epi_knowledge_base.dart';
 export 'src/ai/smart_alerts_engine.dart';
+// ═══ Bot Engine (EPI-Bot Integration) ═══
+export 'src/ai/bot/bot_export.dart';

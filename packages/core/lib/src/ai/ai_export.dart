@@ -37,3 +37,6 @@ export 'zai_service.dart';
 export 'openrouter_service.dart';
 export 'smart_alerts_engine.dart';
 export 'smart_analytics.dart';
+
+// ═══ Bot Engine (EPI-Bot Integration) ═══
+export 'bot/bot_export.dart';

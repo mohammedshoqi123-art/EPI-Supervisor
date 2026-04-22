@@ -45,7 +45,7 @@ export interface ProviderModel {
 const GROQ_CONFIG: ProviderConfig = {
   provider: 'groq',
   baseUrl: 'https://api.groq.com/openai/v1',
-  apiKey: '', // Set via Supabase edge function
+  apiKey: import.meta.env.VITE_GROQ_KEY || '',
   models: [
     { id: 'llama3-8b-8192', label: 'Llama 3 8B (Fast)', maxTokens: 8192, speed: 'fast', cost: 'free', capabilities: ['chat'] },
     { id: 'llama3-70b-8192', label: 'Llama 3 70B', maxTokens: 8192, speed: 'medium', cost: 'free', capabilities: ['chat', 'analysis'] },
@@ -69,12 +69,23 @@ const HUGGINGFACE_CONFIG: ProviderConfig = {
 const GEMINI_CONFIG: ProviderConfig = {
   provider: 'gemini',
   baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-  apiKey: '', // Set via Supabase edge function (MiMo)
+  apiKey: import.meta.env.VITE_MIMO_KEY || '',
   models: [
     { id: 'gemini-pro', label: 'Gemini Pro', maxTokens: 8192, speed: 'medium', cost: 'low', capabilities: ['chat', 'analysis'] },
   ],
   maxTokens: 4096,
   enabled: true,
+}
+
+const MIMO_CONFIG: ProviderConfig = {
+  provider: 'gemini' as AIProvider, // Reuse gemini slot for MiMo
+  baseUrl: 'https://api.xiaomimimo.com/v1',
+  apiKey: import.meta.env.VITE_MIMO_KEY || '',
+  models: [
+    { id: 'mimo-v2-pro', label: 'MiMo v2 Pro', maxTokens: 8192, speed: 'fast', cost: 'low', capabilities: ['chat', 'analysis', 'code'] },
+  ],
+  maxTokens: 4096,
+  enabled: !!(import.meta.env.VITE_MIMO_KEY),
 }
 
 const ZAI_CONFIG: ProviderConfig = {
@@ -105,6 +116,7 @@ const ALL_CONFIGS: ProviderConfig[] = [
   GROQ_CONFIG,
   HUGGINGFACE_CONFIG,
   GEMINI_CONFIG,
+  MIMO_CONFIG,
   ZAI_CONFIG,
   OPENROUTER_CONFIG,
 ]
@@ -221,6 +233,42 @@ async function callOpenRouterDirect(
   }
 }
 
+async function callMiMoDirect(
+  messages: AIMessage[],
+  model: string = 'mimo-v2-pro',
+  apiKey: string,
+): Promise<AIResponse> {
+  const startTime = Date.now()
+
+  const response = await fetch(`${MIMO_CONFIG.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: MIMO_CONFIG.maxTokens,
+      temperature: 0.7,
+    }),
+  })
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`MiMo API error: ${response.status} - ${err}`)
+  }
+
+  const data = await response.json()
+  return {
+    text: data.choices?.[0]?.message?.content || '',
+    provider: 'gemini',
+    model,
+    latencyMs: Date.now() - startTime,
+    tokensUsed: data.usage?.total_tokens,
+  }
+}
+
 async function callZAIDirect(
   messages: AIMessage[],
   model: string = 'default',
@@ -279,6 +327,9 @@ function getFallbackChain(modelChoice: ModelChoice): { provider: AIProvider; mod
   }
   if (OPENROUTER_CONFIG.enabled && modelChoice.provider !== 'openrouter') {
     chain.push({ provider: 'openrouter', model: 'gpt-4o-mini' })
+  }
+  if (MIMO_CONFIG.enabled && modelChoice.provider !== 'gemini') {
+    chain.push({ provider: 'gemini', model: 'mimo-v2-pro' })
   }
   // Supabase edge function as ultimate fallback
   chain.push({ provider: 'groq', model: 'edge-function' })
@@ -374,9 +425,18 @@ async function callProvider(
       return await callOpenRouterDirect(messages, model, OPENROUTER_CONFIG.apiKey)
     }
 
-    case 'huggingface':
     case 'gemini': {
-      // These go through Supabase edge functions
+      // Try MiMo direct first if key available
+      if (MIMO_CONFIG.apiKey) {
+        return await callMiMoDirect(messages, model, MIMO_CONFIG.apiKey)
+      }
+      // Fallback to Supabase edge function
+      return await callSupabaseEdgeFunction(
+        messages[messages.length - 1].content,
+        messages.filter(m => m.role !== 'system'),
+      )
+    }
+    case 'huggingface': {
       return await callSupabaseEdgeFunction(
         messages[messages.length - 1].content,
         messages.filter(m => m.role !== 'system'),

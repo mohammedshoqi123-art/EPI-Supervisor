@@ -266,6 +266,12 @@ class EpiDrawer extends StatelessWidget {
                     'المساعد الذكي',
                     '/ai',
                   ),
+                  _buildItem(
+                    context,
+                    Icons.vaccines_rounded,
+                    'مستشار التحصين',
+                    '/bot',
+                  ),
 
                   // Admin-only sections
                   if (userRoleLevel >= 4) ...[

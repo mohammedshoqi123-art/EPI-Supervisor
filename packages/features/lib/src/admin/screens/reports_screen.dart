@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:epi_core/epi_core.dart';
+import 'package:printing/printing.dart';
 
 /// ═══════════════════════════════════════════════════════════════════
 ///  التقارير والتحليلات — Reports & Analytics
@@ -118,12 +120,28 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           const SizedBox(width: 12),
 
-          // Export
+          // Export CSV
           if (_reportData != null)
             OutlinedButton.icon(
               onPressed: _exportReport,
               icon: const Icon(Icons.download_rounded),
-              label: const Text('تصدير'),
+              label: const Text('تصدير CSV'),
+            ),
+          const SizedBox(width: 8),
+
+          // Export PDF
+          if (_reportData != null)
+            ElevatedButton.icon(
+              onPressed: _exportPdfReport,
+              icon: const Icon(Icons.picture_as_pdf_rounded),
+              label: const Text('تصدير PDF'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE53935),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
         ],
       ),
@@ -553,6 +571,101 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
       }
+    }
+  }
+
+  void _exportPdfReport() async {
+    if (_reportData == null) return;
+
+    setState(() => _loading = true);
+    try {
+      // Build analytics data from current report
+      final total = _reportData?['total'] ?? 0;
+      final aggregates = Map<String, dynamic>.from(
+        _reportData?['aggregates'] ?? {},
+      );
+      final byStatus = Map<String, dynamic>.from(
+        aggregates['by_status'] ?? {},
+      );
+
+      final analyticsData = <String, dynamic>{
+        'submissions': <String, dynamic>{
+          'total': total,
+          'today': 0,
+          'byStatus': byStatus,
+          'byDay': <String, dynamic>{},
+        },
+        'shortages': <String, dynamic>{
+          'total': 0,
+          'resolved': 0,
+          'bySeverity': <String, dynamic>{},
+        },
+      };
+
+      // Build governorate data if available
+      List<Map<String, dynamic>>? govData;
+      if (_reportType == 'governorate_performance' &&
+          _reportData?['governorates'] != null) {
+        govData = List<Map<String, dynamic>>.from(
+          _reportData!['governorates'],
+        );
+      }
+
+      // Build shortages data if available
+      List<Map<String, dynamic>>? shortageData;
+      if (_reportType == 'shortages' && _reportData?['shortages'] != null) {
+        shortageData = List<Map<String, dynamic>>.from(
+          _reportData!['shortages'],
+        );
+      }
+
+      final reportTitle = _getReportTitle();
+      final dateStr =
+          '${_fromDate.year}/${_fromDate.month}/${_fromDate.day} — ${_toDate.year}/${_toDate.month}/${_toDate.day}';
+
+      final file = await ReportGenerator.generatePDFReport(
+        title: reportTitle,
+        subtitle: 'تقرير $_reportType',
+        period: dateStr,
+        analyticsData: analyticsData,
+        governorateData: govData,
+        shortagesData: shortageData,
+      );
+
+      // Show PDF preview / share dialog
+      await Printing.layoutPdf(
+        onLayout: (format) async => file.readAsBytes(),
+        name: '$reportTitle — $dateStr',
+      );
+
+      setState(() => _loading = false);
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل تصدير PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _getReportTitle() {
+    switch (_reportType) {
+      case 'submissions':
+        return 'تقرير الإرساليات';
+      case 'governorate_performance':
+        return 'تقرير أداء المحافظات';
+      case 'users':
+        return 'تقرير المستخدمين';
+      case 'shortages':
+        return 'تقرير النواقص';
+      case 'audit':
+        return 'تقرير سجل التدقيق';
+      default:
+        return 'تقرير EPI';
     }
   }
 }

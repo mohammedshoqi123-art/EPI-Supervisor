@@ -128,6 +128,8 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
       _NavItem(Icons.history_rounded, 'سجل التدقيق', 7),
       _NavItem(Icons.monitor_heart_rounded, 'مراقبة النظام', 8),
       _NavItem(Icons.chat_rounded, 'الدردشة الداخلية', 9),
+      _NavItem(Icons.web_rounded, 'إدارة الصفحات', 10),
+      _NavItem(Icons.book_rounded, 'إدارة المراجع', 11),
     ];
 
     return Container(
@@ -356,6 +358,10 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
         return const SystemMonitorScreen();
       case 9:
         return const InternalChatScreen();
+      case 10:
+        return const PagesManagementScreen();
+      case 11:
+        return const ReferencesManagementScreen();
       default:
         return dashboardAsync.when(
           loading: () => _buildLoadingState(),
@@ -455,6 +461,10 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
         return 'مراقبة النظام';
       case 9:
         return 'الدردشة الداخلية';
+      case 10:
+        return 'إدارة الصفحات';
+      case 11:
+        return 'إدارة المراجع';
       default:
         return 'لوحة التحكم';
     }
@@ -1320,6 +1330,21 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
   // ═══════════════════════════════════════════
 
   Widget _buildMobileLayout(AsyncValue<Map<String, dynamic>> dashboardAsync) {
+    final navItems = [
+      (Icons.dashboard_rounded, 'لوحة التحكم', 0),
+      (Icons.description_rounded, 'الاستمارات', 1),
+      (Icons.people_alt_rounded, 'المستخدمين', 2),
+      (Icons.notifications_active_rounded, 'الإشعارات', 3),
+      (Icons.storage_rounded, 'البيانات', 4),
+      (Icons.assessment_rounded, 'التقارير', 5),
+      (Icons.settings_rounded, 'الإعدادات', 6),
+      (Icons.history_rounded, 'التدقيق', 7),
+      (Icons.monitor_heart_rounded, 'النظام', 8),
+      (Icons.chat_rounded, 'الدردشة', 9),
+      (Icons.web_rounded, 'الصفحات', 10),
+      (Icons.book_rounded, 'المراجع', 11),
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_getScreenTitle()),
@@ -1331,23 +1356,69 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard>
           ),
         ],
       ),
-      body: dashboardAsync.when(
-        loading: () => _buildLoadingState(),
-        error: (err, stack) => _buildErrorState(err),
-        data: (data) {
-          final kpis = Map<String, dynamic>.from(data['kpis'] ?? {});
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _buildKPISection(kpis),
-                const SizedBox(height: 16),
-                _buildQuickActions(kpis),
-              ],
-            ),
-          );
-        },
+      drawer: Drawer(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF004D40), Color(0xFF00897B)],
+                  ),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.shield_rounded, color: Colors.white, size: 32),
+                    SizedBox(height: 8),
+                    Text(
+                      'لوحة التحكم',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: navItems.length,
+                  itemBuilder: (context, index) {
+                    final item = navItems[index];
+                    final isSelected = _selectedNavIndex == item.$3;
+                    return ListTile(
+                      leading: Icon(
+                        item.$1,
+                        color: isSelected ? const Color(0xFF00897B) : null,
+                      ),
+                      title: Text(
+                        item.$2,
+                        style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.normal,
+                          color: isSelected ? const Color(0xFF00897B) : null,
+                        ),
+                      ),
+                      selected: isSelected,
+                      onTap: () {
+                        setState(() => _selectedNavIndex = item.$3);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
+      body: _buildPageContent(dashboardAsync),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedNavIndex.clamp(0, 4),
         onDestinationSelected: (index) =>

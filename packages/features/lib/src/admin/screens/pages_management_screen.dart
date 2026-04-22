@@ -17,7 +17,7 @@ final pagesListProvider = FutureProvider<List<Map<String, dynamic>>>((
     final response = await client
         .from('pages')
         .select('*')
-        .order('sort_order', ascending: true);
+        .order('nav_order', ascending: true);
     return (response as List<dynamic>).cast<Map<String, dynamic>>();
   } catch (_) {
     return [];
@@ -142,7 +142,10 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
                 : pages.where((p) {
                     final title =
                         (p['title_ar'] ?? '').toString().toLowerCase();
-                    return title.contains(_searchQuery.toLowerCase());
+                    final slug =
+                        (p['slug'] ?? '').toString().toLowerCase();
+                    return title.contains(_searchQuery.toLowerCase()) ||
+                        slug.contains(_searchQuery.toLowerCase());
                   }).toList();
 
             if (filtered.isEmpty) {
@@ -297,7 +300,7 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
             cells: [
               DataCell(
                 Text(
-                  '${page['sort_order'] ?? 0}',
+                  '${page['nav_order'] ?? 0}',
                   style: const TextStyle(
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.w600,
@@ -309,7 +312,7 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      _getPageIcon(page['icon_name']),
+                      _getPageIcon(page['icon']),
                       size: 18,
                       color: AppTheme.primaryColor,
                     ),
@@ -403,7 +406,7 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                _getPageIcon(page['icon_name']),
+                _getPageIcon(page['icon']),
                 color: AppTheme.primaryColor,
                 size: 22,
               ),
@@ -510,13 +513,13 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
     );
     final slugController = TextEditingController(text: page?['slug'] ?? '');
     final contentController = TextEditingController(
-      text: page?['content'] ?? '',
+      text: page?['content_ar'] ?? '',
     );
     final iconController = TextEditingController(
-      text: page?['icon_name'] ?? 'web',
+      text: page?['icon'] ?? 'web',
     );
     bool isActive = page?['is_active'] ?? true;
-    String selectedIcon = page?['icon_name'] ?? 'web';
+    String selectedIcon = page?['icon'] ?? 'web';
 
     final iconOptions = {
       'web': Icons.web_outlined,
@@ -693,8 +696,8 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
       final data = {
         'title_ar': title,
         'slug': slug,
-        'content': content,
-        'icon_name': icon,
+        'content_ar': content,
+        'icon': icon,
         'is_active': isActive,
         'updated_at': DateTime.now().toIso8601String(),
       };
@@ -703,7 +706,7 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
         await client.from('pages').update(data).eq('id', pageId);
       } else {
         data['created_at'] = DateTime.now().toIso8601String();
-        data['sort_order'] = 999;
+        data['nav_order'] = 999;
         await client.from('pages').insert(data);
       }
 
@@ -785,7 +788,7 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
 
       for (int i = 0; i < reordered.length; i++) {
         await Supabase.instance.client.from('pages').update({
-          'sort_order': i,
+          'nav_order': i,
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', reordered[i]['id']);
       }

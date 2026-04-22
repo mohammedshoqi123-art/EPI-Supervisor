@@ -18,6 +18,7 @@ final formsListProvider = FutureProvider<List<Map<String, dynamic>>>((
     final response = await client
         .from('forms')
         .select('*')
+        .isFilter('deleted_at', null)
         .order('created_at', ascending: false);
     return (response as List<dynamic>).cast<Map<String, dynamic>>();
   } catch (_) {
@@ -30,7 +31,7 @@ final formsStatsProvider = FutureProvider<Map<String, Map<String, int>>>((
 ) async {
   final client = Supabase.instance.client;
   try {
-    final forms = await client.from('forms').select('id');
+    final forms = await client.from('forms').select('id').isFilter('deleted_at', null);
     final formIds =
         (forms as List<dynamic>).map((f) => f['id'] as String).toList();
 
@@ -171,7 +172,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
             final filtered = _searchQuery.isEmpty
                 ? forms
                 : forms.where((f) {
-                    final name = (f['name_ar'] ?? f['name'] ?? '')
+                    final name = (f['title_ar'] ?? f['title_en'] ?? '')
                         .toString()
                         .toLowerCase();
                     return name.contains(_searchQuery.toLowerCase());
@@ -332,7 +333,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      form['name_ar'] ?? form['name'] ?? 'بدون عنوان',
+                      form['title_ar'] ?? form['title_en'] ?? 'بدون عنوان',
                       style: const TextStyle(
                         fontFamily: 'Cairo',
                         fontSize: 16,
@@ -344,9 +345,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                 ],
               ),
               const SizedBox(height: 6),
-              if (form['description'] != null)
+              if (form['description_ar'] != null)
                 Text(
-                  form['description'],
+                  form['description_ar'],
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -437,7 +438,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    form['name_ar'] ?? form['name'] ?? 'بدون عنوان',
+                    form['title_ar'] ?? form['title_en'] ?? 'بدون عنوان',
                     style: const TextStyle(
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.w700,
@@ -568,10 +569,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
   void _showFormDialog({Map<String, dynamic>? form}) {
     final isEdit = form != null;
     final nameController = TextEditingController(
-      text: form?['name_ar'] ?? form?['name'] ?? '',
+      text: form?['title_ar'] ?? form?['title_en'] ?? '',
     );
     final descController = TextEditingController(
-      text: form?['description'] ?? '',
+      text: form?['description_ar'] ?? '',
     );
     bool isActive = form?['is_active'] ?? true;
 
@@ -670,9 +671,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     try {
       final client = Supabase.instance.client;
       final data = {
-        'name_ar': name,
-        'name': name,
-        'description': description.isNotEmpty ? description : null,
+        'title_ar': name,
+        'title_en': name,
+        'description_ar': description.isNotEmpty ? description : null,
         'is_active': isActive,
         'updated_at': DateTime.now().toIso8601String(),
       };
@@ -726,7 +727,12 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     if (confirmed != true) return;
 
     try {
-      await Supabase.instance.client.from('forms').delete().eq('id', id);
+      // Soft delete — set deleted_at instead of hard delete
+      await Supabase.instance.client.from('forms').update({
+        'deleted_at': DateTime.now().toIso8601String(),
+        'is_active': false,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', id);
       ref.invalidate(formsListProvider);
       ref.invalidate(formsStatsProvider);
       if (mounted) {

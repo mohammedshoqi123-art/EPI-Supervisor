@@ -6,7 +6,7 @@
 
 import * as XLSX from 'xlsx'
 
-interface ExportColumn {
+export interface ExportColumn {
   header: string
   key: string
   width?: number

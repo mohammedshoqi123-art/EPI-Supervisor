@@ -1,160 +1,9 @@
-// ═══════════════════════════════════════════════════════════
-// قاعدة المعرفة المحلية — EPI-Supervisor + EPI-Bot merged
-// إجمالي: 247 chunk (EPI-Supervisor: 17 + EPI-Bot: 230)
-// ═══════════════════════════════════════════════════════════
-
-export interface KnowledgeChunk {
-  docId: string
-  title: string
-  docType: string
-  index: number
-  section: string
-  content: string
-}
-
-export const LOCAL_KNOWLEDGE: KnowledgeChunk[] = 
 [
-  {
-    "docId": "epi_clinical_guide",
-    "title": "الدليل السريري للتحصين — اليمن",
-    "docType": "clinical",
-    "index": 0,
-    "section": "جدول_التطعيم_الروتيني",
-    "content": "جدول التطعيم الروتيني في اليمن — برنامج التحصين الموسّع (EPI):\n\nعند الولادة:\n• BCG (تطعيم السل) — جرعة واحدة داخل الجلد في الذراع الأيمن\n• OPV0 (الشلل الفموي الجرعة صفر) — فموياً\n• HepB0 (الالتهاب الكبدي B) — عضلي، خلال 24 ساعة من الولادة\n\nعند 6 أسابيع:\n• Penta1 (خماسي) — عضلي في الفخذ الأيسر\n• OPV1 (شلل فموي) — فموياً\n• PCV1 (رئوي) — عضلي\n• Rota1 (روتا) — فموياً\n\nعند 10 أسابيع:\n• Penta2 + OPV2 + PCV2 + Rota2\n\nعند 14 أسبوع:\n• Penta3 + OPV3 + PCV3 + IPV (شلل معطل) — عضلي\n\nعند 9 أشهر:\n• MR1 (حصبة وحصبة ألمانية) — تحت الجلد في الذراع الأيسر\n\nعند 18 شهر أو سن المدرسة:\n• MR2\n\nالفجوة الحرجة: بين OPV3 (14 أسبوع) و MR1 (9 أشهر) = 24 أسبوع بدون تطعيم — هذه الفترة تحتاج متابعة"
-  },
-  {
-    "docId": "epi_clinical_guide",
-    "title": "الدليل السريري للتحصين — اليمن",
-    "docType": "clinical",
-    "index": 1,
-    "section": "اللقاحات_الأساسية_التفصيل",
-    "content": "اللقاحات الأساسية — التفاصيل السريرية:\n\n1. BCG (تطعيم السل): يُعطى عند الولادة داخل الجلد في الذراع الأيمن. يحمي من أشكال السل الخطيرة عند الأطفال.\n\n2. OPV (الشلل الفموي): يُعطى فموياً 4 جرعات: صفر + 3 جرعات. يحمي من شلل الأطفال.\n\n3. Penta (اللقاح الخماسي): يحمي من 5 أمراض: الدفتيريا + الكزاز + السعال الديكي + التهاب كبدي B + Haemophilus influenzae. 3 جرعات عضلية عند 6 و 10 و 14 أسبوع. الفاصل الأدنى بين الجرعات: 4 أسابيع. Penta3 هو المؤشر الرئيسي لتغطية التطعيم.\n\n4. PCV (اللقاح الرئوي conjugate): يحمي من الالتهاب الرئوي والمكورات الرئوية. 3 جرعات في نفس أوقات Penta. اليمن تستخدم PCV13.\n\n5. Rotavirus: يحمي من الإسهال الحاد. جرعتان فمويتان عند 6 و 10 أسابيع. لا يُعطى بعد عمر 32 أسبوع.\n\n6. IPV (الشلل المعطل): جرعة واحدة عضلية عند 14 أسبوع. يعزز المناعة ضد شلل الأطفال.\n\n7. MR (الحصبة والحصبة الألمانية): يُعطى تحت الجلد في الذراع الأيسر عند 9 أشهر. MR2 عند 18 شهر أو في سن المدرسة. الحصبة مرض شديد العدوى."
-  },
-  {
-    "docId": "epi_clinical_guide",
-    "title": "الدليل السريري للتحصين — اليمن",
-    "docType": "clinical",
-    "index": 2,
-    "section": "سلسلة_التبريد_والتخزين",
-    "content": "سلسلة التبريد والتخزين — دليل عملي:\n\nدرجات الحرارة: التخزين الموصى 2-8 درجة مئوية. لا تجمد اللقاحات ما عدا OPV و Rota.\n\nاستثناءات: OPV يمكن تخزينه في المجمد (-20). Rota يُخزّن في المجمد. IPV و MR و Penta و PCV: 2-8 فقط.\n\nمؤشر VVM: مربع على كل قنينة يتحول من فاتح إلى غامق بالتعرض للحرارة. VVM 1 فاتح = صالح. VVM 4 غامق بالكامل = فاسد.\n\nالحفظ في الميدان: استخدم الحافظة الحرارية مع قوالب باردة. لا تضع القوالب في اتصال مباشر مع القنينات. أعد تبريد القوالب كل يوم.\n\nالتسجيل: سجل درجات الحرارة مرتين يومياً. إذا تجاوزت 8 درجة لأكثر من 4 ساعات أبلغ فوراً. إذا تجمد اللقاح اعتبره فاسداً وسجل محضر إتلاف."
-  },
-  {
-    "docId": "epi_clinical_guide",
-    "title": "الدليل السريري للتحصين — اليمن",
-    "docType": "clinical",
-    "index": 3,
-    "section": "الأحداث_الضارة_بعد_التطعيم_AEFI",
-    "content": "الأحداث الضارة بعد التطعيم (AEFI):\n\nالتعريف: أي حدث طبي ضار يعقب التلقيح.\n\nالتصنيف:\n1. متعلقة باللقاح: ردود فعل موضعية (ألم، احمرار، تورم) وحمى خفيفة خلال 48 ساعة — طبيعية.\n2. متعلقة بالخطأ: خطأ في التخزين أو التقديم أو التطهير.\n3. صدفية: تحدث بالصدفة بعد التطعيم وليس بسببه.\n4. متعلقة بالقلق: ردود فعل نفسية (بكاء، خوف، إغماء).\n\nالإبلاغ: جميع حالات الخطيرة خلال 24 ساعة. الحالات الخطيرة: دخول مستشفى، إعاقة دائمة، تهديد حياة، وفاة.\n\nالتعامل: حمى = باراسيتامول وسوائل. تورم = كمادات باردة. إغماء = وضع الطفل على ظهره مع رفع الأرجل. صدمة شديدة = أدرينالين عضلي فوراً."
-  },
-  {
-    "docId": "epi_clinical_guide",
-    "title": "الدليل السريري للتحصين — اليمن",
-    "docType": "clinical",
-    "index": 4,
-    "section": "حملات_التطعيم_التكميلية_SIA",
-    "content": "حملات التطعيم التكميلية (SIA) والفرق عن الروتيني:\n\nالروتيني (EPI): رضع حسب الجدول، شهري/أسبوعي، 50-100 طفل لكل جولة، كل اللقاحات، في مرافق ثابتة.\n\nالحملة (SIA): جميع الأطفال دون 5 سنوات، جولة أو جولتين سنوياً، 1-1.5 مليون وطنياً، عادة OPV أو MR فقط، فرق متحركة + ثابتة.\n\nأنواع الحملات في اليمن: حملات OPV (شلل) جولتين سنوياً وطنية. حملات MR (حصبة) حسب الحاجة. حملات إكمال للفئات الفائتة.\n\nفرق الحملات: 12% ثابتة في المرافق + 88% متحركة تذهب للبيوت. كل فريق 2-3 عمال + مشرف. يومياً 15-25 منزل أو 30-50 طفل.\n\nمؤشرات الجودة: تغطية 95% لكل مديرية، 100% على مستوى المحافظة، تلف لقاح 10% أو أقل، إمداد عكسي 100% خلال 48 ساعة."
-  },
-  {
-    "docId": "epi_clinical_guide",
-    "title": "الدليل السريري للتحصين — اليمن",
-    "docType": "clinical",
-    "index": 5,
-    "section": "الجرعة_الصفرية_والتسرّب",
-    "content": "الجرعة الصفرية (Zero Dose) والتسرّب (Dropout):\n\nالجرعة الصفرية: الطفل الذي لم يتلقَّ أي جرعة من Penta. في اليمن 2025: 16,042 طفل (4%). أعلى المحافظات: سيئون 16.3%، المهرة 13.7%، سقطرى 13.4%، مأرب 13.3%.\n\nالتسرّب: الفرق بين من بدأوا التطعيم ومن أكملوه. P1 إلى P3: (Penta1 - Penta3) / Penta1 × 100. P3 إلى MR1: (Penta3 - MR1) / Penta3 × 100. المعدل الجيد: أقل من 10%.\n\nالهدف الوطني: P1→P3 تسرّب 5% أو أقل. P3→MR1 تسرّب 10% أو أقل.\n\nالأسباب: بعد المسافة، نقص الوعي، أوقات عمل المرافق، نزوح العائلات، مرض الطفل.\n\nالاستراتيجيات: تذكير عبر الهاتف، تفعيل العاملين المجتمعيين، دمج التطعيم مع خدمات أخرى، جلسات توعية مركزة."
-  },
-  {
-    "docId": "epi_operational_guide",
-    "title": "الدليل التشغيلي — منصة مشرف EPI",
-    "docType": "operational",
-    "index": 6,
-    "section": "أدوار_المستخدمين",
-    "content": "نظام الصلاحيات في منصة مشرف EPI — 5 أدوار:\n\nمدير النظام (Admin) المستوى 5: وصول كامل لإدارة المستخدمين والنماذج والإعدادات وجميع البيانات.\n\nمركزي (Central) المستوى 4: رؤية كل البيانات وطنياً، إنشاء وتعديل النماذج، تصدير تقارير.\n\nمحافظة (Governorate) المستوى 3: رؤية بيانات محافظته فقط، الموافقة والرفض على الإرساليات، تصدير PDF.\n\nمديرية (District) المستوى 2: رؤية بيانات مديريته فقط، تصدير التقارير.\n\nإدخال بيانات (Data Entry) المستوى 1: إرسال النماذج فقط، رؤية بياناته فقط، لا يستطيع حذف.\n\nقواعد مهمة: لا يمكن إنشاء مستخدم بنفس المستوى أو أعلى. مدير النظام فقط يستطيع إنشاء مستخدمين من المستوى 4 و 5. كل مستخدم يرى البيانات الجغرافية التابعة لمستواه فقط. الحذف ناعم (Soft Delete).\n\nالأمان: الجلسة تنتهي بعد 8 ساعات. التشفير المحلي AES-256-GCM للبيانات على الجهاز."
-  },
-  {
-    "docId": "epi_operational_guide",
-    "title": "الدليل التشغيلي — منصة مشرف EPI",
-    "docType": "operational",
-    "index": 7,
-    "section": "النماذج_الديناميكية",
-    "content": "النماذج الديناميكية — 10 أنواع حقول:\n1. نص (Text) — إدخال حر\n2. رقم (Number) — أرقام فقط\n3. جوال (Phone) — مع تحقق صيغة\n4. نص طويل (Textarea) — لوصف تفصيلي\n5. اختيار (Select) — قائمة منسدلة من خيار واحد\n6. اختيار متعدد (Multi-select) — عدة خيارات\n7. نعم/لا (Boolean) — تبديل\n8. تاريخ (Date) — منتقي تاريخ\n9. GPS — إحداثيات جغرافية (اختياري إلزامي)\n10. صورة (Image) — التقاط من الكاميرا (اختياري إلزامي)\n\nإعدادات متقدمة: GPS إلزامي، صورة إلزامية، عدد صور أقصى، أقسام، ترتيب بسحب وإفلات.\n\nنظام المزامنة: الحفظ أولاً في Hive محلي دائماً. إذا متصل = إرسال فوري. إذا غير متصل = طابور مزامنة. مزامنة تلقائية كل 5 دقائق عند الاتصال. أولوية: إرساليات التطعيم أولاً. إعادة محاولة: 10 ثانية ثم 30 ثم 90 ثم 5 دقائق ثم 15 دقيقة. بعد 5 محاولات فاشلة = مراجعة ييدوية (Dead Letter)."
-  },
-  {
-    "docId": "epi_operational_guide",
-    "title": "الدليل التشغيلي — منصة مشرف EPI",
-    "docType": "operational",
-    "index": 8,
-    "section": "التقارير_المتاحة",
-    "content": "أنواع التقارير في منصة مشرف EPI — 5 أنواع PDF:\n\n1. تقرير الإرساليات اليومي: عدد الإرساليات، الحالة (مقبول/مرفوض/معلق)، حسب المديرية. للمحافظة وال مديرية والمركزي.\n\n2. تقرير الإرساليات الأسبوعي: ملخص الأسبوع، اتجاهات، مقارنة بالأسبوع السابق. للمحافظة والمركزي.\n\n3. تقرير النواقص والاحتياجات: قائمة النواقص المبلغة، الأولوية، الحالة. لجميع الأدوار حسب نطاقها.\n\n4. تقرير أداء المحافظات: مقارنة المحافظات في التغطية وعدد الجلسات ومعدل الجلسة. للمركزي ومدير النظام.\n\n5. التقرير الشامل: كل البيانات — إرساليات ونواقص ومستخدمين وإحصائيات. لمدير النظام فقط.\n\nلوحات المعلومات: مؤشرات KPI حية، رسوم بيانية دائري وخطي وأعمدة، خرائط تفاعلية OpenStreetMap."
-  },
-  {
-    "docId": "epi_operational_guide",
-    "title": "الدليل التشغيلي — منصة مشرف EPI",
-    "docType": "operational",
-    "index": 9,
-    "section": "المساعد_الذكي",
-    "content": "المساعد الذكي (MiMo AI) — الاستخدام والقدرات:\n\nالقدرات: الإجابة على أسئلة حول بيانات التحصين، تحليل التغطية حسب المحافظة والمديرية والجولة، مقارنة الأداء بين المناطق، تقديم توصيات بناءً على البيانات، تفسير المؤشرات، الإجابة عن أسئلة سريرية حول اللقاحات.\n\nأمثلة على أسئلة مفيدة: ما نسبة تغطية لحج في الجولة الخامسة؟ قارن بين أداء تعز ومأرب في 2025. ما أسباب التسرّب في الحديدة؟ ما الجدول الزمني للتطعيم عند الولادة؟ ما المستهدف الشهري لمديرية المخاء؟\n\nالقيود: 25 طلب في الدقيقة لكل مستخدم. لا يحتفظ بذاكرة بين المحادثات. يعتمد على قاعدة المعرفة المحلية (RAG)."
-  },
-  {
-    "docId": "epi_data_2025",
-    "title": "بيانات التحصين اليمن 2025",
-    "docType": "data",
-    "index": 10,
-    "section": "النشاط_الإيصالي_الجولات",
-    "content": "النشاط الإيصالي التكاملي — الجولات الخمس 2025:\n\nالجولة 1 (أبريل-مايو): 14 محافظة، 118 مديرية، 1,873 جلسة، 60,729 طفل مطعم.\nالجولة 2 (يونيو-يوليو): 14 محافظة، 121 مديرية، 2,237 جلسة، 64,847 طفل.\nالجولة 3 (سبتمبر): 14 محافظة، 120 مديرية، 2,178 جلسة، 64,841 طفل.\nالجولة 4 (نوفمبر): 15 محافظة، 117 مديرية، 2,171 جلسة، 57,450 طفل.\nالجولة 5 (ديسمبر): 15 محافظة، 117 مديرية، 2,171 جلسة، 56,161 طفل.\n\nإجمالي 2025: حوالي 304,028 طفل مطعم في 5 جولات. متوسط الجولة: 60,806 طفل.\n\nالاتجاه: الجولة 2 و 3 الأعلى (موسم ذروة). الجولة 4 و 5 الأدنى (نهاية العام).\n\nملاحظة: حضرموت مقسمة في الجولة 4 و 5 إلى الساحل والوادي بدلاً من المكلا و سيئون."
-  },
-  {
-    "docId": "epi_data_2025",
-    "title": "بيانات التحصين اليمن 2025",
-    "docType": "data",
-    "index": 11,
-    "section": "حملات_الشلل",
-    "content": "حملات التطعيم ضد شلل الأطفال (OPV) 2024-2025:\n\nالجولة 1 (فبراير 2024): 1,291,196 طفل، تغطية 100%.\nالجولة 2 (يوليو 2024): 1,342,025 طفل، تغطية 102%، تلف 13%.\nالجولة 3 (يوليو 2025): 1,401,786 طفل، تغطية 104%، تلف 11%، مشاركة نسائية 89%.\nالجولة 4 (سبتمبر 2025): 1,440,085 طفل، تغطية 107%، تلف 11%، مشاركة نسائية 91%.\n\nالمجموع: 5,475,092 طفل عبر 4 جولات.\n\nأعلى المحافظات تغطياً (الجولة 4): الحديدة 131%، مارب 123%، لحج 116%.\nأقل المحافظات: المهرة 94%، سقطرى 95%، حضرموت الوادي 96%.\n\nمديريات تحت الحد الأدنى (الجولة 3): القف 62%، قشن 75%، حصوين 78%.\n\nمؤشرات الجودة (الجولة 4): جاهزية الفريق 100%، بروتوكول 100%، سلسلة تبريد 100%، إمداد عكسي 100%، إشراف إلكتروني 89%."
-  },
-  {
-    "docId": "epi_data_2025",
-    "title": "بيانات التحصين اليمن 2025",
-    "docType": "data",
-    "index": 12,
-    "section": "الغطية_الروتينية_الوطنية",
-    "content": "نتائج التغطية الروتينية 2025:\n\nPenta1 (خماسي أول): 96.3% أعلى من الهدف 90%.\nPenta3 (خماسي ثالث): 90.0% على مستوى الهدف.\nMR1 (حصبة أول): 86.0% أقل من الهدف 90%.\n\nالتسرّب: P1→P3 = 6.3% (جيد). P3→MR1 = 4.0% (جيد).\n\nالمحفزات: لحج 108% تغطية Penta1. أبين 100%.\n\nالتحديات: الحديدة MR1 حوالي 73% أكبر فجوة. سيئون MR1 حوالي 74%.\n\nالجرعة الصفرية: 16,042 طفل (4%). أعلى: سيئون 16.3%، المهرة 13.7%، سقطرى 13.4%.\n\nتغطية شهرية من DHIS2: زنجبار (أبين) Penta1 = 180.8% تشير لمشكلة تقدير سكان. التواهي (عدن) MR1 = 63% تحتاج متابعة."
-  },
-  {
-    "docId": "epi_data_2025",
-    "title": "بيانات التحصين اليمن 2025",
-    "docType": "data",
-    "index": 13,
-    "section": "المستهدفات_2026",
-    "content": "المستهدفات السنوية 2026:\n\n12 محافظة، 120 مديرية. تحت 1 سنة سنوي: 312,729 طفل. تحت 5 سنوات: 1,536,663 طفل. المنازل: 1,181,319.\n\nأعلى المحافظات: تعز 74,025 (نمو 2.51%). لحج 40,215. عدن 28,988 (نمو 3.79%). مأرب 28,383.\n\nأعلى المديريات: مدينة مأرب 81,524 طفل (5.3% من الوطني). مأرب 47,228. الشمايتين 45,158. تبن 43,154.\n\nأقل المديريات: القف 152 طفل (أصغر مديرية). زموخ ومنوخ 236. حجر الصيعر 354.\n\nمعدلات النمو: الأعلى المهرة 4.57%. الأدنى شبوة 2.46%. المستهدف الشهري وطني: 26,061 طفل.\n\nتغير التقسيم: حضرموت المكلا أصبحت حضرموت الساحل (12 مديرية). حضرموت سيئون أصبحت حضرموت الوادي (16 مديرية فيها 6 إضافية)."
-  },
-  {
-    "docId": "epi_data_2025",
-    "title": "بيانات التحصين اليمن 2025",
-    "docType": "data",
-    "index": 14,
-    "section": "اتجاهات_المجتمع",
-    "content": "اتجاهات المجتمع تجاه التطعيم 2025:\n\nمن 23,631 جلسة توعوية: 87,029 مستفيد، 73,909 طفل في أسرهم.\n\nبعد التوعية: اقتنع 48.2%، لا يزال متردد 12.1%، لا يزال رافض 4.6%، انتقلوا للتطعيم 80.1% من المترددين.\n\nأسباب الرفض حسب المحافظة: شبوة 740 سبب (الأعلى: معتقدات دينية + تخوف + شائعات). سيئون 353 سبب (معتقدات دينية + خوف). عدن (شائعات إعاقة + معتقدات). المهرة 140 سبب (مناطق رحل + جهل). الضالع (شائعات اللقاح أمريكي). البيضاء (شائعات فقط).\n\nاستراتيجيات الإقناع الفعالة: التحذير من أمراض الطفولة، نقض الشائعات بحقائق علمية، شرح الآثار الجانبية العادية، أمثلة واقعية من أطفال تم تطعيمهم بنجاح."
-  },
-  {
-    "docId": "epi_data_2025",
-    "title": "بيانات التحصين اليمن 2025",
-    "docType": "data",
-    "index": 15,
-    "section": "الفجوات_والتوصيات",
-    "content": "الفجوات الرئيسية والتوصيات بناءً على بيانات 2025:\n\nالفجوة 1 — تغطية MR1 منخفضة: MR1 = 86% والهدف 90%. أسوأ: الحديدة 73%، سيئون 74%. توصية: حملات MR تكميلية.\n\nالفجوة 2 — المهرة: 9 مديريات صغيرة، 3 تحت 90% في الشلل (قشن 75%، حصوين 78%، حوف 81%). توصية: خطة وصول مخصصة.\n\nالفجوة 3 — سقطرى: 70 طفل في الإيصالي R5. توصية: شحن جوي دوري وتخزين استراتيجي.\n\nالفجوة 4 — الإشراف الإلكتروني: 83% ثم 89%. المؤشر الوحيد تحت 100%. توصية: تدريب المشرفين وتوفير أجهزة.\n\nالفجوة 5 — الرفض المجتمعي: 42% من أسباب عدم التطعيم. شبوة و سيئون = 65% من الرفض. توصية: حملات توعية مركزة وتفعيل قادة المجتمع.\n\nالفجوة 6 — تلف اللقاح في النائيات: القف 78% تلف، ثمود 45%، رخيه 31%. توصية: تحسين سلسلة التبريد وتدريب على VVM."
-  },
-  {
-    "docId": "epi_supervision_template",
-    "title": "نموذج مؤشرات الإشراف",
-    "docType": "template",
-    "index": 16,
-    "section": "مؤشرات_الإشراف_الشاملة",
-    "content": "نموذج مؤشرات الإشراف للنشاط الإيصالي التكاملي — 8 أقسام و 33 مؤشر:\n\nالقسم أ — تركيبة الفريق (4 مؤشرات): عنصري الفريق متواجدين 100%. امرأة في الفريق 90% أو أكثر. عضو من نفس المنطقة 95% أو أكثر. كروت تعريف 100%.\n\nالقسم ب — التخطيط (3 مؤشرات): خطة كروكي 100%. تحديد الموقع 100%. الالتزام بالخطة 100%.\n\nالقسم ج — بروتوكول التطعيم (4 مؤشرات): اتصال شخصي 100%. سؤال الجميع 100%. زاوية 45 درجة 100%. بلع 100%.\n\nالقسم د — التسجيل (4 مؤشرات): تسجيل يومي 100%. متابعة متغيبين 100%. تعليم أصابع 100%. علامات منازل 100%.\n\nالقسم هـ — اللوجستيات (5 مؤشرات): تموين كاف 100%. لقاح كاف 100%. حفظ حراري 100%. فهم VVM 100%. VVM سليم 100%.\n\nالقسم و — الإشراف (4 مؤشرات): إشراف إلكتروني 95% أو أكثر. زيارة يومية 100%. تدوين ملاحظات 100%. سؤال مشتبهات 100%.\n\nالقسم ز — السلامة (6 مؤشرات): تسجيل إمداد 100%. أكياس 100%. جمع صحيح 100%. تسجيل واضح 100%. تطابق عدد 100%. تسليم يومي 100%.\n\nالقسم ح — فيتامين أ (3 مؤشرات): توفر 100%. إعطاء صحيح 100%. مقص وعلبة 100%.\n\nالمؤشر الوحيد تحت 100% في الجولة 4: الإشراف الإلكتروني 89%."
-  },
   {
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تعريف التطعيم",
     "docType": "knowledge",
-    "index": 17,
+    "index": 0,
     "section": "تعريف التطعيم",
     "content": "💉 ما هو التطعيم؟\n\n"
   },
@@ -162,7 +11,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: ما هي اللقاحات",
     "docType": "knowledge",
-    "index": 18,
+    "index": 1,
     "section": "ما هي اللقاحات",
     "content": "🧬 اللقاحات هي مواد حيوية (بيولوجية) تحتوي على:\n\n"
   },
@@ -170,7 +19,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: المناعة",
     "docType": "knowledge",
-    "index": 19,
+    "index": 2,
     "section": "المناعة",
     "content": "🛡️ ما هي المناعة؟\n\n"
   },
@@ -178,7 +27,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: أنواع المناعة",
     "docType": "knowledge",
-    "index": 20,
+    "index": 3,
     "section": "أنواع المناعة",
     "content": "🔬 أنواع المناعة:\n\n"
   },
@@ -186,7 +35,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: المناعة المجتمعية",
     "docType": "knowledge",
-    "index": 21,
+    "index": 4,
     "section": "المناعة المجتمعية",
     "content": "🏘️ ما هي المناعة المجتمعية (Herd Immunity)؟\n\n"
   },
@@ -194,7 +43,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: بي سي جي",
     "docType": "knowledge",
-    "index": 22,
+    "index": 5,
     "section": "بي سي جي",
     "content": "🔴 تطعيم BCG (بي سي جي):\n\n"
   },
@@ -202,7 +51,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: شلل الأطفال",
     "docType": "knowledge",
-    "index": 23,
+    "index": 6,
     "section": "شلل الأطفال",
     "content": "🟢 تطعيم شلل الأطفال (OPV / IPV):\n\n"
   },
@@ -210,7 +59,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الخماسي",
     "docType": "knowledge",
-    "index": 24,
+    "index": 7,
     "section": "الخماسي",
     "content": "🟡 التطعيم الخماسي (Pentavalent/Penta):\n\n"
   },
@@ -218,7 +67,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التطعيم الرئوي",
     "docType": "knowledge",
-    "index": 25,
+    "index": 8,
     "section": "التطعيم الرئوي",
     "content": "🟣 تطعيم PCV (التطعيم الرئوي - المكورات الرئوية):\n\n"
   },
@@ -226,7 +75,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الروتا",
     "docType": "knowledge",
-    "index": 26,
+    "index": 9,
     "section": "الروتا",
     "content": "🔵 تطعيم الروتا فيروس (Rotavirus):\n\n"
   },
@@ -234,7 +83,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الحصبة",
     "docType": "knowledge",
-    "index": 27,
+    "index": 10,
     "section": "الحصبة",
     "content": "🔴 تطعيم الحصبة (MR):\n\n"
   },
@@ -242,7 +91,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التطعيمات النسائية",
     "docType": "knowledge",
-    "index": 28,
+    "index": 11,
     "section": "التطعيمات النسائية",
     "content": "👩 تطعيمات الكزاز للحوامل (Td/TT):\n\n"
   },
@@ -250,7 +99,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: مرض السل",
     "docType": "knowledge",
-    "index": 29,
+    "index": 12,
     "section": "مرض السل",
     "content": "🦠 مرض السل (Tuberculosis/الدرن):\n\n"
   },
@@ -258,7 +107,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: شلل الأطفال المرض",
     "docType": "knowledge",
-    "index": 30,
+    "index": 13,
     "section": "شلل الأطفال المرض",
     "content": "🦠 شلل الأطفال (Poliomyelitis):\n\n"
   },
@@ -266,7 +115,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الخناق",
     "docType": "knowledge",
-    "index": 31,
+    "index": 14,
     "section": "الخناق",
     "content": "🦠 الخناق (Diphtheria):\n\n"
   },
@@ -274,7 +123,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الكزاز",
     "docType": "knowledge",
-    "index": 32,
+    "index": 15,
     "section": "الكزاز",
     "content": "🦠 الكزاز (Tetanus):\n\n"
   },
@@ -282,7 +131,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: السعال الديبي",
     "docType": "knowledge",
-    "index": 33,
+    "index": 16,
     "section": "السعال الديبي",
     "content": "🦠 السعال الديبي (Whooping Cough/Pertussis):\n\n"
   },
@@ -290,7 +139,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التهاب الكبد ب",
     "docType": "knowledge",
-    "index": 34,
+    "index": 17,
     "section": "التهاب الكبد ب",
     "content": "🦠 التهاب الكبد B (Hepatitis B):\n\n"
   },
@@ -298,7 +147,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الحصبة الألمانية",
     "docType": "knowledge",
-    "index": 35,
+    "index": 18,
     "section": "الحصبة الألمانية",
     "content": "🦠 الحصبة الألمانية (Rubella):\n\n"
   },
@@ -306,7 +155,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: المكورات الرئوية",
     "docType": "knowledge",
-    "index": 36,
+    "index": 19,
     "section": "المكورات الرئوية",
     "content": "🦠 الالتهابات بالمكورات الرئوية (Pneumococcal):\n\n"
   },
@@ -314,7 +163,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الروتا المرض",
     "docType": "knowledge",
-    "index": 37,
+    "index": 20,
     "section": "الروتا المرض",
     "content": "🦠 الإسهال بالروتا فيروس:\n\n"
   },
@@ -322,7 +171,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التهاب الأغشية المخية",
     "docType": "knowledge",
-    "index": 38,
+    "index": 21,
     "section": "التهاب الأغشية المخية",
     "content": "🦠 التهاب الأغشية المخية (Meningitis by Hib):\n\n"
   },
@@ -330,7 +179,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: آثار جانبية",
     "docType": "knowledge",
-    "index": 39,
+    "index": 22,
     "section": "آثار جانبية",
     "content": "📋 الآثار الجانبية للتطعيمات:\n\n"
   },
@@ -338,7 +187,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: AEFI",
     "docType": "knowledge",
-    "index": 40,
+    "index": 23,
     "section": "AEFI",
     "content": "📊 حالات الآثار الجانبية بعد التطعيم (AEFI):\n\n"
   },
@@ -346,7 +195,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الحساسية",
     "docType": "knowledge",
-    "index": 41,
+    "index": 24,
     "section": "الحساسية",
     "content": "⚠️ الحساسية والتطعيم:\n\n"
   },
@@ -354,7 +203,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: متى أطعم",
     "docType": "knowledge",
-    "index": 42,
+    "index": 25,
     "section": "متى أطعم",
     "content": "📅 الجدول الزمني للتطعيمات في اليمن (2025):\n\n"
   },
@@ -362,7 +211,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: كم جرعة",
     "docType": "knowledge",
-    "index": 43,
+    "index": 26,
     "section": "كم جرعة",
     "content": "📊 عدد الجرعات لكل تطعيم:\n\n"
   },
@@ -370,7 +219,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: فاصل الجرعات",
     "docType": "knowledge",
-    "index": 44,
+    "index": 27,
     "section": "فاصل الجرعات",
     "content": "⏰ الفواصل بين الجرعات:\n\n"
   },
@@ -378,7 +227,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: سلسلة التبريد",
     "docType": "knowledge",
-    "index": 45,
+    "index": 28,
     "section": "سلسلة التبريد",
     "content": "❄️ سلسلة التبريد (Cold Chain):\n\n"
   },
@@ -386,7 +235,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: VVM",
     "docType": "knowledge",
-    "index": 46,
+    "index": 29,
     "section": "VVM",
     "content": "🔍 مؤشر صلاحية اللقاح (VVM - Vaccine Vial Monitor):\n\n"
   },
@@ -394,7 +243,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: المحاقن",
     "docType": "knowledge",
-    "index": 47,
+    "index": 30,
     "section": "المحاقن",
     "content": "💉 المحاقن والمستلزمات:\n\n"
   },
@@ -402,7 +251,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: فيتامين أ",
     "docType": "knowledge",
-    "index": 48,
+    "index": 31,
     "section": "فيتامين أ",
     "content": "🌟 تكميم فيتامين أ (Vitamin A Supplementation):\n\n"
   },
@@ -410,7 +259,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: أساطير",
     "docType": "knowledge",
-    "index": 49,
+    "index": 32,
     "section": "أساطير",
     "content": "🚫 الأساطير الشائعة عن التطعيمات (والحقيقة):\n\n"
   },
@@ -418,7 +267,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: مختبرات",
     "docType": "knowledge",
-    "index": 50,
+    "index": 33,
     "section": "مختبرات",
     "content": "🔬 كيف نختبر اللقاحات ونضمن أمانها؟\n\n"
   },
@@ -426,7 +275,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: للأطفال المبتسرين",
     "docType": "knowledge",
-    "index": 51,
+    "index": 34,
     "section": "للأطفال المبتسرين",
     "content": "👶 تطعيم الأطفال المبتسرين (خُدّج):\n\n"
   },
@@ -434,7 +283,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: للأطفال المرضى",
     "docType": "knowledge",
-    "index": 52,
+    "index": 35,
     "section": "للأطفال المرضى",
     "content": "🤒 تطعيم الأطفال المرضى:\n"
   },
@@ -442,7 +291,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الأم المرضعة",
     "docType": "knowledge",
-    "index": 53,
+    "index": 36,
     "section": "الأم المرضعة",
     "content": "🤱 التطعيم أثناء الرضاعة:\n\n"
   },
@@ -450,7 +299,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الحوامل",
     "docType": "knowledge",
-    "index": 54,
+    "index": 37,
     "section": "الحوامل",
     "content": "🤰 التطعيم أثناء الحمل:\n\n"
   },
@@ -458,7 +307,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تأخير التطعيم",
     "docType": "knowledge",
-    "index": 55,
+    "index": 38,
     "section": "تأخير التطعيم",
     "content": "⏰ ماذا لو تأخرت عن موعد التطعيم؟\n\n"
   },
@@ -466,7 +315,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: عدم الاستجابة",
     "docType": "knowledge",
-    "index": 56,
+    "index": 39,
     "section": "عدم الاستجابة",
     "content": "❓ ماذا لو لم يستجب الطفل للتطعيم؟\n\n"
   },
@@ -474,7 +323,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تطعيمات متعددة",
     "docType": "knowledge",
-    "index": 57,
+    "index": 40,
     "section": "تطعيمات متعددة",
     "content": "💉 هل يمكن إعطاء عدة تطعيمات في نفس اليوم؟\n\n"
   },
@@ -482,7 +331,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تندب BCG",
     "docType": "knowledge",
-    "index": 58,
+    "index": 41,
     "section": "تندب BCG",
     "content": "🔴 التندب بعد تطعيم BCG - طبيعي أم لا؟\n\n"
   },
@@ -490,7 +339,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التطعيم والمدرسة",
     "docType": "knowledge",
-    "index": 59,
+    "index": 42,
     "section": "التطعيم والمدرسة",
     "content": "🏫 التطعيم والالتحاق بالمدرسة:\n\n"
   },
@@ -498,7 +347,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: حملات التطعيم",
     "docType": "knowledge",
-    "index": 60,
+    "index": 43,
     "section": "حملات التطعيم",
     "content": "🚐 حملات التحصين التكميلية (SIA):\n\n"
   },
@@ -506,7 +355,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: مجاناً",
     "docType": "knowledge",
-    "index": 61,
+    "index": 44,
     "section": "مجاناً",
     "content": "💰 هل تطعيمات البرنامج مجانية؟\n\n"
   },
@@ -514,7 +363,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: أين التطعيم",
     "docType": "knowledge",
-    "index": 62,
+    "index": 45,
     "section": "أين التطعيم",
     "content": "📍 أين أطعم طفلي في اليمن؟\n\n"
   },
@@ -522,7 +371,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: نصائح قبل التطعيم",
     "docType": "knowledge",
-    "index": 63,
+    "index": 46,
     "section": "نصائح قبل التطعيم",
     "content": "✅ نصائح قبل التطعيم:\n\n"
   },
@@ -530,7 +379,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: نصائح بعد التطعيم",
     "docType": "knowledge",
-    "index": 64,
+    "index": 47,
     "section": "نصائح بعد التطعيم",
     "content": "✅ نصائح بعد التطعيم:\n\n"
   },
@@ -538,7 +387,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التغذية والمناعة",
     "docType": "knowledge",
-    "index": 65,
+    "index": 48,
     "section": "التغذية والمناعة",
     "content": "🥗 التغذية ودورها في تعزيز المناعة:\n\n"
   },
@@ -546,7 +395,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الأمراض المعدية",
     "docType": "knowledge",
-    "index": 66,
+    "index": 49,
     "section": "الأمراض المعدية",
     "content": "🦠 كيف تنتقل الأمراض المعدية؟\n\n"
   },
@@ -554,7 +403,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الإسهال",
     "docType": "knowledge",
-    "index": 67,
+    "index": 50,
     "section": "الإسهال",
     "content": "💧 الإسهال عند الأطفال:\n\n"
   },
@@ -562,7 +411,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التطعيمات الجديدة",
     "docType": "knowledge",
-    "index": 68,
+    "index": 51,
     "section": "التطعيمات الجديدة",
     "content": "🆕 هل ستطعيمات جديدة في المستقبل؟\n\n"
   },
@@ -570,7 +419,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التطعيم والسفر",
     "docType": "knowledge",
-    "index": 69,
+    "index": 52,
     "section": "التطعيم والسفر",
     "content": "✈️ التطعيم والسفر:\n\n"
   },
@@ -578,7 +427,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: ملاحظات",
     "docType": "knowledge",
-    "index": 70,
+    "index": 53,
     "section": "ملاحظات",
     "content": "📝 ملاحظات عامة:\n\n"
   },
@@ -586,7 +435,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: جدول التطعيم الرسمي",
     "docType": "knowledge",
-    "index": 71,
+    "index": 54,
     "section": "جدول التطعيم الرسمي",
     "content": "📅 جدول التحصين الروتيني الرسمي (2025):\n\n"
   },
@@ -594,7 +443,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الفرق بين OPV و IPV",
     "docType": "knowledge",
-    "index": 72,
+    "index": 55,
     "section": "الفرق بين OPV و IPV",
     "content": "🔵 الفرق بين OPV و IPV:\n\n"
   },
@@ -602,7 +451,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: هل التطعيم يضر",
     "docType": "knowledge",
-    "index": 73,
+    "index": 56,
     "section": "هل التطعيم يضر",
     "content": "🤔 هل التطعيمات ضارة؟\n\n"
   },
@@ -610,7 +459,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التطعيم والرضاعة",
     "docType": "knowledge",
-    "index": 74,
+    "index": 57,
     "section": "التطعيم والرضاعة",
     "content": "🍼 هل الرضاعة تمنع التطعيم؟\n\n"
   },
@@ -618,7 +467,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: BCG",
     "docType": "knowledge",
-    "index": 75,
+    "index": 58,
     "section": "BCG",
     "content": "لقاح السل"
   },
@@ -626,7 +475,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: HepB",
     "docType": "knowledge",
-    "index": 76,
+    "index": 59,
     "section": "HepB",
     "content": "لقاح الكبد الوبائي ب"
   },
@@ -634,7 +483,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: bOPV",
     "docType": "knowledge",
-    "index": 77,
+    "index": 60,
     "section": "bOPV",
     "content": "لقاح شلل الأطفال الفموي ثنائي النوع"
   },
@@ -642,7 +491,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: tOPV",
     "docType": "knowledge",
-    "index": 78,
+    "index": 61,
     "section": "tOPV",
     "content": "لقاح شلل الأطفال الفموي ثلاثي الأنواع"
   },
@@ -650,7 +499,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: IPV",
     "docType": "knowledge",
-    "index": 79,
+    "index": 62,
     "section": "IPV",
     "content": "لقاح شلل الأطفال الحقني"
   },
@@ -658,7 +507,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: MR",
     "docType": "knowledge",
-    "index": 80,
+    "index": 63,
     "section": "MR",
     "content": "لقاح الحصبة والحصبة الألمانية"
   },
@@ -666,7 +515,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: PCV",
     "docType": "knowledge",
-    "index": 81,
+    "index": 64,
     "section": "PCV",
     "content": "لقاح المكورات الرئوية"
   },
@@ -674,7 +523,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: Rota",
     "docType": "knowledge",
-    "index": 82,
+    "index": 65,
     "section": "Rota",
     "content": "لقاح الروتا فيروس"
   },
@@ -682,7 +531,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: Td",
     "docType": "knowledge",
-    "index": 83,
+    "index": 66,
     "section": "Td",
     "content": "لقاح الكزاز والخناق"
   },
@@ -690,7 +539,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: Penta",
     "docType": "knowledge",
-    "index": 84,
+    "index": 67,
     "section": "Penta",
     "content": "لقاح الخماسي (DTP-HepB-Hib)"
   },
@@ -698,7 +547,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: Hib",
     "docType": "knowledge",
-    "index": 85,
+    "index": 68,
     "section": "Hib",
     "content": "لقاح المستدمية النزلية النوع ب"
   },
@@ -706,7 +555,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: DTP",
     "docType": "knowledge",
-    "index": 86,
+    "index": 69,
     "section": "DTP",
     "content": "لقاح الخناق والكزاز والسعال الديبي"
   },
@@ -714,7 +563,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: TT",
     "docType": "knowledge",
-    "index": 87,
+    "index": 70,
     "section": "TT",
     "content": "لقاح الكزاز"
   },
@@ -722,7 +571,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: OCV",
     "docType": "knowledge",
-    "index": 88,
+    "index": 71,
     "section": "OCV",
     "content": "لقاح الكوليرا الفموي"
   },
@@ -730,7 +579,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: COVID-19",
     "docType": "knowledge",
-    "index": 89,
+    "index": 72,
     "section": "COVID-19",
     "content": "لقاح كورونا"
   },
@@ -738,7 +587,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: EPI",
     "docType": "knowledge",
-    "index": 90,
+    "index": 73,
     "section": "EPI",
     "content": "برنامج التحصين الصحي الموسع"
   },
@@ -746,7 +595,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: AEFI",
     "docType": "knowledge",
-    "index": 91,
+    "index": 74,
     "section": "AEFI",
     "content": "حالات الآثار الجانبية بعد التطعيم"
   },
@@ -754,7 +603,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: VVM",
     "docType": "knowledge",
-    "index": 92,
+    "index": 75,
     "section": "VVM",
     "content": "مراقب صلاحية اللقاح"
   },
@@ -762,7 +611,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: NIDs",
     "docType": "knowledge",
-    "index": 93,
+    "index": 76,
     "section": "NIDs",
     "content": "الأيام الوطنية للتحصين"
   },
@@ -770,7 +619,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: SNIDs",
     "docType": "knowledge",
-    "index": 94,
+    "index": 77,
     "section": "SNIDs",
     "content": "أيام التحصين الإقليمية"
   },
@@ -778,7 +627,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: SIA",
     "docType": "knowledge",
-    "index": 95,
+    "index": 78,
     "section": "SIA",
     "content": "أنشطة التحصين التكميلية"
   },
@@ -786,7 +635,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: UNICEF",
     "docType": "knowledge",
-    "index": 96,
+    "index": 79,
     "section": "UNICEF",
     "content": "منظمة الأمم المتحدة لرعاية الطفولة"
   },
@@ -794,7 +643,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: WHO",
     "docType": "knowledge",
-    "index": 97,
+    "index": 80,
     "section": "WHO",
     "content": "منظمة الصحة العالمية"
   },
@@ -802,7 +651,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: GAVI",
     "docType": "knowledge",
-    "index": 98,
+    "index": 81,
     "section": "GAVI",
     "content": "التحالف العالمي للقاحات والتحصين"
   },
@@ -810,7 +659,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: ID",
     "docType": "knowledge",
-    "index": 99,
+    "index": 82,
     "section": "ID",
     "content": "حقن داخل الأدمة"
   },
@@ -818,7 +667,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: SC",
     "docType": "knowledge",
-    "index": 100,
+    "index": 83,
     "section": "SC",
     "content": "حقن تحت الجلد"
   },
@@ -826,7 +675,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: IM",
     "docType": "knowledge",
-    "index": 101,
+    "index": 84,
     "section": "IM",
     "content": "حقن عضلي"
   },
@@ -834,7 +683,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: WMF",
     "docType": "knowledge",
-    "index": 102,
+    "index": 85,
     "section": "WMF",
     "content": "معامل الفاقد من اللقاح"
   },
@@ -842,7 +691,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: EXP",
     "docType": "knowledge",
-    "index": 103,
+    "index": 86,
     "section": "EXP",
     "content": "تاريخ الانتهاء"
   },
@@ -850,7 +699,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: LOT.NO",
     "docType": "knowledge",
-    "index": 104,
+    "index": 87,
     "section": "LOT.NO",
     "content": "رقم الدفعة"
   },
@@ -858,7 +707,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: ADS",
     "docType": "knowledge",
-    "index": 105,
+    "index": 88,
     "section": "ADS",
     "content": "محاقن ذاتية التلف"
   },
@@ -866,7 +715,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: CCVM",
     "docType": "knowledge",
-    "index": 106,
+    "index": 89,
     "section": "CCVM",
     "content": "إدارة اللقاح وسلسلة التبريد"
   },
@@ -874,7 +723,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: CCE",
     "docType": "knowledge",
-    "index": 107,
+    "index": 90,
     "section": "CCE",
     "content": "معدات سلسلة التبريد"
   },
@@ -882,7 +731,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: EVM",
     "docType": "knowledge",
-    "index": 108,
+    "index": 91,
     "section": "EVM",
     "content": "الإدارة الفعالة للقاحات"
   },
@@ -890,7 +739,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: إدارة المستوى الوسيط",
     "docType": "knowledge",
-    "index": 109,
+    "index": 92,
     "section": "إدارة المستوى الوسيط",
     "content": "🏢 إدارة المستوى الوسيط للتحصين — دليل شامل:\n\n"
   },
@@ -898,7 +747,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: دور مدير مكتب التحصين",
     "docType": "knowledge",
-    "index": 110,
+    "index": 93,
     "section": "دور مدير مكتب التحصين",
     "content": "👨‍💼 دور مدير مكتب التحصين بالمحافظة/المديرية:\n\n"
   },
@@ -906,7 +755,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: مؤشرات الأداء الرئيسية",
     "docType": "knowledge",
-    "index": 111,
+    "index": 94,
     "section": "مؤشرات الأداء الرئيسية",
     "content": "📊 مؤشرات الأداء الرئيسية (KPIs) للتحصين:\n\n"
   },
@@ -914,7 +763,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: رصد التغطيات",
     "docType": "knowledge",
-    "index": 112,
+    "index": 95,
     "section": "رصد التغطيات",
     "content": "📈 رصد التغطيات التطعيمية — دليل عملي:\n\n"
   },
@@ -922,7 +771,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: حساب السكان المستهدفين",
     "docType": "knowledge",
-    "index": 113,
+    "index": 96,
     "section": "حساب السكان المستهدفين",
     "content": "👥 حساب السكان المستهدفين للتحصين:\n\n"
   },
@@ -930,7 +779,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تحليل التسرب",
     "docType": "knowledge",
-    "index": 114,
+    "index": 97,
     "section": "تحليل التسرب",
     "content": "📉 تحليل التسرب بين جرعات التحصين:\n\n"
   },
@@ -938,7 +787,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تتبع المتخلفين",
     "docType": "knowledge",
-    "index": 115,
+    "index": 98,
     "section": "تتبع المتخلفين",
     "content": "🔍 تتبع المتخلفين عن التحصين — استراتيجيات عملية:\n\n"
   },
@@ -946,7 +795,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التقارير الدورية",
     "docType": "knowledge",
-    "index": 116,
+    "index": 99,
     "section": "التقارير الدورية",
     "content": "📋 التقارير الدورية للتحصين — دليل شامل:\n\n"
   },
@@ -954,7 +803,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: نظام المعلومات الصحي",
     "docType": "knowledge",
-    "index": 117,
+    "index": 100,
     "section": "نظام المعلومات الصحي",
     "content": "💻 نظام المعلومات الصحي (DHIS2) للتحصين:\n\n"
   },
@@ -962,7 +811,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التخطيط الدقيق",
     "docType": "knowledge",
-    "index": 118,
+    "index": 101,
     "section": "التخطيط الدقيق",
     "content": "🗺️ التخطيط الدقيق (Microplanning) للتحصين:\n\n"
   },
@@ -970,7 +819,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: إدارة المخزون",
     "docType": "knowledge",
-    "index": 119,
+    "index": 102,
     "section": "إدارة المخزون",
     "content": "📦 إدارة مخزون اللقاحات — دليل عملي:\n\n"
   },
@@ -978,7 +827,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: خطة العمل السنوية",
     "docType": "knowledge",
-    "index": 120,
+    "index": 103,
     "section": "خطة العمل السنوية",
     "content": "📅 خطة العمل السنوية للتحصين:\n\n"
   },
@@ -986,7 +835,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الجلسات الثابتة والمتنقلة",
     "docType": "knowledge",
-    "index": 121,
+    "index": 104,
     "section": "الجلسات الثابتة والمتنقلة",
     "content": "🏥 الجلسات الثابتة والمتنقلة للتحصين:\n\n"
   },
@@ -994,7 +843,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التنسيق مع الشركاء",
     "docType": "knowledge",
-    "index": 122,
+    "index": 105,
     "section": "التنسيق مع الشركاء",
     "content": "🤝 التنسيق مع الشركاء في برنامج التحصين:\n\n"
   },
@@ -1002,7 +851,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: صنع القرار المبني على البيانات",
     "docType": "knowledge",
-    "index": 123,
+    "index": 106,
     "section": "صنع القرار المبني على البيانات",
     "content": "📊 صنع القرار المبني على البيانات (Data-Driven Decision Making):\n\n"
   },
@@ -1010,7 +859,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الإشراف الداعم",
     "docType": "knowledge",
-    "index": 124,
+    "index": 107,
     "section": "الإشراف الداعم",
     "content": "🔍 الإشراف الداعم للتحصين — المفهوم والممارسة:\n\n"
   },
@@ -1018,7 +867,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الزيارات الإشرافية",
     "docType": "knowledge",
-    "index": 125,
+    "index": 108,
     "section": "الزيارات الإشرافية",
     "content": "🚗 الزيارات الإشرافية الداعمة — دليل عملي:\n\n"
   },
@@ -1026,7 +875,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: قائمة المراجعة الإشرافية",
     "docType": "knowledge",
-    "index": 126,
+    "index": 109,
     "section": "قائمة المراجعة الإشرافية",
     "content": "☑️ قائمة المراجعة الإشرافية (Supervision Checklist):\n\n"
   },
@@ -1034,7 +883,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التغذية الراجعة البناءة",
     "docType": "knowledge",
-    "index": 127,
+    "index": 110,
     "section": "التغذية الراجعة البناءة",
     "content": "💬 التغذية الراجعة البناءة في الإشراف الداعم:\n\n"
   },
@@ -1042,7 +891,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: خطة التحسين",
     "docType": "knowledge",
-    "index": 128,
+    "index": 111,
     "section": "خطة التحسين",
     "content": "📈 خطة التحسين (Improvement Plan):\n\n"
   },
@@ -1050,7 +899,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: حملات التحصين",
     "docType": "knowledge",
-    "index": 129,
+    "index": 112,
     "section": "حملات التحصين",
     "content": "🚐 حملات التحصين — دليل شامل:\n\n"
   },
@@ -1058,7 +907,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: أيام التحصين الوطنية",
     "docType": "knowledge",
-    "index": 130,
+    "index": 113,
     "section": "أيام التحصين الوطنية",
     "content": "🇾🇪 أيام التحصين الوطنية (NIDs):\n\n"
   },
@@ -1066,7 +915,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: حملات الاستجابة للأوبئة",
     "docType": "knowledge",
-    "index": 131,
+    "index": 114,
     "section": "حملات الاستجابة للأوبئة",
     "content": "🚨 حملات الاستجابة للأوبئة (Outbreak Response):\n\n"
   },
@@ -1074,7 +923,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التعبئة المجتمعية للحملات",
     "docType": "knowledge",
-    "index": 132,
+    "index": 115,
     "section": "التعبئة المجتمعية للحملات",
     "content": "📢 التعبئة المجتمعية لحملات التحصين:\n\n"
   },
@@ -1082,7 +931,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تخطيط الحملات",
     "docType": "knowledge",
-    "index": 133,
+    "index": 116,
     "section": "تخطيط الحملات",
     "content": "📋 تخطيط حملات التحصين — دليل خطوة بخطوة:\n\n"
   },
@@ -1090,7 +939,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تنفيذ الحملات",
     "docType": "knowledge",
-    "index": 134,
+    "index": 117,
     "section": "تنفيذ الحملات",
     "content": "⚙️ تنفيذ حملات التحصين — الإجراءات الميدانية:\n\n"
   },
@@ -1098,7 +947,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: مراقبة الحملات",
     "docType": "knowledge",
-    "index": 135,
+    "index": 118,
     "section": "مراقبة الحملات",
     "content": "👁️ مراقبة حملات التحصين — دليل المراقبين:\n\n"
   },
@@ -1106,7 +955,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تقييم الحملات",
     "docType": "knowledge",
-    "index": 136,
+    "index": 119,
     "section": "تقييم الحملات",
     "content": "📊 تقييم حملات التحصين — مؤشرات ودروس:\n\n"
   },
@@ -1114,7 +963,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: فرق التحصين المتنقلة",
     "docType": "knowledge",
-    "index": 137,
+    "index": 120,
     "section": "فرق التحصين المتنقلة",
     "content": "🚑 فرق التحصين المتنقلة (Mobile Teams):\n\n"
   },
@@ -1122,7 +971,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: سياسة القارورة المفتوحة",
     "docType": "knowledge",
-    "index": 138,
+    "index": 121,
     "section": "سياسة القارورة المفتوحة",
     "content": "🔓 سياسة القارورة المفتوحة (Open Vial Policy):\n\n"
   },
@@ -1130,7 +979,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: حساب الاحتياج من اللقاحات",
     "docType": "knowledge",
-    "index": 139,
+    "index": 122,
     "section": "حساب الاحتياج من اللقاحات",
     "content": "🧮 حساب الاحتياج من اللقاحات — معادلات وأمثلة:\n\n"
   },
@@ -1138,7 +987,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: حساب الهدر",
     "docType": "knowledge",
-    "index": 140,
+    "index": 123,
     "section": "حساب الهدر",
     "content": "📉 حساب هدر اللقاحات وتقليله:\n\n"
   },
@@ -1146,7 +995,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: أنواع الثلاجات",
     "docType": "knowledge",
-    "index": 141,
+    "index": 124,
     "section": "أنواع الثلاجات",
     "content": " freezer أنواع ثلاجات التحصين ومعدات سلسلة التبريد:\n\n"
   },
@@ -1154,7 +1003,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تعبئة حافظات اللقاح",
     "docType": "knowledge",
-    "index": 142,
+    "index": 125,
     "section": "تعبئة حافظات اللقاح",
     "content": "🎒 تعبئة حافظات اللقاح (Vaccine Carriers) — دليل خطوة بخطوة:\n\n"
   },
@@ -1162,7 +1011,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تحضير اللقاحات الجافة",
     "docType": "knowledge",
-    "index": 143,
+    "index": 126,
     "section": "تحضير اللقاحات الجافة",
     "content": "🧪 تحضير اللقاحات الجافة (Lyophilized Vaccines):\n\n"
   },
@@ -1170,7 +1019,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: سلامة الحقن",
     "docType": "knowledge",
-    "index": 144,
+    "index": 127,
     "section": "سلامة الحقن",
     "content": "💉 سلامة الحقن (Injection Safety) — دليل شامل:\n\n"
   },
@@ -1178,7 +1027,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التخلص من النفايات الحيوية",
     "docType": "knowledge",
-    "index": 145,
+    "index": 128,
     "section": "التخلص من النفايات الحيوية",
     "content": "🗑️ التخلص من النفايات الحيوية (Medical Waste Disposal):\n\n"
   },
@@ -1186,7 +1035,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: مراقبة درجة الحرارة",
     "docType": "knowledge",
-    "index": 146,
+    "index": 129,
     "section": "مراقبة درجة الحرارة",
     "content": "🌡️ مراقبة درجة حرارة سلسلة التبريد:\n\n"
   },
@@ -1194,7 +1043,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: صيانة معدات سلسلة التبريد",
     "docType": "knowledge",
-    "index": 147,
+    "index": 130,
     "section": "صيانة معدات سلسلة التبريد",
     "content": "🔧 صيانة معدات سلسلة التبريد:\n\n"
   },
@@ -1202,7 +1051,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: نقل اللقاحات",
     "docType": "knowledge",
-    "index": 148,
+    "index": 131,
     "section": "نقل اللقاحات",
     "content": "🚚 نقل اللقاحات — دليل التوزيع الآمن:\n\n"
   },
@@ -1210,7 +1059,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التخزين الصحيح للقاحات",
     "docType": "knowledge",
-    "index": 149,
+    "index": 132,
     "section": "التخزين الصحيح للقاحات",
     "content": "🏥 التخزين الصحيح للقاحات في الثلاجة:\n\n"
   },
@@ -1218,7 +1067,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: إدارة انقطاع التبريد",
     "docType": "knowledge",
-    "index": 150,
+    "index": 133,
     "section": "إدارة انقطاع التبريد",
     "content": "⚡ إدارة انقطاع التبريد (Cold Chain Break):\n\n"
   },
@@ -1226,7 +1075,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: نظام FIFO و FEFO",
     "docType": "knowledge",
-    "index": 151,
+    "index": 134,
     "section": "نظام FIFO و FEFO",
     "content": "📊 نظام FIFO و FEFO لإدارة المخزون:\n\n"
   },
@@ -1234,7 +1083,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الترصد الوبائي",
     "docType": "knowledge",
-    "index": 152,
+    "index": 135,
     "section": "الترصد الوبائي",
     "content": "🔬 الترصد الوبائي للأمراض المستهدفة بالتحصين:\n\n"
   },
@@ -1242,7 +1091,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الاستجابة للأوبئة",
     "docType": "knowledge",
-    "index": 153,
+    "index": 136,
     "section": "الاستجابة للأوبئة",
     "content": "🚨 الاستجابة للأوبئة — خطوات عملية:\n\n"
   },
@@ -1250,7 +1099,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: رصد الأحداث الضائرة",
     "docType": "knowledge",
-    "index": 154,
+    "index": 137,
     "section": "رصد الأحداث الضائرة",
     "content": "⚠️ رصد الأحداث الضائرة بعد التطعيم (AEFI Surveillance):\n\n"
   },
@@ -1258,7 +1107,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تحصين المدارس",
     "docType": "knowledge",
-    "index": 155,
+    "index": 138,
     "section": "تحصين المدارس",
     "content": "🏫 تحصين المدارس — دليل التنفيذ:\n\n"
   },
@@ -1266,7 +1115,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: جودة البيانات",
     "docType": "knowledge",
-    "index": 156,
+    "index": 139,
     "section": "جودة البيانات",
     "content": "📊 جودة البيانات في برنامج التحصين:\n\n"
   },
@@ -1274,7 +1123,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تعزيز الطلب",
     "docType": "knowledge",
-    "index": 157,
+    "index": 140,
     "section": "تعزيز الطلب",
     "content": "📢 تعزيز الطلب على التحصين (Demand Generation):\n\n"
   },
@@ -1282,7 +1131,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: المشاركة المجتمعية",
     "docType": "knowledge",
-    "index": 158,
+    "index": 141,
     "section": "المشاركة المجتمعية",
     "content": "🤝 المشاركة المجتمعية في برنامج التحصين:\n\n"
   },
@@ -1290,7 +1139,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: مكافحة الشائعات",
     "docType": "knowledge",
-    "index": 159,
+    "index": 142,
     "section": "مكافحة الشائعات",
     "content": "🛑 مكافحة الشائعات عن التحصين:\n\n"
   },
@@ -1298,7 +1147,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التثقيف الصحي",
     "docType": "knowledge",
-    "index": 160,
+    "index": 143,
     "section": "التثقيف الصحي",
     "content": "📚 التثقيف الصحي للتحصين — دليل الممارسة:\n\n"
   },
@@ -1306,7 +1155,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التكامل مع برامج أخرى",
     "docType": "knowledge",
-    "index": 161,
+    "index": 144,
     "section": "التكامل مع برامج أخرى",
     "content": "🔗 التكامل بين التحصين والبرامج الصحية الأخرى:\n\n"
   },
@@ -1314,7 +1163,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: توثيق التطعيمات",
     "docType": "knowledge",
-    "index": 162,
+    "index": 145,
     "section": "توثيق التطعيمات",
     "content": "📝 توثيق التطعيمات — أهمية البطاقة والسجلات:\n\n"
   },
@@ -1322,7 +1171,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التحصين في الطوارئ والنزوح",
     "docType": "knowledge",
-    "index": 163,
+    "index": 146,
     "section": "التحصين في الطوارئ والنزوح",
     "content": "🏚️ التحصين في حالات الطوارئ والنزوح:\n\n"
   },
@@ -1330,7 +1179,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الشهادة الدولية للتطعيم",
     "docType": "knowledge",
-    "index": 164,
+    "index": 147,
     "section": "الشهادة الدولية للتطعيم",
     "content": "🌐 الشهادة الدولية للتطعيم (International Certificate of Vaccination):\n\n"
   },
@@ -1338,7 +1187,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: مراقبة الأمراض المستهدفة",
     "docType": "knowledge",
-    "index": 165,
+    "index": 148,
     "section": "مراقبة الأمراض المستهدفة",
     "content": "👁️ مراقبة الأمراض المستهدفة بالتحصين:\n\n"
   },
@@ -1346,7 +1195,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التخلص من الأمراض",
     "docType": "knowledge",
-    "index": 166,
+    "index": 149,
     "section": "التخلص من الأمراض",
     "content": "🎯 التخلص من الأمراض المستهدفة بالتحصين:\n\n"
   },
@@ -1354,7 +1203,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: معالجة حالات الرفض",
     "docType": "knowledge",
-    "index": 167,
+    "index": 150,
     "section": "معالجة حالات الرفض",
     "content": "🚫 معالجة حالات رفض التحصين:\n\n"
   },
@@ -1362,7 +1211,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التطوع في التحصين",
     "docType": "knowledge",
-    "index": 168,
+    "index": 151,
     "section": "التطوع في التحصين",
     "content": "🙋 التطوع في برنامج التحصين:\n\n"
   },
@@ -1370,7 +1219,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الشراكة مع القطاع الخاص",
     "docType": "knowledge",
-    "index": 169,
+    "index": 152,
     "section": "الشراكة مع القطاع الخاص",
     "content": "🏢 الشراكة مع القطاع الخاص في التحصين:\n\n"
   },
@@ -1378,7 +1227,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: بناء قدرات العاملين",
     "docType": "knowledge",
-    "index": 170,
+    "index": 153,
     "section": "بناء قدرات العاملين",
     "content": "👨‍🏫 بناء قدرات العاملين الصحيين في التحصين:\n\n"
   },
@@ -1386,7 +1235,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التحفيز والمتابعة",
     "docType": "knowledge",
-    "index": 171,
+    "index": 154,
     "section": "التحفيز والمتابعة",
     "content": "🏆 تحفيز العاملين الصحيين ومتابعتهم:\n\n"
   },
@@ -1394,7 +1243,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: اجتماعات المراجعة",
     "docType": "knowledge",
-    "index": 172,
+    "index": 155,
     "section": "اجتماعات المراجعة",
     "content": "🤝 اجتماعات مراجعة أداء التحصين:\n\n"
   },
@@ -1402,7 +1251,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تقييم الأداء الربعي",
     "docType": "knowledge",
-    "index": 173,
+    "index": 156,
     "section": "تقييم الأداء الربعي",
     "content": "📊 تقييم الأداء الربعي لبرنامج التحصين:\n\n"
   },
@@ -1410,7 +1259,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التحصين والنزوح",
     "docType": "knowledge",
-    "index": 174,
+    "index": 157,
     "section": "التحصين والنزوح",
     "content": "🏚️ التحصين للسكان النازحين والمتأثرين بالنزاعات:\n\n"
   },
@@ -1418,7 +1267,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التغطية الشاملة",
     "docType": "knowledge",
-    "index": 175,
+    "index": 158,
     "section": "التغطية الشاملة",
     "content": "🎯 التغطية الشاملة للتحصين (Universal Coverage):\n\n"
   },
@@ -1426,7 +1275,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: صحة الأم والطفل والتحصين",
     "docType": "knowledge",
-    "index": 176,
+    "index": 159,
     "section": "صحة الأم والطفل والتحصين",
     "content": "👩‍👧 صحة الأم والطفل وعلاقتها بالتحصين:\n\n"
   },
@@ -1434,7 +1283,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التواصل الفعال مع المجتمع",
     "docType": "knowledge",
-    "index": 177,
+    "index": 160,
     "section": "التواصل الفعال مع المجتمع",
     "content": "🗣️ التواصل الفعال مع المجتمع في التحصين:\n\n"
   },
@@ -1442,7 +1291,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: القيادة المجتمعية للتحصين",
     "docType": "knowledge",
-    "index": 178,
+    "index": 161,
     "section": "القيادة المجتمعية للتحصين",
     "content": "⭐ القيادة المجتمعية لدعم التحصين:\n\n"
   },
@@ -1450,7 +1299,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: الإبلاغ عن AEFI",
     "docType": "knowledge",
-    "index": 179,
+    "index": 162,
     "section": "الإبلاغ عن AEFI",
     "content": "📞 الإبلاغ عن الأحداث الضائرة بعد التطعيم:\n\n"
   },
@@ -1458,7 +1307,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التحصين والسجل المدني",
     "docType": "knowledge",
-    "index": 180,
+    "index": 163,
     "section": "التحصين والسجل المدني",
     "content": "📜 الربط بين التحصين والسجل المدني:\n\n"
   },
@@ -1466,7 +1315,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: مؤشر استخدام اللقاحات",
     "docType": "knowledge",
-    "index": 181,
+    "index": 164,
     "section": "مؤشر استخدام اللقاحات",
     "content": "📊 مؤشر استخدام اللقاحات (Vaccine Utilization Rate):\n\n"
   },
@@ -1474,7 +1323,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التوزيع العادل للقاحات",
     "docType": "knowledge",
-    "index": 182,
+    "index": 165,
     "section": "التوزيع العادل للقاحات",
     "content": "⚖️ التوزيع العادل للقاحات:\n\n"
   },
@@ -1482,7 +1331,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التحصين والرعاية الأولية",
     "docType": "knowledge",
-    "index": 183,
+    "index": 166,
     "section": "التحصين والرعاية الأولية",
     "content": "🏥 التحصين كجزء من الرعاية الصحية الأولية:\n\n"
   },
@@ -1490,7 +1339,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التحصين في المناطق الحضرية",
     "docType": "knowledge",
-    "index": 184,
+    "index": 167,
     "section": "التحصين في المناطق الحضرية",
     "content": "🏙️ التحصين في المناطق الحضرية:\n\n"
   },
@@ -1498,7 +1347,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: تخزين المخفف",
     "docType": "knowledge",
-    "index": 185,
+    "index": 168,
     "section": "تخزين المخفف",
     "content": "💧 تخزين المخفف (Diluent) بشكل صحيح:\n\n"
   },
@@ -1506,7 +1355,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: أنواع أكياس الثلج",
     "docType": "knowledge",
-    "index": 186,
+    "index": 169,
     "section": "أنواع أكياس الثلج",
     "content": "🧊 أنواع أكياس الثلج واستخدامها:\n\n"
   },
@@ -1514,7 +1363,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التحصين والتحول الرقمي",
     "docType": "knowledge",
-    "index": 187,
+    "index": 170,
     "section": "التحصين والتحول الرقمي",
     "content": "📱 التحصين والتحول الرقمي:\n\n"
   },
@@ -1522,7 +1371,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: معالجة اللقاح المتجمد",
     "docType": "knowledge",
-    "index": 188,
+    "index": 171,
     "section": "معالجة اللقاح المتجمد",
     "content": "❄️ معالجة اللقاح الذي تعرض للتجمد:\n\n"
   },
@@ -1530,7 +1379,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: التحصين وتغير المناخ",
     "docType": "knowledge",
-    "index": 189,
+    "index": 172,
     "section": "التحصين وتغير المناخ",
     "content": "🌍 التحصين وتغير المناخ:\n\n"
   },
@@ -1538,7 +1387,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: جدول التحصين المحدث 2026",
     "docType": "knowledge",
-    "index": 190,
+    "index": 173,
     "section": "جدول التحصين المحدث 2026",
     "content": "📅 جدول التحصين المحدث 2026 — التغييرات الجديدة:\n\n"
   },
@@ -1546,7 +1395,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_knowledge_base",
     "title": "EPI-Bot: إدارة الحملات في النزاعات",
     "docType": "knowledge",
-    "index": 191,
+    "index": 174,
     "section": "إدارة الحملات في النزاعات",
     "content": "⚔️ إدارة حملات التحصين في مناطق النزاعات:\n\n"
   },
@@ -1554,7 +1403,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_sia_kb",
     "title": "EPI-Bot: حول النشاط الايصالي",
     "docType": "knowledge",
-    "index": 192,
+    "index": 175,
     "section": "حول النشاط الايصالي",
     "content": "🚐 النشاط الايصالي التكاملي (SIA):\n\n"
   },
@@ -1562,7 +1411,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_sia_kb",
     "title": "EPI-Bot: تكميم فيتامين أ",
     "docType": "knowledge",
-    "index": 193,
+    "index": 176,
     "section": "تكميم فيتامين أ",
     "content": "🌟 تكميم فيتامين أ (VAS):\n\n"
   },
@@ -1570,7 +1419,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_sia_kb",
     "title": "EPI-Bot: حملات الحصبة",
     "docType": "knowledge",
-    "index": 194,
+    "index": 177,
     "section": "حملات الحصبة",
     "content": "🔴 حملات الحصبة التكميلية:\n\n"
   },
@@ -1578,7 +1427,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_sia_kb",
     "title": "EPI-Bot: أسبوع صحة الطفل",
     "docType": "knowledge",
-    "index": 195,
+    "index": 178,
     "section": "أسبوع صحة الطفل",
     "content": "👶 أسبوع صحة الطفل (CHW):\n\n"
   },
@@ -1586,7 +1435,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_sia_kb",
     "title": "EPI-Bot: حملات الكزاز للحوامل",
     "docType": "knowledge",
-    "index": 196,
+    "index": 179,
     "section": "حملات الكزاز للحوامل",
     "content": "🤰 حملات الكزاز للحوامل (MAT):\n\n"
   },
@@ -1594,7 +1443,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_sia_kb",
     "title": "EPI-Bot: الفرق بين SIA والروتين",
     "docType": "knowledge",
-    "index": 197,
+    "index": 180,
     "section": "الفرق بين SIA والروتين",
     "content": "📊 الفرق بين SIA والتطعيم الروتيني:\n\n"
   },
@@ -1602,7 +1451,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_sia_kb",
     "title": "EPI-Bot: تقييم SIA",
     "docType": "knowledge",
-    "index": 198,
+    "index": 181,
     "section": "تقييم SIA",
     "content": "📊 تقييم النشاط الايصالي التكاملي:\n\n"
   },
@@ -1610,7 +1459,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_sia_kb",
     "title": "EPI-Bot: التخطيط لـ SIA",
     "docType": "knowledge",
-    "index": 199,
+    "index": 182,
     "section": "التخطيط لـ SIA",
     "content": "📋 التخطيط للنشاط الايصالي:\n\n"
   },
@@ -1618,7 +1467,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_sia_kb",
     "title": "EPI-Bot: التحديات",
     "docType": "knowledge",
-    "index": 200,
+    "index": 183,
     "section": "التحديات",
     "content": "⚠️ التحديات في تنفيذ SIA:\n\n"
   },
@@ -1626,7 +1475,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: علم المناعة التطبيقي للتحصين",
     "docType": "knowledge",
-    "index": 201,
+    "index": 184,
     "section": "علم المناعة التطبيقي للتحصين",
     "content": "🔬 علم المناعة التطبيقي للتحصين (Applied Immunology):\n\n"
   },
@@ -1634,7 +1483,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: المناعة السلبية الأمومية والتحصين",
     "docType": "knowledge",
-    "index": 202,
+    "index": 185,
     "section": "المناعة السلبية الأمومية والتحصين",
     "content": "🤰 المناعة السلبية الأمومية وتأثيرها على التحصين:\n\n"
   },
@@ -1642,7 +1491,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: أنواع اللقاحات المتقدمة",
     "docType": "knowledge",
-    "index": 203,
+    "index": 186,
     "section": "أنواع اللقاحات المتقدمة",
     "content": "🧬 تصنيف اللقاحات المتقدم:\n\n"
   },
@@ -1650,7 +1499,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: استراتيجيات التحصين المتقدمة",
     "docType": "knowledge",
-    "index": 204,
+    "index": 187,
     "section": "استراتيجيات التحصين المتقدمة",
     "content": "📋 استراتيجيات التحصين المتقدمة (Advanced Immunization Strategies):\n\n"
   },
@@ -1658,7 +1507,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: مؤشرات جودة التحصين",
     "docType": "knowledge",
-    "index": 205,
+    "index": 188,
     "section": "مؤشرات جودة التحصين",
     "content": "📊 مؤشرات جودة التحصين (Immunization Quality Indicators):\n\n"
   },
@@ -1666,7 +1515,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: بروتوكولات التطعيم المتقدمة",
     "docType": "knowledge",
-    "index": 206,
+    "index": 189,
     "section": "بروتوكولات التطعيم المتقدمة",
     "content": "📋 بروتوكولات التطعيم المتقدمة:\n\n"
   },
@@ -1674,7 +1523,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: التحصين في حالات الطوارئ والأزمات",
     "docType": "knowledge",
-    "index": 207,
+    "index": 190,
     "section": "التحصين في حالات الطوارئ والأزمات",
     "content": "🚨 التحصين في حالات الطوارئ والأزمات:\n\n"
   },
@@ -1682,7 +1531,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: القضاء على الأمراض والتحصين",
     "docType": "knowledge",
-    "index": 208,
+    "index": 191,
     "section": "القضاء على الأمراض والتحصين",
     "content": "🎯 استراتيجيات القضاء على الأمراض بالتحصين:\n\n"
   },
@@ -1690,7 +1539,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: إدارة اللقاحات المتقدمة",
     "docType": "knowledge",
-    "index": 209,
+    "index": 192,
     "section": "إدارة اللقاحات المتقدمة",
     "content": "💊 إدارة اللقاحات المتقدمة (Advanced Vaccine Management):\n\n"
   },
@@ -1698,7 +1547,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_advanced_immunization_kb",
     "title": "EPI-Bot: سلسلة التبريد المتقدمة",
     "docType": "knowledge",
-    "index": 210,
+    "index": 193,
     "section": "سلسلة التبريد المتقدمة",
     "content": "❄️ إدارة سلسلة التبريد المتقدمة:\n\n"
   },
@@ -1706,7 +1555,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_analytics_kb",
     "title": "EPI-Bot: حول التحليل",
     "docType": "knowledge",
-    "index": 211,
+    "index": 194,
     "section": "حول التحليل",
     "content": "📊 تحليل بيانات النظام الصحي:\n\n"
   },
@@ -1714,7 +1563,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_analytics_kb",
     "title": "EPI-Bot: مؤشرات HMIS",
     "docType": "knowledge",
-    "index": 212,
+    "index": 195,
     "section": "مؤشرات HMIS",
     "content": "📊 مؤشرات HMIS الرئيسية:\n\n"
   },
@@ -1722,7 +1571,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_analytics_kb",
     "title": "EPI-Bot: تحليل التغطية",
     "docType": "knowledge",
-    "index": 213,
+    "index": 196,
     "section": "تحليل التغطية",
     "content": "📈 تحليل التغطية التطعيمية:\n\n"
   },
@@ -1730,7 +1579,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_analytics_kb",
     "title": "EPI-Bot: تحليل AEFI",
     "docType": "knowledge",
-    "index": 214,
+    "index": 197,
     "section": "تحليل AEFI",
     "content": "⚠️ تحليل حالات الآثار الجانبية (AEFI):\n\n"
   },
@@ -1738,7 +1587,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_analytics_kb",
     "title": "EPI-Bot: تحليل الحملات",
     "docType": "knowledge",
-    "index": 215,
+    "index": 198,
     "section": "تحليل الحملات",
     "content": "🚐 تحليل بيانات الحملات:\n\n"
   },
@@ -1746,7 +1595,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_analytics_kb",
     "title": "EPI-Bot: البيانات الديموغرافية",
     "docType": "knowledge",
-    "index": 216,
+    "index": 199,
     "section": "البيانات الديموغرافية",
     "content": "👶 البيانات الديموغرافية:\n\n"
   },
@@ -1754,7 +1603,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_analytics_kb",
     "title": "EPI-Bot: التقارير",
     "docType": "knowledge",
-    "index": 217,
+    "index": 200,
     "section": "التقارير",
     "content": "📋 التقارير المطلوبة:\n\n"
   },
@@ -1762,7 +1611,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_analytics_kb",
     "title": "EPI-Bot: التنبؤ",
     "docType": "knowledge",
-    "index": 218,
+    "index": 201,
     "section": "التنبؤ",
     "content": "🔮 التنبؤ بالاحتياجات:\n\n"
   },
@@ -1770,7 +1619,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_analytics_kb",
     "title": "EPI-Bot: جودة البيانات",
     "docType": "knowledge",
-    "index": 219,
+    "index": 202,
     "section": "جودة البيانات",
     "content": "✅ جودة البيانات:\n\n"
   },
@@ -1778,7 +1627,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: حول الحملات",
     "docType": "knowledge",
-    "index": 220,
+    "index": 203,
     "section": "حول الحملات",
     "content": "🚐 حملات شلل الأطفال في اليمن:\n\n"
   },
@@ -1786,7 +1635,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: الحملات الوطنية",
     "docType": "knowledge",
-    "index": 221,
+    "index": 204,
     "section": "الحملات الوطنية",
     "content": "🇾🇪 الحملات الوطنية لشلل الأطفال (NIDs):\n\n"
   },
@@ -1794,7 +1643,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: الحملات الإقليمية",
     "docType": "knowledge",
-    "index": 222,
+    "index": 205,
     "section": "الحملات الإقليمية",
     "content": "📍 الحملات الإقليمية (SNIDs):\n\n"
   },
@@ -1802,7 +1651,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: الفرق بين NIDs و SNIDs",
     "docType": "knowledge",
-    "index": 223,
+    "index": 206,
     "section": "الفرق بين NIDs و SNIDs",
     "content": "📊 الفرق بين الحملات الوطنية والإقليمية:\n\n"
   },
@@ -1810,7 +1659,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: تاريخ شلل الأطفال في اليمن",
     "docType": "knowledge",
-    "index": 224,
+    "index": 207,
     "section": "تاريخ شلل الأطفال في اليمن",
     "content": "📜 تاريخ شلل الأطفال في اليمن:\n\n"
   },
@@ -1818,7 +1667,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: أنواع شلل الأطفال",
     "docType": "knowledge",
-    "index": 225,
+    "index": 208,
     "section": "أنواع شلل الأطفال",
     "content": "🦠 أنواع فيروس شلل الأطفال:\n\n"
   },
@@ -1826,7 +1675,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: فريق الحملة",
     "docType": "knowledge",
-    "index": 226,
+    "index": 209,
     "section": "فريق الحملة",
     "content": "👥 بنية فريق الحملة:\n\n"
   },
@@ -1834,7 +1683,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: تقييم الحملة",
     "docType": "knowledge",
-    "index": 227,
+    "index": 210,
     "section": "تقييم الحملة",
     "content": "📊 تقييم أداء الحملة:\n\n"
   },
@@ -1842,7 +1691,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: السجلات والتقارير",
     "docType": "knowledge",
-    "index": 228,
+    "index": 211,
     "section": "السجلات والتقارير",
     "content": "📋 سجلات وتقارير الحملة:\n\n"
   },
@@ -1850,7 +1699,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: الأطفال غير المطعمين",
     "docType": "knowledge",
-    "index": 229,
+    "index": 212,
     "section": "الأطفال غير المطعمين",
     "content": "👶 التعامل مع الأطفال غير المطعمين:\n\n"
   },
@@ -1858,7 +1707,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: التثقيف الصحي",
     "docType": "knowledge",
-    "index": 230,
+    "index": 213,
     "section": "التثقيف الصحي",
     "content": "📢 التثقيف الصحي خلال الحملة:\n\n"
   },
@@ -1866,7 +1715,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: سلسلة التبريد في الحملات",
     "docType": "knowledge",
-    "index": 231,
+    "index": 214,
     "section": "سلسلة التبريد في الحملات",
     "content": "❄️ سلسلة التبريد خلال الحملات:\n\n"
   },
@@ -1874,7 +1723,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_polio_campaign_kb",
     "title": "EPI-Bot: الاستجابة للأوبئة",
     "docType": "knowledge",
-    "index": 232,
+    "index": 215,
     "section": "الاستجابة للأوبئة",
     "content": "🚨 الاستجابة للأوبئة:\n\n"
   },
@@ -1882,7 +1731,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: إدارة المستوى الوسيط",
     "docType": "knowledge",
-    "index": 233,
+    "index": 216,
     "section": "إدارة المستوى الوسيط",
     "content": "🏥 إدارة المستوى الوسيط في برنامج التحصين (Intermediate Level Management):\n\n"
   },
@@ -1890,7 +1739,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: مهام مدير مكتب المحافظة في التحصين",
     "docType": "knowledge",
-    "index": 234,
+    "index": 217,
     "section": "مهام مدير مكتب المحافظة في التحصين",
     "content": "📋 المهام التفصيلية لمدير مكتب المحافظة في التحصين:\n\n"
   },
@@ -1898,7 +1747,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: مؤشرات أداء المستوى الوسيط",
     "docType": "knowledge",
-    "index": 235,
+    "index": 218,
     "section": "مؤشرات أداء المستوى الوسيط",
     "content": "📊 مؤشرات أداء المستوى الوسيط في التحصين:\n\n"
   },
@@ -1906,7 +1755,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: الإشراف الداعم",
     "docType": "knowledge",
-    "index": 236,
+    "index": 219,
     "section": "الإشراف الداعم",
     "content": "🏥 الإشراف الداعم في برنامج التحصين (Supportive Supervision):\n\n"
   },
@@ -1914,7 +1763,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: قائمة التحقق الإشرافية",
     "docType": "knowledge",
-    "index": 237,
+    "index": 220,
     "section": "قائمة التحقق الإشرافية",
     "content": "📋 قائمة التحقق الإشرافية الداعمة للتحصين:\n\n"
   },
@@ -1922,7 +1771,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: التخطيط الدقيق",
     "docType": "knowledge",
-    "index": 238,
+    "index": 221,
     "section": "التخطيط الدقيق",
     "content": "📅 التخطيط الدقيق للتحصين (Microplanning):\n\n"
   },
@@ -1930,7 +1779,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: نظام المعلومات الصحية HMIS",
     "docType": "knowledge",
-    "index": 239,
+    "index": 222,
     "section": "نظام المعلومات الصحية HMIS",
     "content": "💻 نظام المعلومات الصحية (HMIS) في التحصين:\n\n"
   },
@@ -1938,7 +1787,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: جودة البيانات في التحصين",
     "docType": "knowledge",
-    "index": 240,
+    "index": 223,
     "section": "جودة البيانات في التحصين",
     "content": "📊 جودة البيانات في برنامج التحصين:\n\n"
   },
@@ -1946,7 +1795,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: بناء القدرات في التحصين",
     "docType": "knowledge",
-    "index": 241,
+    "index": 224,
     "section": "بناء القدرات في التحصين",
     "content": "🎓 بناء القدرات في برنامج التحصين (Capacity Building):\n\n"
   },
@@ -1954,7 +1803,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: التنسيق والشراكات في التحصين",
     "docType": "knowledge",
-    "index": 242,
+    "index": 225,
     "section": "التنسيق والشراكات في التحصين",
     "content": "🤝 التنسيق والشراكات في برنامج التحصين:\n\n"
   },
@@ -1962,7 +1811,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: التعبئة الاجتماعية للتحصين",
     "docType": "knowledge",
-    "index": 243,
+    "index": 226,
     "section": "التعبئة الاجتماعية للتحصين",
     "content": "📢 التعبئة الاجتماعية للتحصين (Social Mobilization):\n\n"
   },
@@ -1970,7 +1819,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: تحليل البيانات لاتخاذ القرارات",
     "docType": "knowledge",
-    "index": 244,
+    "index": 227,
     "section": "تحليل البيانات لاتخاذ القرارات",
     "content": "📈 تحليل البيانات لاتخاذ القرارات في التحصين (Data-driven Decision Making):\n\n"
   },
@@ -1978,7 +1827,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_intermediate_management_kb",
     "title": "EPI-Bot: تتبع المتخلفين عن التحصين",
     "docType": "knowledge",
-    "index": 245,
+    "index": 228,
     "section": "تتبع المتخلفين عن التحصين",
     "content": "🔍 تتبع المتخلفين عن التحصين (Defaulter Tracing):\n\n"
   },
@@ -1986,7 +1835,7 @@ export const LOCAL_KNOWLEDGE: KnowledgeChunk[] =
     "docId": "epi_bot_real_data",
     "title": "بيانات التغطية الفعلية — المحافظات",
     "docType": "data",
-    "index": 246,
+    "index": 229,
     "section": "تغطية_المحافظات",
     "content": "بيانات التغطية حسب المحافظة:\n\n• أبين: 95975 طفل (101%) — جيدة\n• الحديدة: 42883 طفل (151%) — ممتازة\n• الضالع: 86918 طفل (100%) — جيدة\n• المهرة: 21330 طفل (94%) — مقبولة\n• تعز: 336730 طفل (102%) — جيدة\n• حضرموت الساحل: 103237 طفل (98%) — جيدة\n• حضرموت الوادي: 76381 طفل (90%) — مقبولة\n• سقطرى: 10805 طفل (90%) — مقبولة\n• شبوة: 112276 طفل (93%) — مقبولة\n• عدن: 64295 طفل (87%) — متدنية\n• لحج: 130284 طفل (99%) — جيدة\n• مأرب: 72325 طفل (95%) — مقبولة\n• حجة: 55765 طفل (89%) — متدنية\n• البيضاء: 18855 طفل (82%) — متدنية\n• الجوف: 13904 طفل (79%) — متدنية\n• أبين: 95293 طفل (99%) — جيدة\n• الحديدة: 47537 طفل (117%) — ممتازة\n• الضالع: 91904 طفل (103%) — جيدة\n• المهرة: 20728 طفل (95%) — مقبولة\n• تعز: 347155 طفل (106%) — جيدة\n• حضرموت الساحل: 105387 طفل (99%) — جيدة\n• حضرموت الوادي: 82010 طفل (95%) — مقبولة\n• سقطرى: 11186 طفل (96%) — مقبولة\n• شبوة: 112131 طفل (93%) — مقبولة\n• عدن: 63909 طفل (87%) — متدنية\n• لحج: 137000 طفل (104%) — جيدة\n• مأرب: 74313 طفل (98%) — جيدة\n• حجة: 60261 طفل (96%) — مقبولة\n• البيضاء: 19320 طفل (84%) — متدنية\n• الجوف: 14145 طفل (80%) — متدنية\n• أبين: 98264 طفل (100%) — ممتازة\n• الحديدة: 51184 طفل (123%) — ممتازة\n• الضالع: 97408 طفل (105%) — ممتازة\n• المهرة: 20517 طفل (91%) — مقبولة\n• تعز: 358991 طفل (107%) — ممتازة\n• حضرموت الساحل: 108325 طفل (98%) — جيدة\n• حضرموت الوادي: 83842 طفل (95%) — مقبولة\n• سقطرى: 11465 طفل (93%) — مقبولة\n• شبوة: 113755 طفل (95%) — مقبولة\n• عدن: 67043 طفل (91%) — مقبولة\n• لحج: 140650 طفل (107%) — ممتازة\n• مأرب: 76704 طفل (101%) — جيدة\n• حجة: 63806 طفل (102%) — جيدة\n• البيضاء: 20264 طفل (88%) — متدنية\n• الجوف: 14831 طفل (84%) — متدنية\n• أبين: 97374 طفل (99%) — ممتازة\n• الحديدة: 54236 طفل (131%) — ممتازة\n• الضالع: 99418 طفل (107%) — ممتازة\n• المهرة: 21243 طفل (94%) — مقبولة\n• تعز: 360398 طفل (107%) — ممتازة\n• حضرموت الساحل: 110768 طفل (100%) — ممتازة\n• حضرموت الوادي: 85993 طفل (96%) — جيدة\n• سقطرى: 11723 طفل (95%) — مقبولة\n• شبوة: 116519 طفل (97%) — جيدة\n• عدن: 67037 طفل (91%) — مقبولة\n• لحج: 141781 طفل (108%) — ممتازة\n• مأرب: 77037 طفل (101%) — جيدة\n• حجة: 64384 طفل (103%) — جيدة\n• البيضاء: 20383 طفل (88%) — متدنية\n• الجوف: 14727 طفل (84%) — متدنية\n"
   }

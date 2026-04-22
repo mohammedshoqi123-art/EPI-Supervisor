@@ -1,18 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// قاعدة المعرفة المحلية — EPI-Supervisor + EPI-Bot merged
-// إجمالي: 247 chunk (EPI-Supervisor: 17 + EPI-Bot: 230)
-// ═══════════════════════════════════════════════════════════
-
-export interface KnowledgeChunk {
-  docId: string
-  title: string
-  docType: string
-  index: number
-  section: string
-  content: string
-}
-
-export const LOCAL_KNOWLEDGE: KnowledgeChunk[] = 
 [
   {
     "docId": "epi_clinical_guide",

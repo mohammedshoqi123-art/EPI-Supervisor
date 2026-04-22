@@ -41,15 +41,15 @@ enum UserRole {
     }
   }
 
-  /// Hide admin dashboard + user management for non-admins
+  /// Access: admin only for management features
   bool get canAccessAdminDashboard => this == UserRole.admin;
-  bool get canManageUsers => hierarchyLevel >= 4; // admin + central
-  bool get canManageForms => hierarchyLevel >= 4;
-  bool get canViewAuditLogs => hierarchyLevel >= 4;
+  bool get canManageUsers => this == UserRole.admin;
+  bool get canManageForms => this == UserRole.admin;
+  bool get canViewAuditLogs => hierarchyLevel >= 4; // admin + central
 
-  /// Viewing scope — what data they can see
-  bool get canViewAllGovernorates => hierarchyLevel >= 4;
-  bool get canViewAllDistricts => hierarchyLevel >= 3;
+  /// Viewing scope — analytics data visibility
+  bool get canViewAllGovernorates => hierarchyLevel >= 4; // admin + central
+  bool get canViewAllDistricts => hierarchyLevel >= 3; // admin + central + governorate
 
   /// Edit permissions — can only edit their own submissions
   bool get canExport => true; // all roles

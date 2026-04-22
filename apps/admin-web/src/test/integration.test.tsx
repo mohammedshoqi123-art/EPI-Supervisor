@@ -107,7 +107,6 @@ describe('Dashboard Integration', () => {
           active_users: 80,
           total_submissions: 500,
           today_submissions: 25,
-          pending_submissions: 10,
         },
         charts: {},
         recent_activity: [],

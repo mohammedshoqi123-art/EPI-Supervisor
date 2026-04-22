@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import {
-  Users, FileText, FileStack, AlertTriangle, TrendingUp, TrendingDown,
+  Users, FileText, FileStack, TrendingUp, TrendingDown,
   CheckCircle2, XCircle, Clock, Activity, BarChart3, ArrowUpRight,
-  Shield, Zap, Target, Sparkles, Calendar, RefreshCw
+  Shield, ShieldCheck, Zap, Target, Sparkles, Calendar, RefreshCw
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -133,22 +133,13 @@ export default function DashboardPage() {
       description: `${formatNumber(stats.total_submissions)} إجمالي`,
     },
     {
-      title: 'بانتظار المراجعة',
-      value: formatNumber(stats.pending_submissions),
-      icon: Clock,
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-50',
-      gradient: 'bg-gradient-to-r from-amber-500 to-amber-600',
-      description: `${stats.approval_rate.toFixed(1)}% معدل الاعتماد`,
-    },
-    {
-      title: 'النواقص الحرجة',
-      value: formatNumber(stats.critical_shortages),
-      icon: AlertTriangle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      gradient: 'bg-gradient-to-r from-red-500 to-red-600',
-      description: `من أصل ${stats.total_shortages} ناقص`,
+      title: 'معدل الاعتماد',
+      value: `${stats.approval_rate.toFixed(1)}%`,
+      icon: ShieldCheck,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      gradient: 'bg-gradient-to-r from-purple-500 to-purple-600',
+      description: 'نسبة الإرساليات المعتمدة',
     },
   ] : []
 
@@ -191,7 +182,7 @@ export default function DashboardPage() {
                   <Activity className="w-5 h-5 text-primary" />
                   حركة الإرساليات
                 </CardTitle>
-                <CardDescription>آخر 30 يوم — معتمدة، مرفوضة، قيد المراجعة</CardDescription>
+                <CardDescription>آخر 30 يوم — معتمدة ومرفوضة</CardDescription>
               </div>
               <Tabs defaultValue="30d">
                 <TabsList className="h-8 bg-muted/50">

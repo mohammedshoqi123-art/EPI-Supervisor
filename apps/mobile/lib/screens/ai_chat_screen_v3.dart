@@ -516,11 +516,10 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
 
   Widget _buildReportsPdfTab(ColorScheme cs) {
     final pdfReports = [
-      _PdfReport('daily', '📅', 'التقرير اليومي', 'إرساليات، نواقص، مؤشرات يومية', const Color(0xFF1976D2)),
+      _PdfReport('daily', '📅', 'التقرير اليومي', 'إرساليات ومؤشرات يومية', const Color(0xFF1976D2)),
       _PdfReport('weekly', '📊', 'التقرير الأسبوعي', 'اتجاهات، مقارنات أسبوعية', const Color(0xFF388E3C)),
       _PdfReport('monthly', '📆', 'التقرير الشهري', 'ملخص شامل للشهر', const Color(0xFF7B1FA2)),
       _PdfReport('coverage', '💉', 'تقرير التغطية', 'Penta3، حصبة، تسرب', const Color(0xFF00897B)),
-      _PdfReport('shortages', '⚠️', 'تقرير النواقص', 'نواقص حرجة ومستلزمات', const Color(0xFFD32F2F)),
       _PdfReport('governorate', '🗺️', 'تقرير المحافظات', 'ترتيب أداء المحافظات', const Color(0xFFE65100)),
       _PdfReport('supervision', '📋', 'التقرير الإشرافي', 'زيارات، ملاحظات، توصيات', const Color(0xFFF57C00)),
       _PdfReport('comprehensive', '📑', 'التقرير الشامل', 'كل البيانات في تقرير واحد', const Color(0xFF0097A7)),
@@ -1192,34 +1191,18 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   Widget _buildAlertsTab(ColorScheme cs) {
     // Get data for alerts analysis
     final analyticsAsync = ref.watch(dashboardAnalyticsProvider(const AnalyticsFilter()));
-    final shortagesAsync = ref.watch(shortagesProvider);
 
     return analyticsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => _buildAlertsContent(cs, {}, []),
-      data: (analytics) {
-        return shortagesAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, __) => _buildAlertsContent(cs, analytics, []),
-          data: (shortages) => _buildAlertsContent(cs, analytics, shortages),
-        );
-      },
+      error: (_, __) => _buildAlertsContent(cs, {}),
+      data: (analytics) => _buildAlertsContent(cs, analytics),
     );
   }
 
-  Widget _buildAlertsContent(ColorScheme cs, Map<String, dynamic> analytics, List<dynamic> shortages) {
-    // Build data map for SmartAlertsEngine
+  Widget _buildAlertsContent(ColorScheme cs, Map<String, dynamic> analytics) {
+    // Build data map for SmartAlertsEngine (without shortages)
     final data = <String, dynamic>{
       ...analytics,
-      'shortages': {
-        'total': shortages.length,
-        'pending': shortages.where((s) => (s as Map<String, dynamic>)['status'] != 'resolved').length,
-        'resolved': shortages.where((s) => (s as Map<String, dynamic>)['status'] == 'resolved').length,
-        'bySeverity': {
-          'critical': shortages.where((s) => (s as Map<String, dynamic>)['severity'] == 'critical').length,
-          'high': shortages.where((s) => (s as Map<String, dynamic>)['severity'] == 'high').length,
-        },
-      },
     };
 
     final alerts = SmartAlertsEngine.analyzeAlerts(data);

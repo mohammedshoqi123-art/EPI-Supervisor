@@ -138,14 +138,11 @@ export interface DashboardStats {
   total_users: number
   active_users: number
   total_submissions: number
-  pending_submissions: number
   approved_submissions: number
   rejected_submissions: number
   draft_submissions: number
   total_forms: number
   active_forms: number
-  total_shortages: number
-  critical_shortages: number
   unread_notifications: number
   submissions_today: number
   submissions_this_week: number

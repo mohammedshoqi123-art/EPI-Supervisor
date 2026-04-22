@@ -66,12 +66,6 @@ class DashboardReportExporter {
             ),
             _exportOption(
               ctx,
-              'تقرير النواقص والاحتياجات',
-              Icons.warning_amber_rounded,
-              () => onGenerate('shortages'),
-            ),
-            _exportOption(
-              ctx,
               'تقرير أداء المحافظات',
               Icons.map_rounded,
               () => onGenerate('governorates'),
@@ -137,12 +131,6 @@ class DashboardReportExporter {
           'subtitle': 'ملخص أداء الأسبوع الماضي',
           'period': '$fromStr — $dateStr',
         };
-      case 'shortages':
-        return {
-          'title': 'تقرير النواقص والاحتياجات',
-          'subtitle': 'تتبع النواقص الميدانية وحالة الحلول',
-          'period': 'آخر 30 يوم',
-        };
       case 'governorates':
         return {
           'title': 'تقرير أداء المحافظات',
@@ -164,7 +152,6 @@ class DashboardReportExporter {
     required String type,
     required Map<String, dynamic>? analyticsData,
     required Future<List<Map<String, dynamic>>?> Function() fetchGovRanking,
-    required Future<List<Map<String, dynamic>>?> Function() fetchShortages,
   }) async {
     Navigator.pop(context);
 
@@ -213,13 +200,6 @@ class DashboardReportExporter {
         govData = await fetchGovRanking();
       } catch (_) {}
 
-      List<Map<String, dynamic>>? shortagesData;
-      if (type == 'shortages' || type == 'full') {
-        try {
-          shortagesData = await fetchShortages();
-        } catch (_) {}
-      }
-
       final reportInfo = getReportInfo(type);
 
       final file = await ReportGenerator.generatePDFReport(
@@ -228,8 +208,6 @@ class DashboardReportExporter {
         period: reportInfo['period']!,
         analyticsData: analyticsData,
         governorateData: govData,
-        shortagesData:
-            type == 'shortages' || type == 'full' ? shortagesData : null,
       );
 
       if (!context.mounted) return;

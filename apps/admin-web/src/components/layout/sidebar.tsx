@@ -46,8 +46,7 @@ const navItems: NavItem[] = [
   { icon: Users, label: 'المستخدمون', href: '/users' },
   { icon: FileSearch, label: 'النماذج', href: '/forms' },
   { icon: FileStack, label: 'الإرساليات', href: '/submissions' },
-  { icon: AlertTriangle, label: 'النواقص', href: '/shortages' },
-  { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin', 'central'] },
+  { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin'] },
   { icon: MapPinned, label: 'المحافظات', href: '/governorates', roles: ['admin'] },
   { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
   { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
@@ -93,16 +92,8 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
     return user?.role && item.roles.includes(user.role)
   })
 
-  // Add dynamic badges
-  const itemsWithBadges = filteredItems.map(item => {
-    if (item.href === '/submissions' && stats?.pending_submissions) {
-      return { ...item, badge: stats.pending_submissions }
-    }
-    if (item.href === '/shortages' && stats?.critical_shortages) {
-      return { ...item, badge: stats.critical_shortages }
-    }
-    return item
-  })
+  // Add dynamic badges (removed pending/shortages badges)
+  const itemsWithBadges = filteredItems
 
   return (
     <aside

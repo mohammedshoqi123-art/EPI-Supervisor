@@ -12,7 +12,6 @@ const SubmissionsPage = lazy(() => import('@/pages/SubmissionsPage'))
 const AIInsightsPage = lazy(() => import('@/pages/AIInsightsPage'))
 const AISettingsPage = lazy(() => import('@/pages/AISettingsPage'))
 const AuditPage = lazy(() => import('@/pages/AuditPage'))
-const ShortagesPage = lazy(() => import('@/pages/ShortagesPage'))
 const GovernoratesPage = lazy(() => import('@/pages/GovernoratesPage'))
 const MapPage = lazy(() => import('@/pages/MapPage'))
 const PagesManagementPage = lazy(() => import('@/pages/PagesManagementPage'))
@@ -49,7 +48,6 @@ export default function App() {
           <Route path="insights" element={<Suspense fallback={<PageLoader />}><AIInsightsPage /></Suspense>} />
           <Route path="ai-settings" element={<Suspense fallback={<PageLoader />}><AISettingsPage /></Suspense>} />
           <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditPage /></Suspense>} />
-          <Route path="shortages" element={<Suspense fallback={<PageLoader />}><ShortagesPage /></Suspense>} />
           <Route path="governorates" element={<Suspense fallback={<PageLoader />}><GovernoratesPage /></Suspense>} />
           <Route path="map" element={<Suspense fallback={<PageLoader />}><MapPage /></Suspense>} />
           <Route path="pages" element={<Suspense fallback={<PageLoader />}><PagesManagementPage /></Suspense>} />

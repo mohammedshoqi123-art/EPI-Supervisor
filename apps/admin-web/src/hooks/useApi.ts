@@ -160,7 +160,7 @@ export function useDashboardStats(campaignType?: string) {
       }
 
       // Use Promise.allSettled to handle individual failures gracefully
-      const [usersRes, submissionsRes, formsRes, shortagesRes] = await Promise.allSettled([
+      const [usersRes, submissionsRes, formsRes] = await Promise.allSettled([
         supabase.from('profiles').select('id, is_active, role, created_at', { count: 'exact' }),
         applyFormFilter(
           supabase.from('form_submissions').select('id, status, created_at', { count: 'exact' })
@@ -168,16 +168,11 @@ export function useDashboardStats(campaignType?: string) {
         applyFormsFilter(
           supabase.from('forms').select('id, is_active', { count: 'exact' })
         ),
-        (async () => {
-          let q = supabase.from('supply_shortages').select('id, severity, is_resolved', { count: 'exact' })
-          return applyShortageFilter(q)
-        })(),
       ])
 
       const users = usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : []
       const submissions = submissionsRes.status === 'fulfilled' ? (submissionsRes.value.data || []) : []
       const forms = formsRes.status === 'fulfilled' ? (formsRes.value.data || []) : []
-      const shortages = shortagesRes.status === 'fulfilled' ? (shortagesRes.value.data || []) : []
 
       const now = new Date()
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -185,21 +180,16 @@ export function useDashboardStats(campaignType?: string) {
 
       const submissionsToday = submissions.filter((s: any) => new Date(s.created_at) >= today).length
       const submissionsThisWeek = submissions.filter((s: any) => new Date(s.created_at) >= weekAgo).length
-      const submitted = submissions.filter((s: any) => s.status === 'submitted').length
-      const pending = submitted // pending = submitted (awaiting review)
 
       return {
         total_users: users.length,
         active_users: users.filter((u: any) => u.is_active).length,
         total_submissions: submissions.length,
-        pending_submissions: pending,
-        approved_submissions: 0, // simplified enum: only draft + submitted
-        rejected_submissions: 0, // simplified enum: only draft + submitted
+        approved_submissions: 0,
+        rejected_submissions: 0,
         draft_submissions: submissions.filter((s: any) => s.status === 'draft').length,
         total_forms: forms.length,
         active_forms: forms.filter((f: any) => f.is_active).length,
-        total_shortages: shortages.length,
-        critical_shortages: shortages.filter((s: any) => s.severity === 'critical' && !s.is_resolved).length,
         submissions_today: submissionsToday,
         submissions_this_week: submissionsThisWeek,
         submissions_trend: 12.5,

@@ -15,7 +15,7 @@ import { Progress } from '@/components/ui/progress'
 import { supabase } from '@/lib/supabase'
 import { cn, formatNumber } from '@/lib/utils'
 import { useNavigate } from 'react-router-dom'
-import { useDashboardStats, useGovernorateStats, useShortages } from '@/hooks/useApi'
+import { useDashboardStats, useGovernorateStats } from '@/hooks/useApi'
 import { epiBotEngine } from '@/lib/epi-bot-engine'
 
 // ═══════════════════════════════════════════════════════════
@@ -163,26 +163,19 @@ function ActionButtons({ actions, onAction }: { actions: CopilotAction[]; onActi
 
 function useProactiveInsights() {
   const { data: stats } = useDashboardStats()
-  const { data: shortages } = useShortages()
 
   return useCallback(() => {
     const insights: { text: string; severity: 'critical' | 'warning' | 'info' }[] = []
     if (!stats) return insights
 
-    if (stats.critical_shortages > 0) {
-      insights.push({ text: `🚨 ${stats.critical_shortages} نواقص حرجة غير محلولة`, severity: 'critical' })
-    }
     if (stats.approval_rate < 70 && stats.total_submissions > 20) {
       insights.push({ text: `⚠️ معدل الاعتماد ${stats.approval_rate.toFixed(1)}% — أقل من 70%`, severity: 'warning' })
     }
     if (stats.submissions_today === 0 && stats.active_users > 0) {
       insights.push({ text: `📭 لا توجد إرساليات اليوم مع ${stats.active_users} مستخدم نشط`, severity: 'warning' })
     }
-    if (stats.pending_submissions > 20) {
-      insights.push({ text: `⏳ ${stats.pending_submissions} إرسالية بانتظار المراجعة`, severity: 'info' })
-    }
     return insights
-  }, [stats, shortages])
+  }, [stats])
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -193,8 +186,6 @@ function getContextualSuggestions(lastIntent?: string, lastData?: any): string[]
   switch (lastIntent) {
     case 'query_submissions':
       return ['حلل أسباب الرفض', 'قارن بالأسبوع الماضي', 'أي المحافظات لها أعلى رفض؟']
-    case 'query_shortages':
-      return ['أرسل إشعار للمسؤولين', 'أنشئ خطة معالجة', 'ما تأثير النواقص على التغطية؟']
     case 'query_governorates':
       return ['حلل السبب في الأضعف', 'قارن بآخر شهر', 'اعرض تفاصيل كل محافظة']
     case 'query_users':
@@ -422,13 +413,6 @@ export function AIChatWidget() {
       case 'query_submissions':
         actions.push(
           { id: 'nav-subs', label: 'عرض الإرساليات', icon: 'navigate', type: 'navigate', payload: '/submissions', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-          { id: 'nav-pending', label: 'قيد المراجعة', icon: 'navigate', type: 'navigate', payload: '/submissions?status=submitted', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-        )
-        break
-      case 'query_shortages':
-        actions.push(
-          { id: 'nav-shortages', label: 'عرض النواقص', icon: 'navigate', type: 'navigate', payload: '/shortages', color: 'bg-red-50 text-red-700 border-red-200' },
-          { id: 'nav-critical', label: 'الحرجة فقط', icon: 'navigate', type: 'navigate', payload: '/shortages?severity=critical', color: 'bg-red-100 text-red-800 border-red-300' },
         )
         break
       case 'query_governorates':
@@ -462,21 +446,7 @@ export function AIChatWidget() {
         items: [
           { label: 'معتمدة', value: data.byStatus.approved || 0, color: 'bg-emerald-500' },
           { label: 'مرفوضة', value: data.byStatus.rejected || 0, color: 'bg-red-500' },
-          { label: 'قيد المراجعة', value: data.byStatus.submitted || 0, color: 'bg-blue-500' },
           { label: 'مسودات', value: data.byStatus.draft || 0, color: 'bg-gray-400' },
-        ].filter(i => i.value > 0),
-      }
-    }
-
-    if (intent === 'query_shortages' && data.bySeverity) {
-      return {
-        type: 'bar',
-        title: 'النواقص حسب الخطورة',
-        items: [
-          { label: 'حرج 🔴', value: data.bySeverity.critical || 0, color: 'bg-red-500' },
-          { label: 'عالي 🟠', value: data.bySeverity.high || 0, color: 'bg-orange-500' },
-          { label: 'متوسط 🟡', value: data.bySeverity.medium || 0, color: 'bg-yellow-500' },
-          { label: 'منخفض 🟢', value: data.bySeverity.low || 0, color: 'bg-green-500' },
         ].filter(i => i.value > 0),
       }
     }

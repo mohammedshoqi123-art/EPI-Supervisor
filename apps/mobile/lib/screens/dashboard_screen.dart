@@ -229,13 +229,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             return null;
           }
         },
-        fetchShortages: () async {
-          try {
-            return await ref.read(databaseServiceProvider).getShortages();
-          } catch (_) {
-            return null;
-          }
-        },
       ),
     );
   }

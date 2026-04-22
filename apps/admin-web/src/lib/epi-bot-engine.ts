@@ -151,7 +151,6 @@ interface IntentDef {
 const INTENTS: IntentDef[] = [
   // Query intents
   { id: 'query_submissions', label: 'استعلام الإرساليات', keywords: ['ارسالي', 'ارسال', 'بيانات', 'استماره', 'نموذج', 'تقديم', 'مسوده', 'مرسل'], category: 'query', responseTemplate: 'إحصائيات الإرساليات', priority: 10 },
-  { id: 'query_shortages', label: 'استعلام النواقص', keywords: ['نقص', 'نواقص', 'حاجه', 'مطلوب', 'خزين', 'مخزون', 'توفير', 'تزويد'], category: 'query', responseTemplate: 'تقرير النواقص', priority: 10 },
   { id: 'query_governorates', label: 'استعلام المحافظات', keywords: ['محافظ', 'محافظه', 'منطق', 'قضاء', 'مديري', 'حي', 'جغرافي', 'خريط'], category: 'query', responseTemplate: 'بيانات المحافظات', priority: 9 },
   { id: 'query_users', label: 'استعلام المستخدمين', keywords: ['مستخدم', 'فريق', 'موظف', 'عامل', 'مشغل', 'نشط', 'حساب', 'صلاحي'], category: 'query', responseTemplate: 'إحصائيات المستخدمين', priority: 9 },
   { id: 'query_coverage', label: 'استعلام التغطية', keywords: ['تغطي', 'نسب', 'معدل', 'تحصين', 'تلقيح', 'تطعيم', 'وصول', 'انتشار'], category: 'query', responseTemplate: 'نسب التغطية', priority: 10 },
@@ -203,7 +202,6 @@ const INTENTS: IntentDef[] = [
   { id: 'query_schedule', label: 'جدول التطعيم', keywords: ['جدول', 'مواعيد', 'وقت', 'تاريخ', 'موعد', 'خطة', 'زمن'], category: 'query', responseTemplate: 'جدول التطعيم', priority: 8 },
   { id: 'bulk_action', label: 'إجراء جماعي', keywords: ['جماع', 'كل', 'مجموع', 'دفع', 'متعدد', 'تحديد الكل'], category: 'action', responseTemplate: 'إجراء جماعي', priority: 6 },
   { id: 'go_to_reports', label: 'التقارير', keywords: ['تقارير', 'ارقام', 'احصائي'], category: 'navigation', responseTemplate: 'الانتقال للتقارير', priority: 5 },
-  { id: 'go_to_shortages', label: 'النواقص', keywords: ['نواقص صفح', 'نقص عرض'], category: 'navigation', responseTemplate: 'الانتقال للنواقص', priority: 5 },
   { id: 'feedback', label: 'ملاحظات', keywords: ['ملاحظ', 'راي', 'اقتراح', 'تحسين', 'تقييم'], category: 'help', responseTemplate: 'شكراً لملاحظاتك', priority: 4 },
   { id: 'correlation_analysis', label: 'تحليل الارتباط', keywords: ['ارتباط', 'علاق', 'سببي', 'تاثير متبادل', 'رابط'], category: 'analysis', responseTemplate: 'تحليل الارتباط', priority: 8 },
   { id: 'root_cause', label: 'السبب الجذري', keywords: ['سبب', 'جذر', 'لماذا', 'عامل', 'محرك', 'مصدر مشكل'], category: 'analysis', responseTemplate: 'تحليل السبب الجذري', priority: 9 },
@@ -246,14 +244,6 @@ const KNOWLEDGE_BASE: KnowledgeRule[] = [
     keywords: ['تغطي', 'هدف', 'نسب', 'معدل'],
     response: 'الهدف الوطني للتغطية هو 95% لجميع اللقاحات. النسب الأقل من 80% تعتبر حرجة وتتطلب تدخل فوري. النسب بين 80-90% تتطلب متابعة مكثفة.',
     relatedIntents: ['query_coverage', 'low_coverage', 'comparison'],
-    priority: 10,
-  },
-  {
-    id: 'kb_shortage_protocol',
-    domain: 'shortage',
-    keywords: ['نقص', 'نواقص', 'خزين', 'مخزون'],
-    response: 'عند رصد نقص: 1) تسجيل النقص في النظام 2) تحديد مستوى الخطورة (حرج/عالي/متوسط/منخفض) 3) إشعار المسؤولين 4) متابعة التوفير 5) تأكيد الاستلام والتحديث في النظام.',
-    relatedIntents: ['query_shortages', 'critical_shortage', 'resolve_shortage'],
     priority: 10,
   },
   {
@@ -639,16 +629,14 @@ export class EPIBotEngine {
 
     const followUpMap: Record<string, string[]> = {
       query_submissions: ['حلل أسباب الرفض', 'قارن بالأسبوع الماضي', 'أي المحافظات لها أعلى رفض؟'],
-      query_shortages: ['أرسل إشعار للمسؤولين', 'أنشئ خطة معالجة', 'ما تأثير النواقص على التغطية؟'],
       query_governorates: ['حلل السبب في الأضعف', 'قارن بآخر شهر', 'اعرض تفاصيل كل محافظة'],
       query_users: ['المستخدمين غير النشطين', 'توزيع الصلاحيات', 'آخر تسجيل دخول'],
       query_coverage: ['أي المناطق أقل تغطية؟', 'قارن بالهدف الوطني', 'توقع التغطية الشهر القادم'],
       query_vaccination: ['ما أكثر اللقاحات نقصاً؟', 'حالة سلسلة التبريد', 'تغطية الحصب'],
       create_report: ['أرسل التقرير بالبريد', 'صدر كـ PDF', 'أضف رسوم بيانية'],
-      critical_shortage: ['أرسل إشعار فوري', 'أنشئ طلب توريد', 'تتبع حالة التوفير'],
       low_coverage: ['حدد الأسباب المحتملة', 'اقترح خطة تحسين', 'أي المناطق متأثرة؟'],
-      greeting: ['📊 حالة الإرساليات', '⚠️ النواقص الحرجة', '📈 تقرير يومي'],
-      unknown: ['📊 حالة الإرساليات', '⚠️ النواقص الحرجة', '👥 فريق العمل', '📈 تقرير يومي'],
+      greeting: ['📊 حالة الإرساليات', '📈 تقرير يومي'],
+      unknown: ['📊 حالة الإرساليات', '👥 فريق العمل', '📈 تقرير يومي'],
     }
 
     if (lastIntent && followUpMap[lastIntent]) {
@@ -683,9 +671,6 @@ export class EPIBotEngine {
       lines.push(`   • الإجمالي: ${stats.total_submissions}`)
       lines.push(`   • اليوم: ${stats.submissions_today ?? 0}`)
       lines.push(`   • هذا الأسبوع: ${stats.submissions_this_week ?? 0}`)
-      if (stats.pending_submissions) {
-        lines.push(`   • بانتظار المراجعة: ${stats.pending_submissions}`)
-      }
       lines.push('')
     }
 
@@ -694,14 +679,6 @@ export class EPIBotEngine {
       lines.push('👥 **المستخدمين:**')
       lines.push(`   • الإجمالي: ${stats.total_users}`)
       lines.push(`   • النشطين: ${stats.active_users ?? 0}`)
-      lines.push('')
-    }
-
-    // Shortages
-    if (stats.total_shortages !== undefined) {
-      lines.push('⚠️ **النواقص:**')
-      lines.push(`   • الإجمالي: ${stats.total_shortages}`)
-      lines.push(`   • الحرجة: ${stats.critical_shortages ?? 0}`)
       lines.push('')
     }
 
@@ -714,10 +691,6 @@ export class EPIBotEngine {
     }
 
     // Alerts
-    if (stats.critical_shortages > 0) {
-      lines.push('🚨 **تنبيهات:**')
-      lines.push(`   • ${stats.critical_shortages} نواقص حرجة تحتاج معالجة فورية!`)
-    }
     if (stats.submissions_today === 0 && stats.active_users > 0) {
       lines.push('📭 لا توجد إرساليات اليوم رغم وجود مستخدمين نشطين')
     }
@@ -929,15 +902,12 @@ export class EPIBotEngine {
       case 'query_vaccination':
         return `${prefix}بيانات التطعيم:\n\nيشمل برنامج التطعيم BCG, HepB, OPV/IPV, الخماسي, الحصبة, MR, DTaP. أي لقاح تريد تفاصيله؟`
 
-      case 'critical_shortage':
-        return `${prefix}تنبيه حرج! يوجد نواقص حرجة تحتاج معالجة فورية. أنصح بإرسال إشعار للمسؤولين وتفعيل خطة الطوارئ فوراً.`
-
       case 'low_coverage':
         return `${prefix}تنبيه: التغطية أقل من المستهدف! يجب تحديد الأسباب ووضع خطة تحسين. هل تريد تحليل المناطق المتأثرة؟`
 
       case 'how_to':
       case 'guide':
-        return '📖 دليل الاستخدام:\n\n• الإرساليات: عرض وتتبع البيانات المُرسلة\n• النواقص: مراقبة المستلزمات\n• التقارير: إنشاء تقارير وتحليلات\n• الإشعارات: إرسال تنبيهات للفريق\n\nما الذي تريد تعلمه بالتفصيل؟'
+        return '📖 دليل الاستخدام:\n\n• الإرساليات: عرض وتتبع البيانات المُرسلة\n• التقارير: إنشاء تقارير وتحليلات\n• الإشعارات: إرسال تنبيهات للفريق\n\nما الذي تريد تعلمه بالتفصيل؟'
 
       case 'troubleshooting':
         return '🔧 حل المشاكل:\n\n1) مشكلة في الاتصال: تحقق من الشبكة وأعد المحاولة\n2) بيانات لا تظهر: انتظر قليلاً ثم أعد تحميل الصفحة\n3) خطأ في الإرسال: تأكد من ملء جميع الحقول المطلوبة\n\nما المشكلة التي تواجهها؟'
@@ -946,7 +916,7 @@ export class EPIBotEngine {
         return `${prefix}إنشاء تقرير:\n\nيمكنني إنشاء تقارير متنوعة:\n• تقرير يومي شامل\n• تقرير أسبوعي بالاتجاهات\n• مقارنة المحافظات\n• تحليل التغطية\n\nأي تقرير تريد؟`
 
       case 'trend_analysis':
-        return `${prefix}تحليل الاتجاهات:\n\nيمكنني تحليل اتجاهات الإرساليات والتغطية والنواقص عبر الزمن. أي فترة زمنية تريد تحليلها؟`
+        return `${prefix}تحليل الاتجاهات:\n\nيمكنني تحليل اتجاهات الإرساليات والتغطية عبر الزمن. أي فترة زمنية تريد تحليلها؟`
 
       case 'comparison':
         return `${prefix}مقارنة:\n\nيمكنني المقارنة بين:\n• المحافظات\n• الفترات الزمنية\n• أنواع اللقاحات\n• الحملات\n\nماذا تريد مقارنته؟`
@@ -969,14 +939,6 @@ export class EPIBotEngine {
       case 'query_submissions':
         actions.push(
           { id: 'nav-subs', label: 'عرض الإرساليات', type: 'navigate', payload: '/submissions', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-          { id: 'nav-pending', label: 'قيد المراجعة', type: 'navigate', payload: '/submissions?status=submitted', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-        )
-        break
-      case 'query_shortages':
-      case 'critical_shortage':
-        actions.push(
-          { id: 'nav-shortages', label: 'عرض النواقص', type: 'navigate', payload: '/shortages', color: 'bg-red-50 text-red-700 border-red-200' },
-          { id: 'notify-team', label: 'إشعار الفريق', type: 'command', payload: 'send_notification_shortage', color: 'bg-orange-50 text-orange-700 border-orange-200' },
         )
         break
       case 'query_governorates':

@@ -20,6 +20,7 @@ const ChatPage = lazy(() => import('@/pages/ChatPage'))
 const BotChatPage = lazy(() => import('@/pages/BotChatPage'))
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
 const ReferencesPage = lazy(() => import('@/pages/ReferencesPage'))
+const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
 
 function PageLoader() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="bot" element={<Suspense fallback={<PageLoader />}><BotChatPage /></Suspense>} />
           <Route path="notifications" element={<Suspense fallback={<PageLoader />}><NotificationsPage /></Suspense>} />
           <Route path="references" element={<Suspense fallback={<PageLoader />}><ReferencesPage /></Suspense>} />
+          <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
         </Route>
         {/* Root redirects to login */}
         <Route path="/" element={<Navigate to="/login" replace />} />

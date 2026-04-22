@@ -6,7 +6,8 @@ import {
   MapPin, Shield, ChevronLeft, ChevronRight, Settings, LogOut,
   AlertTriangle, Bell, Moon, Sun, Menu, X, Sparkles, Layout, Clock,
   Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
-  FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare
+  FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare,
+  FileSpreadsheet
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -42,6 +43,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { icon: Gauge, label: 'لوحة التحكم', href: '/dashboard' },
   { icon: BarChart3, label: 'التحليلات', href: '/insights' },
+  { icon: FileSpreadsheet, label: 'التقارير والبيانات', href: '/reports', roles: ['admin', 'central', 'governorate', 'district'] },
   { icon: Brain, label: 'إعدادات الذكاء الاصطناعي', href: '/ai-settings', roles: ['admin'] },
   { icon: Users, label: 'المستخدمون', href: '/users' },
   { icon: FileSearch, label: 'النماذج', href: '/forms' },

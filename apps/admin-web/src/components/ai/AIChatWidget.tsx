@@ -316,7 +316,14 @@ export function AIChatWidget() {
               timestamp: new Date(),
               isStreaming: false,
               source: 'suggestions',
-              suggestions: localResult.suggestions.slice(0, 4),
+              actions: localResult.suggestions.slice(0, 4).map((s, i) => ({
+                id: `suggest-${i}`,
+                label: s,
+                icon: 'sparkle',
+                type: 'query' as const,
+                payload: s,
+                color: 'bg-muted text-muted-foreground border-border hover:bg-accent',
+              })),
             }
             setMessages(prev => [...prev, suggestMsg])
           }

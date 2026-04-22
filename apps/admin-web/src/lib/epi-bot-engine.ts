@@ -354,6 +354,10 @@ class ConversationMemory {
   }
 }
 
+// ─── Local Knowledge Base (16 chunks from knowledge_chunks.json) ──
+
+import { LOCAL_KNOWLEDGE, type KnowledgeChunk } from './local-knowledge'
+
 // ─── Main EPI-Bot Engine ─────────────────────────────────────
 
 export class EPIBotEngine {
@@ -364,6 +368,53 @@ export class EPIBotEngine {
     this.memory = new ConversationMemory()
   }
 
+  // ── Search local knowledge chunks (vector-like keyword matching) ──
+  searchLocalKnowledge(query: string): KnowledgeChunk[] {
+    const normalized = normalizeArabic(query)
+    const tokens = tokenizeArabic(normalized)
+    const filtered = removeStopWords(tokens)
+
+    const scored: { chunk: KnowledgeChunk; score: number }[] = []
+
+    for (const chunk of LOCAL_KNOWLEDGE) {
+      let score = 0
+      const chunkNorm = normalizeArabic(chunk.content)
+      const sectionNorm = normalizeArabic(chunk.section)
+      const titleNorm = normalizeArabic(chunk.title)
+
+      // Check each token against chunk content
+      for (const token of filtered) {
+        if (token.length < 2) continue
+        // Exact match in content
+        if (chunkNorm.includes(token)) score += 2
+        // Match in section name
+        if (sectionNorm.includes(token)) score += 3
+        // Match in title
+        if (titleNorm.includes(token)) score += 2
+        // Partial match
+        for (const word of chunkNorm.split(/\s+/)) {
+          if (word.includes(token) || token.includes(word)) {
+            score += 0.5
+          }
+        }
+      }
+
+      // Boost by doc type relevance
+      if (chunk.docType === 'clinical' && filtered.some(t => ['لقاح', 'تطعيم', 'جرع', 'تحصين', 'تبريد'].some(k => normalizeArabic(k).includes(t)))) score *= 1.3
+      if (chunk.docType === 'data' && filtered.some(t => ['تغطي', 'نسب', 'إحصائي', 'بيانات', 'معدل'].some(k => normalizeArabic(k).includes(t)))) score *= 1.3
+      if (chunk.docType === 'operational' && filtered.some(t => ['كيف', 'استخدام', 'دليل', 'ارشاد', 'طريق'].some(k => normalizeArabic(k).includes(t)))) score *= 1.3
+
+      if (score > 0) {
+        scored.push({ chunk, score })
+      }
+    }
+
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(s => s.chunk)
+  }
+
   // ── Core: Process Message ──
 
   processMessage(text: string, context?: ConversationContext): BotResponse {
@@ -372,13 +423,38 @@ export class EPIBotEngine {
     const suggestions = this.getSmartSuggestions(context || this.getDefaultContext())
     const actions = this.buildActions(intent.intent, intent.entities)
 
-    // Build response text
-    let responseText = this.generateResponse(intent, sentiment, context)
+    // ── Search local knowledge chunks first ──
+    const localChunks = this.searchLocalKnowledge(text)
 
-    // Check knowledge base for supplementary info
+    // Build response text
+    let responseText = ''
+    let useLocal = false
+
+    if (localChunks.length > 0) {
+      // We have relevant knowledge chunks — build a rich local response
+      const topChunk = localChunks[0]
+      responseText = `📖 ${topChunk.title}\n\n${topChunk.content}`
+
+      // Append additional related chunks briefly
+      if (localChunks.length > 1) {
+        responseText += '\n\n━━━ مراجع إضافية ━━━'
+        for (const extra of localChunks.slice(1)) {
+          responseText += `\n\n📌 ${extra.section}: ${extra.content.slice(0, 200)}...`
+        }
+      }
+      useLocal = true
+    }
+
+    // If no knowledge match, use template-based response
+    if (!responseText) {
+      responseText = this.generateResponse(intent, sentiment, context)
+    }
+
+    // Check hardcoded knowledge base for supplementary info
     const kbMatch = this.searchKnowledgeBase(text)
-    if (kbMatch && intent.confidence < 0.7) {
-      responseText += '\n\n📖 ' + kbMatch.response
+    if (kbMatch) {
+      responseText += '\n\n💡 ' + kbMatch.response
+      useLocal = true
     }
 
     // Store in conversation memory
@@ -399,13 +475,17 @@ export class EPIBotEngine {
       timestamp: Date.now(),
     })
 
+    // Determine source: use 'local' if we have knowledge match or high-confidence intent
+    const source = useLocal || intent.confidence > 0.5 ? 'local' : 'hybrid'
+
     return {
       text: responseText,
       intent: intent.intent,
       sentiment: sentiment.sentiment,
       suggestions,
       actions,
-      source: intent.confidence > 0.8 ? 'local' : 'hybrid',
+      source,
+      data: { knowledgeChunks: localChunks.length },
     }
   }
 

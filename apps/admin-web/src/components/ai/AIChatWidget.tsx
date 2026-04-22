@@ -288,8 +288,8 @@ export function AIChatWidget() {
         }
         const localResult = epiBotEngine.processMessage(text, context)
 
-        // If local bot is confident enough (>= 0.7), use its response directly
-        if (localResult.source === 'local' && localResult.intent !== 'unknown') {
+        // If local bot found knowledge or is confident, use its response directly
+        if (localResult.source === 'local') {
           // Simulate streaming for local response
           let current = ''
           const chars = localResult.text.split('')
@@ -688,7 +688,7 @@ export function AIChatWidget() {
                               </button>
                               {msg.source && (
                                 <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 ml-auto">
-                                  {msg.source === 'function_call' ? '🗃️ DB' : msg.source === 'groq' ? '⚡ AI' : msg.source === 'mimo' ? '🤖 MiMo' : msg.source}
+                                  {msg.source === 'epi-bot-local' ? '🧠 EPI-Bot' : msg.source === 'function_call' ? '🗃️ DB' : msg.source === 'groq' ? '⚡ AI' : msg.source === 'mimo' ? '🤖 MiMo' : msg.source}
                                 </Badge>
                               )}
                             </div>

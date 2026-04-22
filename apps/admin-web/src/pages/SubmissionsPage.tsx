@@ -1,18 +1,21 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Search, Filter, CheckCircle2, XCircle, Clock, Eye, MessageSquare,
   ChevronLeft, ChevronRight, MapPin, Calendar, User, FileText, Download,
-  AlertTriangle, RefreshCw
+  AlertTriangle, RefreshCw, Trash2, Send, MoreVertical, FileStack,
+  ArrowUpDown, Loader2, X
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Header } from '@/components/layout/header'
 import { useSubmissions, useUpdateSubmissionStatus, useForms, useGovernorates } from '@/hooks/useApi'
 import { supabase } from '@/lib/supabase'
@@ -27,7 +30,6 @@ function convertToCSV(data: Record<string, unknown>[], headers: string[]): strin
     headers.map((h) => {
       const val = row[h]
       const str = val === null || val === undefined ? '' : String(val)
-      // Escape quotes and wrap in quotes if contains comma/quote/newline
       if (str.includes(',') || str.includes('"') || str.includes('\n')) {
         return `"${str.replace(/"/g, '""')}"`
       }
@@ -47,57 +49,97 @@ function downloadCSV(content: string, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-async function exportSubmissions() {
-  const { data } = await supabase
-    .from('form_submissions')
-    .select('*, forms(title_ar), profiles(full_name, email)')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(5000)
-
-  if (!data || data.length === 0) return
-
-  const headers = ['الرقم', 'النموذج', 'المُرسل', 'البريد', 'الحالة', 'التاريخ']
-  const rows = data.map((s, i) => ({
-    'الرقم': i + 1,
-    'النموذج': s.forms?.title_ar || '',
-    'المُرسل': s.profiles?.full_name || '',
-    'البريد': s.profiles?.email || '',
-    'الحالة': s.status,
-    'التاريخ': s.created_at,
-  }))
-
-  const csv = convertToCSV(rows, headers)
-  downloadCSV(csv, `submissions_${new Date().toISOString().split('T')[0]}.csv`)
-}
-
 export default function SubmissionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [formFilter, setFormFilter] = useState<string>('all')
+  const [govFilter, setGovFilter] = useState<string>('all')
+  const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<FormSubmission | null>(null)
   const { campaign, labelAr, isFiltered } = useCampaign()
+  const { toast } = useToast()
 
   const { data, isLoading, isError, error, refetch } = useSubmissions({
     status: statusFilter !== 'all' ? (statusFilter as SubmissionStatus) : undefined,
     formId: formFilter !== 'all' ? formFilter : undefined,
+    governorateId: govFilter !== 'all' ? govFilter : undefined,
+    search: search || undefined,
     page,
     pageSize: 20,
     campaignType: campaign,
   })
 
   const { data: formsResult } = useForms({ campaignType: campaign })
+  const { data: governorates } = useGovernorates()
   const forms = formsResult?.data
   const submissions = data?.data || []
   const totalCount = data?.count || 0
   const totalPages = Math.ceil(totalCount / 20)
 
+  const exportAll = async () => {
+    const { data: allData } = await supabase
+      .from('form_submissions')
+      .select('*, forms(title_ar), profiles(full_name, email), governorates(name_ar)')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(10000)
+
+    if (!allData || allData.length === 0) {
+      toast({ title: 'لا توجد بيانات للتصدير', variant: 'destructive' })
+      return
+    }
+
+    const headers = ['الرقم', 'النموذج', 'المحافظة', 'المُرسل', 'البريد', 'الحالة', 'التاريخ']
+    const rows = allData.map((s, i) => ({
+      'الرقم': i + 1,
+      'النموذج': s.forms?.title_ar || '',
+      'المحافظة': s.governorates?.name_ar || '',
+      'المُرسل': s.profiles?.full_name || '',
+      'البريد': s.profiles?.email || '',
+      'الحالة': s.status === 'submitted' ? 'مرسلة' : 'مسودة',
+      'التاريخ': s.created_at,
+    }))
+
+    const csv = convertToCSV(rows, headers)
+    downloadCSV(csv, `submissions_${new Date().toISOString().split('T')[0]}.csv`)
+    toast({ title: `تم تصدير ${allData.length} إرسالية`, variant: 'success' })
+  }
+
+  const deleteSubmission = async (sub: FormSubmission) => {
+    const { error: delError } = await supabase
+      .from('form_submissions')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', sub.id)
+
+    if (delError) {
+      toast({ title: 'فشل حذف الإرسالية', variant: 'destructive' })
+    } else {
+      toast({ title: 'تم حذف الإرسالية', variant: 'success' })
+      setDeleteTarget(null)
+      refetch()
+    }
+  }
+
+  const clearFilters = () => {
+    setStatusFilter('all')
+    setFormFilter('all')
+    setGovFilter('all')
+    setSearch('')
+    setPage(1)
+  }
+
+  const hasFilters = statusFilter !== 'all' || formFilter !== 'all' || govFilter !== 'all' || search
+
   return (
     <div className="page-enter">
-      <Header title="الإرساليات" subtitle={isFiltered ? `${totalCount} إرسالية — ${labelAr}` : `${totalCount} إرسالية`} onRefresh={() => refetch()} />
+      <Header
+        title="الإرساليات"
+        subtitle={isFiltered ? `${totalCount} إرسالية — ${labelAr}` : `${totalCount} إرسالية`}
+        onRefresh={() => refetch()}
+      />
 
-      <div className="p-6 space-y-6">
-        {/* Error State */}
+      <div className="p-4 sm:p-6 space-y-4">
         {isError && (
           <Card className="border-red-200 bg-red-50/50">
             <CardContent className="p-6 text-center">
@@ -111,202 +153,335 @@ export default function SubmissionsPage() {
           </Card>
         )}
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
-            <TabsList>
-              <TabsTrigger value="all" className="text-xs">الكل</TabsTrigger>
-              <TabsTrigger value="submitted" className="text-xs">مرسلة</TabsTrigger>
-              <TabsTrigger value="draft" className="text-xs">مسودة</TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="بحث بالاسم أو البريد..."
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                  className="h-8 text-xs pr-8"
+                />
+                {search && (
+                  <Button variant="ghost" size="icon-sm" className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                    onClick={() => { setSearch(''); setPage(1) }}>
+                    <X className="w-3 h-3" />
+                  </Button>
+                )}
+              </div>
 
-          <Select value={formFilter} onValueChange={(v) => { setFormFilter(v); setPage(1) }}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="كل النماذج" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">كل النماذج</SelectItem>
-              {forms?.map((f) => <SelectItem key={f.id} value={f.id}>{f.title_ar}</SelectItem>)}
-            </SelectContent>
-          </Select>
+              <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="all" className="text-[10px] px-2">الكل</TabsTrigger>
+                  <TabsTrigger value="submitted" className="text-[10px] px-2">مرسلة</TabsTrigger>
+                  <TabsTrigger value="draft" className="text-[10px] px-2">مسودة</TabsTrigger>
+                </TabsList>
+              </Tabs>
 
-          <Button variant="outline" className="gap-2 mr-auto" onClick={() => exportSubmissions()}>
-            <Download className="w-4 h-4" />
-            تصدير CSV
-          </Button>
-        </div>
+              <Select value={formFilter} onValueChange={(v) => { setFormFilter(v); setPage(1) }}>
+                <SelectTrigger className="w-36 h-8 text-xs">
+                  <SelectValue placeholder="النموذج" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل النماذج</SelectItem>
+                  {forms?.map((f) => <SelectItem key={f.id} value={f.id}>{f.title_ar}</SelectItem>)}
+                </SelectContent>
+              </Select>
 
-        {/* Table */}
-        <Card>
+              <Select value={govFilter} onValueChange={(v) => { setGovFilter(v); setPage(1) }}>
+                <SelectTrigger className="w-36 h-8 text-xs">
+                  <SelectValue placeholder="المحافظة" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل المحافظات</SelectItem>
+                  {governorates?.map((g) => <SelectItem key={g.id} value={g.id}>{g.name_ar}</SelectItem>)}
+                </SelectContent>
+              </Select>
+
+              {hasFilters && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={clearFilters}>
+                  <X className="w-3 h-3" /> مسح
+                </Button>
+              )}
+
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs mr-auto" onClick={exportAll}>
+                <Download className="w-3.5 h-3.5" /> تصدير
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-6 space-y-3">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="w-full h-12" />)}
+                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="w-full h-10" />)}
+              </div>
+            ) : submissions.length === 0 ? (
+              <div className="text-center py-16">
+                <FileStack className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+                <h3 className="text-sm font-medium text-muted-foreground mb-1">
+                  {hasFilters ? 'لا توجد نتائج مطابقة' : 'لا توجد إرساليات بعد'}
+                </h3>
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" className="text-xs mt-2" onClick={clearFilters}>مسح الفلاتر</Button>
+                )}
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead>النموذج</TableHead>
-                    <TableHead>المُرسل</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    <TableHead>التاريخ</TableHead>
-                    <TableHead className="w-12">إجراءات</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {submissions.map((sub, idx) => (
-                    <TableRow key={sub.id} className="table-row-hover cursor-pointer" onClick={() => setSelectedSubmission(sub)}>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {(page - 1) * 20 + idx + 1}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-muted-foreground" />
-                          <span className="font-medium">{sub.forms?.title_ar || '—'}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium text-sm">{sub.profiles?.full_name || '—'}</p>
-                          <p className="text-xs text-muted-foreground">{sub.profiles?.email}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={cn('text-xs', STATUS_COLORS[sub.status as SubmissionStatus])}>
-                          {STATUS_LABELS[sub.status as SubmissionStatus]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatRelativeTime(sub.created_at)}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon-sm">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead className="w-8 text-xs">#</TableHead>
+                      <TableHead className="text-xs">النموذج</TableHead>
+                      <TableHead className="text-xs">المُرسل</TableHead>
+                      <TableHead className="text-xs">الحالة</TableHead>
+                      <TableHead className="text-xs hidden md:table-cell">التاريخ</TableHead>
+                      <TableHead className="w-10 text-xs">...</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {submissions.map((sub, idx) => (
+                      <TableRow key={sub.id} className="cursor-pointer hover:bg-muted/20" onClick={() => setSelectedSubmission(sub)}>
+                        <TableCell className="text-muted-foreground text-xs">{(page - 1) * 20 + idx + 1}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <span className="text-xs font-medium truncate max-w-[120px]">{sub.forms?.title_ar || '—'}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-xs font-medium">{sub.profiles?.full_name || '—'}</p>
+                            <p className="text-[10px] text-muted-foreground truncate max-w-[120px]">{sub.profiles?.email}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={cn('text-[10px]', STATUS_COLORS[sub.status as SubmissionStatus])}>
+                            {STATUS_LABELS[sub.status as SubmissionStatus]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
+                          {formatRelativeTime(sub.created_at)}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon-sm" className="h-7 w-7">
+                                <MoreVertical className="w-3.5 h-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setSelectedSubmission(sub)}>
+                                <Eye className="w-3.5 h-3.5 ml-2" /> عرض
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setDeleteTarget(sub)} className="text-destructive">
+                                <Trash2 className="w-3.5 h-3.5 ml-2" /> حذف
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               عرض {(page - 1) * 20 + 1} — {Math.min(page * 20, totalCount)} من {totalCount}
             </p>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                <ChevronRight className="w-4 h-4" />
+            <div className="flex items-center gap-1.5">
+              <Button variant="outline" size="icon-sm" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <ChevronRight className="w-3.5 h-3.5" />
               </Button>
-              <span className="text-sm font-medium px-2">{page} / {totalPages}</span>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-                <ChevronLeft className="w-4 h-4" />
+              <span className="text-xs font-medium px-2 tabular-nums">{page}/{totalPages}</span>
+              <Button variant="outline" size="icon-sm" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                <ChevronLeft className="w-3.5 h-3.5" />
               </Button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Submission Detail Dialog */}
       {selectedSubmission && (
         <SubmissionDetailDialog
           submission={selectedSubmission}
           open={!!selectedSubmission}
           onOpenChange={() => setSelectedSubmission(null)}
+          onDeleted={() => { setSelectedSubmission(null); refetch() }}
         />
+      )}
+
+      {deleteTarget && (
+        <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-destructive flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" /> تأكيد الحذف
+              </DialogTitle>
+              <DialogDescription>هل أنت متأكد من حذف هذه الإرسالية؟ لا يمكن التراجع.</DialogDescription>
+            </DialogHeader>
+            <div className="p-3 bg-destructive/5 border border-destructive/20 rounded-lg text-sm space-y-1">
+              <p className="font-medium">{deleteTarget.profiles?.full_name || '—'}</p>
+              <p className="text-xs text-muted-foreground">{formatDateTime(deleteTarget.created_at)}</p>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>إلغاء</Button>
+              <Button variant="destructive" size="sm" onClick={() => deleteSubmission(deleteTarget)} className="gap-1.5">
+                <Trash2 className="w-3.5 h-3.5" /> حذف
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )
 }
 
-function SubmissionDetailDialog({ submission, open, onOpenChange }: {
-  submission: FormSubmission; open: boolean; onOpenChange: (v: boolean) => void
+function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
+  submission: FormSubmission; open: boolean; onOpenChange: (v: boolean) => void; onDeleted: () => void
 }) {
   const [reviewNotes, setReviewNotes] = useState('')
   const updateStatus = useUpdateSubmissionStatus()
   const { toast } = useToast()
 
-  const handleAction = (status: SubmissionStatus) => {
-    updateStatus.mutate({ id: submission.id, status, review_notes: reviewNotes || undefined }, {
-      onSuccess: () => {
-        toast({ title: status === 'submitted' ? 'تم الإرسال' : 'تم الإرجاع لمسودة', variant: 'default' })
-        onOpenChange(false)
-      },
-    })
+  const handleStatusChange = (newStatus: SubmissionStatus) => {
+    updateStatus.mutate(
+      { id: submission.id, status: newStatus, review_notes: reviewNotes || undefined },
+      {
+        onSuccess: () => {
+          toast({ title: newStatus === 'submitted' ? 'تم الإرسال بنجاح' : 'تم إرجاعها لمسودة', variant: 'success' })
+          onOpenChange(false)
+        },
+        onError: () => toast({ title: 'فشل تحديث الحالة', variant: 'destructive' }),
+      }
+    )
   }
+
+  const handleDelete = async () => {
+    const { error } = await supabase
+      .from('form_submissions')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', submission.id)
+    if (error) {
+      toast({ title: 'فشل الحذف', variant: 'destructive' })
+    } else {
+      toast({ title: 'تم حذف الإرسالية', variant: 'success' })
+      onDeleted()
+    }
+  }
+
+  const dataFields = useMemo(() => {
+    if (!submission.data || typeof submission.data !== 'object') return []
+    return Object.entries(submission.data as Record<string, unknown>).map(([key, val]) => ({
+      key,
+      value: typeof val === 'object' ? JSON.stringify(val) : String(val ?? ''),
+      isBoolean: typeof val === 'boolean',
+      isNumber: typeof val === 'number',
+      boolVal: val === true,
+    }))
+  }, [submission.data])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>تفاصيل الإرسالية</DialogTitle>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-0">
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-primary" /> تفاصيل الإرسالية
+          </DialogTitle>
         </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-muted-foreground">النموذج</p>
-              <p className="font-medium">{submission.forms?.title_ar || '—'}</p>
+        <div className="flex-1 overflow-y-auto px-6 space-y-4 pb-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <p className="text-[10px] text-muted-foreground mb-0.5">النموذج</p>
+              <p className="text-xs font-medium">{submission.forms?.title_ar || '—'}</p>
             </div>
-            <div>
-              <p className="text-muted-foreground">الحالة</p>
-              <Badge className={cn('text-xs', STATUS_COLORS[submission.status as SubmissionStatus])}>
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <p className="text-[10px] text-muted-foreground mb-0.5">الحالة</p>
+              <Badge className={cn('text-[10px]', STATUS_COLORS[submission.status as SubmissionStatus])}>
                 {STATUS_LABELS[submission.status as SubmissionStatus]}
               </Badge>
             </div>
-            <div>
-              <p className="text-muted-foreground">المُرسل</p>
-              <p className="font-medium">{submission.profiles?.full_name || '—'}</p>
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <p className="text-[10px] text-muted-foreground mb-0.5">المُرسل</p>
+              <p className="text-xs font-medium">{submission.profiles?.full_name || '—'}</p>
+              <p className="text-[10px] text-muted-foreground" dir="ltr">{submission.profiles?.email}</p>
             </div>
-            <div>
-              <p className="text-muted-foreground">التاريخ</p>
-              <p className="font-medium">{formatDateTime(submission.created_at)}</p>
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <p className="text-[10px] text-muted-foreground mb-0.5">التاريخ</p>
+              <p className="text-xs font-medium">{formatDateTime(submission.created_at)}</p>
             </div>
           </div>
 
           {submission.notes && (
             <div>
-              <p className="text-sm text-muted-foreground mb-1">ملاحظات</p>
-              <p className="text-sm bg-muted p-3 rounded-lg">{submission.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-xs bg-muted p-3 rounded-lg">{submission.notes}</p>
             </div>
           )}
 
-          {/* Data Preview */}
+          {submission.review_notes && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات المراجعة</p>
+              <p className="text-xs bg-amber-50 border border-amber-200/50 p-3 rounded-lg text-amber-800">{submission.review_notes}</p>
+            </div>
+          )}
+
           <div>
-            <p className="text-sm text-muted-foreground mb-2">البيانات</p>
-            <pre className="text-xs bg-muted p-3 rounded-lg overflow-x-auto max-h-48" dir="ltr">
-              {JSON.stringify(submission.data, null, 2)}
-            </pre>
+            <p className="text-xs font-medium mb-2">البيانات ({dataFields.length} حقل)</p>
+            {dataFields.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">لا توجد بيانات</p>
+            ) : (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {dataFields.map((field) => (
+                  <div key={field.key} className="flex items-start gap-2 text-xs py-1.5 border-b last:border-0">
+                    <span className="font-medium text-muted-foreground min-w-[80px] shrink-0">{field.key}</span>
+                    <span className={cn(
+                      'font-mono break-all',
+                      field.isBoolean && (field.boolVal ? 'text-emerald-600' : 'text-red-600'),
+                      field.isNumber && 'text-blue-600'
+                    )}>
+                      {field.isBoolean ? (field.boolVal ? 'نعم ✓' : 'لا ✗') : field.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Review Actions */}
-          {submission.status === 'submitted' && (
-            <div className="space-y-3 pt-3 border-t">
-              <Input
-                placeholder="ملاحظات المراجعة (اختياري)"
-                value={reviewNotes}
-                onChange={(e) => setReviewNotes(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1 gap-2"
-                  onClick={() => handleAction('draft')}
-                  disabled={updateStatus.isPending}
-                >
-                  <XCircle className="w-4 h-4" />
+          <div className="space-y-3 pt-3 border-t">
+            <Label className="text-xs">تغيير الحالة</Label>
+            <Input
+              placeholder="ملاحظات المراجعة (اختياري)"
+              value={reviewNotes}
+              onChange={(e) => setReviewNotes(e.target.value)}
+              className="h-8 text-xs"
+            />
+            <div className="flex gap-2">
+              {submission.status === 'draft' && (
+                <Button size="sm" className="flex-1 gap-1.5" onClick={() => handleStatusChange('submitted')} disabled={updateStatus.isPending}>
+                  {updateStatus.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  تحويل لمرسلة
+                </Button>
+              )}
+              {submission.status === 'submitted' && (
+                <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => handleStatusChange('draft')} disabled={updateStatus.isPending}>
+                  {updateStatus.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
                   إرجاع لمسودة
                 </Button>
-              </div>
+              )}
+              <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleDelete}>
+                <Trash2 className="w-3.5 h-3.5" /> حذف
+              </Button>
             </div>
-          )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

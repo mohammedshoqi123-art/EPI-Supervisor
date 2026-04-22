@@ -22,6 +22,90 @@ class ReportGenerator {
   static pw.Font? _boldFont;
   static pw.Font? _lightFont;
 
+  /// Convenience: generate report by type (daily/weekly/monthly/coverage/shortages/governorate/supervision/comprehensive/all)
+  /// Builds metadata and empty analyticsData automatically.
+  /// Call this from UI screens that don't have live data on hand.
+  static Future<File> generateByType(String reportType) async {
+    final now = DateTime.now();
+    final dateStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final weekAgo = now.subtract(const Duration(days: 7));
+    final weekStr =
+        '${weekAgo.year}-${weekAgo.month.toString().padLeft(2, '0')}-${weekAgo.day.toString().padLeft(2, '0')}';
+
+    final reportMeta = <String, Map<String, String>>{
+      'daily': {
+        'title': 'التقرير اليومي',
+        'subtitle': 'إحصائيات ومتابعة إرساليات اليوم',
+        'period': dateStr,
+      },
+      'weekly': {
+        'title': 'التقرير الأسبوعي',
+        'subtitle': 'ملخص أداء الأسبوع الماضي',
+        'period': '$weekStr — $dateStr',
+      },
+      'monthly': {
+        'title': 'التقرير الشهري',
+        'subtitle': 'ملخص شامل للشهر الحالي',
+        'period': 'الشهر الحالي — $dateStr',
+      },
+      'coverage': {
+        'title': 'تقرير التغطية',
+        'subtitle': 'Penta3، حصبة، تسرب',
+        'period': 'آخر 30 يوم',
+      },
+      'shortages': {
+        'title': 'تقرير النواقص',
+        'subtitle': 'نواقص حرجة ومستلزمات',
+        'period': 'آخر 30 يوم',
+      },
+      'governorate': {
+        'title': 'تقرير المحافظات',
+        'subtitle': 'ترتيب أداء المحافظات',
+        'period': 'آخر 30 يوم',
+      },
+      'supervision': {
+        'title': 'التقرير الإشرافي',
+        'subtitle': 'زيارات، ملاحظات، توصيات',
+        'period': 'آخر 30 يوم',
+      },
+      'comprehensive': {
+        'title': 'التقرير الشامل',
+        'subtitle': 'كل البيانات في تقرير واحد',
+        'period': 'آخر 30 يوم',
+      },
+      'all': {
+        'title': 'كل التقارير',
+        'subtitle': 'تقرير شامل يحتوي كل الأقسام',
+        'period': 'آخر 30 يوم',
+      },
+    };
+
+    final meta = reportMeta[reportType] ?? reportMeta['daily']!;
+
+    // Empty analytics structure — the PDF generator handles nulls gracefully
+    final emptyAnalytics = <String, dynamic>{
+      'submissions': <String, dynamic>{
+        'total': 0,
+        'today': 0,
+        'byStatus': <String, dynamic>{},
+        'byDay': <String, dynamic>{},
+      },
+      'shortages': <String, dynamic>{
+        'total': 0,
+        'resolved': 0,
+        'bySeverity': <String, dynamic>{},
+      },
+    };
+
+    return generatePDFReport(
+      title: meta['title']!,
+      subtitle: meta['subtitle']!,
+      period: meta['period']!,
+      analyticsData: emptyAnalytics,
+    );
+  }
+
   /// Generate a full professional PDF report
   static Future<File> generatePDFReport({
     required String title,

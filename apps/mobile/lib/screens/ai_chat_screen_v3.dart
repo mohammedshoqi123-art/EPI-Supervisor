@@ -602,7 +602,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         Text('جاري إنشاء \${r.title}...', style: const TextStyle(fontFamily: 'Tajawal'))]),
       duration: const Duration(seconds: 3), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), margin: const EdgeInsets.all(16)));
     try {
-      final file = await ReportGenerator.generatePDFReport(reportType: r.id, context: context);
+      final file = await ReportGenerator.generateByType(r.id);
       if (_mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

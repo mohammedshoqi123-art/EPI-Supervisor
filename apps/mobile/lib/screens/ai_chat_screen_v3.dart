@@ -403,9 +403,9 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             Expanded(
               child: TabBarView(
                 children: [
-                  _buildReportsTab(cs),
-                  _buildChatTab(cs),
+                  _buildReportsPdfTab(cs),
                   _buildBotTab(cs),
+                  _buildChatTab(cs),
                   _buildAlertsTab(cs),
                 ],
               ),
@@ -501,9 +501,9 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700, fontSize: 13),
         unselectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w500, fontSize: 12),
         tabs: const [
-          Tab(text: 'تقارير وتحاليل', icon: Icon(Icons.assessment_rounded, size: 20)),
-          Tab(text: 'دردشة ذكية', icon: Icon(Icons.chat_rounded, size: 20)),
+          Tab(text: 'تقارير PDF', icon: Icon(Icons.picture_as_pdf_rounded, size: 20)),
           Tab(text: 'مستشار التحصين', icon: Icon(Icons.vaccines_rounded, size: 20)),
+          Tab(text: 'مساعد النظام', icon: Icon(Icons.smart_toy_rounded, size: 20)),
           Tab(text: 'تنبيهات ذكية', icon: Icon(Icons.notifications_active_rounded, size: 20)),
         ],
       ),
@@ -511,19 +511,19 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   }
 
   // ═══════════════════════════════════════════════════════════
-  // TAB 1: REPORTS & ANALYTICS
+  // TAB 1: PDF EXPORT REPORTS
   // ═══════════════════════════════════════════════════════════
 
-  Widget _buildReportsTab(ColorScheme cs) {
-    final templates = [
-      _ReportTemplate('daily', '📅', 'تقرير يومي', 'ملخص شامل لليوم', const Color(0xFF1976D2)),
-      _ReportTemplate('weekly', '📊', 'تقرير أسبوعي', 'اتجاهات ومقارنات', const Color(0xFF388E3C)),
-      _ReportTemplate('coverage', '💉', 'تغطية التطعيم', 'Penta3, dropout, حصبة', const Color(0xFF00897B)),
-      _ReportTemplate('shortages', '⚠️', 'النواقص والتبريد', 'نواقص حرجة وسلسلة تبريد', const Color(0xFFD32F2F)),
-      _ReportTemplate('governorate', '🗺️', 'أداء المحافظات', 'ترتيب ومقارنة المحافظات', const Color(0xFF7B1FA2)),
-      _ReportTemplate('polio', '🛡️', 'حملات الشلل', 'تحليل حملات التطعيم', const Color(0xFFE65100)),
-      _ReportTemplate('supervision', '📋', 'تقرير إشرافي', 'أداء الزيارات والملاحظات', const Color(0xFFF57C00)),
-      _ReportTemplate('quality', '✅', 'جودة البيانات', 'رفض، اكتمال، أخطاء', const Color(0xFF0097A7)),
+  Widget _buildReportsPdfTab(ColorScheme cs) {
+    final pdfReports = [
+      _PdfReport('daily', '📅', 'التقرير اليومي', 'إرساليات، نواقص، مؤشرات يومية', const Color(0xFF1976D2)),
+      _PdfReport('weekly', '📊', 'التقرير الأسبوعي', 'اتجاهات، مقارنات أسبوعية', const Color(0xFF388E3C)),
+      _PdfReport('monthly', '📆', 'التقرير الشهري', 'ملخص شامل للشهر', const Color(0xFF7B1FA2)),
+      _PdfReport('coverage', '💉', 'تقرير التغطية', 'Penta3، حصبة، تسرب', const Color(0xFF00897B)),
+      _PdfReport('shortages', '⚠️', 'تقرير النواقص', 'نواقص حرجة ومستلزمات', const Color(0xFFD32F2F)),
+      _PdfReport('governorate', '🗺️', 'تقرير المحافظات', 'ترتيب أداء المحافظات', const Color(0xFFE65100)),
+      _PdfReport('supervision', '📋', 'التقرير الإشرافي', 'زيارات، ملاحظات، توصيات', const Color(0xFFF57C00)),
+      _PdfReport('comprehensive', '📑', 'التقرير الشامل', 'كل البيانات في تقرير واحد', const Color(0xFF0097A7)),
     ];
 
     return SingleChildScrollView(
@@ -532,161 +532,92 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Executive Briefing Button
-          _buildExecutiveBriefingCard(cs),
-          const SizedBox(height: 24),
-
-          // Report templates
-          Text('📝 قوالب التقارير والتحاليل', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface)),
+          Text('📄 تقارير PDF', style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
           const SizedBox(height: 4),
-          Text('تقارير ذكية مبنية على بيانات النظام الفعلية', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: cs.onSurfaceVariant)),
-          const SizedBox(height: 16),
-
+          Text('صدّر تقارير احترافية بصيغة PDF', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: cs.onSurfaceVariant)),
+          const SizedBox(height: 20),
           GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 2.0,
-            children: templates.map((t) => _buildReportCard(cs, t)).toList(),
+            crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 1.1,
+            children: pdfReports.map((r) => _buildPdfCard(cs, r)).toList(),
           ),
           const SizedBox(height: 24),
-
-          // Deep Analytics Section
-          Text('🔬 تحاليل عميقة', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface)),
-          const SizedBox(height: 12),
-          _buildDeepAnalysisCard(cs, Icons.trending_up_rounded, 'تحليل الاتجاهات', 'توقعات وتحليل زمني للبيانات', 'حلل اتجاه الإرساليات خلال الأسبوع الماضي', const Color(0xFF1565C0)),
-          _buildDeepAnalysisCard(cs, Icons.compare_arrows_rounded, 'مقارنة المحافظات', 'أفضل وأسوأ المحافظات مع الأسباب', 'قارن أداء المحافظات في التغطية', const Color(0xFF6A1B9A)),
-          _buildDeepAnalysisCard(cs, Icons.warning_amber_rounded, 'تقييم المخاطر', 'مخاطر التفشي والتسرب', 'ما هي المخاطر الحالية في النظام؟', const Color(0xFFC62828)),
-          _buildDeepAnalysisCard(cs, Icons.lightbulb_outline_rounded, 'توصيات ذكية', 'اقتراحات مبنية على البيانات', 'ما هي أهم التوصيات لتحسين الأداء؟', const Color(0xFFEF6C00)),
+          _buildExportAllCard(cs),
           const SizedBox(height: 28),
         ],
       ),
     );
   }
 
-  Widget _buildExecutiveBriefingCard(ColorScheme cs) {
+  Widget _buildPdfCard(ColorScheme cs, _PdfReport r) {
     return Material(
-      color: cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(20),
-      elevation: 0,
+      color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _exportPdf(r),
+        child: Container(padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: r.color.withValues(alpha: 0.12))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+            Row(children: [Text(r.emoji, style: const TextStyle(fontSize: 28)), const Spacer(), Icon(Icons.download_rounded, size: 18, color: r.color.withValues(alpha: 0.6))]),
+            const Spacer(),
+            Text(r.title, style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurface)),
+            const SizedBox(height: 4),
+            Text(r.desc, style: TextStyle(fontFamily: 'Tajawal', fontSize: 10, color: cs.onSurfaceVariant), maxLines: 2, overflow: TextOverflow.ellipsis),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExportAllCard(ColorScheme cs) {
+    return Material(
+      color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () => _send('أنشئ ملخص تنفيذي شامل لحالة النظام اليوم'),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              colors: [cs.primaryContainer, cs.tertiaryContainer.withValues(alpha: 0.3)],
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [cs.primary, cs.tertiary]),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
-                ),
-                child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 28),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('الملخص التنفيذي', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w800, color: cs.onSurface)),
-                    const SizedBox(height: 4),
-                    Text('ملخص يومي ذكي: أهم المؤشرات، التنبيهات، والتوصيات', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: cs.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_back_ios_rounded, size: 16, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReportCard(ColorScheme cs, _ReportTemplate t) {
-    return Material(
-      color: cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () {
-          HapticFeedback.lightImpact();
-          _send('أنشئ تقرير ${t.title}', template: t.id);
-        },
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: t.color.withValues(alpha: 0.12), width: 1),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(children: [
-                Text(t.emoji, style: const TextStyle(fontSize: 20)),
-                const SizedBox(width: 8),
-                Expanded(child: Text('تقرير ${t.title}', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.w700, color: cs.onSurface))),
-              ]),
+        onTap: () => _exportPdf(_PdfReport('all', '📑', 'كل التقارير', '', const Color(0xFF00897B))),
+        child: Container(width: double.infinity, padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(colors: [cs.primaryContainer.withValues(alpha: 0.5), cs.tertiaryContainer.withValues(alpha: 0.2)], begin: Alignment.topRight, end: Alignment.bottomLeft)),
+          child: Row(children: [
+            Container(width: 52, height: 52, decoration: BoxDecoration(gradient: LinearGradient(colors: [cs.primary, cs.tertiary]), borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 12)]),
+              child: const Icon(Icons.download_rounded, color: Colors.white, size: 26)),
+            const SizedBox(width: 16),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('تصدير الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w800, color: cs.onSurface)),
               const SizedBox(height: 4),
-              Text(t.desc, style: TextStyle(fontFamily: 'Tajawal', fontSize: 10, color: cs.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
-            ],
-          ),
+              Text('تقرير شامل يحتوي كل الأقسام', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: cs.onSurfaceVariant)),
+            ])),
+            Icon(Icons.arrow_back_ios_rounded, size: 16, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+          ]),
         ),
       ),
     );
   }
 
-  Widget _buildDeepAnalysisCard(ColorScheme cs, IconData icon, String title, String desc, String query, Color accent) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            HapticFeedback.lightImpact();
-            _send(query);
-          },
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: accent.withValues(alpha: 0.12), width: 1),
-            ),
-            child: Row(children: [
-              Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(color: accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, size: 22, color: accent),
-              ),
-              const SizedBox(width: 14),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurface)),
-                  Text(desc, style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: cs.onSurfaceVariant)),
-                ],
-              )),
-              Icon(Icons.arrow_back_ios_rounded, size: 14, color: cs.onSurfaceVariant.withValues(alpha: 0.35)),
-            ]),
-          ),
-        ),
-      ),
-    );
+  Future<void> _exportPdf(_PdfReport r) async {
+    HapticFeedback.mediumImpact();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)), const SizedBox(width: 12),
+        Text('جاري إنشاء \${r.title}...', style: const TextStyle(fontFamily: 'Tajawal'))]),
+      duration: const Duration(seconds: 3), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), margin: const EdgeInsets.all(16)));
+    try {
+      final file = await ReportGenerator.generatePDFReport(reportType: r.id, context: context);
+      if (_mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [const Icon(Icons.check_circle, color: Colors.white, size: 20), const SizedBox(width: 8),
+            Expanded(child: Text('تم إنشاء \${r.title}!', style: const TextStyle(fontFamily: 'Tajawal')))]),
+          backgroundColor: const Color(0xFF4CAF50), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16), duration: const Duration(seconds: 5)));
+      }
+    } catch (e) {
+      if (_mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشل: \$e', style: const TextStyle(fontFamily: 'Tajawal')),
+          backgroundColor: const Color(0xFFD32F2F), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), margin: const EdgeInsets.all(16)));
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -1536,13 +1467,13 @@ class _StreamingCursorState extends State<_StreamingCursor> with SingleTickerPro
   }
 }
 
-class _ReportTemplate {
+class _PdfReport {
   final String id;
   final String emoji;
   final String title;
   final String desc;
   final Color color;
-  const _ReportTemplate(this.id, this.emoji, this.title, this.desc, this.color);
+  const _PdfReport(this.id, this.emoji, this.title, this.desc, this.color);
 }
 
 class _ModelOption {

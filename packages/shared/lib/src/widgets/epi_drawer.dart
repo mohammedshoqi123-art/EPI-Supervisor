@@ -270,7 +270,7 @@ class EpiDrawer extends StatelessWidget {
                     context,
                     Icons.vaccines_rounded,
                     'مستشار التحصين',
-                    '/bot',
+                    '/ai',
                   ),
 
                   // Admin-only sections

@@ -104,6 +104,13 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   late AnimationController _typingAnimCtrl;
   bool _showWelcome = true;
 
+  // ═══ Bot state (unified local→AI) ═══
+  final _botCtrl = TextEditingController();
+  final _botScroll = ScrollController();
+  late BotEngine _botEngine;
+  final List<BotMessage> _botMsgs = [];
+  bool _botLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -112,6 +119,8 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       duration: const Duration(milliseconds: 1400),
     )..repeat();
     _restore();
+    _botEngine = BotEngine();
+    _botEngine.initialize();
   }
 
   @override
@@ -119,6 +128,8 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     _mounted = false;
     _ctrl.dispose();
     _scroll.dispose();
+    _botCtrl.dispose();
+    _botScroll.dispose();
     _typingAnimCtrl.dispose();
     super.dispose();
   }
@@ -382,7 +393,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         backgroundColor: cs.surface,
         appBar: _buildAppBar(cs),
@@ -394,6 +405,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 children: [
                   _buildReportsTab(cs),
                   _buildChatTab(cs),
+                  _buildBotTab(cs),
                   _buildAlertsTab(cs),
                 ],
               ),
@@ -491,6 +503,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         tabs: const [
           Tab(text: 'تقارير وتحاليل', icon: Icon(Icons.assessment_rounded, size: 20)),
           Tab(text: 'دردشة ذكية', icon: Icon(Icons.chat_rounded, size: 20)),
+          Tab(text: 'مستشار التحصين', icon: Icon(Icons.vaccines_rounded, size: 20)),
           Tab(text: 'تنبيهات ذكية', icon: Icon(Icons.notifications_active_rounded, size: 20)),
         ],
       ),
@@ -990,7 +1003,259 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   }
 
   // ═══════════════════════════════════════════════════════════
-  // TAB 3: SMART ALERTS
+  // TAB 3: VACCINATION BOT (Unified Local → AI)
+  // ═══════════════════════════════════════════════════════════
+
+  Widget _buildBotTab(ColorScheme cs) {
+    return Column(
+      children: [
+        // Source indicator bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF00897B).withValues(alpha: 0.08),
+            border: Border(bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.2))),
+          ),
+          child: Row(
+            children: [
+              const Text('💉', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Expanded(child: Text('محلي أولاً ← ذكاء اصطناعي تلقائياً', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: cs.onSurfaceVariant))),
+              if (_botEngine.isAIEnabled)
+                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(color: const Color(0xFF4CAF50).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                  child: const Text('AI ✓', style: TextStyle(fontFamily: 'Cairo', fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF2E7D32)))),
+            ],
+          ),
+        ),
+        Expanded(child: _botMsgs.isEmpty ? _buildBotWelcome(cs) : _buildBotMessages(cs)),
+        if (_botLoading) _buildBotTyping(cs),
+        _buildBotInputBar(cs),
+      ],
+    );
+  }
+
+  Widget _buildBotWelcome(ColorScheme cs) {
+    final topics = [
+      ('💉', 'وش تطعيمات طفلي؟', 'حسب عمر الطفل', const Color(0xFF00897B)),
+      ('⚠️', 'وش الآثار الجانبية؟', 'حرارة، تورم، تشنجات', const Color(0xFFFF5722)),
+      ('💰', 'هل مجاني؟', 'معلومات التكلفة', const Color(0xFF4CAF50)),
+      ('🚫', 'هل يسبب أوتيزم؟', 'الرد على الأساطير', const Color(0xFF9C27B0)),
+      ('🔍', 'الأشراف الداعم', 'زيارات وتقييم', const Color(0xFF2196F3)),
+      ('🏢', 'إدارة المستوى الوسيط', 'تخطيط ومؤشرات', const Color(0xFFFF9800)),
+      ('📋', 'جدول التحصين الكامل', 'كل التطعيمات', const Color(0xFF00897B)),
+      ('❄️', 'سلسلة التبريد', 'VVM والتخزين', const Color(0xFF03A9F4)),
+    ];
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(20),
+      child: Column(children: [
+        const SizedBox(height: 8),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.8, end: 1.0),
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.elasticOut,
+          builder: (c, v, child) => Transform.scale(scale: v, child: child),
+          child: Container(width: 80, height: 80,
+            decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF00897B), Color(0xFF00695C)]),
+              borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: const Color(0xFF00897B).withValues(alpha: 0.3), blurRadius: 20)]),
+            child: const Center(child: Text('💉🇾🇪', style: TextStyle(fontSize: 36)))),
+        ),
+        const SizedBox(height: 16),
+        Text('مستشار التحصين الذكي', style: TextStyle(fontFamily: 'Cairo', fontSize: 20, fontWeight: FontWeight.w800, color: cs.onSurface)),
+        const SizedBox(height: 4),
+        Text('180+ موضوع — محلي أولاً ← AI تلقائياً', textAlign: TextAlign.center,
+          style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: cs.onSurfaceVariant, height: 1.5)),
+        const SizedBox(height: 24),
+        Text('📌 مواضيع شائعة', style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface)),
+        const SizedBox(height: 12),
+        ...topics.map((t) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Material(
+            color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => _sendBotMessage(t.$2),
+              child: Container(padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: t.$4.withValues(alpha: 0.12))),
+                child: Row(children: [
+                  Text(t.$1, style: const TextStyle(fontSize: 22)), const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(t.$2, style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                    Text(t.$3, style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: cs.onSurfaceVariant)),
+                  ])),
+                  Icon(Icons.arrow_back_ios_rounded, size: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.35)),
+                ])),
+            ),
+          ),
+        )),
+        const SizedBox(height: 20),
+      ]),
+    );
+  }
+
+  Widget _buildBotMessages(ColorScheme cs) {
+    return ListView.builder(
+      controller: _botScroll, physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      itemCount: _botMsgs.length,
+      itemBuilder: (context, i) {
+        final msg = _botMsgs[i];
+        final isMe = !msg.isBot;
+        return Padding(
+          padding: EdgeInsets.only(bottom: 10, left: isMe ? 48 : 0, right: isMe ? 0 : 48),
+          child: Column(crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [
+            if (!isMe)
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(width: 30, height: 30,
+                  decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF00897B), Color(0xFF00695C)]), borderRadius: BorderRadius.circular(10)),
+                  child: const Center(child: Text('💉', style: TextStyle(fontSize: 14)))),
+                const SizedBox(width: 8),
+                Flexible(child: _botBubbleContent(msg, isMe, cs)),
+              ])
+            else
+              _botBubbleContent(msg, isMe, cs),
+            if (msg.isBot && msg.quickReplies != null && msg.quickReplies!.isNotEmpty)
+              Container(margin: const EdgeInsets.only(top: 6, right: 38),
+                child: Wrap(spacing: 6, runSpacing: 6, children: msg.quickReplies!.map((qr) =>
+                  GestureDetector(onTap: () => _sendBotMessage(qr.text),
+                    child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(color: const Color(0xFFE0F2F1), borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFF00897B).withValues(alpha: 0.25))),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text(qr.emoji, style: const TextStyle(fontSize: 13)), const SizedBox(width: 4),
+                        Text(qr.text, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF00695C), fontWeight: FontWeight.w600)),
+                      ])))).toList())),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _botBubbleContent(BotMessage msg, bool isMe, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isMe ? cs.primary : cs.surfaceContainerLow,
+        borderRadius: BorderRadius.only(topLeft: Radius.circular(isMe ? 16 : 4), topRight: Radius.circular(isMe ? 4 : 16),
+          bottomLeft: const Radius.circular(16), bottomRight: const Radius.circular(16)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
+      ),
+      child: SelectableText(msg.text,
+        style: TextStyle(fontFamily: 'Tajawal', fontSize: 14, height: 1.6, color: isMe ? cs.onPrimary : cs.onSurface),
+        textDirection: TextDirection.rtl),
+    );
+  }
+
+  Widget _buildBotTyping(ColorScheme cs) {
+    return Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), alignment: Alignment.centerRight,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 26, height: 26, decoration: BoxDecoration(color: const Color(0xFF00897B).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+          child: const Center(child: Text('💉', style: TextStyle(fontSize: 12)))),
+        const SizedBox(width: 8),
+        Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)]),
+          child: AnimatedBuilder(animation: _typingAnimCtrl, builder: (c, _) => Row(mainAxisSize: MainAxisSize.min,
+            children: List.generate(3, (i) {
+              final v = ((_typingAnimCtrl.value + i * 0.3) % 1.0);
+              final o = (v < 0.5) ? v * 2 : (1 - v) * 2;
+              return Container(margin: const EdgeInsets.symmetric(horizontal: 2), width: 7, height: 7,
+                decoration: BoxDecoration(color: Color.lerp(const Color(0xFF00897B).withValues(alpha: 0.2), const Color(0xFF00897B), o), shape: BoxShape.circle));
+            })))),
+      ]));
+  }
+
+  Widget _buildBotInputBar(ColorScheme cs) {
+    return Container(
+      padding: EdgeInsets.only(left: 12, right: 12, top: 10, bottom: MediaQuery.of(context).padding.bottom + 8),
+      decoration: BoxDecoration(color: cs.surface, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, -2))]),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        GestureDetector(onTap: _botLoading ? null : () => _sendBotMessage(_botCtrl.text),
+          child: AnimatedContainer(duration: const Duration(milliseconds: 200), width: 46, height: 46,
+            decoration: BoxDecoration(gradient: _botCtrl.text.trim().isNotEmpty ? const LinearGradient(colors: [Color(0xFF00897B), Color(0xFF00695C)]) : null,
+              color: _botCtrl.text.trim().isNotEmpty ? null : cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(14)),
+            child: _botLoading ? Padding(padding: const EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary))
+              : Icon(Icons.send_rounded, color: _botCtrl.text.trim().isNotEmpty ? cs.onPrimary : cs.onSurfaceVariant, size: 20))),
+        const SizedBox(width: 10),
+        Expanded(child: Container(constraints: const BoxConstraints(maxHeight: 100),
+          decoration: BoxDecoration(color: cs.surfaceContainerHighest, borderRadius: BorderRadius.circular(14), border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3))),
+          child: TextField(controller: _botCtrl, textDirection: TextDirection.rtl, maxLines: 3, minLines: 1,
+            style: TextStyle(fontFamily: 'Tajawal', fontSize: 14, color: cs.onSurface),
+            decoration: InputDecoration(hintText: 'اسأل عن التطعيمات...', hintStyle: TextStyle(fontFamily: 'Tajawal', fontSize: 13, color: cs.onSurfaceVariant),
+              border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
+            onChanged: (_) => setState(() {}), onSubmitted: (v) => _sendBotMessage(v)))),
+      ]),
+    );
+  }
+
+  /// ═══ UNIFIED: Local first → AI fallback ═══
+  Future<void> _sendBotMessage(String text) async {
+    if (text.trim().isEmpty || _botLoading) return;
+    HapticFeedback.lightImpact();
+    _botCtrl.clear();
+    setState(() {
+      _botMsgs.add(BotMessage(id: '${DateTime.now().millisecondsSinceEpoch}', text: text, isBot: false, timestamp: DateTime.now()));
+      _botLoading = true;
+    });
+    _botScrollDown();
+
+    try {
+      // Step 1: Local engine
+      final localResp = _botEngine.sendMessage(text);
+      if (localResp != null && !_isGenericResponse(localResp.text)) {
+        setState(() { _botMsgs.add(localResp); _botLoading = false; });
+        _botScrollDown();
+        return;
+      }
+      if (localResp != null) setState(() => _botMsgs.add(localResp));
+
+      // Step 2: AI fallback
+      try {
+        final api = ref.read(apiClientProvider);
+        final hist = _botMsgs.length > 6 ? _botMsgs.sublist(_botMsgs.length - 6) : _botMsgs;
+        final histJson = hist.map((m) => {'role': m.isBot ? 'assistant' : 'user',
+          'content': m.text.length > 300 ? '${m.text.substring(0, 300)}...' : m.text}).toList();
+        final resp = await api.callFunction('ai-chat-v3', {'message': text, 'history': histJson, 'template': 'vaccination'})
+          .timeout(const Duration(seconds: 30));
+        final reply = resp['reply'] as String? ?? '';
+        if (reply.isNotEmpty && _mounted) {
+          if (localResp != null && _botMsgs.isNotEmpty && _botMsgs.last.isBot) _botMsgs.removeLast();
+          setState(() {
+            _botMsgs.add(BotMessage(id: '${DateTime.now().millisecondsSinceEpoch}', text: reply, isBot: true,
+              timestamp: DateTime.now(), quickReplies: _botSuggestions(text)));
+            _botLoading = false;
+          });
+        } else { setState(() => _botLoading = false); }
+      } catch (_) { setState(() => _botLoading = false); }
+    } catch (_) {
+      setState(() {
+        _botMsgs.add(BotMessage(id: '${DateTime.now().millisecondsSinceEpoch}', text: '⚠️ حدث خطأ. حاول مرة أخرى.',
+          isBot: true, timestamp: DateTime.now(),
+          quickReplies: const [BotQuickReply(text: 'وش تطعيمات طفلي؟', emoji: '💉'), BotQuickReply(text: 'وش الآثار؟', emoji: '⚠️')]));
+        _botLoading = false;
+      });
+    }
+    _botScrollDown();
+  }
+
+  bool _isGenericResponse(String t) => t.contains('🤖 أقدر أساعدك') || t.contains('مش فاهم قصدك') ||
+    t.contains('جرب تسأل') || t.contains('أو اختر من الاقتراحات') || t.contains('أهلاً! أنا مستشار التحصين الذكي');
+
+  List<BotQuickReply> _botSuggestions(String lastMsg) {
+    final n = SmartNLP.normalize(lastMsg);
+    if (n.contains('حرار') || n.contains('سخون')) return const [BotQuickReply(text: 'متى أخاف؟', emoji: '🚨'), BotQuickReply(text: 'متى أروح للطبيب؟', emoji: '🏥')];
+    if (n.contains('تطعيم') || n.contains('لقاح')) return const [BotQuickReply(text: 'وش الآثار الجانبية؟', emoji: '⚠️'), BotQuickReply(text: 'كم جرعة؟', emoji: '🔢')];
+    return const [BotQuickReply(text: 'وش تطعيمات طفلي؟', emoji: '💉'), BotQuickReply(text: 'وش الآثار؟', emoji: '⚠️'), BotQuickReply(text: 'هل مجاني؟', emoji: '💰')];
+  }
+
+  void _botScrollDown() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_botScroll.hasClients) _botScroll.animateTo(_botScroll.position.maxScrollExtent + 100, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // TAB 4: SMART ALERTS
   // ═══════════════════════════════════════════════════════════
 
   Widget _buildAlertsTab(ColorScheme cs) {

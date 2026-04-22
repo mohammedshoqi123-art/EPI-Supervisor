@@ -18,7 +18,7 @@ import '../screens/forms_status_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/references_screen.dart';
 import '../screens/chat_screen.dart';
-import '../screens/bot_chat_screen.dart';
+
 import '../screens/profile_screen.dart';
 import '../screens/users_screen.dart';
 import '../screens/forms_management_screen.dart';
@@ -31,7 +31,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   // Minimum role level required per route
   const routeMinRole = {
     '/ai': 1, // everyone
-    '/bot': 1, // everyone can use vaccination bot
+
     '/references': 1, // everyone can view references
   };
 
@@ -121,10 +121,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/ai',
             builder: (context, state) => const AiChatScreenV3(),
           ),
-          GoRoute(
-            path: '/bot',
-            builder: (context, state) => const BotChatScreen(),
-          ),
+
           GoRoute(
             path: '/references',
             builder: (context, state) => const ReferencesScreen(),

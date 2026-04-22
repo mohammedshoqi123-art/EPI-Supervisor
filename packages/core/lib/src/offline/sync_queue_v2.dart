@@ -337,27 +337,26 @@ class ProductionSyncQueue {
 
   // ─── PRIVATE HELPERS ─────────────────────────────────────────────────────
 
-  Box<String> get _safeQueueBox {
+  /// Safe box access — returns null if not initialized (web-safe)
+  Box<String>? get _safeQueueBox {
     final b = _queueBox;
-    if (b == null || !b.isOpen) {
-      throw StateError(
-        'ProductionSyncQueue not initialized. Call init() first.',
-      );
-    }
+    if (b == null || !b.isOpen) return null;
     return b;
   }
 
   Future<void> _saveEntry(SyncQueueEntry entry) async {
+    final box = _safeQueueBox;
+    if (box == null) return;
     final encrypted = _encryption.encrypt(jsonEncode(entry.toJson()));
-    await _safeQueueBox.put(entry.id, encrypted);
+    await box.put(entry.id, encrypted);
   }
 
   Future<void> _deleteEntry(String id) async {
-    await _safeQueueBox.delete(id);
+    await _safeQueueBox?.delete(id);
   }
 
   SyncQueueEntry? _getEntry(String id) {
-    final raw = _safeQueueBox.get(id);
+    final raw = _safeQueueBox?.get(id);
     if (raw == null) return null;
     try {
       return SyncQueueEntry.fromJson(
@@ -369,7 +368,9 @@ class ProductionSyncQueue {
   }
 
   List<SyncQueueEntry> _getAllEntries() {
-    return _safeQueueBox.values
+    final box = _safeQueueBox;
+    if (box == null) return [];
+    return box.values
         .map((raw) {
           try {
             return SyncQueueEntry.fromJson(

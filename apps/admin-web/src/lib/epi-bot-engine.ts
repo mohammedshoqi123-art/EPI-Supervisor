@@ -137,6 +137,143 @@ function stemArabic(word: string): string {
   return stemmed
 }
 
+// ─── Child Age Parser & Vaccination Schedule ─────────────────
+
+/**
+ * يفهم عمر الطفل من النص العربي
+ * أمثلة: "عمره شهر", "3 شهور", "سنة", "سنة ونص", "سنتين", "9 شهور"
+ */
+function parseChildAge(text: string): { months: number; weeks: number; display: string } | null {
+  const normalized = normalizeArabic(text)
+
+  // Patterns for age expressions
+  const patterns: { regex: RegExp; toMonths: (m: RegExpMatchArray) => number }[] = [
+    // "عمره سنتين" or "سنتين"
+    { regex: /سنتين/, toMonths: () => 24 },
+    // "عمره سنة ونص" or "سنة ونصف" or "سنة ونص"
+    { regex: /سنة\s*ونص[ف]?/, toMonths: () => 18 },
+    // "عمره سنة وست شهور" or "سنة وستة اشهر"
+    { regex: /سنة\s*و(ست|6)\s*شهر/, toMonths: () => 18 },
+    // "عمره سنة وثلاث شهور"
+    { regex: /سنة\s*و(ثلاث|3)\s*شهر/, toMonths: () => 15 },
+    // "عمره سنتين ونص"
+    { regex: /سنتين\s*ونص[ف]?/, toMonths: () => 30 },
+    // "عمره سنة" or "عمره سنه"
+    { regex: /سنت?[هی]/, toMonths: () => 12 },
+    // "عمره X شهر" or "X شهر" or "عمره X شهور"
+    { regex: /(\d+)\s*شهو?ر/, toMonths: (m) => parseInt(m[1]) },
+    // "عمره شهرين"
+    { regex: /شهرين/, toMonths: () => 2 },
+    // "عمره شهر" (single month)
+    { regex: /(?<!\d)شهر(?!\d|ين)/, toMonths: () => 1 },
+    // "عمره X اسبوع" or "X اسبوع"
+    { regex: /(\d+)\s*اسبوو?ع/, toMonths: (m) => Math.floor(parseInt(m[1]) / 4), },
+    // "عمره اسبوع" or "اسبوع واحد"
+    { regex: /اسبوو?ع(?!\d|ين)/, toMonths: () => 0 },
+    // "عمره X يوم"
+    { regex: /(\d+)\s*يوم/, toMonths: (m) => 0 },
+    // Just a number (assume months if context suggests)
+    { regex: /^(\d+)\s*$/, toMonths: (m) => parseInt(m[1]) },
+  ]
+
+  for (const p of patterns) {
+    const match = normalized.match(p.regex)
+    if (match) {
+      const months = p.toMonths(match)
+      const weeks = months * 4
+      let display = ''
+      if (months === 0) display = 'أقل من شهر'
+      else if (months === 1) display = 'شهر واحد'
+      else if (months === 2) display = 'شهرين'
+      else if (months < 12) display = `${months} شهور`
+      else if (months === 12) display = 'سنة واحدة'
+      else if (months === 18) display = 'سنة ونصف'
+      else if (months === 24) display = 'سنتين'
+      else display = `${months} شهر`
+      return { months, weeks, display }
+    }
+  }
+  return null
+}
+
+/**
+ * جدول التطعيم حسب عمر الطفل (بالأشهر)
+ * يرجع: اللقاحات المطلوبة + اللقاحات المتأخرة + اللقاحات القادمة
+ */
+function getVaccinesByAge(months: number): {
+  due: string[]
+  overdue: string[]
+  upcoming: string[]
+  schedule: string
+} {
+  const due: string[] = []
+  const overdue: string[] = []
+  const upcoming: string[] = []
+
+  // Define vaccination schedule
+  const schedule = [
+    { id: 'bcg', name: '🔴 BCG (ضد السل)', dueAt: 0, maxAt: 12, route: 'داخل الجلد' },
+    { id: 'hepb0', name: '💉 HepB0 (كبد ب - ولادة)', dueAt: 0, maxAt: 60, route: 'عضلي' },
+    { id: 'opv0', name: '💧 OPV0 (شلل فموي - ولادة)', dueAt: 0, maxAt: 60, route: 'فموي' },
+    { id: 'opv1', name: '💧 OPV1 (شلل فموي 1)', dueAt: 1.5, maxAt: 60, route: 'فموي' },
+    { id: 'penta1', name: '5️⃣ Penta1 (خماسي 1)', dueAt: 1.5, maxAt: 60, route: 'عضلي' },
+    { id: 'pcv1', name: '🫁 PCV1 (مكورات 1)', dueAt: 1.5, maxAt: 60, route: 'عضلي' },
+    { id: 'rota1', name: '🦠 Rota1 (روتا 1)', dueAt: 1.5, maxAt: 24, route: 'فموي' },
+    { id: 'opv2', name: '💧 OPV2 (شلل فموي 2)', dueAt: 2.5, maxAt: 60, route: 'فموي' },
+    { id: 'penta2', name: '5️⃣ Penta2 (خماسي 2)', dueAt: 2.5, maxAt: 60, route: 'عضلي' },
+    { id: 'pcv2', name: '🫁 PCV2 (مكورات 2)', dueAt: 2.5, maxAt: 60, route: 'عضلي' },
+    { id: 'rota2', name: '🦠 Rota2 (روتا 2)', dueAt: 2.5, maxAt: 24, route: 'فموي' },
+    { id: 'opv3', name: '💧 OPV3 (شلل فموي 3)', dueAt: 3.5, maxAt: 60, route: 'فموي' },
+    { id: 'penta3', name: '5️⃣ Penta3 (خماسي 3)', dueAt: 3.5, maxAt: 60, route: 'عضلي' },
+    { id: 'pcv3', name: '🫁 PCV3 (مكورات 3)', dueAt: 3.5, maxAt: 60, route: 'عضلي' },
+    { id: 'ipv1', name: '💉 IPV1 (شلل حقن 1)', dueAt: 3.5, maxAt: 60, route: 'عضلي' },
+    { id: 'mr1', name: '🔴 MR1 (حصبة 1)', dueAt: 9, maxAt: 60, route: 'تحت الجلد' },
+    { id: 'opv4', name: '💧 OPV4 (شلل فموي 4)', dueAt: 9, maxAt: 60, route: 'فموي' },
+    { id: 'ipv2', name: '💉 IPV2 (شلل حقن 2)', dueAt: 9, maxAt: 60, route: 'عضلي' },
+    { id: 'vitA1', name: '🌟 فيتامين أ (100,000 و.د)', dueAt: 9, maxAt: 60, route: 'فموي' },
+    { id: 'mr2', name: '🔴 MR2 (حصبة 2)', dueAt: 18, maxAt: 60, route: 'تحت الجلد' },
+    { id: 'opv5', name: '💧 OPV5 (شلل فموي 5)', dueAt: 18, maxAt: 60, route: 'فموي' },
+    { id: 'penta4', name: '💪 Penta4 (خماسي تعزيزية)', dueAt: 18, maxAt: 60, route: 'عضلي' },
+    { id: 'vitA2', name: '🌟 فيتامين أ (200,000 و.د)', dueAt: 18, maxAt: 60, route: 'فموي' },
+    { id: 'td_school', name: '🏫 Td (مدرسي)', dueAt: 60, maxAt: 84, route: 'عضلي' },
+    { id: 'mr_school', name: '🔴 MR تعزيزية (مدرسي)', dueAt: 60, maxAt: 60, route: 'تحت الجلد' },
+    { id: 'vitA_school', name: '🌟 فيتامين أ (مدرسي)', dueAt: 60, maxAt: 60, route: 'فموي' },
+  ]
+
+  for (const v of schedule) {
+    if (months >= v.dueAt && months < v.maxAt) {
+      due.push(v.name)
+    } else if (months >= v.maxAt) {
+      // Only add if not already in due (avoid duplicates for same vaccine at different ages)
+      if (!due.some(d => d.includes(v.id.replace(/\d+$/, '')))) {
+        overdue.push(`${v.name} (تجاوز العمر)`)
+      }
+    } else {
+      upcoming.push(`${v.name} (عند ${v.dueAt < 1 ? 'الولادة' : v.dueAt + ' شهر'})`)
+    }
+  }
+
+  // Build schedule text
+  let scheduleText = ''
+  if (months < 1.5) {
+    scheduleText = '📅 **التطعيمات عند الولادة:**\n• BCG (ضد السل) — داخل الجلد\n• OPV0 (شلل فموي) — فموي\n• HepB0 (كبد ب) — عضلي خلال 24 ساعة'
+  } else if (months < 2.5) {
+    scheduleText = '📅 **تطعيمات 6 أسابيع:**\n• OPV1 + Penta1 + PCV1 + Rota1\nالجرعة التالية عند 10 أسابيع'
+  } else if (months < 3.5) {
+    scheduleText = '📅 **تطعيمات 10 أسابيع:**\n• OPV2 + Penta2 + PCV2 + Rota2\nالجرعة التالية عند 14 أسبوع'
+  } else if (months < 9) {
+    scheduleText = '📅 **تطعيمات 14 أسبوع:**\n• OPV3 + Penta3 + PCV3 + IPV1\nالجرعة التالية عند 9 أشهر (MR1 + OPV4 + IPV2 + فيتامين أ)'
+  } else if (months < 18) {
+    scheduleText = '📅 **تطعيمات 9 أشهر:**\n• MR1 + OPV4 + IPV2 + فيتامين أ (100,000 و.د)\nالجرعة التالية عند 18 شهر'
+  } else if (months < 60) {
+    scheduleText = '📅 **تطعيمات 18 شهر:**\n• MR2 + OPV5 + Penta4 (تعزيزية) + فيتامين أ (200,000 و.د)\nالجرعة التالية عند دخول المدارس (5-7 سنوات)'
+  } else {
+    scheduleText = '📅 **تطعيمات دخول المدارس (5-7 سنوات):**\n• Td + MR تعزيزية + فيتامين أ (200,000 و.د)'
+  }
+
+  return { due, overdue, upcoming, schedule: scheduleText }
+}
+
 // ─── Intent Definitions ──────────────────────────────────────
 
 interface IntentDef {
@@ -198,7 +335,9 @@ const INTENTS: IntentDef[] = [
   { id: 'query_supplies', label: 'استعلام المستلزمات', keywords: ['مستلزم', 'معد', 'حقن', 'ثلاج', 'مبرد', 'سرنج', 'قطن', 'كحول'], category: 'query', responseTemplate: 'المستلزمات', priority: 8 },
   { id: 'query_cold_chain', label: 'سلسلة التبريد', keywords: ['تبريد', 'ثلاج', 'مبرد', 'حرار', 'تخزين لقاح', 'سلسل بارد', 'فريزر'], category: 'query', responseTemplate: 'سلسلة التبريد', priority: 9 },
   { id: 'query_adverse_events', label: 'الأحداث الضائرة', keywords: ['ضائر', 'عرض جانب', 'تاثير', 'مضاعف', 'تحسس', 'رد فعل'], category: 'query', responseTemplate: 'الأحداث الضائرة', priority: 9 },
-  { id: 'query_demographics', label: 'الديموغرافيا', keywords: ['سكان', 'تعداد', 'ولاد', 'وفيات', 'عمر', 'فئ عمر', 'اطفال', 'حوامل'], category: 'query', responseTemplate: 'بيانات سكانية', priority: 7 },
+  { id: 'query_demographics', label: 'الديموغرافيا', keywords: ['سكان', 'تعداد', 'ولاد', 'وفيات', 'فئ عمر', 'اطفال', 'حوامل'], category: 'query', responseTemplate: 'بيانات سكانية', priority: 7 },
+  { id: 'query_child_vaccines', label: 'تطعيمات طفلي', keywords: ['طفلي', 'طفلك', 'طفﻻ', 'رضيع', 'مولود', 'تطعيمات طفل', 'جدول طفلي', 'وش ياخذ', 'وش اللقاحات', 'تعليمات طفلي'], category: 'query', responseTemplate: 'تطعيمات حسب العمر', priority: 10 },
+  { id: 'child_age_response', label: 'عمر الطفل', keywords: ['عمره', 'عمرها', 'شهرين', 'سنتين', 'سنه', 'سنة'], category: 'context', responseTemplate: 'رد حسب العمر', priority: 9 },
   { id: 'query_schedule', label: 'جدول التطعيم', keywords: ['جدول', 'مواعيد', 'وقت', 'تاريخ', 'موعد', 'خطة', 'زمن'], category: 'query', responseTemplate: 'جدول التطعيم', priority: 8 },
   { id: 'bulk_action', label: 'إجراء جماعي', keywords: ['جماع', 'كل', 'مجموع', 'دفع', 'متعدد', 'تحديد الكل'], category: 'action', responseTemplate: 'إجراء جماعي', priority: 6 },
   { id: 'go_to_reports', label: 'التقارير', keywords: ['تقارير', 'ارقام', 'احصائي'], category: 'navigation', responseTemplate: 'الانتقال للتقارير', priority: 5 },
@@ -408,10 +547,35 @@ export class EPIBotEngine {
   // ── Core: Process Message ──
 
   processMessage(text: string, context?: ConversationContext): BotResponse {
-    const intent = this.classifyIntent(text)
+    let intent = this.classifyIntent(text)
     const sentiment = this.analyzeSentiment(text)
     const suggestions = this.getSmartSuggestions(context || this.getDefaultContext())
     const actions = this.buildActions(intent.intent, intent.entities)
+
+    // ── Context-aware: if last intent asked about child age, and current message has age ──
+    const userId = context?.userId || 'anonymous'
+    const sessionId = context?.sessionId || this.defaultSessionId
+    const recentIntents = this.memory.getRecentIntents(userId, sessionId, 3)
+    const lastBotIntent = recentIntents[recentIntents.length - 1]
+
+    // If bot just asked about child age and user responds with age
+    if ((lastBotIntent === 'query_child_vaccines' || lastBotIntent === 'child_age_response')
+        && intent.entities.child_age_months) {
+      intent = {
+        ...intent,
+        intent: 'child_age_response',
+        confidence: 0.95,
+      }
+    }
+
+    // Also detect age-only messages (like "شهر", "3 شهور") when context suggests vaccination query
+    if (intent.entities.child_age_months && intent.intent === 'unknown') {
+      intent = {
+        ...intent,
+        intent: 'child_age_response',
+        confidence: 0.9,
+      }
+    }
 
     // ── Search local knowledge chunks first ──
     const localChunks = this.searchLocalKnowledge(text)
@@ -820,11 +984,21 @@ export class EPIBotEngine {
   private extractEntities(normalizedText: string, tokens: string[]): Record<string, string> {
     const entities: Record<string, string> = {}
 
-    // Time entities
-    if (normalizedText.includes('اليوم')) entities.time_period = 'today'
-    else if (normalizedText.includes('اسبوع') || normalizedText.includes('هذا الاسبوع')) entities.time_period = 'this_week'
-    else if (normalizedText.includes('شهر') || normalizedText.includes('هذا الشهر')) entities.time_period = 'this_month'
-    else if (normalizedText.includes('امس')) entities.time_period = 'yesterday'
+    // Child age entities (highest priority)
+    const ageInfo = parseChildAge(normalizedText)
+    if (ageInfo) {
+      entities.child_age_months = String(ageInfo.months)
+      entities.child_age_weeks = String(ageInfo.weeks)
+      entities.child_age_display = ageInfo.display
+    }
+
+    // Time entities (only if no child age detected)
+    if (!entities.child_age_months) {
+      if (normalizedText.includes('اليوم')) entities.time_period = 'today'
+      else if (normalizedText.includes('اسبوع') || normalizedText.includes('هذا الاسبوع')) entities.time_period = 'this_week'
+      else if (normalizedText.includes('شهر') || normalizedText.includes('هذا الشهر')) entities.time_period = 'this_month'
+      else if (normalizedText.includes('امس')) entities.time_period = 'yesterday'
+    }
 
     // Severity entities
     if (normalizedText.includes('حرج')) entities.severity = 'critical'
@@ -901,6 +1075,58 @@ export class EPIBotEngine {
 
       case 'query_vaccination':
         return `${prefix}بيانات التطعيم:\n\nيشمل برنامج التطعيم BCG, HepB, OPV/IPV, الخماسي, الحصبة, MR, DTaP. أي لقاح تريد تفاصيله؟`
+
+      case 'query_child_vaccines': {
+        // If we have a child age from entities, use it
+        const childAge = intent.entities.child_age_months
+        if (childAge) {
+          const ageMonths = parseInt(childAge)
+          const ageDisplay = intent.entities.child_age_display || childAge + ' شهر'
+          const vaccInfo = getVaccinesByAge(ageMonths)
+          let resp = `👶 **تطعيمات طفلك (${ageDisplay}):**\n\n`
+          resp += vaccInfo.schedule + '\n\n'
+          if (vaccInfo.due.length > 0) {
+            resp += '✅ **اللقاحات المطلوبة الآن:**\n'
+            vaccInfo.due.forEach(v => resp += `• ${v}\n`)
+            resp += '\n'
+          }
+          if (vaccInfo.overdue.length > 0) {
+            resp += '⚠️ **لقاحات متأخرة:**\n'
+            vaccInfo.overdue.forEach(v => resp += `• ${v}\n`)
+            resp += '\n'
+          }
+          if (vaccInfo.upcoming.length > 0 && vaccInfo.upcoming.length <= 5) {
+            resp += '📅 **اللقاحات القادمة:**\n'
+            vaccInfo.upcoming.slice(0, 3).forEach(v => resp += `• ${v}\n`)
+          }
+          resp += '\n💡 تذكّر: الفاصل الأدنى بين الجرعات 4 أسابيع (28 يوم). تابع مع أقرب مركز صحي.'
+          return resp
+        }
+        // No age detected — ask for it
+        return '👶 لكي أخبرك بتطعيمات طفلك بالضبط، كم عمره؟\n\nمثال: "شهر"، "3 شهور"، "9 شهور"، "سنة"، "سنة ونص"'
+      }
+
+      case 'child_age_response': {
+        const ageMonths2 = intent.entities.child_age_months
+        if (ageMonths2) {
+          const ageM = parseInt(ageMonths2)
+          const ageD = intent.entities.child_age_display || ageMonths2 + ' شهر'
+          const vInfo = getVaccinesByAge(ageM)
+          let resp2 = `👶 **تطعيمات طفلك (${ageD}):**\n\n`
+          resp2 += vInfo.schedule + '\n\n'
+          if (vInfo.due.length > 0) {
+            resp2 += '✅ **اللقاحات المطلوبة:**\n'
+            vInfo.due.forEach(v => resp2 += `• ${v}\n`)
+          }
+          if (vInfo.overdue.length > 0) {
+            resp2 += '\n⚠️ **متأخرة:**\n'
+            vInfo.overdue.forEach(v => resp2 += `• ${v}\n`)
+          }
+          resp2 += '\n💡 تابع مع أقرب مركز صحي لاستكمال التطعيمات.'
+          return resp2
+        }
+        return '🤔 ما فهمت العمر بالضبط. ممكن تقولي كم عمر طفلك؟ (مثال: "شهر"، "3 شهور"، "سنة")'
+      }
 
       case 'low_coverage':
         return `${prefix}تنبيه: التغطية أقل من المستهدف! يجب تحديد الأسباب ووضع خطة تحسين. هل تريد تحليل المناطق المتأثرة؟`

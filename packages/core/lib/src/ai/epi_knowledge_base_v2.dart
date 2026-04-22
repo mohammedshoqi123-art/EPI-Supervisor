@@ -15,10 +15,9 @@ class EpiKnowledgeBase {
     {'vaccine': 'OPV1+Penta1+PCV1+Rota1', 'ageMonths': 2, 'disease': 'شلل+خماسي+رئوي+روتا', 'route': 'فموي+عضلي', 'site': 'الفم+الفخذ'},
     {'vaccine': 'OPV2+Penta2+PCV2+Rota2', 'ageMonths': 4, 'disease': 'شلل+خماسي+رئوي+روتا', 'route': 'فموي+عضلي', 'site': 'الفم+الفخذ'},
     {'vaccine': 'OPV3+Penta3+PCV3+IPV', 'ageMonths': 6, 'disease': 'شلل+خماسي+رئوي+شلل حقن', 'route': 'فموي+عضلي', 'site': 'الفم+الفخذ'},
-    {'vaccine': 'MR1+OPV4', 'ageMonths': 9, 'disease': 'الحصبة+الحصبة الألمانية', 'route': 'تحت الجلد+فموي', 'site': 'الذراع+الفم'},
-    {'vaccine': 'VitA-12m', 'ageMonths': 12, 'disease': 'فيتامين أ', 'route': 'فموي', 'site': 'الفم'},
-    {'vaccine': 'MR2+DTP-b+OPV5+VitA-18m', 'ageMonths': 18, 'disease': 'حصبة+تعزيز+شلل+فيتامين', 'route': 'تحت الجلد+عضلي+فموي', 'site': 'الذراع+الفخذ+الفم'},
-    {'vaccine': 'DTP-s+MR-s+VitA-6y', 'ageMonths': 72, 'disease': 'تعزيز المدرسة', 'route': 'عضلي+تحت الجلد+فموي', 'site': 'الذراع+الفم'},
+    {'vaccine': 'MR1+OPV4+IPV2+VitA-9m', 'ageMonths': 9, 'disease': 'الحصبة+الحصبة الألمانية+شلل+فيتامين', 'route': 'تحت الجلد+فموي+عضلي+فموي', 'site': 'الذراع+الفم+الفخذ'},
+    {'vaccine': 'MR2+Penta4+OPV5+VitA-18m', 'ageMonths': 18, 'disease': 'حصبة+خماسي تعزيزية+شلل+فيتامين', 'route': 'تحت الجلد+عضلي+فموي', 'site': 'الذراع+الفخذ+الفم'},
+    {'vaccine': 'Td-s+MR-s+VitA-6y', 'ageMonths': 72, 'disease': 'تعزيز المدرسة', 'route': 'عضلي+تحت الجلد+فموي', 'site': 'الذراع+الفم'},
   ];
 
   /// التطعيمات المطلوبة حسب العمر الحالي
@@ -56,7 +55,7 @@ class EpiKnowledgeBase {
         {'name': 'OPV3', 'description': 'شلل الأطفال — الجرعة الثالثة', 'emoji': '💧'},
         {'name': 'الخماسي 3', 'description': 'الجرعة الثالثة (مكتملة)', 'emoji': '5️⃣'},
         {'name': 'PCV3', 'description': 'الرئوي — الجرعة الثالثة', 'emoji': '🫁'},
-        {'name': 'IPV', 'description': 'شلل حقني — جرعة واحدة', 'emoji': '💉'},
+        {'name': 'IPV', 'description': 'شلل حقني — جرعتان (14 أسبوع + 9 أشهر)', 'emoji': '💉'},
       ];
     }
 
@@ -64,31 +63,25 @@ class EpiKnowledgeBase {
       return [
         {'name': 'MR1', 'description': 'الحصبة — الجرعة الأولى (9 أشهر)', 'emoji': '🔴'},
         {'name': 'OPV4', 'description': 'شلل الأطفال — الجرعة الرابعة', 'emoji': '💧'},
-      ];
-    }
-
-    if (months < 12) {
-      return [
-        {'name': 'MR1', 'description': 'الحصبة — إذا لم يأخذها', 'emoji': '🔴'},
-        {'name': 'OPV4', 'description': 'شلل الأطفال — إذا لم يأخذها', 'emoji': '💧'},
-        {'name': 'فيتامين أ', 'description': 'كبسولة حمراء (12 شهر)', 'emoji': '🌟'},
+        {'name': 'IPV2', 'description': 'شلل حقني — الجرعة الثانية', 'emoji': '💉'},
+        {'name': 'فيتامين أ', 'description': 'كبسولة زرقاء 100,000 و.د (9 أشهر)', 'emoji': '🌟'},
       ];
     }
 
     if (months < 18) {
       return [
         {'name': 'MR2', 'description': 'الحصبة — الجرعة الثانية (18 شهر)', 'emoji': '🔴'},
-        {'name': 'DTP معززة', 'description': 'جرعة تعزيزية', 'emoji': '💪'},
+        {'name': 'Penta4', 'description': 'خماسي تعزيزية', 'emoji': '💪'},
         {'name': 'OPV5', 'description': 'شلل الأطفال — الجرعة الخامسة', 'emoji': '💧'},
-        {'name': 'فيتامين أ', 'description': 'كبسولة حمراء (18 شهر)', 'emoji': '🌟'},
+        {'name': 'فيتامين أ', 'description': 'كبسولة حمراء 200,000 و.د (18 شهر)', 'emoji': '🌟'},
       ];
     }
 
     if (months < 72) {
       return [
-        {'name': 'DTP المدرسة', 'description': 'جرعة تعزيزية عند دخول المدرسة', 'emoji': '🏫'},
+        {'name': 'Td المدرسة', 'description': 'جرعة تعزيزية عند دخول المدرسة', 'emoji': '🏫'},
         {'name': 'MR المدرسة', 'description': 'الحصبة — جرعة المدرسة', 'emoji': '🔴'},
-        {'name': 'فيتامين أ', 'description': 'كبسولة حمراء (6 سنوات)', 'emoji': '🌟'},
+        {'name': 'فيتامين أ', 'description': 'كبسولة حمراء 200,000 و.د (6 سنوات)', 'emoji': '🌟'},
       ];
     }
 
@@ -144,13 +137,13 @@ class EpiKnowledgeBase {
     buf.writeln('🟣 عمر 9 أشهر:');
     buf.writeln('   • MR1 (الحصبة) + OPV4');
     buf.writeln('');
-    buf.writeln('🌟 عمر 12 شهر: فيتامين أ');
+    buf.writeln('🌟 عمر 9 أشهر: فيتامين أ (100,000 و.د)');
     buf.writeln('');
     buf.writeln('💪 عمر 18 شهر:');
-    buf.writeln('   • MR2 + DTP معززة + OPV5 + فيتامين أ');
+    buf.writeln('   • MR2 + Penta4 (خماسي تعزيزية) + OPV5 + فيتامين أ');
     buf.writeln('');
     buf.writeln('🏫 عمر 6 سنوات (دخول المدرسة):');
-    buf.writeln('   • DTP معززة + MR معززة + فيتامين أ');
+    buf.writeln('   • Td + MR تعزيزية + فيتامين أ');
     buf.writeln('');
     buf.writeln('⏰ لا تتأخر! كل تأخير يعرض طفلك للخطر');
     return buf.toString();
@@ -395,9 +388,9 @@ class EpiKnowledgeBase {
     'فيتامين أ':
         '🌟 فيتامين أ:\n\n'
         '📅 يُعطى 3 مرات:\n'
-        '• عمر 12 شهر (200,000 وحدة دولية)\n'
-        '• عمر 18 شهر (200,000 وحدة دولية)\n'
-        '• عمر 6 سنوات (200,000 وحدة دولية)\n\n'
+        '• عمر 9 أشهر (100,000 وحدة دولية — كبسولة زرقاء)\n'
+        '• عمر 18 شهر (200,000 وحدة دولية — كبسولة حمراء)\n'
+        '• عمر 6 سنوات (200,000 وحدة دولية — كبسولة حمراء)\n\n'
         '💊 كبسولة حمراء تُعطى من الفم\n\n'
         '✅ فوائده:\n'
         '• يحمي من العمى\n'

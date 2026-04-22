@@ -306,10 +306,10 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
   String _getVaccinesForAge(int months) {
     if (months == 0) return '🔴 BCG (ضد السل)\n💧 OPV0 (شلل فموي)\n💉 HepB0 (كبد ب)';
     if (months < 4) return '💧 OPV1-2\n5️⃣ الخماسي 1-2\n🫁 PCV1-2\n🦠 Rota1-2';
-    if (months < 6) return '💧 OPV3\n5️⃣ الخماسي 3\n🫁 PCV3\n💉 IPV (شلل حقن)';
-    if (months < 9) return '🔴 MR1 (الحصبة — 9 أشهر)\n💧 OPV4';
-    if (months < 18) return '🌟 فيتامين أ (12 شهر)\n🔴 MR2 (18 شهر)\n💪 DTP معززة\n💧 OPV5';
-    return '🏫 DTP معززة (6 سنوات)\n🔴 MR معززة (6 سنوات)\n🌟 فيتامين أ';
+    if (months < 6) return '💧 OPV3\n5️⃣ الخماسي 3\n🫁 PCV3\n💉 IPV1 (شلل حقن)';
+    if (months < 9) return '🔴 MR1 (الحصبة — 9 أشهر)\n💧 OPV4\n💉 IPV2 (شلل حقن)\n🌟 فيتامين أ (100,000 و.د)';
+    if (months < 18) return '🔴 MR2 (18 شهر)\n💪 Penta4 (خماسي تعزيزية)\n💧 OPV5\n🌟 فيتامين أ (200,000 و.د)';
+    return '🏫 Td (مدرسي)\n🔴 MR تعزيزية\n🌟 فيتامين أ (200,000 و.د)';
   }
 
   void _scrollToBottom() {

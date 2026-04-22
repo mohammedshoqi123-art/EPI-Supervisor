@@ -2,6 +2,8 @@
 /// Ported and enhanced from EPI-Bot's multiple knowledge bases
 /// Covers: Vaccines, schedules, supervision, management, campaigns, cold chain, AEFI
 
+import 'epi_nlp_engine.dart';
+
 class EpiKnowledgeBase {
   // ═══════════════════════════════════════════════════════════
   // VACCINATION SCHEDULE — Yemen National Schedule

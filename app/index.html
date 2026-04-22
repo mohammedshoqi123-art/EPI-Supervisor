@@ -180,7 +180,6 @@
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
-  </script>
 
     // ═══ FIX: Flutter HTML renderer coordinate issue with RTL ═══
     // The html[dir=rtl] causes Flutter's absolute positioning to place
@@ -201,6 +200,7 @@
       }
     });
     _fixFlutterRTL.observe(document.body, {childList: true, subtree: true});
+  </script>
 
   <script src="flutter_bootstrap.js" async></script>
 </body>

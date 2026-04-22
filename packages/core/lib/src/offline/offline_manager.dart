@@ -123,7 +123,7 @@ class OfflineManager {
   Future<void> _recoverStuckSyncingItems() async {
     if (_box == null || !_box!.isOpen) return;
 
-    final data = _safeBox.get(_syncQueueKey);
+    final data = _safeBox?.get(_syncQueueKey);
     if (data == null || data.isEmpty) return;
 
     try {
@@ -146,7 +146,7 @@ class OfflineManager {
 
       if (recovered > 0) {
         final encrypted = _encryption.encrypt(jsonEncode(queue));
-        await _safeBox.put(_syncQueueKey, encrypted);
+        await _safeBox?.put(_syncQueueKey, encrypted);
         if (kDebugMode)
           print('[OfflineManager] Recovered $recovered stuck syncing items');
       }
@@ -184,17 +184,15 @@ class OfflineManager {
     });
   }
 
-  /// Safe box access — throws if not initialized
-  Box<String> get _safeBox {
+  /// Safe box access — returns null if not initialized (web-safe)
+  Box<String>? get _safeBox {
     final b = _box;
-    if (b == null || !b.isOpen) {
-      throw StateError('OfflineManager not initialized. Call init() first.');
-    }
+    if (b == null || !b.isOpen) return null;
     return b;
   }
 
   List<Map<String, dynamic>> _getQueue() {
-    final data = _safeBox.get(_syncQueueKey);
+    final data = _safeBox?.get(_syncQueueKey);
     if (data == null || data.isEmpty) return [];
     try {
       final decoded = jsonDecode(_encryption.decrypt(data));
@@ -207,7 +205,7 @@ class OfflineManager {
 
   Future<void> _saveQueue(List<Map<String, dynamic>> queue) async {
     final encrypted = _encryption.encrypt(jsonEncode(queue));
-    await _safeBox.put(_syncQueueKey, encrypted);
+    await _safeBox?.put(_syncQueueKey, encrypted);
   }
 
   Future<List<Map<String, dynamic>>> getPendingItems() async {
@@ -222,7 +220,7 @@ class OfflineManager {
   }
 
   Future<void> clearQueue() async {
-    await _safeBox.delete(_syncQueueKey);
+    await _safeBox?.delete(_syncQueueKey);
     _invalidatePendingCount();
   }
 
@@ -370,7 +368,7 @@ class OfflineManager {
         'resolved': false,
       };
       final encrypted = _encryption.encrypt(jsonEncode(conflicts));
-      await _safeBox.put(_conflictsKey, encrypted);
+      await _safeBox?.put(_conflictsKey, encrypted);
     } catch (e) {
       if (kDebugMode) print('Failed to save conflict: $e');
     }
@@ -384,7 +382,7 @@ class OfflineManager {
   }
 
   Map<String, dynamic> _getConflicts() {
-    final data = _safeBox.get(_conflictsKey);
+    final data = _safeBox?.get(_conflictsKey);
     if (data == null || data.isEmpty) return {};
     try {
       return Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
@@ -412,7 +410,7 @@ class OfflineManager {
           useLocal ? 'local_wins' : 'server_wins';
       conflicts[offlineId]['resolved_at'] = DateTime.now().toIso8601String();
       final encrypted = _encryption.encrypt(jsonEncode(conflicts));
-      await _safeBox.put(_conflictsKey, encrypted);
+      await _safeBox?.put(_conflictsKey, encrypted);
     }
   }
 
@@ -444,12 +442,12 @@ class OfflineManager {
         'saved_at': DateTime.now().toIso8601String(),
       };
       final encrypted = _encryption.encrypt(jsonEncode(drafts));
-      await _safeBox.put(_draftsKey, encrypted);
+      await _safeBox?.put(_draftsKey, encrypted);
     });
   }
 
   Map<String, dynamic> _getDrafts() {
-    final data = _safeBox.get(_draftsKey);
+    final data = _safeBox?.get(_draftsKey);
     if (data == null || data.isEmpty) return {};
     try {
       return Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
@@ -488,7 +486,7 @@ class OfflineManager {
       final drafts = _getDrafts();
       drafts.remove(draftId);
       final encrypted = _encryption.encrypt(jsonEncode(drafts));
-      await _safeBox.put(_draftsKey, encrypted);
+      await _safeBox?.put(_draftsKey, encrypted);
     });
   }
 
@@ -502,12 +500,12 @@ class OfflineManager {
         'cached_at': DateTime.now().toIso8601String(),
       };
       final encrypted = _encryption.encrypt(jsonEncode(cache));
-      await _safeBox.put(_cacheKey, encrypted);
+      await _safeBox?.put(_cacheKey, encrypted);
     });
   }
 
   Map<String, dynamic> _getCache() {
-    final data = _safeBox.get(_cacheKey);
+    final data = _safeBox?.get(_cacheKey);
     if (data == null || data.isEmpty) return {};
 
     // 1. Try decrypting with current key
@@ -532,7 +530,7 @@ class OfflineManager {
           );
         }
         // Clear the corrupted data so next cacheData() writes clean
-        _safeBox.delete(_cacheKey);
+        _safeBox?.delete(_cacheKey);
         return {};
       }
     }
@@ -571,7 +569,7 @@ class OfflineManager {
   }
 
   Future<void> clearCache() async {
-    await _safeBox.delete(_cacheKey);
+    await _safeBox?.delete(_cacheKey);
   }
 
   /// Remove a specific key from the persistent cache.
@@ -581,7 +579,7 @@ class OfflineManager {
       final cache = _getCache();
       cache.remove(key);
       final encrypted = _encryption.encrypt(jsonEncode(cache));
-      await _safeBox.put(_cacheKey, encrypted);
+      await _safeBox?.put(_cacheKey, encrypted);
     });
   }
 

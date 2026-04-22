@@ -444,6 +444,19 @@ class EpiNLPEngine {
     return IntentResult(best.key, best.value.clamp(0.0, 1.0), allScores: scores);
   }
 
+  /// إرجاع قائمة مرتبة بالنيات المكتشفة (للتوافق مع الكود القديم)
+  static List<IntentResult> detectIntents(String normalized, {String? previousIntent, String? lastTopic}) {
+    final result = detectIntent(normalized, previousIntent: previousIntent, lastTopic: lastTopic);
+    final allResults = <IntentResult>[result];
+    for (final entry in result.allScores.entries) {
+      if (entry.key != result.intent && entry.value > 0.1) {
+        allResults.add(IntentResult(entry.key, entry.value));
+      }
+    }
+    allResults.sort((a, b) => b.confidence.compareTo(a.confidence));
+    return allResults;
+  }
+
   static bool isFollowUp(String n) {
     return RegExp(r'^(نعم|ايه|اي|يب|ايوه|اشرح|وضح|بالتفصيل|تفاصيل|كم|ليه|ليش|طيب|تمام|واضح|فهمت|اوكي|نعم ابي|ايه ابي|زيد)')
         .hasMatch(n);

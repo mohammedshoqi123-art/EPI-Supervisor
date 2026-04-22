@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import {
@@ -313,7 +314,7 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
   )
 }
 
-// Mobile sidebar (overlay)
+// Mobile sidebar (overlay) — uses React Portal to render outside parent stacking context
 export function MobileSidebar({ user }: { user?: { full_name: string; email: string; role: UserRole } | null }) {
   const [open, setOpen] = useState(false)
   const location = useLocation()
@@ -324,94 +325,131 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
     setOpen(false)
   }, [location.pathname])
 
+  // Prevent body scroll when open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
   const filteredItems = navItems.filter(item => {
     if (!item.roles) return true
     return user?.role && item.roles.includes(user.role)
   })
+
+  const overlay = open ? (
+    <div className="fixed inset-0" style={{ zIndex: 99999 }}>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+        onClick={() => setOpen(false)}
+      />
+      {/* Sidebar Panel */}
+      <div
+        className="fixed inset-y-0 right-0 w-[280px] shadow-2xl animate-in slide-in-from-right duration-300"
+        style={{ background: 'linear-gradient(180deg, #1d4ed8 0%, #2563eb 40%, #1e40af 100%)', color: '#fff' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 h-16">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-sm overflow-hidden border border-blue-100/50">
+              <img src={getLogoUrl('64')} alt="EPI" className="w-8 h-8 object-contain"
+                onError={(e) => { e.currentTarget.style.display = 'none' }} />
+            </div>
+            <h1 className="font-heading font-bold text-lg text-white">EPI Supervisor's</h1>
+          </div>
+          <Button variant="ghost" size="icon-sm" onClick={() => setOpen(false)} className="text-blue-200 hover:text-white hover:bg-white/10">
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+        <Separator className="bg-white/10" />
+
+        {/* Campaign Filter (Mobile) */}
+        <div className="px-3 pt-3 pb-1">
+          <div className="flex items-center gap-1.5 px-2 mb-2">
+            <Filter className="w-3.5 h-3.5 text-blue-200" />
+            <span className="text-[11px] font-medium text-blue-200 uppercase tracking-wider">فلتر النشاط</span>
+          </div>
+          <div className="space-y-1">
+            {CAMPAIGN_OPTIONS.map((option) => {
+              const isActive = campaign === option.id
+              return (
+                <button
+                  key={option.id}
+                  onClick={() => setCampaign(option.id)}
+                  className={cn(
+                    'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-right',
+                    isActive
+                      ? 'bg-white/20 text-white shadow-md shadow-black/10'
+                      : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                  )}
+                >
+                  <span className="text-base">{option.icon}</span>
+                  <span className="flex-1 truncate">{option.labelAr}</span>
+                  {isActive && (
+                    <span className="w-2 h-2 rounded-full bg-white shrink-0" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <Separator className="bg-white/10" />
+
+        {/* Navigation */}
+        <nav className="px-3 py-4 space-y-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+          {filteredItems.map((item) => {
+            const isActive = location.pathname === item.href
+            const Icon = item.icon
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  isActive ? 'bg-white/20 text-white shadow-md' : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                )}
+              >
+                <Icon className="w-5 h-5" />
+                <span>{item.label}</span>
+                {item.badge && item.badge > 0 && (
+                  <Badge variant="destructive" className="mr-auto text-[10px]">{item.badge}</Badge>
+                )}
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* User Info at bottom */}
+        {user && (
+          <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-white/10">
+            <div className="flex items-center gap-3">
+              <Avatar className="w-9 h-9">
+                <AvatarFallback className="bg-white/20 text-white text-sm font-bold">
+                  {getInitials(user.full_name)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate text-white">{user.full_name}</p>
+                <p className="text-xs text-blue-200 truncate">{ROLE_LABELS[user.role]}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null
 
   return (
     <>
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(true)}>
         <Menu className="w-5 h-5" />
       </Button>
-
-      {open && (
-        <div className="mobile-sidebar-overlay lg:hidden">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" style={{ zIndex: 9998 }} onClick={() => setOpen(false)} />
-          <div
-            className="fixed inset-y-0 right-0 w-[280px] shadow-2xl animate-slide-in-right"
-            style={{ background: 'linear-gradient(180deg, #1d4ed8 0%, #2563eb 40%, #1e40af 100%)', color: '#fff', zIndex: 9999 }}
-          >
-            <div className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-sm overflow-hidden border border-blue-100/50">
-                  <img src={getLogoUrl('64')} alt="EPI" className="w-8 h-8 object-contain"
-                    onError={(e) => { e.currentTarget.style.display = 'none' }} />
-                </div>
-                <h1 className="font-heading font-bold text-lg text-white">EPI Supervisor's</h1>
-              </div>
-              <Button variant="ghost" size="icon-sm" onClick={() => setOpen(false)} className="text-blue-200 hover:text-white hover:bg-white/10">
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-            <Separator className="bg-white/10" />
-            {/* Campaign Filter (Mobile) */}
-            <div className="px-3 pt-3 pb-1">
-              <div className="flex items-center gap-1.5 px-2 mb-2">
-                <Filter className="w-3.5 h-3.5 text-blue-200" />
-                <span className="text-[11px] font-medium text-blue-200 uppercase tracking-wider">فلتر النشاط</span>
-              </div>
-              <div className="space-y-1">
-                {CAMPAIGN_OPTIONS.map((option) => {
-                  const isActive = campaign === option.id
-                  return (
-                    <button
-                      key={option.id}
-                      onClick={() => setCampaign(option.id)}
-                      className={cn(
-                        'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-right',
-                        isActive
-                          ? 'bg-white/20 text-white shadow-md shadow-black/10'
-                          : 'text-blue-100 hover:bg-white/10 hover:text-white'
-                      )}
-                    >
-                      <span className="text-base">{option.icon}</span>
-                      <span className="flex-1 truncate">{option.labelAr}</span>
-                      {isActive && (
-                        <span className="w-2 h-2 rounded-full bg-white shrink-0" />
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            <Separator className="bg-white/10" />
-            <nav className="px-3 py-4 space-y-1">
-              {filteredItems.map((item) => {
-                const isActive = location.pathname === item.href
-                const Icon = item.icon
-                return (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                      isActive ? 'bg-white/20 text-white shadow-md' : 'text-blue-100 hover:bg-white/10 hover:text-white'
-                    )}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{item.label}</span>
-                    {item.badge && item.badge > 0 && (
-                      <Badge variant="destructive" className="mr-auto text-[10px]">{item.badge}</Badge>
-                    )}
-                  </Link>
-                )
-              })}
-            </nav>
-          </div>
-        </div>
-      )}
+      {createPortal(overlay, document.body)}
     </>
   )
 }

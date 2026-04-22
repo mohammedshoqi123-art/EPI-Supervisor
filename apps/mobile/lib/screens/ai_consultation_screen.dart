@@ -8,11 +8,8 @@
 /// ═══════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
 // ═══ استيراد المكونات الجديدة ═══
 // import 'package:epi_core/src/ai/ai_router_v2.dart';
@@ -344,14 +341,14 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('المساعد الذكي',
+                  const Text('المساعد الذكي',
                       style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700, fontSize: 16)),
                   Text(_isOnline ? 'متصل — AI + تحليلات' : 'أوفلاين — استشارات صحية',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w400)),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400)),
                 ],
               ),
             ),

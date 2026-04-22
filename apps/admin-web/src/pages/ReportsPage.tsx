@@ -7,7 +7,7 @@ import {
   CheckCircle2, Loader2, PieChart as PieChartIcon, Target,
   Layers, Send, ClipboardList, Gauge, Star, Sparkles,
   ChevronRight, ChevronDown, FileDown, Database,
-  ArrowUp, ArrowDown, Info
+  ArrowUp, ArrowDown, Info, ScrollText, History
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,7 @@ import { Header } from '@/components/layout/header'
 import {
   useAuth, useForms, useGovernorates, useGovernorateStats,
   useDashboardStats, useShortages, useFormSubmissionCounts,
-  useSubmissionsChart, useRoleDistribution
+  useSubmissionsChart, useRoleDistribution, useAuditLogs
 } from '@/hooks/useApi'
 import { supabase, isConfigured } from '@/lib/supabase'
 import { ROLE_LABELS, ROLE_HIERARCHY, type UserRole, type Form } from '@/types/database'
@@ -260,6 +260,7 @@ export default function ReportsPage() {
   const { data: governorates } = useGovernorates()
   const { data: chartData, isLoading: chartLoading } = useSubmissionsChart(campaign)
   const { data: roleDistribution } = useRoleDistribution()
+  const { data: auditData } = useAuditLogs({ page: 1 })
 
   const forms = formsResult?.data || []
 
@@ -432,6 +433,59 @@ export default function ReportsPage() {
     })
   })
 
+  const handleExportAudit = () => exportReport('audit', async () => {
+    let query = supabase.from('audit_logs').select(`
+      id, action, table_name, record_id, ip_address, created_at,
+      profiles(full_name, email, role)
+    `).order('created_at', { ascending: false }).limit(5000)
+
+    if (dateFrom) query = query.gte('created_at', dateFrom)
+    if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')
+
+    const { data, error } = await query
+    if (error) throw error
+
+    const actionLabels: Record<string, string> = {
+      create: 'إنشاء', update: 'تعديل', delete: 'حذف',
+      login: 'تسجيل دخول', logout: 'تسجيل خروج',
+    }
+    const tableLabels: Record<string, string> = {
+      profiles: 'المستخدمين', form_submissions: 'الإرساليات', forms: 'النماذج',
+      supply_shortages: 'النواقص', governorates: 'المحافظات', districts: 'المديريات',
+      notifications: 'الإشعارات',
+    }
+
+    const columns: ExportColumn[] = [
+      { header: '#', key: 'index', width: 6 },
+      { header: 'الإجراء', key: 'action', width: 14 },
+      { header: 'الجدول', key: 'table', width: 16 },
+      { header: 'المستخدم', key: 'user', width: 22 },
+      { header: 'البريد', key: 'email', width: 25 },
+      { header: 'الدور', key: 'role', width: 14 },
+      { header: 'IP', key: 'ip', width: 14 },
+      { header: 'التاريخ', key: 'date', width: 18 },
+    ]
+
+    const rows = (data || []).map((log: any, i: number) => ({
+      index: i + 1,
+      action: actionLabels[log.action] || log.action,
+      table: tableLabels[log.table_name] || log.table_name,
+      user: log.profiles?.full_name || '',
+      email: log.profiles?.email || '',
+      role: log.profiles?.role || '',
+      ip: log.ip_address || '',
+      date: new Date(log.created_at).toLocaleString('ar-SA'),
+    }))
+
+    exportToExcel({
+      sheetName: 'سجل التدقيق',
+      title: 'تقرير سجل التدقيق — EPI Supervisor',
+      subtitle: `تصدير: ${new Date().toLocaleDateString('ar-SA')} — ${rows.length} سجل`,
+      columns, data: rows,
+      fileName: `audit_report_${new Date().toISOString().split('T')[0]}`,
+    })
+  })
+
   // Form-level export
   const handleExportForm = async (form: Form, format: 'xlsx' | 'csv') => {
     setExportingFormId(form.id)
@@ -548,6 +602,16 @@ export default function ReportsPage() {
         icon: PackageX, title: 'تقرير النواقص', subtitle: 'نواقص اللقاحات والمعدات — الخطورة، المحافظة، حالة الحل',
         color: 'text-orange-600', gradient: 'bg-gradient-to-r from-orange-500 to-orange-600',
         onClick: handleExportShortages, loading: exportingReport === 'shortages',
+      })
+    }
+
+    // 9. Audit Log Report — matches mobile audit screen
+    if (canExportAll(userRole)) {
+      cards.push({
+        icon: ScrollText, title: 'سجل التدقيق', subtitle: 'جميع العمليات: إنشاء، تعديل، حذف، تسجيل دخول — مع IP والمستخدم',
+        color: 'text-slate-600', gradient: 'bg-gradient-to-r from-slate-500 to-slate-600',
+        onClick: handleExportAudit, loading: exportingReport === 'audit',
+        badge: 'audit',
       })
     }
 
@@ -818,6 +882,70 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Recent Activity Feed — matches mobile dashboard activity */}
+            {auditData && auditData.data && auditData.data.length > 0 && (
+              <Card className="border-0 shadow-md overflow-hidden">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div>
+                    <CardTitle className="text-base font-heading flex items-center gap-2">
+                      <History className="w-5 h-5 text-primary" />
+                      آخر النشاطات
+                    </CardTitle>
+                    <CardDescription className="text-xs">آخر العمليات المسجلة في النظام</CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportAudit}>
+                    <FileDown className="w-3.5 h-3.5" /> تصدير السجل
+                  </Button>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-0">
+                    {auditData.data.slice(0, 8).map((log: any, i: number) => {
+                      const actionIcons: Record<string, { icon: React.ElementType; color: string }> = {
+                        create: { icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50' },
+                        update: { icon: Activity, color: 'text-blue-600 bg-blue-50' },
+                        delete: { icon: AlertTriangle, color: 'text-red-600 bg-red-50' },
+                        login: { icon: Users, color: 'text-purple-600 bg-purple-50' },
+                      }
+                      const actionLabels: Record<string, string> = {
+                        create: 'إنشاء', update: 'تعديل', delete: 'حذف', login: 'دخول', logout: 'خروج',
+                      }
+                      const tableLabels: Record<string, string> = {
+                        profiles: 'المستخدمين', form_submissions: 'الإرساليات', forms: 'النماذج',
+                        supply_shortages: 'النواقص', notifications: 'الإشعارات',
+                      }
+                      const actionInfo = actionIcons[log.action] || { icon: Info, color: 'text-gray-600 bg-gray-50' }
+                      const ActionIcon = actionInfo.icon
+
+                      const timeDiff = Date.now() - new Date(log.created_at).getTime()
+                      let timeLabel: string
+                      if (timeDiff < 60000) timeLabel = 'الآن'
+                      else if (timeDiff < 3600000) timeLabel = `منذ ${Math.floor(timeDiff / 60000)} د`
+                      else if (timeDiff < 86400000) timeLabel = `منذ ${Math.floor(timeDiff / 3600000)} س`
+                      else timeLabel = `منذ ${Math.floor(timeDiff / 86400000)} يوم`
+
+                      return (
+                        <div key={log.id} className={cn('flex items-center gap-3 py-3 px-2 rounded-lg hover:bg-muted/50 transition-colors', i < auditData.data.length - 1 && 'border-b')}>
+                          <div className={cn('p-2 rounded-lg', actionInfo.color)}>
+                            <ActionIcon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {log.profiles?.full_name || 'النظام'} — {actionLabels[log.action] || log.action}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {tableLabels[log.table_name] || log.table_name}
+                              {log.ip_address && ` • ${log.ip_address}`}
+                            </p>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground shrink-0">{timeLabel}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ═══════════════════════════════════════════════════ */}

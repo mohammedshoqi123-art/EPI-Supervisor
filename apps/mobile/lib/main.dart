@@ -1,3 +1,12 @@
+/// ═══════════════════════════════════════════════════════════════════════
+///  main.dart — نسخة مُحسّنة: تضمن تسجيل الدخول المستقر
+///  التغييرات:
+///  1. Supabase.initialize مع authOptions صريحة
+///  2. لا signOut تلقائي أبداً
+///  3. إعادة محاولة init عند الفشل
+///  4. Splash screen ينتظر الجلسة قبل التوجيه
+/// ═══════════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -9,57 +18,94 @@ import 'package:epi_shared/epi_shared.dart';
 import 'router/app_router.dart';
 import 'screens/onboarding_screen.dart';
 
-// Theme mode provider
 final themeModeProvider = StateProvider<ThemeMode>((_) => ThemeMode.system);
+
+/// حالة تهيئة Supabase
+final supabaseInitProvider = StateProvider<SupabaseInitState>((_) => SupabaseInitState.initial);
+
+enum SupabaseInitState { initial, initializing, ready, failed }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Run the app FIRST — don't block on async init
   runApp(const ProviderScope(child: EpiSupervisorApp()));
 
-  // Deferred init: use Future.microtask to run AFTER first frame renders
+  // تهيئة مُؤجّلة
   Future.microtask(() async {
-    // Load .env
-    try {
-      final dotenv = await EnvLoader.load();
-      if (dotenv.isNotEmpty) {
-        SupabaseConfig.setFromEnv(
-          url: dotenv['SUPABASE_URL'] ?? '',
-          anonKey: dotenv['SUPABASE_ANON_KEY'] ?? '',
-        );
-      }
-    } catch (_) {}
-
-    // Validate env (non-blocking — show warning in UI if needed)
-    try {
-      EnvValidator.validate();
-    } catch (_) {}
-
-    // Init connectivity
-    try {
-      await ConnectivityUtils.initialize().timeout(const Duration(seconds: 5));
-    } catch (_) {}
-
-    // Init Supabase
-    try {
-      if (!EnvValidator.isOfflineMode && SupabaseConfig.url.isNotEmpty) {
-        SupabaseConfig.validate();
-        await Supabase.initialize(
-          url: SupabaseConfig.url,
-          anonKey: SupabaseConfig.anonKey,
-          debug: AppConfig.isDevelopment,
-        ).timeout(const Duration(seconds: 15));
-      }
-    } catch (_) {}
-
-    // Init notifications
-    try {
-      if (SupabaseConfig.isConfigured) {
-        NotificationService.init(ApiClient());
-      }
-    } catch (_) {}
+    await _initServices();
   });
+}
+
+Future<void> _initServices() async {
+  // Load .env
+  try {
+    final dotenv = await EnvLoader.load();
+    if (dotenv.isNotEmpty) {
+      SupabaseConfig.setFromEnv(
+        url: dotenv['SUPABASE_URL'] ?? '',
+        anonKey: dotenv['SUPABASE_ANON_KEY'] ?? '',
+      );
+    }
+  } catch (_) {}
+
+  // Init connectivity
+  try {
+    await ConnectivityUtils.initialize().timeout(const Duration(seconds: 5));
+  } catch (_) {}
+
+  // ═══ تحسين 1: تهيئة Supabase مع خيارات صريحة ═══
+  try {
+    if (!EnvValidator.isOfflineMode && SupabaseConfig.url.isNotEmpty) {
+      SupabaseConfig.validate();
+
+      await Supabase.initialize(
+        url: SupabaseConfig.url,
+        anonKey: SupabaseConfig.anonKey,
+        debug: AppConfig.isDevelopment,
+        // ═══ تحسين 2: خيارات المصادقة الصريحة ═══
+        authOptions: const FlutterAuthClientOptions(
+          authFlowType: AuthFlowType.pkce,
+          autoRefreshToken: true,    // تجديد التوكن تلقائياً
+        ),
+        realtimeClientOptions: const RealtimeClientOptions(
+          logLevel: RealtimeLogLevel.info,
+        ),
+        storageOptions: const StorageClientOptions(
+          retryAttempts: 3,
+        ),
+      ).timeout(const Duration(seconds: 20));
+
+      debugPrint('[Init] Supabase initialized successfully');
+    }
+  } catch (e) {
+    debugPrint('[Init] Supabase init failed: $e');
+    // ═══ تحسين 3: إعادة محاولة بعد 3 ثوان ═══
+    Future.delayed(const Duration(seconds: 3), () async {
+      try {
+        if (SupabaseConfig.url.isNotEmpty) {
+          await Supabase.initialize(
+            url: SupabaseConfig.url,
+            anonKey: SupabaseConfig.anonKey,
+            debug: false,
+            authOptions: const FlutterAuthClientOptions(
+              authFlowType: AuthFlowType.pkce,
+              autoRefreshToken: true,
+            ),
+          ).timeout(const Duration(seconds: 20));
+          debugPrint('[Init] Supabase retry succeeded');
+        }
+      } catch (retryError) {
+        debugPrint('[Init] Supabase retry also failed: $retryError');
+      }
+    });
+  }
+
+  // Init notifications
+  try {
+    if (SupabaseConfig.isConfigured) {
+      NotificationService.init(ApiClient());
+    }
+  } catch (_) {}
 }
 
 class EpiSupervisorApp extends ConsumerStatefulWidget {
@@ -90,7 +136,6 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
         });
       }
     } catch (e) {
-      // If onboarding check fails (e.g. on web), skip it
       debugPrint('Onboarding check failed: $e');
       if (mounted) {
         setState(() {
@@ -151,47 +196,6 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
       builder: (context, child) {
         return Directionality(textDirection: TextDirection.rtl, child: child!);
       },
-    );
-  }
-}
-
-/// Web-safe error app — shows error message with proper MaterialApp setup
-class _ErrorApp extends StatelessWidget {
-  final String title;
-  final String message;
-  const _ErrorApp({required this.title, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      locale: const Locale('ar', 'IQ'),
-      supportedLocales: const [Locale('ar', 'IQ')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      home: Directionality(
-        textDirection: TextDirection.rtl,
-        child: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                  const SizedBox(height: 8),
-                  Text(message, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Tajawal')),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

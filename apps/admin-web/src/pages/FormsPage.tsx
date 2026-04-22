@@ -6,7 +6,8 @@ import {
   Hash, ListChecks, Camera, QrCode, PenTool, Type, ArrowUpDown,
   Settings, LayoutGrid, Columns3, Tag, BarChart3, AlertTriangle,
   Send, X, Check, Loader2, CheckCircle2, Download, Database,
-  RefreshCw, ChevronLeft, User, Filter as FilterIcon, XCircle
+  RefreshCw, ChevronLeft, User, Filter as FilterIcon, XCircle,
+  Users, Activity
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,12 +18,17 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Progress } from '@/components/ui/progress'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import {
+  BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts'
 import { Header } from '@/components/layout/header'
 import { useForms, useCreateForm, useUpdateForm, useDeleteForm, useFormSubmissionCounts, useSubmissions, useUpdateSubmissionStatus } from '@/hooks/useApi'
 import { ROLE_LABELS, ROLE_HIERARCHY, STATUS_LABELS, STATUS_COLORS, type Form, type UserRole, type SubmissionStatus, type FormSubmission } from '@/types/database'
@@ -1664,6 +1670,8 @@ function DeleteFormDialog({ open, onOpenChange, form, onSuccess }: DeleteFormDia
 
 // ==================== Per-Form Data Management Dialog ====================
 
+const ANALYTICS_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6']
+
 interface FormDataDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -1671,9 +1679,9 @@ interface FormDataDialogProps {
 }
 
 function FormDataDialog({ open, onOpenChange, form }: FormDataDialogProps) {
+  const [activeTab, setActiveTab] = useState('data')
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [search, setSearch] = useState('')
   const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FormSubmission | null>(null)
   const { toast } = useToast()
@@ -1686,13 +1694,118 @@ function FormDataDialog({ open, onOpenChange, form }: FormDataDialogProps) {
     pageSize: 15,
   })
 
+  // Fetch ALL submissions for analytics (no pagination)
+  const { data: allData, isLoading: allLoading } = useSubmissions({
+    formId: form.id,
+    pageSize: 10000,
+  })
+
   const submissions = data?.data || []
+  const allSubmissions = allData?.data || []
   const totalCount = data?.count || 0
   const totalPages = Math.ceil(totalCount / 15)
 
+  // ─── Analytics computations ──────────────────────────────
+  const analytics = useMemo(() => {
+    if (allSubmissions.length === 0) return null
+
+    // Status distribution
+    const statusDist = { submitted: 0, draft: 0 }
+    allSubmissions.forEach(s => {
+      if (s.status === 'submitted') statusDist.submitted++
+      else statusDist.draft++
+    })
+
+    // Timeline (last 30 days)
+    const timeline: Record<string, { date: string; count: number }> = {}
+    const now = new Date()
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000)
+      const key = d.toISOString().split('T')[0]
+      timeline[key] = { date: key.slice(5), count: 0 }
+    }
+    allSubmissions.forEach(s => {
+      const key = s.created_at?.split('T')[0]
+      if (timeline[key]) timeline[key].count++
+    })
+
+    // By governorate
+    const byGov: Record<string, number> = {}
+    allSubmissions.forEach(s => {
+      const govId = (s as Record<string, unknown>).governorate_id as string || 'unknown'
+      byGov[govId] = (byGov[govId] || 0) + 1
+    })
+
+    // Field analysis — find yes/no fields and aggregate
+    const fieldAgg: Record<string, { yes: number; no: number; total: number }> = {}
+    allSubmissions.forEach(s => {
+      const d = s.data as Record<string, unknown> || {}
+      Object.entries(d).forEach(([key, val]) => {
+        if (typeof val === 'boolean') {
+          if (!fieldAgg[key]) fieldAgg[key] = { yes: 0, no: 0, total: 0 }
+          fieldAgg[key].total++
+          if (val) fieldAgg[key].yes++
+          else fieldAgg[key].no++
+        }
+      })
+    })
+
+    // Numeric field sums
+    const numericAgg: Record<string, { sum: number; count: number; avg: number }> = {}
+    allSubmissions.forEach(s => {
+      const d = s.data as Record<string, unknown> || {}
+      Object.entries(d).forEach(([key, val]) => {
+        if (typeof val === 'number' && !isNaN(val)) {
+          if (!numericAgg[key]) numericAgg[key] = { sum: 0, count: 0, avg: 0 }
+          numericAgg[key].sum += val
+          numericAgg[key].count++
+        }
+      })
+    })
+    Object.values(numericAgg).forEach(v => { v.avg = v.count > 0 ? v.sum / v.count : 0 })
+
+    // Submissions per day of week
+    const byDayOfWeek = [0, 1, 2, 3, 4, 5, 6].map(d => ({ day: d, count: 0 }))
+    const dayNames = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت']
+    allSubmissions.forEach(s => {
+      const d = new Date(s.created_at)
+      byDayOfWeek[d.getDay()].count++
+    })
+
+    // Submissions per hour
+    const byHour = Array.from({ length: 24 }, (_, i) => ({ hour: `${i}:00`, count: 0 }))
+    allSubmissions.forEach(s => {
+      const d = new Date(s.created_at)
+      byHour[d.getHours()].count++
+    })
+
+    // Top submitters
+    const bySubmitter: Record<string, { name: string; count: number }> = {}
+    allSubmissions.forEach(s => {
+      const name = s.profiles?.full_name || 'غير معروف'
+      if (!bySubmitter[name]) bySubmitter[name] = { name, count: 0 }
+      bySubmitter[name].count++
+    })
+    const topSubmitters = Object.values(bySubmitter).sort((a, b) => b.count - a.count).slice(0, 10)
+
+    return {
+      statusDist,
+      timeline: Object.values(timeline),
+      fieldAgg,
+      numericAgg,
+      byDayOfWeek: byDayOfWeek.map((d, i) => ({ ...d, name: dayNames[i] })),
+      byHour,
+      topSubmitters,
+      total: allSubmissions.length,
+      approvalRate: allSubmissions.length > 0
+        ? (statusDist.submitted / allSubmissions.length) * 100
+        : 0,
+    }
+  }, [allSubmissions])
+
   // Export submissions for this form only
   const exportFormSubmissions = async () => {
-    const { data: allData } = await supabase
+    const { data: exportData } = await supabase
       .from('form_submissions')
       .select('*, profiles(full_name, email)')
       .eq('form_id', form.id)
@@ -1700,13 +1813,13 @@ function FormDataDialog({ open, onOpenChange, form }: FormDataDialogProps) {
       .order('created_at', { ascending: false })
       .limit(10000)
 
-    if (!allData || allData.length === 0) {
+    if (!exportData || exportData.length === 0) {
       toast({ title: 'لا توجد بيانات للتصدير', variant: 'destructive' })
       return
     }
 
     const headers = ['الرقم', 'المُرسل', 'البريد', 'الحالة', 'التاريخ', 'البيانات']
-    const rows = allData.map((s, i) => ({
+    const rows = exportData.map((s, i) => ({
       'الرقم': i + 1,
       'المُرسل': s.profiles?.full_name || '',
       'البريد': s.profiles?.email || '',
@@ -1732,10 +1845,9 @@ function FormDataDialog({ open, onOpenChange, form }: FormDataDialogProps) {
     link.download = `${form.title_ar}_${new Date().toISOString().split('T')[0]}.csv`
     link.click()
     URL.revokeObjectURL(url)
-    toast({ title: `تم تصدير ${allData.length} إرسالية`, variant: 'success' })
+    toast({ title: `تم تصدير ${exportData.length} إرسالية`, variant: 'success' })
   }
 
-  // Delete a single submission
   const deleteSubmission = async (submission: FormSubmission) => {
     const { error } = await supabase
       .from('form_submissions')
@@ -1751,7 +1863,6 @@ function FormDataDialog({ open, onOpenChange, form }: FormDataDialogProps) {
     }
   }
 
-  // Update submission status
   const handleStatusUpdate = (submission: FormSubmission, newStatus: SubmissionStatus) => {
     updateStatus.mutate(
       { id: submission.id, status: newStatus },
@@ -1768,122 +1879,356 @@ function FormDataDialog({ open, onOpenChange, form }: FormDataDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="sm:max-w-5xl max-h-[92vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Database className="w-5 h-5 text-primary" />
             إدارة بيانات: {form.title_ar}
           </DialogTitle>
           <DialogDescription>
-            عرض وتصدير وتعديل وحذف إرساليات هذا النموذج
+            عرض وتحليل وتصدير وتعديل وحذف إرساليات هذا النموذج
           </DialogDescription>
         </DialogHeader>
 
-        {/* Toolbar */}
-        <div className="px-6 py-3 flex flex-wrap items-center gap-3 border-b">
-          <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
-            <TabsList className="h-8">
-              <TabsTrigger value="all" className="text-xs px-3">الكل ({totalCount})</TabsTrigger>
-              <TabsTrigger value="submitted" className="text-xs px-3">مرسلة</TabsTrigger>
-              <TabsTrigger value="draft" className="text-xs px-3">مسودة</TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 px-6">
+          <TabsList className="w-full justify-start gap-1 mb-2 bg-transparent p-0 h-auto">
+            <TabsTrigger value="data" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md px-3 py-1.5 text-xs">
+              <Database className="w-3.5 h-3.5 ml-1" />الإرساليات ({totalCount})
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md px-3 py-1.5 text-xs">
+              <BarChart3 className="w-3.5 h-3.5 ml-1" />التحليلات
+            </TabsTrigger>
+          </TabsList>
 
-          <div className="relative flex-1 min-w-[150px]">
-            <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              placeholder="بحث..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 text-xs pr-8"
-            />
-          </div>
+          {/* ===== DATA TAB ===== */}
+          <TabsContent value="data" className="mt-0 flex-1 flex flex-col min-h-0">
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center gap-3 py-3 border-b">
+              <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="all" className="text-xs px-3">الكل</TabsTrigger>
+                  <TabsTrigger value="submitted" className="text-xs px-3">مرسلة</TabsTrigger>
+                  <TabsTrigger value="draft" className="text-xs px-3">مسودة</TabsTrigger>
+                </TabsList>
+              </Tabs>
 
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={exportFormSubmissions}>
-            <Download className="w-3.5 h-3.5" />
-            تصدير CSV
-          </Button>
-
-          <Button variant="ghost" size="icon-sm" onClick={() => refetch()}>
-            <RefreshCw className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-
-        {/* Submissions Table */}
-        <div className="flex-1 overflow-auto px-6">
-          {isLoading ? (
-            <div className="py-6 space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="w-full h-10" />)}
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs mr-auto" onClick={exportFormSubmissions}>
+                <Download className="w-3.5 h-3.5" /> تصدير CSV
+              </Button>
+              <Button variant="ghost" size="icon-sm" onClick={() => refetch()}>
+                <RefreshCw className="w-3.5 h-3.5" />
+              </Button>
             </div>
-          ) : submissions.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">لا توجد إرساليات لهذا النموذج</p>
+
+            {/* Table */}
+            <div className="flex-1 overflow-auto">
+              {isLoading ? (
+                <div className="py-6 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="w-full h-10" />)}</div>
+              ) : submissions.length === 0 ? (
+                <div className="text-center py-16 text-muted-foreground">
+                  <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">لا توجد إرساليات لهذا النموذج</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="text-right p-2.5 font-medium text-xs text-muted-foreground w-8">#</th>
+                      <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">المُرسل</th>
+                      <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">الحالة</th>
+                      <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">التاريخ</th>
+                      <th className="text-center p-2.5 font-medium text-xs text-muted-foreground w-24">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {submissions.map((sub, idx) => (
+                      <tr key={sub.id} className="border-b hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => setSelectedSubmission(sub)}>
+                        <td className="p-2.5 text-muted-foreground text-xs">{(page - 1) * 15 + idx + 1}</td>
+                        <td className="p-2.5">
+                          <div className="flex items-center gap-2">
+                            <User className="w-3.5 h-3.5 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-xs">{sub.profiles?.full_name || '—'}</p>
+                              <p className="text-[10px] text-muted-foreground">{sub.profiles?.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-2.5">
+                          <Badge className={cn('text-[10px]', STATUS_COLORS[sub.status as SubmissionStatus])}>
+                            {STATUS_LABELS[sub.status as SubmissionStatus]}
+                          </Badge>
+                        </td>
+                        <td className="p-2.5 text-xs text-muted-foreground">{formatRelativeTime(sub.created_at)}</td>
+                        <td className="p-2.5">
+                          <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon-sm" className="h-7 w-7" onClick={() => setSelectedSubmission(sub)} title="عرض">
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(sub)} title="حذف">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/30">
-                  <th className="text-right p-2.5 font-medium text-xs text-muted-foreground w-8">#</th>
-                  <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">المُرسل</th>
-                  <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">الحالة</th>
-                  <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">التاريخ</th>
-                  <th className="text-center p-2.5 font-medium text-xs text-muted-foreground w-24">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {submissions.map((sub, idx) => (
-                  <tr key={sub.id} className="border-b hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => setSelectedSubmission(sub)}>
-                    <td className="p-2.5 text-muted-foreground text-xs">{(page - 1) * 15 + idx + 1}</td>
-                    <td className="p-2.5">
-                      <div className="flex items-center gap-2">
-                        <User className="w-3.5 h-3.5 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium text-xs">{sub.profiles?.full_name || '—'}</p>
-                          <p className="text-[10px] text-muted-foreground">{sub.profiles?.email}</p>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="py-3 border-t flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  عرض {(page - 1) * 15 + 1} — {Math.min(page * 15, totalCount)} من {totalCount}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon-sm" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Button>
+                  <span className="text-xs font-medium px-1">{page}/{totalPages}</span>
+                  <Button variant="outline" size="icon-sm" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ===== ANALYTICS TAB ===== */}
+          <TabsContent value="analytics" className="mt-0 flex-1 overflow-auto">
+            {allLoading ? (
+              <div className="py-6 space-y-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="w-full h-40" />)}</div>
+            ) : !analytics ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">لا توجد بيانات كافية للتحليل</p>
+              </div>
+            ) : (
+              <div className="space-y-5 pb-4">
+                {/* ─── Summary Cards ───────────────────────── */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/50">
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-heading font-bold text-blue-700">{analytics.total}</p>
+                      <p className="text-xs text-blue-600/80">إجمالي الإرساليات</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100/50">
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-heading font-bold text-emerald-700">{analytics.statusDist.submitted}</p>
+                      <p className="text-xs text-emerald-600/80">مرسلة</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100/50">
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-heading font-bold text-amber-700">{analytics.statusDist.draft}</p>
+                      <p className="text-xs text-amber-600/80">مسودة</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-purple-50 to-purple-100/50">
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-heading font-bold text-purple-700">{analytics.approvalRate.toFixed(1)}%</p>
+                      <p className="text-xs text-purple-600/80">نسبة الإرسال</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* ─── Timeline + Status Pie ───────────────── */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  {/* Timeline */}
+                  <Card className="lg:col-span-2 border-0 shadow-sm">
+                    <CardContent className="p-4">
+                      <h4 className="text-sm font-heading font-bold mb-3 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-primary" /> حركة الإرساليات (30 يوم)
+                      </h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <AreaChart data={analytics.timeline}>
+                          <defs>
+                            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" />
+                          <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" />
+                          <Tooltip
+                            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                            labelFormatter={(v) => `التاريخ: ${v}`}
+                            formatter={(v: number) => [v, 'إرسالية']}
+                          />
+                          <Area type="monotone" dataKey="count" name="إرساليات" stroke="#3b82f6" fill="url(#areaGrad)" strokeWidth={2} dot={false} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Status Pie */}
+                  <Card className="border-0 shadow-sm">
+                    <CardContent className="p-4">
+                      <h4 className="text-sm font-heading font-bold mb-3 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-primary" /> توزيع الحالات
+                      </h4>
+                      <ResponsiveContainer width="100%" height={180}>
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: 'مرسلة', value: analytics.statusDist.submitted },
+                              { name: 'مسودة', value: analytics.statusDist.draft },
+                            ]}
+                            cx="50%" cy="50%" innerRadius={45} outerRadius={70}
+                            paddingAngle={4} dataKey="value" stroke="#fff" strokeWidth={2}
+                          >
+                            <Cell fill="#10b981" />
+                            <Cell fill="#f59e0b" />
+                          </Pie>
+                          <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="flex justify-center gap-4 mt-2">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <div className="w-3 h-3 rounded-full bg-emerald-500" /> مرسلة
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <div className="w-3 h-3 rounded-full bg-amber-500" /> مسودة
                         </div>
                       </div>
-                    </td>
-                    <td className="p-2.5">
-                      <Badge className={cn('text-[10px]', STATUS_COLORS[sub.status as SubmissionStatus])}>
-                        {STATUS_LABELS[sub.status as SubmissionStatus]}
-                      </Badge>
-                    </td>
-                    <td className="p-2.5 text-xs text-muted-foreground">{formatRelativeTime(sub.created_at)}</td>
-                    <td className="p-2.5">
-                      <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon-sm" className="h-7 w-7" onClick={() => setSelectedSubmission(sub)} title="عرض">
-                          <Eye className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(sub)} title="حذف">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                    </CardContent>
+                  </Card>
+                </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="px-6 py-3 border-t flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              عرض {(page - 1) * 15 + 1} — {Math.min(page * 15, totalCount)} من {totalCount}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon-sm" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </Button>
-              <span className="text-xs font-medium px-1">{page}/{totalPages}</span>
-              <Button variant="outline" size="icon-sm" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          </div>
-        )}
+                {/* ─── Day of Week + Hour Distribution ─────── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <Card className="border-0 shadow-sm">
+                    <CardContent className="p-4">
+                      <h4 className="text-sm font-heading font-bold mb-3 flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-primary" /> الإرساليات حسب اليوم
+                      </h4>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={analytics.byDayOfWeek}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} stroke="#d1d5db" />
+                          <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" />
+                          <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                          <Bar dataKey="count" name="إرساليات" radius={[6, 6, 0, 0]} fill="#8b5cf6" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm">
+                    <CardContent className="p-4">
+                      <h4 className="text-sm font-heading font-bold mb-3 flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-primary" /> الإرساليات حسب الساعة
+                      </h4>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={analytics.byHour}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="hour" tick={{ fontSize: 9, fill: '#6b7280' }} stroke="#d1d5db" />
+                          <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" />
+                          <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                          <Bar dataKey="count" name="إرساليات" radius={[4, 4, 0, 0]} fill="#06b6d4" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* ─── Top Submitters ──────────────────────── */}
+                {analytics.topSubmitters.length > 0 && (
+                  <Card className="border-0 shadow-sm">
+                    <CardContent className="p-4">
+                      <h4 className="text-sm font-heading font-bold mb-3 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-primary" /> أكثر المُرسلين نشاطاً
+                      </h4>
+                      <div className="space-y-2">
+                        {analytics.topSubmitters.map((s, i) => {
+                          const maxCount = analytics.topSubmitters[0]?.count || 1
+                          const ratio = s.count / maxCount
+                          return (
+                            <div key={i} className="flex items-center gap-3">
+                              <span className="text-xs font-mono text-muted-foreground w-5">{i + 1}</span>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-medium">{s.name}</span>
+                                  <span className="text-xs font-bold text-primary">{s.count}</span>
+                                </div>
+                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all"
+                                    style={{ width: `${ratio * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* ─── Yes/No Field Analysis ───────────────── */}
+                {Object.keys(analytics.fieldAgg).length > 0 && (
+                  <Card className="border-0 shadow-sm">
+                    <CardContent className="p-4">
+                      <h4 className="text-sm font-heading font-bold mb-3 flex items-center gap-2">
+                        <ListChecks className="w-4 h-4 text-primary" /> تحليل الحقول (نعم/لا)
+                      </h4>
+                      <div className="space-y-3">
+                        {Object.entries(analytics.fieldAgg)
+                          .sort(([, a], [, b]) => (a.yes / a.total) - (b.yes / b.total))
+                          .map(([key, val]) => {
+                            const pct = val.total > 0 ? (val.yes / val.total) * 100 : 0
+                            const color = pct >= 80 ? 'emerald' : pct >= 50 ? 'amber' : 'red'
+                            return (
+                              <div key={key}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-medium truncate max-w-[60%]" title={key}>{key}</span>
+                                  <span className={`text-xs font-bold text-${color}-600`}>{pct.toFixed(0)}% ({val.yes}/{val.total})</span>
+                                </div>
+                                <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all bg-${color}-500`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })
+                        }
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* ─── Numeric Field Sums ──────────────────── */}
+                {Object.keys(analytics.numericAgg).length > 0 && (
+                  <Card className="border-0 shadow-sm">
+                    <CardContent className="p-4">
+                      <h4 className="text-sm font-heading font-bold mb-3 flex items-center gap-2">
+                        <Hash className="w-4 h-4 text-primary" /> ملخص الحقول الرقمية
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {Object.entries(analytics.numericAgg)
+                          .sort(([, a], [, b]) => b.sum - a.sum)
+                          .map(([key, val]) => (
+                            <div key={key} className="p-3 bg-muted/30 rounded-lg">
+                              <p className="text-xs text-muted-foreground truncate" title={key}>{key}</p>
+                              <p className="text-lg font-heading font-bold text-primary">{val.sum.toLocaleString()}</p>
+                              <p className="text-[10px] text-muted-foreground">المتوسط: {val.avg.toFixed(1)} ({val.count} قيمة)</p>
+                            </div>
+                          ))
+                        }
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="px-6 py-3 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full">
@@ -1908,12 +2253,9 @@ function FormDataDialog({ open, onOpenChange, form }: FormDataDialogProps) {
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
               <DialogTitle className="text-destructive flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5" />
-                تأكيد الحذف
+                <AlertTriangle className="w-5 h-5" /> تأكيد الحذف
               </DialogTitle>
-              <DialogDescription>
-                هل أنت متأكد من حذف هذه الإرسالية؟ لا يمكن التراجع.
-              </DialogDescription>
+              <DialogDescription>هل أنت متأكد من حذف هذه الإرسالية؟ لا يمكن التراجع.</DialogDescription>
             </DialogHeader>
             <div className="p-3 bg-destructive/5 border border-destructive/20 rounded-lg text-sm">
               <p>الإرسالية: {deleteTarget.id.slice(0, 8)}…</p>

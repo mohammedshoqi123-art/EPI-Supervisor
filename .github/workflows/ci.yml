@@ -256,13 +256,17 @@ jobs:
           name: epi-supervisor-web
           path: flutter-web-dist/
 
+      - name: Clean old Flutter Web files
+        run: |
+          rm -rf flutter-web-dist/canvaskit flutter-web-dist/*.map 2>/dev/null || true
+
       - name: Deploy to gh-pages branch (app/ subfolder)
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./flutter-web-dist
           destination_dir: app
-          keep_files: true
+          keep_files: false
           commit_message: "deploy: Flutter Web update [skip ci]"
 
   # ─── Deploy Edge Functions ───────────────────────────────

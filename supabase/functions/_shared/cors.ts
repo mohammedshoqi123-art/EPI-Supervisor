@@ -4,14 +4,22 @@
  *
  * SECURITY: Default is fail-closed. Set ALLOWED_ORIGINS in Supabase Edge Function Secrets.
  * Example: ALLOWED_ORIGINS=https://your-app.com,https://admin.your-app.com
+ *
+ * CONFIGURATION: Set ALLOWED_ORIGINS as a comma-separated list of allowed origins.
+ * The GitHub Pages origin should always be included:
+ *   https://mohammedshoqi123-art.github.io
  */
 
-const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '').split(',').map(s => s.trim()).filter(Boolean)
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean)
 
 export function corsHeaders(origin: string | null): Record<string, string> {
   // ═══ FAIL-CLOSED: If no origins configured, only allow requests without Origin header ═══
   // Mobile apps (Flutter Android/iOS) don't send Origin header → they pass through.
-  // Browser requests (Flutter Web) send Origin header → they must be explicitly allowed.
+  // Browser requests (Flutter Web / Admin Dashboard) send Origin header → must be explicitly allowed.
+
   if (ALLOWED_ORIGINS.length === 0) {
     // No Origin header = direct API call from mobile app → allow
     if (!origin) {
@@ -22,6 +30,7 @@ export function corsHeaders(origin: string | null): Record<string, string> {
       }
     }
     // Origin header present but no allowlist configured → block (fail-closed)
+    console.warn(`[CORS] ⚠️ Blocked request from ${origin} — ALLOWED_ORIGINS not configured`)
     return {
       'Access-Control-Allow-Origin': 'null',
       'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',

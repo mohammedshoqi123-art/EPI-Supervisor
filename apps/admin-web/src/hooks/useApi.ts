@@ -75,18 +75,26 @@ export function useAuth() {
     queryKey: ['auth'],
     queryFn: async () => {
       if (!isConfigured) return null
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
       if (!session) return null
 
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*, governorates(name_ar), districts(name_ar)')
         .eq('id', session.user.id)
         .single()
 
+      if (profileError) {
+        // Profile not found is not a fatal error — user may be new
+        console.warn('[Auth] Profile fetch error:', profileError.message)
+        return { session, profile: null }
+      }
+
       return { session, profile }
     },
-    retry: 0,
+    retry: 1,
+    retryDelay: 2000,
     staleTime: 30000,
     enabled: isConfigured,
   })

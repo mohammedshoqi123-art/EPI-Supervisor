@@ -82,7 +82,15 @@ export function AppLayout() {
     return <Navigate to="/login" replace />
   }
 
-  const user = authData.profile
+  const user = authData.profile || {
+    id: authData.session.user.id,
+    email: authData.session.user.email || '',
+    full_name: authData.session.user.email?.split('@')[0] || 'مستخدم',
+    role: 'admin' as const,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

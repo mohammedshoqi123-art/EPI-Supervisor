@@ -5,6 +5,17 @@ import path from 'path'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
+  // Validate required environment variables in production build
+  if (mode === 'production') {
+    const required = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY']
+    const missing = required.filter(key => !env[key])
+    if (missing.length > 0) {
+      console.warn(`\n⚠️  Missing environment variables: ${missing.join(', ')}`)
+      console.warn('   The app will build but Supabase features will not work.')
+      console.warn('   Set these in your .env file or CI environment.\n')
+    }
+  }
+
   return {
     plugins: [react()],
     base: '/EPI-Supervisor/',

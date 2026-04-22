@@ -2,7 +2,8 @@ import { useState } from 'react'
 import {
   Users, FileText, FileStack, TrendingUp, TrendingDown,
   CheckCircle2, XCircle, Clock, Activity, BarChart3, ArrowUpRight,
-  Shield, ShieldCheck, Zap, Target, Sparkles, Calendar, RefreshCw
+  Shield, ShieldCheck, Zap, Target, Sparkles, Calendar, RefreshCw,
+  AlertTriangle, Database
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,6 +15,7 @@ import { Header } from '@/components/layout/header'
 import { useDashboardStats, useSubmissionsChart, useGovernorateStats, useRoleDistribution } from '@/hooks/useApi'
 import { formatNumber, formatPercent, cn } from '@/lib/utils'
 import { useCampaign } from '@/lib/campaign-context'
+import { isConfigured } from '@/lib/supabase'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -106,10 +108,59 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export default function DashboardPage() {
   const { campaign, labelAr, isFiltered } = useCampaign()
-  const { data: stats, isLoading: statsLoading, refetch, isFetching } = useDashboardStats(campaign)
+  const { data: stats, isLoading: statsLoading, refetch, isFetching, error: statsError } = useDashboardStats(campaign)
   const { data: chartData, isLoading: chartLoading } = useSubmissionsChart(campaign)
   const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign)
   const { data: roleDistribution, isLoading: roleLoading } = useRoleDistribution()
+
+  // Show configuration error state
+  if (!isConfigured) {
+    return (
+      <div className="page-enter">
+        <Header title="لوحة التحكم" subtitle="مرحباً بك في لوحة إدارة منصة EPI Supervisor's" />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Card className="max-w-md border-amber-200 bg-amber-50/50">
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto">
+                <Database className="w-8 h-8 text-amber-600" />
+              </div>
+              <h3 className="text-lg font-heading font-bold text-amber-900">Supabase غير مُعدّ</h3>
+              <p className="text-sm text-amber-700">
+                يرجى تعيين متغيرات البيئة في GitHub Secrets:
+              </p>
+              <div className="text-xs font-mono text-left bg-amber-100 p-3 rounded-lg text-amber-800" dir="ltr">
+                SUPABASE_URL<br/>
+                SUPABASE_ANON_KEY
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // Show connection error state
+  if (statsError) {
+    return (
+      <div className="page-enter">
+        <Header title="لوحة التحكم" subtitle="مرحباً بك" />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Card className="max-w-md border-red-200 bg-red-50/50">
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-lg font-heading font-bold text-red-900">خطأ في الاتصال</h3>
+              <p className="text-sm text-red-700">{(statsError as Error)?.message || 'تعذر الاتصال بقاعدة البيانات'}</p>
+              <Button onClick={() => refetch()} variant="outline" className="gap-2">
+                <RefreshCw className="w-4 h-4" /> إعادة المحاولة
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
   const statCards: StatCardProps[] = stats ? [
     {

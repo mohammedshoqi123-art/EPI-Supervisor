@@ -116,6 +116,10 @@ export default function LoginPage() {
                 <div>
                   <p className="font-semibold">Supabase غير مُعدّ</p>
                   <p className="text-xs mt-1 opacity-80">يرجى تعيين متغيرات البيئة VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY</p>
+                  <p className="text-xs mt-2 opacity-60 font-mono" dir="ltr">
+                    URL: {import.meta.env.VITE_SUPABASE_URL || '(empty)'}<br/>
+                    Key: {import.meta.env.VITE_SUPABASE_ANON_KEY ? '***set***' : '(empty)'}
+                  </p>
                 </div>
               </div>
             )}

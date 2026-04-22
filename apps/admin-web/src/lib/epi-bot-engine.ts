@@ -280,7 +280,7 @@ interface IntentDef {
   id: string
   label: string
   keywords: string[]
-  category: 'query' | 'action' | 'navigation' | 'help' | 'analysis' | 'alert'
+  category: 'query' | 'action' | 'navigation' | 'help' | 'analysis' | 'alert' | 'context'
   responseTemplate: string
   priority: number
 }
@@ -611,9 +611,7 @@ export class EPIBotEngine {
       useLocal = true
     }
 
-    // Store in conversation memory
-    const userId = context?.userId || 'anonymous'
-    const sessionId = context?.sessionId || this.defaultSessionId
+    // Store in conversation memory (reuse userId/sessionId from above)
     this.memory.addTurn(userId, sessionId, {
       role: 'user',
       text,
@@ -797,6 +795,9 @@ export class EPIBotEngine {
       query_users: ['المستخدمين غير النشطين', 'توزيع الصلاحيات', 'آخر تسجيل دخول'],
       query_coverage: ['أي المناطق أقل تغطية؟', 'قارن بالهدف الوطني', 'توقع التغطية الشهر القادم'],
       query_vaccination: ['ما أكثر اللقاحات نقصاً؟', 'حالة سلسلة التبريد', 'تغطية الحصب'],
+      query_child_vaccines: ['كم عمر طفلك؟', 'متى الموعد القادم؟', 'هل فيه لقاحات متأخرة؟'],
+      child_age_response: ['وش اللقاحات القادمة؟', 'هل فيه تأخر؟', 'متى الموعد التالي؟'],
+      query_schedule: ['جدول الحملة القادمة', 'أي اللقاحات ناقصة؟', 'مقارنة بالجدول الرسمي'],
       create_report: ['أرسل التقرير بالبريد', 'صدر كـ PDF', 'أضف رسوم بيانية'],
       low_coverage: ['حدد الأسباب المحتملة', 'اقترح خطة تحسين', 'أي المناطق متأثرة؟'],
       greeting: ['📊 حالة الإرساليات', '📈 تقرير يومي'],

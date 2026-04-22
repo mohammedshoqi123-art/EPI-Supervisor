@@ -97,6 +97,7 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
           QuickReplyData(text: 'هل مجاني؟', emoji: '💰'),
           QuickReplyData(text: 'وين أطعم؟', emoji: '📍'),
           QuickReplyData(text: 'حالات خاصة', emoji: '👶'),
+          QuickReplyData(text: 'جدول التحصين', emoji: '📅'),
           QuickReplyData(text: 'تحليلات النظام', emoji: '📊'),
         ],
       ));
@@ -286,6 +287,30 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
       );
     }
 
+    // جدول التحصين الكامل
+    if (lower.contains('جدول') || lower.contains('مواعيد') || lower.contains('متى التطعيم')) {
+      return ChatMessage(
+        text: '📅 جدول التحصين في اليمن:\n\n'
+            '🟢 عند الولادة: BCG + HepB0 + OPV0\n'
+            '🟡 6 أسابيع: OPV1 + Penta1 + PCV1 + Rota1\n'
+            '🟠 10 أسابيع: OPV2 + Penta2 + PCV2 + Rota2\n'
+            '🔴 14 أسبوع: OPV3 + Penta3 + PCV3 + IPV1\n'
+            '🟣 9 أشهر: MR1 + OPV4 + IPV2 + فيتامين أ (100k)\n'
+            '💪 18 شهر: MR2 + Penta4 + OPV5 + فيتامين أ (200k)\n'
+            '🏫 5-7 سنوات: Td + MR تعزيزية + فيتامين أ (200k)\n\n'
+            '⏰ الحدود:\n'
+            '• BCG: لا يُعطي بعد سنة واحدة\n'
+            '• Rota: لا يُعطي بعد سنتين\n'
+            '• باقي اللقاحات: لا يُعطي بعد 5 سنوات',
+        source: MsgSource.botLocal,
+        intent: 'schedule',
+        quickReplies: const [
+          QuickReplyData(text: 'تطعيمات طفلي', emoji: '💉'),
+          QuickReplyData(text: 'وش الآثار الجانبية؟', emoji: '⚠️'),
+        ],
+      );
+    }
+
     // رد افتراضي
     return ChatMessage(
       text: '🤔 ما فهمت السؤال تماماً. جرب تسأل عن:\n\n'
@@ -309,7 +334,8 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
     if (months < 6) return '💧 OPV3\n5️⃣ الخماسي 3\n🫁 PCV3\n💉 IPV1 (شلل حقن)';
     if (months < 9) return '🔴 MR1 (الحصبة — 9 أشهر)\n💧 OPV4\n💉 IPV2 (شلل حقن)\n🌟 فيتامين أ (100,000 و.د)';
     if (months < 18) return '🔴 MR2 (18 شهر)\n💪 Penta4 (خماسي تعزيزية)\n💧 OPV5\n🌟 فيتامين أ (200,000 و.د)';
-    return '🏫 Td (مدرسي)\n🔴 MR تعزيزية\n🌟 فيتامين أ (200,000 و.د)';
+    if (months < 60) return '💪 Penta4 (18 شهر) — مكتملة\n🔴 MR2 (18 شهر) — مكتملة\n🌟 فيتامين أ (200,000 عند 18 شهر) — مكتملة\n⏳ الجرعة القادمة: Td + MR تعزيزية عند دخول المدارس (5-7 سنوات)';
+  return '🏫 Td (مدرسي)\n🔴 MR تعزيزية\n🌟 فيتامين أ (200,000 و.د)';
   }
 
   void _scrollToBottom() {

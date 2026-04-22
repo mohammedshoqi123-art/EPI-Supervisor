@@ -6,14 +6,16 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 /// Professional PDF Report Generator for EPI Supervisor
-/// Supports Arabic RTL, branded design, KPI cards, tables
+/// Supports Arabic RTL, branded design, analytics sections
 class ReportGenerator {
-  // Brand colors
+  // Brand colors — matching login screen gradient
   static const _primaryColor = PdfColor.fromInt(0xFF00897B);
-  static const _primaryDark = PdfColor.fromInt(0xFF004D40);
+  static const _primaryDark = PdfColor.fromInt(0xFF00695C);
+  static const _deepDark = PdfColor.fromInt(0xFF004D40);
   static const _accentColor = PdfColor.fromInt(0xFFE53935);
   static const _successColor = PdfColor.fromInt(0xFF43A047);
   static const _warningColor = PdfColor.fromInt(0xFFFF8F00);
+  static const _infoColor = PdfColor.fromInt(0xFF1976D2);
   static const _bgLight = PdfColor.fromInt(0xFFF5F7FA);
   static const _textDark = PdfColor.fromInt(0xFF212121);
   static const _textMuted = PdfColor.fromInt(0xFF757575);
@@ -22,9 +24,7 @@ class ReportGenerator {
   static pw.Font? _boldFont;
   static pw.Font? _lightFont;
 
-  /// Convenience: generate report by type (daily/weekly/monthly/coverage/shortages/governorate/supervision/comprehensive/all)
-  /// Builds metadata and empty analyticsData automatically.
-  /// Call this from UI screens that don't have live data on hand.
+  /// Convenience: generate report by type
   static Future<File> generateByType(String reportType) async {
     final now = DateTime.now();
     final dateStr =
@@ -35,55 +35,29 @@ class ReportGenerator {
 
     final reportMeta = <String, Map<String, String>>{
       'daily': {
-        'title': 'التقرير اليومي',
+        'title': 'تقرير الإرساليات اليومي',
         'subtitle': 'إحصائيات ومتابعة إرساليات اليوم',
         'period': dateStr,
       },
       'weekly': {
-        'title': 'التقرير الأسبوعي',
+        'title': 'تقرير الإرساليات الأسبوعي',
         'subtitle': 'ملخص أداء الأسبوع الماضي',
         'period': '$weekStr — $dateStr',
       },
-      'monthly': {
-        'title': 'التقرير الشهري',
-        'subtitle': 'ملخص شامل للشهر الحالي',
-        'period': 'الشهر الحالي — $dateStr',
-      },
-      'coverage': {
-        'title': 'تقرير التغطية',
-        'subtitle': 'Penta3، حصبة، تسرب',
+      'governorates': {
+        'title': 'تقرير أداء المحافظات',
+        'subtitle': 'مقارنة أداء المحافظات والمديريات',
         'period': 'آخر 30 يوم',
       },
-      'shortages': {
-        'title': 'تقرير النواقص',
-        'subtitle': 'نواقص حرجة ومستلزمات',
-        'period': 'آخر 30 يوم',
-      },
-      'governorate': {
-        'title': 'تقرير المحافظات',
-        'subtitle': 'ترتيب أداء المحافظات',
-        'period': 'آخر 30 يوم',
-      },
-      'supervision': {
-        'title': 'التقرير الإشرافي',
-        'subtitle': 'زيارات، ملاحظات، توصيات',
-        'period': 'آخر 30 يوم',
-      },
-      'comprehensive': {
+      'full': {
         'title': 'التقرير الشامل',
-        'subtitle': 'كل البيانات في تقرير واحد',
-        'period': 'آخر 30 يوم',
-      },
-      'all': {
-        'title': 'كل التقارير',
-        'subtitle': 'تقرير شامل يحتوي كل الأقسام',
+        'subtitle': 'كل البيانات والإحصائيات — تقرير متكامل',
         'period': 'آخر 30 يوم',
       },
     };
 
     final meta = reportMeta[reportType] ?? reportMeta['daily']!;
 
-    // Empty analytics structure — the PDF generator handles nulls gracefully
     final emptyAnalytics = <String, dynamic>{
       'submissions': <String, dynamic>{
         'total': 0,
@@ -114,6 +88,11 @@ class ReportGenerator {
     required Map<String, dynamic> analyticsData,
     List<Map<String, dynamic>>? governorateData,
     List<Map<String, dynamic>>? shortagesData,
+    // Analytics sections (from analytics screen tabs)
+    List<ReadinessGovData>? readinessData,
+    List<ComplianceSectionData>? complianceData,
+    List<ServiceNumberData>? serviceNumbersData,
+    List<ChallengeData>? challengesData,
     String? outputPath,
   }) async {
     await _loadFonts();
@@ -126,20 +105,11 @@ class ReportGenerator {
         analyticsData['submissions'] as Map<String, dynamic>? ?? {};
     final shortages = analyticsData['shortages'] as Map<String, dynamic>? ?? {};
     final total = submissions['total'] as int? ?? 0;
-    final today = submissions['today'] as int? ?? 0;
     final byStatus = submissions['byStatus'] as Map<String, dynamic>? ?? {};
-    final byDay = submissions['byDay'] as Map<String, dynamic>? ?? {};
-    final totalShortages = shortages['total'] as int? ?? 0;
-    final resolvedShortages = shortages['resolved'] as int? ?? 0;
-    final bySeverity = shortages['bySeverity'] as Map<String, dynamic>? ?? {};
-
     final approved = byStatus['approved'] as int? ?? 0;
-    final rejected = byStatus['rejected'] as int? ?? 0;
-    final pending = byStatus['submitted'] as int? ?? 0;
-    final draft = byStatus['draft'] as int? ?? 0;
     final completionRate = total > 0 ? ((approved / total) * 100).round() : 0;
 
-    // ═══ Page 1: Cover Page ═══
+    // ═══ Page 1: Cover Page — Login Screen Style ═══
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -147,246 +117,187 @@ class ReportGenerator {
         theme: pw.ThemeData.withFont(base: _font!, bold: _boldFont!),
         build: (ctx) => pw.Directionality(
           textDirection: pw.TextDirection.rtl,
-          child: pw.Stack(
-            children: [
-              // Background gradient header
-              pw.Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: pw.Container(
-                  height: 280,
-                  decoration: const pw.BoxDecoration(
-                    gradient: pw.LinearGradient(
-                      colors: [_primaryColor, _primaryDark],
-                      begin: pw.Alignment.topRight,
-                      end: pw.Alignment.bottomLeft,
-                    ),
-                  ),
-                ),
+          child: pw.Container(
+            decoration: const pw.BoxDecoration(
+              gradient: pw.LinearGradient(
+                colors: [_primaryColor, _primaryDark, _deepDark],
+                begin: pw.Alignment.topLeft,
+                end: pw.Alignment.bottomRight,
+                stops: [0.0, 0.6, 1.0],
               ),
-              // Content
-              pw.Column(
-                children: [
-                  pw.SizedBox(height: 60),
-                  // Logo area
-                  pw.Container(
-                    width: 80,
-                    height: 80,
-                    decoration: const pw.BoxDecoration(
-                      color: PdfColors.white,
-                      shape: pw.BoxShape.circle,
-                    ),
-                    child: pw.Center(
-                      child: pw.Text(
-                        'EPI',
-                        style: pw.TextStyle(
-                          font: _boldFont,
-                          fontSize: 24,
-                          color: _primaryColor,
-                        ),
+            ),
+            child: pw.Column(
+              children: [
+                pw.SizedBox(height: 80),
+                pw.Container(
+                  width: 90,
+                  height: 90,
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.white,
+                    shape: pw.BoxShape.circle,
+                    boxShadow: [
+                      pw.BoxShadow(
+                        color: PdfColor.fromInt(0x33000000),
+                        blurRadius: 20,
+                      ),
+                    ],
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      'EPI',
+                      style: pw.TextStyle(
+                        font: _boldFont,
+                        fontSize: 28,
+                        color: _primaryColor,
+                        letterSpacing: 1,
                       ),
                     ),
                   ),
-                  pw.SizedBox(height: 20),
-                  pw.Text(
-                    'منصة مشرف EPI',
-                    style: pw.TextStyle(
-                      font: _boldFont,
-                      fontSize: 28,
-                      color: PdfColors.white,
-                    ),
+                ),
+                pw.SizedBox(height: 24),
+                pw.Text(
+                  "EPI Supervisor's",
+                  style: pw.TextStyle(
+                    font: _boldFont,
+                    fontSize: 28,
+                    color: PdfColors.white,
+                    letterSpacing: 0.5,
                   ),
-                  pw.SizedBox(height: 6),
-                  pw.Text(
-                    'نظام الإشراف الميداني لحملات التطعيم',
+                ),
+                pw.SizedBox(height: 10),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 40),
+                  child: pw.Text(
+                    'النظام الالكتروني للاشراف على حملات وانشطة برنامج التحصين الصحي الموسع',
+                    textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
-                      font: _lightFont,
+                      font: _font,
                       fontSize: 14,
                       color: PdfColor.fromInt(0xB3FFFFFF),
+                      height: 1.6,
                     ),
                   ),
-                  pw.SizedBox(height: 40),
-                  // Report card
-                  pw.Container(
-                    margin: const pw.EdgeInsets.symmetric(horizontal: 40),
-                    padding: const pw.EdgeInsets.all(30),
-                    decoration: pw.BoxDecoration(
-                      color: PdfColors.white,
-                      borderRadius: pw.BorderRadius.circular(16),
-                      boxShadow: [
-                        pw.BoxShadow(
-                          color: PdfColor.fromInt(0x1A000000),
-                          blurRadius: 20,
-                          offset: const PdfPoint(0, 4),
+                ),
+                pw.SizedBox(height: 50),
+                pw.Container(
+                  margin: const pw.EdgeInsets.symmetric(horizontal: 48),
+                  padding: const pw.EdgeInsets.all(28),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.white,
+                    borderRadius: pw.BorderRadius.circular(20),
+                    boxShadow: [
+                      pw.BoxShadow(
+                        color: PdfColor.fromInt(0x1A000000),
+                        blurRadius: 30,
+                        offset: const PdfPoint(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: pw.Column(
+                    children: [
+                      pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 6,
                         ),
-                      ],
-                    ),
-                    child: pw.Column(
-                      children: [
-                        pw.Container(
-                          padding: const pw.EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 6,
-                          ),
-                          decoration: pw.BoxDecoration(
-                            color: _primaryColor,
-                            borderRadius: pw.BorderRadius.circular(20),
-                          ),
-                          child: pw.Text(
-                            'تقرير',
-                            style: pw.TextStyle(
-                              font: _boldFont,
-                              fontSize: 12,
-                              color: PdfColors.white,
-                            ),
-                          ),
+                        decoration: pw.BoxDecoration(
+                          color: _primaryColor,
+                          borderRadius: pw.BorderRadius.circular(20),
                         ),
-                        pw.SizedBox(height: 16),
-                        pw.Text(
-                          title,
+                        child: pw.Text(
+                          'تقرير',
                           style: pw.TextStyle(
                             font: _boldFont,
-                            fontSize: 22,
-                            color: _textDark,
+                            fontSize: 12,
+                            color: PdfColors.white,
                           ),
                         ),
-                        pw.SizedBox(height: 8),
-                        pw.Text(
-                          subtitle,
-                          style: pw.TextStyle(
-                            font: _font,
-                            fontSize: 13,
-                            color: _textMuted,
-                          ),
+                      ),
+                      pw.SizedBox(height: 18),
+                      pw.Text(
+                        title,
+                        style: pw.TextStyle(
+                          font: _boldFont,
+                          fontSize: 22,
+                          color: _textDark,
                         ),
-                        pw.SizedBox(height: 20),
-                        pw.Divider(color: PdfColor.fromInt(0xFFE0E0E0)),
-                        pw.SizedBox(height: 16),
-                        // Meta info
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _metaItemCover('الفترة', period),
-                            _metaItemCover('الإجمالي', '$total إرسالية'),
-                            _metaItemCover('الإنجاز', '$completionRate%'),
-                          ],
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Text(
+                        subtitle,
+                        style: pw.TextStyle(
+                          font: _font,
+                          fontSize: 13,
+                          color: _textMuted,
                         ),
-                      ],
-                    ),
+                      ),
+                      pw.SizedBox(height: 20),
+                      pw.Divider(color: PdfColor.fromInt(0xFFE0E0E0)),
+                      pw.SizedBox(height: 16),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _metaItemCover('الفترة', period),
+                          _metaItemCover('الإجمالي', '$total إرسالية'),
+                          _metaItemCover('الإنجاز', '$completionRate%'),
+                        ],
+                      ),
+                    ],
                   ),
-                  pw.Spacer(),
-                  // Footer
-                  pw.Container(
-                    padding: const pw.EdgeInsets.all(16),
-                    child: pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text(
-                          'تاريخ الإنشاء: $dateStr',
-                          style: pw.TextStyle(
-                            font: _lightFont,
-                            fontSize: 9,
-                            color: _textMuted,
-                          ),
+                ),
+                pw.Spacer(),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(20),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                        'تاريخ الإنشاء: $dateStr',
+                        style: pw.TextStyle(
+                          font: _lightFont,
+                          fontSize: 9,
+                          color: PdfColor.fromInt(0x99FFFFFF),
                         ),
-                        pw.Text(
-                          'EPI Supervisor v2.2.0',
-                          style: pw.TextStyle(
-                            font: _lightFont,
-                            fontSize: 9,
-                            color: _textMuted,
-                          ),
+                      ),
+                      pw.Text(
+                        'EPI Supervisor v2.2.0',
+                        style: pw.TextStyle(
+                          font: _lightFont,
+                          fontSize: 9,
+                          color: PdfColor.fromInt(0x99FFFFFF),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
 
-    // ═══ Page 2: KPI Summary ═══
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        theme: pw.ThemeData.withFont(base: _font!, bold: _boldFont!),
-        header: (ctx) => _buildHeader(title, dateStr),
-        footer: (ctx) => _buildFooter(ctx),
-        build: (ctx) => [
-          pw.Directionality(
-            textDirection: pw.TextDirection.rtl,
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                // Section title
-                _sectionHeader('ملخص المؤشرات الرئيسية'),
-                pw.SizedBox(height: 16),
+    // ═══ Section: Readiness (Tab 1) ═══
+    if (readinessData != null && readinessData.isNotEmpty) {
+      _addReadinessPages(pdf, readinessData, title, dateStr);
+    }
 
-                // KPI Cards Grid
-                pw.Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _kpiCard('إجمالي الإرساليات', '$total', _primaryColor),
-                    _kpiCard('إرساليات اليوم', '$today', PdfColors.blue700),
-                    _kpiCard('مقبول', '$approved', _successColor),
-                    _kpiCard('مرفوض', '$rejected', _accentColor),
-                    _kpiCard('قيد المراجعة', '$pending', _warningColor),
-                    if (draft > 0)
-                      _kpiCard('مسودات', '$draft', PdfColors.grey600),
-                    _kpiCard('نسبة القبول', '$completionRate%', _successColor),
-                    _kpiCard('النواقص', '$totalShortages', _warningColor),
-                    _kpiCard(
-                      'نواقص محلولة',
-                      '$resolvedShortages',
-                      _successColor,
-                    ),
-                    if (totalShortages - resolvedShortages > 0)
-                      _kpiCard(
-                        'نواقص معلقة',
-                        '${totalShortages - resolvedShortages}',
-                        _accentColor,
-                      ),
-                  ],
-                ),
-                pw.SizedBox(height: 24),
+    // ═══ Section: Compliance (Tab 2) ═══
+    if (complianceData != null && complianceData.isNotEmpty) {
+      _addCompliancePages(pdf, complianceData, title, dateStr);
+    }
 
-                // Status distribution
-                if (byStatus.isNotEmpty) ...[
-                  _sectionHeader('توزيع الإرساليات حسب الحالة'),
-                  pw.SizedBox(height: 12),
-                  _buildStatusDistributionTable(byStatus, total),
-                  pw.SizedBox(height: 24),
-                ],
+    // ═══ Section: Service Numbers (Tab 3) ═══
+    if (serviceNumbersData != null && serviceNumbersData.isNotEmpty) {
+      _addServiceNumbersPages(pdf, serviceNumbersData, title, dateStr);
+    }
 
-                // Daily activity
-                if (byDay.isNotEmpty) ...[
-                  _sectionHeader('النشاط اليومي (آخر 7 أيام)'),
-                  pw.SizedBox(height: 12),
-                  _buildDailyActivityTable(byDay),
-                  pw.SizedBox(height: 24),
-                ],
+    // ═══ Section: Challenges (Tab 4) ═══
+    if (challengesData != null && challengesData.isNotEmpty) {
+      _addChallengesPages(pdf, challengesData, title, dateStr);
+    }
 
-                // Shortages by severity
-                if (bySeverity.isNotEmpty) ...[
-                  _sectionHeader('توزيع النواقص حسب الخطورة'),
-                  pw.SizedBox(height: 12),
-                  _buildSeverityTable(bySeverity, totalShortages),
-                  pw.SizedBox(height: 24),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-
-    // ═══ Page 3: Governorate Performance ═══
+    // ═══ Governorate Performance ═══
     if (governorateData != null && governorateData.isNotEmpty) {
       pdf.addPage(
         pw.MultiPage(
@@ -412,7 +323,7 @@ class ReportGenerator {
       );
     }
 
-    // ═══ Page 4: Shortages Details ═══
+    // ═══ Shortages Details ═══
     if (shortagesData != null && shortagesData.isNotEmpty) {
       pdf.addPage(
         pw.MultiPage(
@@ -447,8 +358,509 @@ class ReportGenerator {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // WIDGET BUILDERS
+  // READINESS PAGES (Tab 1)
   // ═══════════════════════════════════════════════════════════════════════
+
+  static void _addReadinessPages(
+    pw.Document pdf,
+    List<ReadinessGovData> data,
+    String title,
+    String dateStr,
+  ) {
+    final ready = data.where((g) => g.status == 'ready').length;
+    final partial = data.where((g) => g.status == 'partial').length;
+    final notReady = data.where((g) => g.status == 'notReady').length;
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        theme: pw.ThemeData.withFont(base: _font!, bold: _boldFont!),
+        header: (ctx) => _buildHeader(title, dateStr),
+        footer: (ctx) => _buildFooter(ctx),
+        build: (ctx) => [
+          pw.Directionality(
+            textDirection: pw.TextDirection.rtl,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _sectionHeader('🏥 جاهزية المحافظات'),
+                pw.SizedBox(height: 16),
+
+                // Summary row
+                pw.Row(
+                  children: [
+                    _summaryChip('جاهزة', '$ready', _successColor),
+                    pw.SizedBox(width: 8),
+                    _summaryChip('جزئياً', '$partial', _warningColor),
+                    pw.SizedBox(width: 8),
+                    _summaryChip('غير جاهزة', '$notReady', _accentColor),
+                    pw.SizedBox(width: 8),
+                    _summaryChip('الإجمالي', '${data.length}', _infoColor),
+                  ],
+                ),
+                pw.SizedBox(height: 20),
+
+                // Table
+                _buildReadinessTable(data),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildReadinessTable(List<ReadinessGovData> data) {
+    final rows = data.map((g) {
+      final statusAr = switch (g.status) {
+        'ready' => '✅ جاهزة',
+        'partial' => '⚠️ جزئياً',
+        'notReady' => '❌ غير جاهزة',
+        _ => '❓ غير محدد',
+      };
+      return [
+        statusAr,
+        '${g.score}/${g.total}',
+        g.govName,
+      ];
+    }).toList();
+
+    return pw.TableHelper.fromTextArray(
+      border: pw.TableBorder.all(
+        color: PdfColor.fromInt(0xFFE0E0E0),
+        width: 0.5,
+      ),
+      headerStyle: pw.TextStyle(
+        font: _boldFont,
+        fontSize: 11,
+        color: PdfColors.white,
+      ),
+      headerDecoration: const pw.BoxDecoration(color: _primaryColor),
+      cellStyle: pw.TextStyle(font: _font, fontSize: 10),
+      cellAlignment: pw.Alignment.centerRight,
+      headerAlignment: pw.Alignment.centerRight,
+      headers: ['الحالة', 'المعايير', 'المحافظة'],
+      data: rows,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // COMPLIANCE PAGES (Tab 2)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  static void _addCompliancePages(
+    pw.Document pdf,
+    List<ComplianceSectionData> data,
+    String title,
+    String dateStr,
+  ) {
+    final overallYes = data.fold<int>(0, (s, d) => s + d.yesCount);
+    final overallTotal = data.fold<int>(0, (s, d) => s + d.totalCount);
+    final overallPct = overallTotal > 0
+        ? (overallYes * 100 / overallTotal).toStringAsFixed(0)
+        : '0';
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        theme: pw.ThemeData.withFont(base: _font!, bold: _boldFont!),
+        header: (ctx) => _buildHeader(title, dateStr),
+        footer: (ctx) => _buildFooter(ctx),
+        build: (ctx) => [
+          pw.Directionality(
+            textDirection: pw.TextDirection.rtl,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _sectionHeader('📋 تحليل الالتزام الإشرافي'),
+                pw.SizedBox(height: 12),
+
+                // Overall compliance
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(16),
+                  decoration: pw.BoxDecoration(
+                    color: _bgLight,
+                    borderRadius: pw.BorderRadius.circular(12),
+                    border: pw.Border.all(
+                      color: PdfColor.fromInt(0xFFE0E0E0),
+                    ),
+                  ),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.center,
+                    children: [
+                      pw.Text(
+                        'نسبة الالتزام الكلية: ',
+                        style: pw.TextStyle(
+                          font: _font,
+                          fontSize: 14,
+                          color: _textDark,
+                        ),
+                      ),
+                      pw.Text(
+                        '$overallPct%',
+                        style: pw.TextStyle(
+                          font: _boldFont,
+                          fontSize: 22,
+                          color: _primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+
+                // Sections table
+                _buildComplianceTable(data),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildComplianceTable(List<ComplianceSectionData> data) {
+    final rows = data.map((s) {
+      final pct = s.totalCount > 0
+          ? (s.yesCount * 100 / s.totalCount).toStringAsFixed(0)
+          : '0';
+      return ['$pct%', '${s.yesCount}/${s.totalCount}', s.sectionName];
+    }).toList();
+
+    return pw.TableHelper.fromTextArray(
+      border: pw.TableBorder.all(
+        color: PdfColor.fromInt(0xFFE0E0E0),
+        width: 0.5,
+      ),
+      headerStyle: pw.TextStyle(
+        font: _boldFont,
+        fontSize: 11,
+        color: PdfColors.white,
+      ),
+      headerDecoration: const pw.BoxDecoration(color: _infoColor),
+      cellStyle: pw.TextStyle(font: _font, fontSize: 10),
+      cellAlignment: pw.Alignment.centerRight,
+      headerAlignment: pw.Alignment.centerRight,
+      headers: ['النسبة', 'المُنجز/الإجمالي', 'القسم'],
+      data: rows,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // SERVICE NUMBERS PAGES (Tab 3)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  static void _addServiceNumbersPages(
+    pw.Document pdf,
+    List<ServiceNumberData> data,
+    String title,
+    String dateStr,
+  ) {
+    final grandTotal = data.fold<int>(0, (s, d) => s + d.total);
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        theme: pw.ThemeData.withFont(base: _font!, bold: _boldFont!),
+        header: (ctx) => _buildHeader(title, dateStr),
+        footer: (ctx) => _buildFooter(ctx),
+        build: (ctx) => [
+          pw.Directionality(
+            textDirection: pw.TextDirection.rtl,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _sectionHeader('👥 أعداد المترددين على الخدمات'),
+                pw.SizedBox(height: 12),
+
+                // Grand total
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(16),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColor.fromInt(0xFFE0F2F1),
+                    borderRadius: pw.BorderRadius.circular(12),
+                  ),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.center,
+                    children: [
+                      pw.Text(
+                        'إجمالي المترددين: ',
+                        style: pw.TextStyle(
+                          font: _font,
+                          fontSize: 14,
+                          color: _textDark,
+                        ),
+                      ),
+                      pw.Text(
+                        '$grandTotal',
+                        style: pw.TextStyle(
+                          font: _boldFont,
+                          fontSize: 24,
+                          color: _primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+
+                // Numbers table
+                _buildServiceNumbersTable(data),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildServiceNumbersTable(List<ServiceNumberData> data) {
+    final rows = data.map((s) {
+      return ['${s.avg.toStringAsFixed(1)}', '${s.total}', s.label];
+    }).toList();
+
+    return pw.TableHelper.fromTextArray(
+      border: pw.TableBorder.all(
+        color: PdfColor.fromInt(0xFFE0E0E0),
+        width: 0.5,
+      ),
+      headerStyle: pw.TextStyle(
+        font: _boldFont,
+        fontSize: 11,
+        color: PdfColors.white,
+      ),
+      headerDecoration: const pw.BoxDecoration(color: _primaryColor),
+      cellStyle: pw.TextStyle(font: _font, fontSize: 10),
+      cellAlignment: pw.Alignment.centerRight,
+      headerAlignment: pw.Alignment.centerRight,
+      headers: ['المتوسط/زيارة', 'الإجمالي', 'الخدمة'],
+      data: rows,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CHALLENGES PAGES (Tab 4)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  static void _addChallengesPages(
+    pw.Document pdf,
+    List<ChallengeData> data,
+    String title,
+    String dateStr,
+  ) {
+    // Take up to 20 challenges
+    final items = data.take(20).toList();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        theme: pw.ThemeData.withFont(base: _font!, bold: _boldFont!),
+        header: (ctx) => _buildHeader(title, dateStr),
+        footer: (ctx) => _buildFooter(ctx),
+        build: (ctx) => [
+          pw.Directionality(
+            textDirection: pw.TextDirection.rtl,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _sectionHeader('⚠️ التحديات والتوصيات'),
+                pw.SizedBox(height: 12),
+                pw.Text(
+                  'إجمالي: ${data.length} تقرير',
+                  style: pw.TextStyle(
+                    font: _font,
+                    fontSize: 11,
+                    color: _textMuted,
+                  ),
+                ),
+                pw.SizedBox(height: 16),
+
+                ...items.map((c) => _buildChallengeCard(c)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildChallengeCard(ChallengeData c) {
+    return pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(bottom: 12),
+      padding: const pw.EdgeInsets.all(14),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(10),
+        border: pw.Border.all(color: PdfColor.fromInt(0xFFE0E0E0)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          // Header
+          pw.Row(
+            children: [
+              pw.Container(
+                width: 28,
+                height: 28,
+                decoration: const pw.BoxDecoration(
+                  color: PdfColor.fromInt(0xFFE8EAF6),
+                  shape: pw.BoxShape.circle,
+                ),
+                child: pw.Center(
+                  child: pw.Text(
+                    c.supervisorName.isNotEmpty ? c.supervisorName[0] : '?',
+                    style: pw.TextStyle(
+                      font: _boldFont,
+                      fontSize: 12,
+                      color: PdfColor.fromInt(0xFF3F51B5),
+                    ),
+                  ),
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      c.supervisorName,
+                      style: pw.TextStyle(
+                        font: _boldFont,
+                        fontSize: 11,
+                        color: _textDark,
+                      ),
+                    ),
+                    pw.Text(
+                      c.date,
+                      style: pw.TextStyle(
+                        font: _font,
+                        fontSize: 9,
+                        color: _textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 10),
+
+          // Challenges
+          if (c.challenges.isNotEmpty) ...[
+            _challengeBlock(
+              'التحديات',
+              c.challenges,
+              PdfColor.fromInt(0xFFFFEBEE),
+              PdfColor.fromInt(0xFFE53935),
+            ),
+            pw.SizedBox(height: 6),
+          ],
+
+          // Actions taken
+          if (c.actionsTaken.isNotEmpty) ...[
+            _challengeBlock(
+              'الإجراءات المتخذة',
+              c.actionsTaken,
+              PdfColor.fromInt(0xFFE3F2FD),
+              PdfColor.fromInt(0xFF1976D2),
+            ),
+            pw.SizedBox(height: 6),
+          ],
+
+          // Recommendations
+          if (c.recommendations.isNotEmpty) ...[
+            _challengeBlock(
+              'التوصيات',
+              c.recommendations,
+              PdfColor.fromInt(0xFFE8F5E9),
+              PdfColor.fromInt(0xFF43A047),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _challengeBlock(
+    String label,
+    String text,
+    PdfColor bgColor,
+    PdfColor accentColor,
+  ) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(10),
+      decoration: pw.BoxDecoration(
+        color: bgColor,
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              font: _boldFont,
+              fontSize: 10,
+              color: accentColor,
+            ),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            text,
+            style: pw.TextStyle(
+              font: _font,
+              fontSize: 10,
+              color: _textDark,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // SHARED WIDGETS
+  // ═══════════════════════════════════════════════════════════════════════
+
+  static pw.Widget _summaryChip(String label, String value, PdfColor color) {
+    return pw.Expanded(
+      child: pw.Container(
+        padding: const pw.EdgeInsets.symmetric(vertical: 10),
+        decoration: pw.BoxDecoration(
+          color: PdfColor.fromInt(0xFFF5F7FA),
+          borderRadius: pw.BorderRadius.circular(8),
+          border: pw.Border.all(color: PdfColor.fromInt(0xFFE0E0E0)),
+        ),
+        child: pw.Column(
+          children: [
+            pw.Text(
+              value,
+              style: pw.TextStyle(
+                font: _boldFont,
+                fontSize: 18,
+                color: color,
+              ),
+            ),
+            pw.SizedBox(height: 2),
+            pw.Text(
+              label,
+              textAlign: pw.TextAlign.center,
+              style: pw.TextStyle(font: _font, fontSize: 9, color: _textMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   static pw.Widget _metaItemCover(String label, String value) {
     return pw.Column(
@@ -488,7 +900,7 @@ class ReportGenerator {
               style: pw.TextStyle(font: _font, fontSize: 9, color: _textMuted),
             ),
             pw.Text(
-              'منصة مشرف EPI',
+              "EPI Supervisor's",
               style: pw.TextStyle(
                 font: _boldFont,
                 fontSize: 9,
@@ -519,7 +931,7 @@ class ReportGenerator {
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              'منصة مشرف EPI',
+              "EPI Supervisor's",
               style: pw.TextStyle(
                 font: _lightFont,
                 fontSize: 8,
@@ -550,202 +962,6 @@ class ReportGenerator {
         title,
         style: pw.TextStyle(font: _boldFont, fontSize: 14, color: _textDark),
       ),
-    );
-  }
-
-  static pw.Widget _kpiCard(String label, String value, PdfColor color) {
-    return pw.Container(
-      width: 140,
-      padding: const pw.EdgeInsets.all(14),
-      decoration: pw.BoxDecoration(
-        color: PdfColors.white,
-        borderRadius: pw.BorderRadius.circular(10),
-        border: pw.Border.all(color: PdfColor.fromInt(0xFFE0E0E0)),
-        boxShadow: [
-          pw.BoxShadow(
-            color: PdfColor.fromInt(0x0A000000),
-            blurRadius: 4,
-            offset: const PdfPoint(0, 2),
-          ),
-        ],
-      ),
-      child: pw.Column(
-        children: [
-          pw.Container(
-            width: 40,
-            height: 40,
-            decoration: pw.BoxDecoration(
-              color: color,
-              borderRadius: pw.BorderRadius.circular(10),
-            ),
-            child: pw.Center(
-              child: pw.Text(
-                value,
-                style: pw.TextStyle(
-                  font: _boldFont,
-                  fontSize: 14,
-                  color: PdfColors.white,
-                ),
-              ),
-            ),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Text(
-            label,
-            textAlign: pw.TextAlign.center,
-            style: pw.TextStyle(font: _font, fontSize: 9, color: _textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static pw.Widget _buildStatusDistributionTable(
-    Map<String, dynamic> byStatus,
-    int total,
-  ) {
-    final statusLabels = {
-      'approved': 'مقبول',
-      'submitted': 'قيد المراجعة',
-      'rejected': 'مرفوض',
-      'draft': 'مسودة',
-    };
-    final statusColors = {
-      'approved': _successColor,
-      'submitted': _warningColor,
-      'rejected': _accentColor,
-      'draft': PdfColors.grey600,
-    };
-
-    final rows = <List<String>>[];
-    final barWidgets = <pw.Widget>[];
-
-    for (final entry in byStatus.entries) {
-      final label = statusLabels[entry.key] ?? entry.key;
-      final count = entry.value as int;
-      final pct = total > 0 ? (count * 100 / total).toStringAsFixed(1) : '0.0';
-      rows.add(['$pct%', '$count', label]);
-
-      barWidgets.add(
-        pw.Expanded(
-          flex: count > 0 ? count : 1,
-          child: pw.Container(
-            height: 24,
-            color: statusColors[entry.key] ?? PdfColors.grey400,
-            child: pw.Center(
-              child: pw.Text(
-                '$count',
-                style: pw.TextStyle(
-                  font: _boldFont,
-                  fontSize: 9,
-                  color: PdfColors.white,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return pw.Column(
-      children: [
-        pw.TableHelper.fromTextArray(
-          border: pw.TableBorder.all(
-            color: PdfColor.fromInt(0xFFE0E0E0),
-            width: 0.5,
-          ),
-          headerStyle: pw.TextStyle(
-            font: _boldFont,
-            fontSize: 11,
-            color: PdfColors.white,
-          ),
-          headerDecoration: const pw.BoxDecoration(color: _primaryColor),
-          cellStyle: pw.TextStyle(font: _font, fontSize: 10),
-          cellAlignment: pw.Alignment.centerRight,
-          headerAlignment: pw.Alignment.centerRight,
-          headers: ['النسبة', 'العدد', 'الحالة'],
-          data: rows,
-        ),
-        pw.SizedBox(height: 12),
-        pw.Container(
-          height: 28,
-          decoration: pw.BoxDecoration(
-            borderRadius: pw.BorderRadius.circular(6),
-          ),
-          child: pw.Row(children: barWidgets),
-        ),
-      ],
-    );
-  }
-
-  static pw.Widget _buildDailyActivityTable(Map<String, dynamic> byDay) {
-    final entries = byDay.entries.toList();
-    final maxCount = entries.fold<int>(
-      0,
-      (max, e) => (e.value as int) > max ? (e.value as int) : max,
-    );
-
-    final rows = entries.map((e) {
-      final count = e.value as int;
-      final barWidth =
-          maxCount > 0 ? (count / maxCount * 100).toStringAsFixed(0) : '0';
-      return ['$barWidth%', '$count', e.key];
-    }).toList();
-
-    return pw.TableHelper.fromTextArray(
-      border: pw.TableBorder.all(
-        color: PdfColor.fromInt(0xFFE0E0E0),
-        width: 0.5,
-      ),
-      headerStyle: pw.TextStyle(
-        font: _boldFont,
-        fontSize: 11,
-        color: PdfColors.white,
-      ),
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.blue700),
-      cellStyle: pw.TextStyle(font: _font, fontSize: 10),
-      cellAlignment: pw.Alignment.centerRight,
-      headerAlignment: pw.Alignment.centerRight,
-      headers: ['النسبة', 'الإرساليات', 'اليوم'],
-      data: rows,
-    );
-  }
-
-  static pw.Widget _buildSeverityTable(
-    Map<String, dynamic> bySeverity,
-    int total,
-  ) {
-    final severityLabels = {
-      'critical': 'حرج',
-      'high': 'عالي',
-      'medium': 'متوسط',
-      'low': 'منخفض',
-    };
-
-    final rows = <List<String>>[];
-    for (final entry in bySeverity.entries) {
-      final label = severityLabels[entry.key] ?? entry.key;
-      final count = entry.value as int;
-      final pct = total > 0 ? (count * 100 / total).toStringAsFixed(1) : '0.0';
-      rows.add(['$pct%', '$count', label]);
-    }
-
-    return pw.TableHelper.fromTextArray(
-      border: pw.TableBorder.all(
-        color: PdfColor.fromInt(0xFFE0E0E0),
-        width: 0.5,
-      ),
-      headerStyle: pw.TextStyle(
-        font: _boldFont,
-        fontSize: 11,
-        color: PdfColors.white,
-      ),
-      headerDecoration: const pw.BoxDecoration(color: _accentColor),
-      cellStyle: pw.TextStyle(font: _font, fontSize: 10),
-      cellAlignment: pw.Alignment.centerRight,
-      headerAlignment: pw.Alignment.centerRight,
-      headers: ['النسبة', 'العدد', 'مستوى الخطورة'],
-      data: rows,
     );
   }
 
@@ -819,21 +1035,10 @@ class ReportGenerator {
   // HELPERS
   // ═══════════════════════════════════════════════════════════════════════
 
-  /// Format date in Arabic
   static String _formatDateArabic(DateTime date) {
     const months = [
-      'يناير',
-      'فبراير',
-      'مارس',
-      'أبريل',
-      'مايو',
-      'يونيو',
-      'يوليو',
-      'أغسطس',
-      'سبتمبر',
-      'أكتوبر',
-      'نوفمبر',
-      'ديسمبر',
+      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
@@ -851,7 +1056,6 @@ class ReportGenerator {
       final boldData = await rootBundle.load('assets/fonts/Cairo-Bold.ttf');
       _font = pw.Font.ttf(regularData);
       _boldFont = pw.Font.ttf(boldData);
-      // Try light font
       try {
         final lightData = await rootBundle.load('assets/fonts/Cairo-Light.ttf');
         _lightFont = pw.Font.ttf(lightData);
@@ -864,4 +1068,68 @@ class ReportGenerator {
       _lightFont = pw.Font.helvetica();
     }
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DATA MODELS for Analytics Sections
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Readiness data per governorate (Tab 1)
+class ReadinessGovData {
+  final String govName;
+  final String status; // 'ready', 'partial', 'notReady', 'unknown'
+  final int score;
+  final int total;
+  final String? reasons;
+
+  const ReadinessGovData({
+    required this.govName,
+    required this.status,
+    required this.score,
+    required this.total,
+    this.reasons,
+  });
+}
+
+/// Compliance section data (Tab 2)
+class ComplianceSectionData {
+  final String sectionName;
+  final int yesCount;
+  final int totalCount;
+
+  const ComplianceSectionData({
+    required this.sectionName,
+    required this.yesCount,
+    required this.totalCount,
+  });
+}
+
+/// Service number data (Tab 3)
+class ServiceNumberData {
+  final String label;
+  final int total;
+  final double avg;
+
+  const ServiceNumberData({
+    required this.label,
+    required this.total,
+    required this.avg,
+  });
+}
+
+/// Challenge data (Tab 4)
+class ChallengeData {
+  final String supervisorName;
+  final String date;
+  final String challenges;
+  final String actionsTaken;
+  final String recommendations;
+
+  const ChallengeData({
+    required this.supervisorName,
+    required this.date,
+    required this.challenges,
+    required this.actionsTaken,
+    required this.recommendations,
+  });
 }

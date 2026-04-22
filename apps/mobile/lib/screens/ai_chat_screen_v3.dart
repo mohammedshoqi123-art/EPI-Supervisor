@@ -393,7 +393,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return DefaultTabController(
-      length: 4,
+      length: 3,
       child: Scaffold(
         backgroundColor: cs.surface,
         appBar: _buildAppBar(cs),
@@ -403,7 +403,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             Expanded(
               child: TabBarView(
                 children: [
-                  _buildReportsPdfTab(cs),
                   _buildBotTab(cs),
                   _buildChatTab(cs),
                   _buildAlertsTab(cs),
@@ -501,7 +500,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700, fontSize: 13),
         unselectedLabelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w500, fontSize: 12),
         tabs: const [
-          Tab(text: 'تقارير PDF', icon: Icon(Icons.picture_as_pdf_rounded, size: 20)),
           Tab(text: 'مستشار التحصين', icon: Icon(Icons.vaccines_rounded, size: 20)),
           Tab(text: 'مساعد النظام', icon: Icon(Icons.smart_toy_rounded, size: 20)),
           Tab(text: 'تنبيهات ذكية', icon: Icon(Icons.notifications_active_rounded, size: 20)),
@@ -510,117 +508,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // TAB 1: PDF EXPORT REPORTS
-  // ═══════════════════════════════════════════════════════════
-
-  Widget _buildReportsPdfTab(ColorScheme cs) {
-    final pdfReports = [
-      _PdfReport('daily', '📅', 'التقرير اليومي', 'إرساليات ومؤشرات يومية', const Color(0xFF1976D2)),
-      _PdfReport('weekly', '📊', 'التقرير الأسبوعي', 'اتجاهات، مقارنات أسبوعية', const Color(0xFF388E3C)),
-      _PdfReport('monthly', '📆', 'التقرير الشهري', 'ملخص شامل للشهر', const Color(0xFF7B1FA2)),
-      _PdfReport('coverage', '💉', 'تقرير التغطية', 'Penta3، حصبة، تسرب', const Color(0xFF00897B)),
-      _PdfReport('governorate', '🗺️', 'تقرير المحافظات', 'ترتيب أداء المحافظات', const Color(0xFFE65100)),
-      _PdfReport('supervision', '📋', 'التقرير الإشرافي', 'زيارات، ملاحظات، توصيات', const Color(0xFFF57C00)),
-      _PdfReport('comprehensive', '📑', 'التقرير الشامل', 'كل البيانات في تقرير واحد', const Color(0xFF0097A7)),
-    ];
-
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('📄 تقارير PDF', style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
-          const SizedBox(height: 4),
-          Text('صدّر تقارير احترافية بصيغة PDF', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: cs.onSurfaceVariant)),
-          const SizedBox(height: 20),
-          GridView.count(
-            crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 1.1,
-            children: pdfReports.map((r) => _buildPdfCard(cs, r)).toList(),
-          ),
-          const SizedBox(height: 24),
-          _buildExportAllCard(cs),
-          const SizedBox(height: 28),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPdfCard(ColorScheme cs, _PdfReport r) {
-    return Material(
-      color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => _exportPdf(r),
-        child: Container(padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: r.color.withValues(alpha: 0.12))),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-            Row(children: [Text(r.emoji, style: const TextStyle(fontSize: 28)), const Spacer(), Icon(Icons.download_rounded, size: 18, color: r.color.withValues(alpha: 0.6))]),
-            const Spacer(),
-            Text(r.title, style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurface)),
-            const SizedBox(height: 4),
-            Text(r.desc, style: TextStyle(fontFamily: 'Tajawal', fontSize: 10, color: cs.onSurfaceVariant), maxLines: 2, overflow: TextOverflow.ellipsis),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExportAllCard(ColorScheme cs) {
-    return Material(
-      color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () => _exportPdf(_PdfReport('all', '📑', 'كل التقارير', '', const Color(0xFF00897B))),
-        child: Container(width: double.infinity, padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(colors: [cs.primaryContainer.withValues(alpha: 0.5), cs.tertiaryContainer.withValues(alpha: 0.2)], begin: Alignment.topRight, end: Alignment.bottomLeft)),
-          child: Row(children: [
-            Container(width: 52, height: 52, decoration: BoxDecoration(gradient: LinearGradient(colors: [cs.primary, cs.tertiary]), borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.3), blurRadius: 12)]),
-              child: const Icon(Icons.download_rounded, color: Colors.white, size: 26)),
-            const SizedBox(width: 16),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('تصدير الكل', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w800, color: cs.onSurface)),
-              const SizedBox(height: 4),
-              Text('تقرير شامل يحتوي كل الأقسام', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: cs.onSurfaceVariant)),
-            ])),
-            Icon(Icons.arrow_back_ios_rounded, size: 16, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _exportPdf(_PdfReport r) async {
-    HapticFeedback.mediumImpact();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)), const SizedBox(width: 12),
-        Text('جاري إنشاء \${r.title}...', style: const TextStyle(fontFamily: 'Tajawal'))]),
-      duration: const Duration(seconds: 3), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), margin: const EdgeInsets.all(16)));
-    try {
-      final file = await ReportGenerator.generateByType(r.id);
-      if (_mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Row(children: [const Icon(Icons.check_circle, color: Colors.white, size: 20), const SizedBox(width: 8),
-            Expanded(child: Text('تم إنشاء \${r.title}!', style: const TextStyle(fontFamily: 'Tajawal')))]),
-          backgroundColor: const Color(0xFF4CAF50), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16), duration: const Duration(seconds: 5)));
-      }
-    } catch (e) {
-      if (_mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشل: \$e', style: const TextStyle(fontFamily: 'Tajawal')),
-          backgroundColor: const Color(0xFFD32F2F), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), margin: const EdgeInsets.all(16)));
-      }
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // TAB 2: SMART CHAT
   // ═══════════════════════════════════════════════════════════
 
   Widget _buildChatTab(ColorScheme cs) {
@@ -1448,15 +1335,6 @@ class _StreamingCursorState extends State<_StreamingCursor> with SingleTickerPro
       child: Text('▎', style: TextStyle(color: widget.color, fontSize: 14)),
     );
   }
-}
-
-class _PdfReport {
-  final String id;
-  final String emoji;
-  final String title;
-  final String desc;
-  final Color color;
-  const _PdfReport(this.id, this.emoji, this.title, this.desc, this.color);
 }
 
 class _ModelOption {

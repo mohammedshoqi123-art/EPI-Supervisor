@@ -207,7 +207,75 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  void _exportPdfReport() {
+  // Analytics form IDs (same as analytics_screen.dart)
+  static const _readinessFormId = '8aa0f3d5-7ab0-430f-85fd-4488c0c129bb';
+  static const _supervisionFormId = '97a4f2b3-c573-4812-b58c-5b0acf814e24';
+
+  // Readiness criteria keys
+  static const _readinessCriteriaKeys = [
+    'budget_received', 'routine_vaccines_available', 'medicines_available',
+    'reproductive_supplies_available', 'staff_available', 'preparatory_meeting_held',
+  ];
+
+  // Compliance sections (yes/no fields)
+  static const _yesNoSections = {
+    'معلومات الفريق': ['has_activity_plan', 'has_doctor_or_trained', 'wearing_uniform'],
+    'بيئة العمل والتنسيق': ['suitable_location', 'community_coordination', 'has_speaker', 'has_transport', 'previous_visit'],
+    'السجلات والوثائق': ['complete_records', 'daily_work_forms', 'correct_data_entry', 'next_visit_noted'],
+    'بطاقات التحصين': ['child_vaccination_cards', 'women_vaccination_cards'],
+    'جودة الخدمة': ['good_acceptance', 'safe_vaccination', 'respiratory_rate_check', 'muac_measurement', 'ors_provision', 'clean_delivery_kit', 'nutrition_assessment'],
+    'الفيتامينات والإحالة': ['vitamin_a_children', 'vitamin_a_women', 'facility_referral', 'correct_medication', 'nutrition_counseling'],
+    'التعامل مع اللقاحات': ['vaccine_disposal', 'safety_box_usage', 'cold_chain_proper'],
+    'الإمدادات والمعدات': ['family_planning_available', 'folic_iron_stock', 'fetal_stethoscope', 'bp_device', 'muac_tape', 'height_board', 'thermometer', 'scale', 'daily_supply_tracking'],
+    'سياسة الالتحاق بالركب': ['has_vaccine_carrier', 'vaccines_sufficient', 'correct_vaccine_site', 'catch_up_knowledge', 'catch_up_training', 'catch_up_2to5_registration', 'team_target_knowledge'],
+    'تتبع المتخلفين': ['has_defaulter_mechanism', 'has_previous_vaccination_records'],
+    'الآثار الجانبية': ['aefi_knowledge', 'aefi_mothers_info'],
+  };
+
+  // Service number fields
+  static const _serviceNumberFields = {
+    'immunization_children': 'التحصين - أطفال',
+    'immunization_women': 'التحصين - نساء',
+    'child_health_under2m': 'صحة طفل (< شهرين)',
+    'child_health_2to59m': 'صحة طفل (2-59 شهر)',
+    'child_health_over5': 'صحة طفل (> 5 سنوات)',
+    'fp_clients': 'تنظيم الأسرة',
+    'anc_clients': 'رعاية حوامل',
+    'delivery_cases': 'ولادات',
+    'nutrition_children_6_59': 'تغذية أطفال (6-59 شهر)',
+    'referred_children': 'أطفال مُحالين',
+    'nutrition_women': 'تغذية حوامل ومرضعات',
+  };
+
+  Future<void> _exportPdfReport() async {
+    // Fetch analytics data for the 4 tabs
+    List<ReadinessGovData>? readinessData;
+    List<ComplianceSectionData>? complianceData;
+    List<ServiceNumberData>? serviceNumbersData;
+    List<ChallengeData>? challengesData;
+
+    try {
+      final db = ref.read(databaseServiceProvider);
+
+      // Fetch readiness submissions
+      final readinessSubs = await db.getSubmissions(formId: _readinessFormId, limit: 500);
+      if (readinessSubs.isNotEmpty) {
+        readinessData = _processReadinessData(readinessSubs);
+      }
+
+      // Fetch supervision submissions
+      final supervisionSubs = await db.getSubmissions(formId: _supervisionFormId, limit: 500);
+      if (supervisionSubs.isNotEmpty) {
+        complianceData = _processComplianceData(supervisionSubs);
+        serviceNumbersData = _processServiceNumbersData(supervisionSubs);
+        challengesData = _processChallengesData(supervisionSubs);
+      }
+    } catch (_) {
+      // Analytics data is optional — report will still generate without it
+    }
+
+    if (!mounted) return;
+
     DashboardReportExporter.showExportSheet(
       context: context,
       onGenerate: (type) => DashboardReportExporter.generateAndShare(
@@ -229,7 +297,134 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             return null;
           }
         },
+        readinessData: readinessData,
+        complianceData: complianceData,
+        serviceNumbersData: serviceNumbersData,
+        challengesData: challengesData,
       ),
     );
+  }
+
+  List<ReadinessGovData> _processReadinessData(List<Map<String, dynamic>> subs) {
+    final govAsync = ref.read(governoratesProvider);
+    final govNames = <String, String>{};
+    for (final g in (govAsync.valueOrNull ?? [])) {
+      govNames[g['id'] as String? ?? ''] = g['name_ar'] as String? ?? '';
+    }
+
+    // Latest submission per governorate
+    final latestByGov = <String, Map<String, dynamic>>{};
+    for (final s in subs) {
+      final d = s['data'] as Map<String, dynamic>? ?? {};
+      final govId = d['governorate_id'] as String?;
+      if (govId == null) continue;
+      final existing = latestByGov[govId];
+      if (existing == null ||
+          (s['created_at'] as String? ?? '').compareTo(existing['created_at'] as String? ?? '') > 0) {
+        latestByGov[govId] = s;
+      }
+    }
+
+    return latestByGov.entries.map((e) {
+      final d = e.value['data'] as Map<String, dynamic>? ?? {};
+      final govName = govNames[e.key] ?? 'غير محدد';
+      final readyStr = d['ready_for_launch'] as String?;
+      final status = readyStr == 'جاهزة'
+          ? 'ready'
+          : readyStr == 'جاهزة جزئياً' || readyStr == 'جاهزة جزئيا'
+              ? 'partial'
+              : readyStr == 'غير جاهزة'
+                  ? 'notReady'
+                  : 'unknown';
+
+      int score = 0;
+      for (final key in _readinessCriteriaKeys) {
+        if (d[key] == true) score++;
+      }
+
+      return ReadinessGovData(
+        govName: govName,
+        status: status,
+        score: score,
+        total: _readinessCriteriaKeys.length,
+        reasons: d['postponement_reasons'] as String?,
+      );
+    }).toList()
+      ..sort((a, b) {
+        final order = {'notReady': 0, 'partial': 1, 'unknown': 2, 'ready': 3};
+        return (order[a.status] ?? 9).compareTo(order[b.status] ?? 9);
+      });
+  }
+
+  List<ComplianceSectionData> _processComplianceData(List<Map<String, dynamic>> subs) {
+    final realSubs = subs.where((s) {
+      final d = s['data'] as Map<String, dynamic>? ?? {};
+      return d['governorate_id'] != null;
+    }).toList();
+
+    return _yesNoSections.entries.map((section) {
+      int yesCount = 0, totalCount = 0;
+      for (final key in section.value) {
+        for (final s in realSubs) {
+          final d = s['data'] as Map<String, dynamic>? ?? {};
+          if (d.containsKey(key)) {
+            totalCount++;
+            if (d[key] == true) yesCount++;
+          }
+        }
+      }
+      return ComplianceSectionData(
+        sectionName: section.key,
+        yesCount: yesCount,
+        totalCount: totalCount,
+      );
+    }).toList();
+  }
+
+  List<ServiceNumberData> _processServiceNumbersData(List<Map<String, dynamic>> subs) {
+    final realSubs = subs.where((s) {
+      final d = s['data'] as Map<String, dynamic>? ?? {};
+      return d['governorate_id'] != null;
+    }).toList();
+
+    final totals = <String, int>{};
+    final counts = <String, int>{};
+    for (final s in realSubs) {
+      final d = s['data'] as Map<String, dynamic>? ?? {};
+      for (final key in _serviceNumberFields.keys) {
+        final val = d[key];
+        if (val is num) {
+          totals[key] = (totals[key] ?? 0) + val.toInt();
+          counts[key] = (counts[key] ?? 0) + 1;
+        }
+      }
+    }
+
+    return _serviceNumberFields.entries.map((e) {
+      final total = totals[e.key] ?? 0;
+      final count = counts[e.key] ?? 0;
+      final avg = count > 0 ? total / count : 0.0;
+      return ServiceNumberData(label: e.value, total: total, avg: avg);
+    }).toList();
+  }
+
+  List<ChallengeData> _processChallengesData(List<Map<String, dynamic>> subs) {
+    return subs
+        .where((s) {
+          final d = s['data'] as Map<String, dynamic>? ?? {};
+          return d['challenges'] != null || d['actions_taken'] != null || d['recommendations'] != null;
+        })
+        .take(20)
+        .map((s) {
+          final d = s['data'] as Map<String, dynamic>? ?? {};
+          return ChallengeData(
+            supervisorName: d['supervisor_name'] as String? ?? 'غير محدد',
+            date: (s['created_at'] as String? ?? '').substring(0, 10),
+            challenges: d['challenges'] as String? ?? '',
+            actionsTaken: d['actions_taken'] as String? ?? '',
+            recommendations: d['recommendations'] as String? ?? '',
+          );
+        })
+        .toList();
   }
 }

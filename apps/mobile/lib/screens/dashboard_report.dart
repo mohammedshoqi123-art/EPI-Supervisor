@@ -152,6 +152,11 @@ class DashboardReportExporter {
     required String type,
     required Map<String, dynamic>? analyticsData,
     required Future<List<Map<String, dynamic>>?> Function() fetchGovRanking,
+    // Analytics sections from analytics screen
+    List<ReadinessGovData>? readinessData,
+    List<ComplianceSectionData>? complianceData,
+    List<ServiceNumberData>? serviceNumbersData,
+    List<ChallengeData>? challengesData,
   }) async {
     Navigator.pop(context);
 
@@ -208,6 +213,10 @@ class DashboardReportExporter {
         period: reportInfo['period']!,
         analyticsData: analyticsData,
         governorateData: govData,
+        readinessData: readinessData,
+        complianceData: complianceData,
+        serviceNumbersData: serviceNumbersData,
+        challengesData: challengesData,
       );
 
       if (!context.mounted) return;

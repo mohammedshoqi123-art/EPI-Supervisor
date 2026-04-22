@@ -6,7 +6,7 @@ import {
   Hash, ListChecks, Camera, QrCode, PenTool, Type, ArrowUpDown,
   Settings, LayoutGrid, Columns3, Tag, BarChart3, AlertTriangle,
   Send, X, Check, Loader2, CheckCircle2, Download, Database,
-  RefreshCw, ChevronLeft, User, Filter as FilterIcon, XCircle,
+  RefreshCw, ChevronLeft, ChevronRight, User, Filter as FilterIcon, XCircle,
   Users, Activity
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'

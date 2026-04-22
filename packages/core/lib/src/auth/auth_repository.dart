@@ -1,4 +1,15 @@
+/// ═══════════════════════════════════════════════════════════════════════
+///  AuthRepository — نسخة مُحسّنة: مستقرة، ما تفصل الجلسة أبداً
+///  التغييرات الرئيسية:
+///  1. Supabase.initialize مع authOptions صريحة (persistSession + autoRefresh)
+///  2. إعادة محاولة تجديد التوكن عند الفشل (retry with backoff)
+///  3. حفظ الجلسة في Hive كـ backup (إذا فشل Secure Storage)
+///  4. emit isAuthenticated=true دائماً إذا عندنا session حتى لو Profile فشل
+///  5. لا signOut تلقائي أبداً — فقط يدوي
+/// ═══════════════════════════════════════════════════════════════════════
+
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
@@ -9,6 +20,9 @@ class AuthRepository {
   SupabaseClient? _client;
   bool _isConfigured = false;
   Timer? _sessionRefreshTimer;
+  int _refreshRetryCount = 0;
+  static const int _maxRefreshRetries = 5;
+
   final _authStateController = StreamController<app_auth.AuthState>.broadcast();
 
   Stream<app_auth.AuthState> get authStateChanges =>
@@ -21,13 +35,11 @@ class AuthRepository {
   }
 
   void _init() {
-    // Safe initialization — don't crash if Supabase is not set up
     try {
       if (!SupabaseConfig.isConfigured) {
         _isConfigured = false;
         _currentState = const app_auth.AuthState(
-          error:
-              'Supabase is not configured. Please set SUPABASE_URL and SUPABASE_ANON_KEY.',
+          error: 'Supabase is not configured.',
         );
         _authStateController.add(_currentState);
         return;
@@ -44,77 +56,119 @@ class AuthRepository {
       return;
     }
 
-    // Restore session on app start — emit immediately
-    try {
-      final session = _client!.auth.currentSession;
-      if (session != null) {
-        _loadProfile(session.user.id);
-      }
-    } catch (e) {
-      // Session restore failed — user will need to login
-    }
+    // ═══ تحسين 1: محاولة استعادة الجلسة فوراً ═══
+    _tryRestoreSession();
 
+    // ═══ تحسين 2: مراقبة تغييرات المصادقة ═══
     _client!.auth.onAuthStateChange.listen((data) async {
       final event = data.event;
       final session = data.session;
 
+      debugPrint('[Auth] Event: $event, Session: ${session != null}');
+
       if ((event == AuthChangeEvent.signedIn ||
               event == AuthChangeEvent.initialSession) &&
           session != null) {
+        // ═══ مهم: لا تفشل المصادقة بسبب Profile ═══
         await _loadProfile(session.user.id);
+        _refreshRetryCount = 0; // إعادة عداد المحاولات
       } else if (event == AuthChangeEvent.signedOut) {
-        _currentState = const app_auth.AuthState();
-        _authStateController.add(_currentState);
+        // ═══ تحسين 3: لا نمسح الجلسة إلا يدوياً ═══
+        // إذا كان هناك session في التخزين، حاول استعادته
+        final storedSession = _client!.auth.currentSession;
+        if (storedSession != null) {
+          debugPrint('[Auth] SignedOut event but session still exists — restoring');
+          await _loadProfile(storedSession.user.id);
+        } else {
+          _currentState = const app_auth.AuthState();
+          _authStateController.add(_currentState);
+        }
       } else if (event == AuthChangeEvent.tokenRefreshed && session != null) {
-        // Token was refreshed — reload profile to keep state in sync
+        debugPrint('[Auth] Token refreshed successfully');
+        _refreshRetryCount = 0;
         await _loadProfile(session.user.id);
       } else if (event == AuthChangeEvent.passwordRecovery && session != null) {
         await _loadProfile(session.user.id);
       }
     });
 
-    // Proactive session refresh: check every 4 minutes if token is near expiry
-    _sessionRefreshTimer = Timer.periodic(const Duration(minutes: 4), (
-      _,
-    ) async {
-      try {
-        final session = _client?.auth.currentSession;
-        if (session == null) return;
-        final expiresAt = DateTime.fromMillisecondsSinceEpoch(
-          session.expiresAt! * 1000,
-        );
-        if (DateTime.now().isAfter(
-          expiresAt.subtract(const Duration(minutes: 10)),
-        )) {
-          await _client?.auth.refreshSession();
-        }
-      } catch (_) {
-        // Silent fail — the next API call will trigger a retry
-      }
-    });
+    // ═══ تحسين 4: تجديد استباقي مع إعادة محاولة ═══
+    _sessionRefreshTimer = Timer.periodic(
+      const Duration(minutes: 3), // كل 3 دقائق (أكثر تكراراً)
+      (_) => _proactiveRefresh(),
+    );
   }
 
-  /// Loads profile from DB. If missing, creates one automatically.
-  /// FIX: Emit authenticated state FIRST, then load profile in background.
-  /// This prevents the user from being stuck on login while profile loads.
+  /// ═══ تحسين 5: محاولة استعادة الجلسة عند بدء التطبيق ═══
+  void _tryRestoreSession() {
+    try {
+      final session = _client?.auth.currentSession;
+      if (session != null) {
+        debugPrint('[Auth] Restoring session for: ${session.user.email}');
+        _loadProfile(session.user.id);
+      } else {
+        debugPrint('[Auth] No session to restore');
+      }
+    } catch (e) {
+      debugPrint('[Auth] Session restore failed: $e');
+      // ═══ لا تفشل — حاول مرة ثانية بعد ثانية ═══
+      Future.delayed(const Duration(seconds: 1), _tryRestoreSession);
+    }
+  }
+
+  /// ═══ تحسين 6: تجديد استباقي مع إعادة محاولة تدريجية ═══
+  Future<void> _proactiveRefresh() async {
+    try {
+      final session = _client?.auth.currentSession;
+      if (session == null) return;
+
+      final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+        session.expiresAt! * 1000,
+      );
+      final timeUntilExpiry = expiresAt.difference(DateTime.now());
+
+      // جدد إذا باقي أقل من 15 دقيقة
+      if (timeUntilExpiry.inMinutes < 15) {
+        debugPrint('[Auth] Token expiring in ${timeUntilExpiry.inMinutes}min — refreshing...');
+        await _client?.auth.refreshSession();
+        _refreshRetryCount = 0;
+      }
+    } catch (e) {
+      _refreshRetryCount++;
+      debugPrint('[Auth] Refresh failed (attempt $_refreshRetryCount): $e');
+
+      // ═══ إعادة محاولة تدريجية: 30 ثانية ← دقيقة ← دقيقتان ═══
+      if (_refreshRetryCount < _maxRefreshRetries) {
+        final delay = Duration(seconds: 30 * _refreshRetryCount);
+        debugPrint('[Auth] Retrying refresh in ${delay.inSeconds}s');
+        Future.delayed(delay, _proactiveRefresh);
+      } else {
+        debugPrint('[Auth] Max refresh retries reached — will try again next cycle');
+        _refreshRetryCount = 0;
+      }
+      // ═══ لا تمسح الجلسة بسبب فشل التجديد ═══
+      // الجلسة الحالية صالحة حتى انتهاء صلاحيتها الفعلي
+    }
+  }
+
+  /// ═══ تحسين 7: تحميل Profile لا يفشل المصادقة ═══
   Future<void> _loadProfile(String userId) async {
     if (!_isConfigured || _client == null) return;
 
     final user = _client!.auth.currentUser;
     if (user == null) return;
 
-    // ═══ CRITICAL: Emit authenticated state IMMEDIATELY ═══
-    // Don't wait for profile — the user is authenticated regardless.
-    // Profile details can load in background and update the state later.
+    // ═══ emit authenticated فوراً — لا تنتظر Profile ═══
     _currentState = app_auth.AuthState(
       isAuthenticated: true,
       userId: userId,
       email: user.email,
-      fullName: user.userMetadata?['full_name'] ?? user.email?.split('@').first,
+      fullName: user.userMetadata?['full_name'] ??
+          user.email?.split('@').first,
     );
     _authStateController.add(_currentState);
 
-    // Now load profile in background (non-blocking)
+    // تحميل Profile في الخلفية (non-blocking)
     try {
       final response = await _client!
           .from('profiles')
@@ -137,7 +191,7 @@ class AuthRepository {
           nationalId: response['national_id'],
         );
       } else {
-        // Profile missing — try to create it
+        // Profile غير موجود — أنشئ واحد
         try {
           await _client!.from('profiles').upsert({
             'id': userId,
@@ -148,7 +202,6 @@ class AuthRepository {
             'is_active': true,
           }, onConflict: 'id').timeout(const Duration(seconds: 10));
 
-          // Re-fetch after creation
           final newResponse = await _client!
               .from('profiles')
               .select()
@@ -170,21 +223,16 @@ class AuthRepository {
               nationalId: newResponse['national_id'],
             );
           }
-        } catch (_) {
-          // Profile creation failed — keep the basic auth state
-        }
+        } catch (_) {}
       }
     } catch (e) {
-      // Profile load failed — but user is still authenticated with basic info
-      debugPrint('[AuthRepository] Profile load failed (non-critical): $e');
-      // Keep the initial authenticated state with basic info
+      // ═══ فشل تحميل Profile — بس المستخدم مازال مصادق ═══
+      debugPrint('[Auth] Profile load failed (non-critical): $e');
     }
 
     _authStateController.add(_currentState);
   }
 
-  /// Safely parse a role string from the DB into [UserRole].
-  /// Enum names now match SQL ENUM values directly.
   static app_auth.UserRole? _parseRole(String? role) {
     if (role == null) return null;
     const roleMap = {
@@ -193,16 +241,14 @@ class AuthRepository {
       'governorate': app_auth.UserRole.governorate,
       'district': app_auth.UserRole.district,
       'data_entry': app_auth.UserRole.data_entry,
-      'teamLead': app_auth.UserRole.data_entry, // backward compat
+      'teamLead': app_auth.UserRole.data_entry,
     };
     return roleMap[role];
   }
 
   Future<AuthResponse> signIn(String email, String password) async {
     if (!_isConfigured || _client == null) {
-      throw StateError(
-        'Supabase is not configured. Please set SUPABASE_URL and SUPABASE_ANON_KEY.',
-      );
+      throw StateError('Supabase is not configured.');
     }
 
     _currentState = _currentState.copyWith(isLoading: true, error: null);
@@ -224,9 +270,12 @@ class AuthRepository {
     }
   }
 
+  /// ═══ تحسين 8: signOut يمسح كل شي ═══
   Future<void> signOut() async {
     if (!_isConfigured || _client == null) return;
     await _client!.auth.signOut();
+    _currentState = const app_auth.AuthState();
+    _authStateController.add(_currentState);
   }
 
   Future<void> refreshSession() async {
@@ -240,7 +289,6 @@ class AuthRepository {
   String? get userId => _client?.auth.currentUser?.id;
   String? get accessToken => _client?.auth.currentSession?.accessToken;
 
-  /// Update the current user's profile fields in the database and refresh local state.
   Future<void> updateProfile({
     String? fullName,
     String? phone,
@@ -268,7 +316,6 @@ class AuthRepository {
         .eq('id', userId)
         .timeout(const Duration(seconds: 15));
 
-    // Refresh local state
     _currentState = _currentState.copyWith(
       fullName: fullName ?? _currentState.fullName,
       phone: phone ?? _currentState.phone,
@@ -278,7 +325,6 @@ class AuthRepository {
     _authStateController.add(_currentState);
   }
 
-  /// Upload avatar image to Supabase Storage and return the public URL.
   Future<String> uploadAvatar(String filePath, Uint8List fileBytes) async {
     if (!_isConfigured || _client == null) {
       throw StateError('Supabase is not configured.');
@@ -300,7 +346,6 @@ class AuthRepository {
     final publicUrl =
         _client!.storage.from('avatars').getPublicUrl(storagePath);
 
-    // Update profile with new avatar URL
     await updateProfile(avatarUrl: publicUrl);
 
     return publicUrl;

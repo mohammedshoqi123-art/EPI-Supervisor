@@ -43,3 +43,9 @@ export 'src/ai/smart_analytics.dart';
 export 'src/ai/ai_router.dart';
 export 'src/ai/groq_service.dart';
 export 'src/ai/unified_ai_provider.dart';
+// ═══ New AI Providers: Z AI + OpenRouter + NLP + KB + Alerts ═══
+export 'src/ai/zai_service.dart';
+export 'src/ai/openrouter_service.dart';
+export 'src/ai/epi_nlp_engine.dart';
+export 'src/ai/epi_knowledge_base.dart';
+export 'src/ai/smart_alerts_engine.dart';

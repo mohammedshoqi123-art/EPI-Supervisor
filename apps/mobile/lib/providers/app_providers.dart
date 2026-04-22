@@ -550,3 +550,107 @@ final huggingFaceServiceProvider = Provider<HuggingFaceService?>((ref) {
 final enhancedLocalAIProvider = Provider<EnhancedLocalAI>((ref) {
   return EnhancedLocalAI();
 });
+
+// ═══════════════════════════════════════════════════════════════
+// NEW AI Services — Z AI, OpenRouter, NLP, Knowledge Base, Alerts
+// ═══════════════════════════════════════════════════════════════
+
+/// Z AI Service — GLM-based AI model
+final zaiServiceProvider = Provider<ZAIService?>((ref) {
+  const apiKey = String.fromEnvironment('ZAI_API_KEY', defaultValue: '7e3302f88b9b415ab4acffb2ec2ae527');
+  if (apiKey.isEmpty) return null;
+  final service = ZAIService(apiKey);
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+/// OpenRouter Service — Gateway to multiple LLM models
+final openRouterServiceProvider = Provider<OpenRouterService?>((ref) {
+  const apiKey = String.fromEnvironment('OPENROUTER_API_KEY', defaultValue: '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');
+  if (apiKey.isEmpty) return null;
+  final service = OpenRouterService(apiKey);
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+/// EPI NLP Engine — always available (no API needed)
+final epiNLPEngineProvider = Provider<EpiNLPEngine>((ref) {
+  return EpiNLPEngine();
+});
+
+/// EPI Knowledge Base — always available (no API needed)
+final epiKnowledgeBaseProvider = Provider<EpiKnowledgeBase>((ref) {
+  return EpiKnowledgeBase();
+});
+
+/// Smart Alerts Engine — always available (no API needed)
+final smartAlertsEngineProvider = Provider<SmartAlertsEngine>((ref) {
+  return SmartAlertsEngine();
+});
+
+/// AI Model Selection — user-chosen or auto-selected provider
+final aiModelSelectionProvider = StateNotifierProvider<AIModelSelectionNotifier, AIModelSelection>((ref) {
+  return AIModelSelectionNotifier();
+});
+
+class AIModelSelection {
+  final String provider; // 'groq', 'zai', 'openrouter', 'gemini', 'local'
+  final String? model; // specific model id (for OpenRouter)
+  final bool autoSelect; // auto-select best provider based on query
+
+  const AIModelSelection({
+    this.provider = 'groq',
+    this.model,
+    this.autoSelect = true,
+  });
+
+  AIModelSelection copyWith({String? provider, String? model, bool? autoSelect}) {
+    return AIModelSelection(
+      provider: provider ?? this.provider,
+      model: model ?? this.model,
+      autoSelect: autoSelect ?? this.autoSelect,
+    );
+  }
+}
+
+class AIModelSelectionNotifier extends StateNotifier<AIModelSelection> {
+  AIModelSelectionNotifier() : super(const AIModelSelection());
+
+  void selectProvider(String provider) {
+    state = state.copyWith(provider: provider);
+  }
+
+  void selectModel(String model) {
+    state = state.copyWith(model: model);
+  }
+
+  void toggleAutoSelect() {
+    state = state.copyWith(autoSelect: !state.autoSelect);
+  }
+
+  /// Auto-select best provider based on query type
+  String selectBestProvider(String query) {
+    final intents = EpiNLPEngine.detectIntents(query);
+    if (intents.isEmpty) return 'groq';
+
+    final topIntent = intents.first.intent;
+
+    // Deep analysis → use powerful model
+    if (['generate_report', 'analyze_trend', 'query_analytics'].contains(topIntent)) {
+      return 'openrouter'; // DeepSeek/GPT-4 for reports
+    }
+
+    // Quick query → use fast model
+    if (['query_submissions', 'query_shortages', 'query_governorates'].contains(topIntent)) {
+      return 'groq'; // Fastest
+    }
+
+    // Knowledge questions → Z AI or Groq
+    if (['query_vaccination', 'query_campaign', 'query_aefi', 'query_coverage'].contains(topIntent)) {
+      return 'zai'; // Z AI good for knowledge
+    }
+
+    // Default → Groq (fastest)
+    return 'groq';
+  }
+}

@@ -4,10 +4,14 @@ import 'huggingface/hf_service.dart';
 import 'rag/rag_pipeline.dart';
 import 'function_calling/function_calling_engine.dart';
 import 'enhanced_local_ai.dart';
+import 'zai_service.dart';
+import 'openrouter_service.dart';
+import 'epi_nlp_engine.dart';
+import 'epi_knowledge_base.dart';
 import '../offline/offline_manager.dart';
 
-/// AI Provider priority: Groq (fast) → HuggingFace (tasks) → MiMo (fallback) → Local
-enum AIProvider { groq, huggingface, mimo, local }
+/// AI Provider priority: Groq (fast) → Z AI → OpenRouter → HuggingFace → MiMo → Local
+enum AIProvider { groq, zai, openrouter, huggingface, mimo, local }
 
 class UnifiedAIResponse {
   final String text;
@@ -28,6 +32,8 @@ class UnifiedAIResponse {
 /// Master AI service — intelligently routes to best provider
 class UnifiedAIProvider {
   final GroqService? _groq;
+  final ZAIService? _zai;
+  final OpenRouterService? _openRouter;
   final HuggingFaceService? _hf;
   final RagPipeline? _rag;
   final FunctionCallingEngine? _fnCall;
@@ -39,11 +45,15 @@ class UnifiedAIProvider {
 
   UnifiedAIProvider({
     GroqService? groq,
+    ZAIService? zai,
+    OpenRouterService? openRouter,
     HuggingFaceService? hf,
     RagPipeline? rag,
     FunctionCallingEngine? fnCall,
     OfflineManager? offline,
   })  : _groq = groq,
+        _zai = zai,
+        _openRouter = openRouter,
         _hf = hf,
         _rag = rag,
         _fnCall = fnCall,
@@ -52,6 +62,8 @@ class UnifiedAIProvider {
 
   bool get isOnline => _offline.isOnline;
   bool get hasGroq => _groq?.isAvailable ?? false;
+  bool get hasZAI => _zai?.isAvailable ?? false;
+  bool get hasOpenRouter => _openRouter?.isAvailable ?? false;
   bool get hasHF => _hf != null;
   bool get hasRAG => _rag?.isReady ?? false;
 
@@ -78,7 +90,7 @@ class UnifiedAIProvider {
     }
 
     // OFFLINE: Use local AI
-    if (!isOnline || (!hasGroq && !hasHF)) {
+    if (!isOnline || (!hasGroq && !hasZAI && !hasOpenRouter && !hasHF)) {
       return _handleOffline(message, data);
     }
 
@@ -193,12 +205,16 @@ class UnifiedAIProvider {
       } catch (_) {}
     }
 
-    // Step 4: LLM response (Groq preferred)
+    // Step 4: LLM response (Groq preferred, then Z AI, then OpenRouter)
     if (hasGroq) {
       final systemPrompt = _buildSystemPrompt(ragContext: ragContext);
+      // Add knowledge base context
+      final kbContext = EpiKnowledgeBase.getRelevantContext(message);
+      final fullPrompt = systemPrompt + (kbContext.isNotEmpty ? '\n\n$kbContext' : '');
+
       final resp = await _groq!.chat(
         message,
-        systemPrompt: systemPrompt,
+        systemPrompt: fullPrompt,
         context: data,
         model: mode == 'suggestions'
             ? 'llama-3.1-8b-instant'
@@ -221,6 +237,52 @@ class UnifiedAIProvider {
       );
 
       return response;
+    }
+
+    // Fallback to Z AI
+    if (hasZAI) {
+      try {
+        final systemPrompt = _buildSystemPrompt(ragContext: ragContext);
+        final kbContext = EpiKnowledgeBase.getRelevantContext(message);
+        final fullPrompt = systemPrompt + (kbContext.isNotEmpty ? '\n\n$kbContext' : '');
+
+        final resp = await _zai!.chat(
+          message,
+          systemPrompt: fullPrompt,
+          context: data,
+          maxTokens: template != null ? 1000 : 800,
+        );
+
+        return UnifiedAIResponse(
+          text: resp,
+          provider: AIProvider.zai,
+          confidence: 0.80,
+          metadata: {'intent': intentStr, 'model': 'zai'},
+        );
+      } catch (_) {}
+    }
+
+    // Fallback to OpenRouter
+    if (hasOpenRouter) {
+      try {
+        final systemPrompt = _buildSystemPrompt(ragContext: ragContext);
+        final kbContext = EpiKnowledgeBase.getRelevantContext(message);
+        final fullPrompt = systemPrompt + (kbContext.isNotEmpty ? '\n\n$kbContext' : '');
+
+        final resp = await _openRouter!.chat(
+          message,
+          systemPrompt: fullPrompt,
+          context: data,
+          maxTokens: template != null ? 1000 : 800,
+        );
+
+        return UnifiedAIResponse(
+          text: resp,
+          provider: AIProvider.openrouter,
+          confidence: 0.80,
+          metadata: {'intent': intentStr, 'model': 'openrouter'},
+        );
+      } catch (_) {}
     }
 
     // Fallback to HF QA if available
@@ -322,6 +384,8 @@ Health Score: 80+=ممتاز, 50-79=متوسط, <50=ضعيف.
 
   Map<String, dynamic> get status => {
         'groq': hasGroq,
+        'zai': hasZAI,
+        'openrouter': hasOpenRouter,
         'huggingface': hasHF,
         'rag': hasRAG,
         'online': isOnline,

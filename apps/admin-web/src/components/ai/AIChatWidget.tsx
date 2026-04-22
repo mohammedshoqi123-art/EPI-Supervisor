@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase'
 import { cn, formatNumber } from '@/lib/utils'
 import { useNavigate } from 'react-router-dom'
 import { useDashboardStats, useGovernorateStats, useShortages } from '@/hooks/useApi'
+import { epiBotEngine } from '@/lib/epi-bot-engine'
 
 // ═══════════════════════════════════════════════════════════
 // TYPES
@@ -275,6 +276,56 @@ export function AIChatWidget() {
     setMessages(prev => [...prev, assistantMsg])
 
     try {
+      // ── Tier 1: Local EPI-Bot Engine (fast, offline-capable) ──
+      if (!template) {
+        const context = {
+          userId: 'current',
+          sessionId: 'main',
+          history: [],
+          metadata: {},
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+        const localResult = epiBotEngine.processMessage(text, context)
+
+        // If local bot is confident enough (>= 0.7), use its response directly
+        if (localResult.source === 'local' && localResult.intent !== 'unknown') {
+          // Simulate streaming for local response
+          let current = ''
+          const chars = localResult.text.split('')
+          for (let i = 0; i < chars.length; i++) {
+            current += chars[i]
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsg.id ? { ...m, content: current } : m
+            ))
+            if (i % 3 === 0) await new Promise(r => setTimeout(r, 6))
+          }
+
+          const actions = buildActions(localResult.intent, undefined)
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsg.id
+              ? { ...m, isStreaming: false, source: 'epi-bot-local', intent: localResult.intent, actions }
+              : m
+          ))
+
+          if (localResult.suggestions.length > 0) {
+            const suggestMsg: Message = {
+              id: (Date.now() + 2).toString(),
+              role: 'assistant',
+              content: '',
+              timestamp: new Date(),
+              isStreaming: false,
+              source: 'suggestions',
+              suggestions: localResult.suggestions.slice(0, 4),
+            }
+            setMessages(prev => [...prev, suggestMsg])
+          }
+          setIsLoading(false)
+          return // ✅ Done locally — no API call needed
+        }
+      }
+
+      // ── Tier 2: Supabase Edge Function (full AI with RAG) ──
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('Not authenticated')
 

@@ -474,8 +474,8 @@ export default function MapPage() {
                             <div className="flex items-center gap-2 mb-2">
                               <div className={cn('w-2.5 h-2.5 rounded-full',
                                 sub.status === 'submitted' ? 'bg-emerald-500' :
-                                sub.status === 'submitted' ? 'bg-blue-500' :
-                                sub.status === 'draft' ? 'bg-amber-500' :
+                                sub.status === 'reviewed' ? 'bg-blue-500' :
+                                sub.status === 'draft' ? 'bg-amber-500' : 'bg-gray-400'
                               )} />
                               <span className="font-bold text-sm">{sub.forms?.title_ar || 'إرسالية'}</span>
                             </div>
@@ -733,8 +733,8 @@ export default function MapPage() {
                 >
                   <div className={cn('w-2.5 h-2.5 rounded-full shrink-0',
                     sub.status === 'submitted' ? 'bg-emerald-500' :
-                    sub.status === 'submitted' ? 'bg-blue-500' :
-                    sub.status === 'draft' ? 'bg-amber-500' :
+                    sub.status === 'reviewed' ? 'bg-blue-500' :
+                    sub.status === 'draft' ? 'bg-amber-500' : 'bg-gray-400'
                   )} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{sub.forms?.title_ar || 'إرسالية'}</p>

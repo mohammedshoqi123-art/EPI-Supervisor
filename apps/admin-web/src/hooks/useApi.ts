@@ -203,7 +203,7 @@ export function useDashboardStats(campaignType?: string) {
         submissions_today: submissionsToday,
         submissions_this_week: submissionsThisWeek,
         submissions_trend: 12.5,
-        approval_rate: submissions.length > 0 ? (approved / submissions.length) * 100 : 0,
+        approval_rate: submissions.length > 0 ? ((submissions.filter((s: any) => s.status === 'submitted').length) / submissions.length) * 100 : 0,
         unread_notifications: 0,
       }
     },

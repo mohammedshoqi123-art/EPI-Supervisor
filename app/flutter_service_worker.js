@@ -36,8 +36,8 @@ const RESOURCES = {"assets/assets/fonts/Tajawal-Medium.ttf": "3876865bd2f341d2d9
 "canvaskit/canvaskit.js": "26eef3024dbc64886b7f48e1b6fb05cf",
 "canvaskit/skwasm.js": "ac0f73826b925320a1e9b0d3fd7da61c",
 "flutter.js": "4b2350e14c6650ba82871f60906437ea",
-"flutter_bootstrap.js": "3557b3ee631b84556fefd23e508d1818",
-"main.dart.js": "b5ac25e8538492752a78686618885536",
+"flutter_bootstrap.js": "ee512354905552fc2b093cb1911b071d",
+"main.dart.js": "c005ada0b8b2644efbdb0b9f6f5336bd",
 "version.json": "f5e1e04d4e61f48538135d4b1a4947f0"};
 // The application shell files that are downloaded before a service worker can
 // start.

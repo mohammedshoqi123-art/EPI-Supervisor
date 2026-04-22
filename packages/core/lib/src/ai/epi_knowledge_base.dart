@@ -424,7 +424,7 @@ class EpiKnowledgeBase {
         // Fuzzy match
         final fieldWords = normalizedField.split(' ');
         for (final fw in fieldWords) {
-          if (EpiNLPEngine.similarity(word, fw) > 0.8) {
+          if (EpiNLPEngine.fuzzyMatch(word, fw) > 0.8) {
             totalMatches++;
             break;
           }

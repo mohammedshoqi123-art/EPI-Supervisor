@@ -118,35 +118,9 @@ jobs:
           path: apps/admin-web/dist/
           retention-days: 7
 
-  # ─── Deploy Admin Web to GitHub Pages ──────────────────
-  deploy-admin:
-    name: Deploy Admin Web
-    runs-on: ubuntu-latest
-    needs: admin-web
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Admin Web artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: admin-web-dist
-          path: admin-web-dist/
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./admin-web-dist
-          publish_branch: gh-pages
-          keep_files: true
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: 'deploy: admin dashboard ${{ github.sha }}'
-
   # ─── Build APK ───────────────────────────────────────────
+  # NOTE: Admin dashboard deployment handled by deploy-admin.yml
+  # to avoid race condition with dual gh-pages pushes
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest

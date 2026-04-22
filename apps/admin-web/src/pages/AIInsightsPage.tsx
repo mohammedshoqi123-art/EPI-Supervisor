@@ -44,18 +44,6 @@ function generateInsights(stats: any, govStats: any, shortages: any) {
     })
   }
 
-  // Critical: Many unresolved shortages
-  if (stats.critical_shortages > 5) {
-    insights.push({
-      type: 'critical',
-      title: 'نواقص حرجة تحتاج تدخل فوري',
-      description: `${stats.critical_shortages} نقص حرج غير محلول. هذه النواقص قد تؤثر على سير التطعيم.`,
-      action: 'مراجعة النواقص الحرجة وتخصيص الموارد',
-      icon: AlertTriangle,
-      priority: 1,
-    })
-  }
-
   // Warning: Low submission rate
   if (stats.submissions_today < 5 && stats.total_users > 10) {
     insights.push({
@@ -142,7 +130,6 @@ function calculateHealthScore(stats: any): number {
   let score = 50
   score += Math.min(stats.approval_rate * 0.3, 30)
   score += stats.active_users > 0 ? 10 : -10
-  score += stats.critical_shortages === 0 ? 10 : -stats.critical_shortages * 2
   score += stats.submissions_today > 10 ? 5 : 0
   return Math.max(0, Math.min(100, Math.round(score)))
 }
@@ -189,8 +176,7 @@ export default function AIInsightsPage() {
     { metric: 'الاعتماد', value: stats.approval_rate, fullMark: 100 },
     { metric: 'النشاط', value: Math.min((stats.submissions_today / 20) * 100, 100), fullMark: 100 },
     { metric: 'التغطية', value: stats.total_users > 0 ? (stats.active_users / stats.total_users) * 100 : 0, fullMark: 100 },
-    { metric: 'الجودة', value: Math.max(0, 100 - stats.critical_shortages * 10), fullMark: 100 },
-    { metric: 'الاستجابة', value: stats.pending_submissions < 10 ? 90 : stats.pending_submissions < 30 ? 60 : 30, fullMark: 100 },
+    { metric: 'الجودة', value: stats.approval_rate > 80 ? 90 : stats.approval_rate > 60 ? 60 : 30, fullMark: 100 },
     { metric: 'الالتزام', value: stats.submissions_this_week > 50 ? 90 : stats.submissions_this_week > 20 ? 60 : 30, fullMark: 100 },
   ] : []
 

@@ -629,8 +629,8 @@ export default function ReportsPage() {
           { label: 'إجمالي المستخدمين', value: stats.total_users, icon: '👥', color: '#1E88E5' },
           { label: 'إرساليات اليوم', value: stats.submissions_today, icon: '📋', color: '#43A047' },
           { label: 'المسودات', value: stats.draft_submissions, icon: '📝', color: '#FB8C00' },
-          { label: 'النواقص الحرجة', value: stats.critical_shortages, icon: '⚠️', color: '#E53935' },
-          { label: 'التغطية', value: `${stats.total_governorates} محافظة`, icon: '🗺️', color: '#00897B' },
+          { label: 'النماذج النشطة', value: stats.active_forms, icon: '📄', color: '#E53935' },
+          { label: 'المحافظات', value: govStats?.length ?? 0, icon: '🗺️', color: '#00897B' },
           { label: 'معدل الأداء', value: `${stats.approval_rate.toFixed(1)}%`, icon: '📈', color: '#8E24AA' },
         ],
       })

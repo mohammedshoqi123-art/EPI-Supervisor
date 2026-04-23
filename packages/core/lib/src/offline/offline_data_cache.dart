@@ -258,6 +258,30 @@ class OfflineDataCache {
     if (kDebugMode) print('[OfflineDataCache] All caches cleared');
   }
 
+  /// Invalidate all cache keys matching a prefix — clears BOTH memory and Hive.
+  /// ═══ FIX: Previous sync invalidation only checked _memoryCache.keys (via getDebugInfo),
+  /// missing keys that were evicted from memory (LRU) but still persisted in Hive.
+  /// This caused stale data to be served after sync, especially in the Numbers/Visitors tab.
+  Future<void> invalidateByPrefix(String prefix) async {
+    // 1. Clear matching memory cache keys
+    final memoryKeys = _memoryCache.keys.where((k) => k.startsWith(prefix)).toList();
+    for (final key in memoryKeys) {
+      _memoryCache.remove(key);
+    }
+
+    // 2. Clear matching persistent (Hive) cache keys
+    final persistentKeys = _offline.getCacheKeys().where((k) => k.startsWith(prefix)).toList();
+    for (final key in persistentKeys) {
+      await _offline.removeCacheKey(key);
+    }
+
+    final total = memoryKeys.length + persistentKeys.length;
+    if (kDebugMode && total > 0) {
+      print('[OfflineDataCache] Invalidated $total keys by prefix "$prefix" '
+          '(memory: ${memoryKeys.length}, persistent: ${persistentKeys.length})');
+    }
+  }
+
   /// Check if we have any cached data for a key (including stale when offline).
   bool hasCachedData(String key) {
     if (_memoryCache.containsKey(key)) return true;

@@ -583,6 +583,13 @@ class OfflineManager {
     });
   }
 
+  /// Get all keys currently in the persistent cache.
+  /// Used by OfflineDataCache.invalidateByPrefix() for prefix-based invalidation.
+  List<String> getCacheKeys() {
+    final cache = _getCache();
+    return cache.keys.toList();
+  }
+
   void dispose() {
     _connectivityController.close();
   }

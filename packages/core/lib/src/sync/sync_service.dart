@@ -297,17 +297,17 @@ class SyncService {
 
       // ═══ FIX: Invalidate submissions + analytics caches after successful sync ═══
       // Without this, the UI shows stale data for up to 2 hours (cache maxAge).
-      // Memory cache only — persistent cache (Hive) stays intact for offline fallback.
+      // ═══ FIX: Use invalidateByPrefix() to clear BOTH memory AND Hive persistent cache.
+      // Previous approach used getDebugInfo()['keys'] which only returned memory cache keys,
+      // missing entries evicted by LRU but still persisted in Hive.
+      // This caused the Numbers/Visitors tab to show stale data after sync.
       if (result.synced > 0 || result.duplicates > 0) {
         _offline.updateConnectivity(true);
 
         final cache = _dataCache;
         if (cache != null) {
-          final debugInfo = cache.getDebugInfo();
-          final keys = debugInfo['keys'] as List? ?? [];
-
           // Invalidate all submission + analytics + shortages + trend + ranking caches
-          // Includes integrated activity analytics (readiness + supervision)
+          // Includes integrated activity analytics (readiness + supervision + numbers)
           const prefixes = [
             'submissions',
             'dashboard_analytics',
@@ -319,20 +319,14 @@ class SyncService {
           ];
 
           int invalidated = 0;
-          for (final key in keys) {
-            final keyStr = key.toString();
-            for (final prefix in prefixes) {
-              if (keyStr.startsWith(prefix)) {
-                await cache.invalidate(keyStr);
-                invalidated++;
-                break;
-              }
-            }
+          for (final prefix in prefixes) {
+            await cache.invalidateByPrefix(prefix);
+            invalidated++;
           }
 
-          if (kDebugMode && invalidated > 0)
+          if (kDebugMode)
             print(
-              '[SyncService] Invalidated $invalidated caches (submissions + analytics)',
+              '[SyncService] Invalidated $invalidated cache prefixes (submissions + analytics)',
             );
         }
       }

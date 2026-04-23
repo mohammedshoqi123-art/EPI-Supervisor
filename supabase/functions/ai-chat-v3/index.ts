@@ -319,14 +319,14 @@ function buildDynamicSystemPrompt(
 == أسلوب الإجابة ==
 • ابدأ بالخلاصة العملية مباشرة بدون مقدمات طويلة.
 • استخدم أرقام حقيقية من الأدوات المتاحة — لا تختلق أرقاماً.
-• كن المستشار الذكي والخبير (استخدم أسلوباً احترافياً ومحفزاً - "حلاوة").
-• اعتمد أولاً على مراجع قاعدة المعرفة. إن لم تتوفر، يمكن الاستعانة بمعرفتك العامة الموثوقة (WHO, UNICEF, MoHP) مع الإشارة لذلك (مثلاً: "وفقاً لقاعدة المعرفة..." أو "حسب إرشادات WHO..."). لا تقدم تشخيصات طبية فردية أبداً.
-• الحملات المتاحة: شلل الأطفال (polio_campaign) + النشاط الإيصالي التكاملي (integrated_activity). عند الحديث عن البيانات، وضّح أي حملة.
-• جداول مختصرة، قوائم، رموز (📊⚠️✅💡🚨)
-• توصيات عملية ميدانية تدعم أداء العمل
-• الحد الأقصى: 250 كلمة للأسئلة المباشرة.
+• أنت خبير شامل — قادر على تحليل البيانات، إنشاء التقارير، مقارنة الفترات، البحث في الحقول، وإعطاء توصيات ميدانية.
+• اعتمد أولاً على مراجع قاعدة المعرفة. إن لم تتوفر، يمكن الاستعانة بمعرفتك العامة الموثوقة (WHO, UNICEF, MoHP) مع الإشارة لذلك.
+• الحملات المتاحة: شلل الأطفال (polio_campaign) + النشاط الإيصالي التكاملي (integrated_activity).
+• استخدم جداول مختصرة، قوائم، رموز (📊⚠️✅💡🚨) لتوضيح البيانات.
+• قدم توصيات عملية ميدانية تدعم أداء العمل.
 • إذا لا توجد بيانات، قل ذلك واقترح مصدرها.
-• تكيف مع دور المستخدم: ${profile.role === 'admin' ? 'محلل استراتيجي' : profile.role === 'data_entry' ? 'مساعد عملي مبسط' : 'مستشار ميداني خبير'}`
+• تكيف مع دور المستخدم: ${profile.role === 'admin' ? 'محلل استراتيجي — أعطِ تحليلاً عميقاً وتوصيات استراتيجية' : profile.role === 'data_entry' ? 'مساعد عملي مبسط' : 'مستشار ميداني خبير'}
+• لديك صلاحية الوصول لكل النماذج والحقول والإرساليات — لا تتردد في استخدام كل الأدوات المتاحة.`
 
   if (dynamicKnowledge) {
     sys += `\n\n== بيانات المحافظات (محدّثة) ==\n${dynamicKnowledge}`
@@ -733,6 +733,103 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_form_field_values',
+      description: 'جلب القيم الفعلية لحقل محدد من الإرساليات — يعرض كل القيم المُرسلة مع تكرارها. مثلاً: كل أرقام الفرق، كل أسماء المرافق الصحية.',
+      parameters: {
+        type: 'object',
+        properties: {
+          form_id: { type: 'string', description: 'معرف النموذج (UUID)' },
+          field_key: { type: 'string', description: 'مفتاح الحقل في data JSONB' },
+          days: { type: 'number', description: 'آخر كم يوم' },
+          limit: { type: 'number', description: 'عدد القيم (افتراضي 100)' },
+        },
+        required: ['form_id', 'field_key'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_submissions',
+      description: 'البحث في الإرساليات حسب محتوى الحقول — مثلاً: ابحث عن إرساليات محافظة تعز، أو إرسالية برقم فريق محدد.',
+      parameters: {
+        type: 'object',
+        properties: {
+          form_id: { type: 'string', description: 'معرف النموذج' },
+          field_key: { type: 'string', description: 'مفتاح الحقل للبحث فيه' },
+          field_value: { type: 'string', description: 'القيمة المطلوبة (بحث جزئي)' },
+          days: { type: 'number', description: 'آخر كم يوم' },
+          limit: { type: 'number', description: 'عدد النتائج (افتراضي 20)' },
+        },
+        required: ['field_key', 'field_value'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'compare_periods',
+      description: 'مقارنة أداء فترتين — مثلاً: هذا الأسبوع مقابل الأسبوع الماضي، أو هذا الشهر مقابل الشهر السابق.',
+      parameters: {
+        type: 'object',
+        properties: {
+          current_days: { type: 'number', description: 'عدد أيام الفترة الحالية (مثلاً 7)' },
+          previous_days: { type: 'number', description: 'عدد أيام الفترة السابقة (مثلاً 7)' },
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+        },
+        required: ['current_days'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_user_activity',
+      description: 'جلب نشاط المستخدمين — مَن أكثر المستخدمين إرسالاً، ومَن غير نشط.',
+      parameters: {
+        type: 'object',
+        properties: {
+          days: { type: 'number', description: 'آخر كم يوم (افتراضي 30)' },
+          limit: { type: 'number', description: 'عدد المستخدمين (افتراضي 20)' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_critical_alerts',
+      description: 'جلب التنبيهات الحرجة — نواقص حرجة، إرساليات متأخرة، محافظات ضعيفة.',
+      parameters: {
+        type: 'object',
+        properties: {
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'export_report',
+      description: 'إنشاء تقرير مفصل بالبيانات — يُرجع ملخصاً شاملاً قابل للنسخ.',
+      parameters: {
+        type: 'object',
+        properties: {
+          report_type: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'governorate', 'campaign', 'custom'], description: 'نوع التقرير' },
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+          governorate_name: { type: 'string', description: 'اسم المحافظة (اختياري)' },
+          days: { type: 'number', description: 'عدد الأيام (افتراضي 7)' },
+        },
+        required: ['report_type'],
+      },
+    },
+  },
 ]
 
 async function executeFunction(supa: any, name: string, args: Record<string, any>): Promise<any> {
@@ -1069,6 +1166,230 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           result: Math.round(result * 100) / 100,
           data_points: values.length,
           period: days ? `آخر ${days} يوم` : 'كل الفترات',
+        }
+      }
+
+      case 'get_form_field_values': {
+        const { form_id, field_key, days, limit } = args
+        let query = supa.from('form_submissions')
+          .select(`data->>${field_key}, created_at, governorate_id`)
+          .is('deleted_at', null)
+        if (form_id) query = query.eq('form_id', form_id)
+        if (days) {
+          const since = new Date(Date.now() - days * 86400000).toISOString()
+          query = query.gte('created_at', since)
+        }
+        const { data } = await withTimeout(query.limit(limit || 100), 8_000) ?? {}
+        if (!data) return { error: 'لا توجد بيانات' }
+
+        const valueCounts: Record<string, number> = {}
+        for (const row of data) {
+          const val = row[`data->>${field_key}`] || row.data?.[field_key] || 'غير محدد'
+          const strVal = String(val)
+          valueCounts[strVal] = (valueCounts[strVal] ?? 0) + 1
+        }
+
+        const sorted = Object.entries(valueCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 50)
+          .map(([value, count]) => ({ value, count }))
+
+        return { field: field_key, values: sorted, total_records: data.length }
+      }
+
+      case 'search_submissions': {
+        const { form_id, field_key, field_value, days, limit } = args
+        let query = supa.from('form_submissions')
+          .select('id, data, status, created_at, governorate_id, form_id')
+          .is('deleted_at', null)
+          .ilike(`data->>${field_key}`, `%${field_value}%`)
+        if (form_id) query = query.eq('form_id', form_id)
+        if (days) {
+          const since = new Date(Date.now() - days * 86400000).toISOString()
+          query = query.gte('created_at', since)
+        }
+        const { data } = await withTimeout(query.limit(limit || 20), 8_000) ?? {}
+        if (!data) return { error: 'لا توجد نتائج' }
+
+        return {
+          query: field_value,
+          field: field_key,
+          results: data.map((r: any) => ({
+            id: r.id,
+            status: r.status,
+            created_at: r.created_at,
+            data: r.data,
+          })),
+          count: data.length,
+        }
+      }
+
+      case 'compare_periods': {
+        const { current_days, previous_days, campaign_type } = args
+        const prevDays = previous_days || current_days
+
+        const currentSince = new Date(Date.now() - current_days * 86400000).toISOString()
+        const previousSince = new Date(Date.now() - (current_days + prevDays) * 86400000).toISOString()
+        const previousEnd = currentSince
+
+        let currentQuery = supa.from('form_submissions').select('status, form_id').is('deleted_at', null).gte('created_at', currentSince)
+        let previousQuery = supa.from('form_submissions').select('status, form_id').is('deleted_at', null).gte('created_at', previousSince).lt('created_at', previousEnd)
+
+        if (campaign_type && campaign_type !== 'all') {
+          const formIds = await getCampaignFormIds(campaign_type)
+          if (formIds) {
+            currentQuery = currentQuery.in('form_id', formIds)
+            previousQuery = previousQuery.in('form_id', formIds)
+          }
+        }
+
+        const [currentData, previousData] = await Promise.all([
+          withTimeout(currentQuery.limit(5000), 10_000),
+          withTimeout(previousQuery.limit(5000), 10_000),
+        ])
+
+        const currentTotal = currentData?.length || 0
+        const previousTotal = previousData?.length || 0
+        const change = previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal * 100).toFixed(1) : 'N/A'
+
+        const currentApproved = currentData?.filter((r: any) => r.status === 'approved').length || 0
+        const previousApproved = previousData?.filter((r: any) => r.status === 'approved').length || 0
+
+        return {
+          current_period: { days: current_days, total: currentTotal, approved: currentApproved },
+          previous_period: { days: prevDays, total: previousTotal, approved: previousApproved },
+          change_percent: change,
+          trend: currentTotal > previousTotal ? '📈 صاعد' : currentTotal < previousTotal ? '📉 هابط' : '➡️ مستقر',
+        }
+      }
+
+      case 'get_user_activity': {
+        const { days, limit: userLimit } = args
+        const since = new Date(Date.now() - (days || 30) * 86400000).toISOString()
+
+        const { data: submissions } = await withTimeout(
+          supa.from('form_submissions')
+            .select('submitted_by, created_at')
+            .is('deleted_at', null)
+            .gte('created_at', since)
+            .limit(5000),
+          10_000
+        ) ?? {}
+
+        if (!submissions) return { error: 'لا توجد بيانات' }
+
+        const userCounts: Record<string, number> = {}
+        for (const s of submissions) {
+          if (s.submitted_by) {
+            userCounts[s.submitted_by] = (userCounts[s.submitted_by] ?? 0) + 1
+          }
+        }
+
+        const topUsers = Object.entries(userCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, userLimit || 20)
+
+        // Get user names
+        const userIds = topUsers.map(([id]) => id)
+        const { data: profiles } = await supa.from('profiles').select('id, full_name, role').in('id', userIds)
+
+        const profileMap: Record<string, any> = {}
+        profiles?.forEach((p: any) => { profileMap[p.id] = p })
+
+        return {
+          period_days: days || 30,
+          total_submissions: submissions.length,
+          active_users: Object.keys(userCounts).length,
+          top_users: topUsers.map(([id, count]) => ({
+            name: profileMap[id]?.full_name || 'غير معروف',
+            role: profileMap[id]?.role || '?',
+            submissions: count,
+          })),
+        }
+      }
+
+      case 'get_critical_alerts': {
+        const campaign_type = args.campaign_type || 'all'
+
+        // Get unresolved shortages
+        let shortageQuery = supa.from('supply_shortages')
+          .select('severity, item_name, governorate_id, created_at')
+          .eq('is_resolved', false)
+          .is('deleted_at', null)
+        const { data: shortages } = await withTimeout(shortageQuery.limit(50), 8_000) ?? {}
+
+        // Get stale submissions (no submissions in last 3 days from active users)
+        const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString()
+        let subQuery = supa.from('form_submissions')
+          .select('governorate_id, created_at, form_id')
+          .is('deleted_at', null)
+          .gte('created_at', threeDaysAgo)
+        if (campaign_type !== 'all') {
+          const formIds = await getCampaignFormIds(campaign_type)
+          if (formIds) subQuery = subQuery.in('form_id', formIds)
+        }
+        const { data: recentSubs } = await withTimeout(subQuery.limit(2000), 8_000) ?? {}
+
+        const activeGovs = new Set(recentSubs?.map((r: any) => r.governorate_id).filter(Boolean))
+
+        // Get all governorates
+        const { data: govs } = await supa.from('governorates').select('id, name_ar')
+
+        const inactiveGovs = govs?.filter((g: any) => !activeGovs.has(g.id)) || []
+
+        return {
+          shortages: {
+            total: shortages?.length || 0,
+            critical: shortages?.filter((s: any) => s.severity === 'critical').length || 0,
+            items: shortages?.slice(0, 10).map((s: any) => ({
+              item: s.item_name,
+              severity: s.severity,
+            })),
+          },
+          inactive_governorates: inactiveGovs.map((g: any) => g.name_ar),
+          alert_count: (shortages?.length || 0) + inactiveGovs.length,
+        }
+      }
+
+      case 'export_report': {
+        const { report_type, campaign_type, governorate_name, days } = args
+        const periodDays = days || 7
+        const since = new Date(Date.now() - periodDays * 86400000).toISOString()
+
+        let query = supa.from('form_submissions')
+          .select('status, form_id, governorate_id, created_at, submitted_by')
+          .is('deleted_at', null)
+          .gte('created_at', since)
+
+        if (campaign_type && campaign_type !== 'all') {
+          const formIds = await getCampaignFormIds(campaign_type)
+          if (formIds) query = query.in('form_id', formIds)
+        }
+
+        const { data } = await withTimeout(query.limit(5000), 10_000) ?? {}
+
+        const byStatus: Record<string, number> = {}
+        const byDay: Record<string, number> = {}
+        data?.forEach((r: any) => {
+          byStatus[r.status] = (byStatus[r.status] ?? 0) + 1
+          const day = r.created_at?.split('T')[0]
+          if (day) byDay[day] = (byDay[day] ?? 0) + 1
+        })
+
+        const campaignLabel = campaign_type === 'polio_campaign' ? 'شلل الأطفال'
+          : campaign_type === 'integrated_activity' ? 'النشاط الإيصالي التكاملي'
+          : 'كل الحملات'
+
+        return {
+          report_type,
+          campaign: campaignLabel,
+          period: `آخر ${periodDays} يوم`,
+          total: data?.length || 0,
+          by_status: byStatus,
+          daily_trend: byDay,
+          approval_rate: data?.length
+            ? ((byStatus.approved || 0) / data.length * 100).toFixed(1) + '%'
+            : 'N/A',
         }
       }
 
@@ -1429,7 +1750,7 @@ async function groqChat(messages: any[], key: string, opts: any = {}) {
   const body: Record<string, any> = {
     model: opts.model || 'llama-3.3-70b-versatile',
     messages,
-    max_tokens: opts.maxTokens || 800,
+    max_tokens: opts.maxTokens || 2000,
     temperature: opts.temperature ?? 0.4,
   }
 
@@ -1602,7 +1923,7 @@ serve(async (req) => {
     const dbModel = modelConfig.defaultModel
     const dbProvider = dbModel?.provider
     const dbModelId = dbModel?.model_id
-    const dbMaxTokens = dbModel?.max_tokens || 800
+    const dbMaxTokens = dbModel?.max_tokens || 2000
     const dbTemperature = Number(dbModel?.temperature) || 0.4
 
     // MODE: Suggestions (role-aware)

@@ -65,17 +65,24 @@ interface QuickCommand {
 // ═══════════════════════════════════════════════════════════
 
 const QUICK_COMMANDS: QuickCommand[] = [
-  // Queries
+  // ─── استعلامات عامة ───
   { id: 'subs', label: 'حالة الإرساليات', icon: '📊', command: 'ما حالة الإرساليات اليوم؟', category: 'query', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
   { id: 'short', label: 'النواقص الحرجة', icon: '⚠️', command: 'أين النواقص الحرجة؟', category: 'query', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
   { id: 'govs', label: 'ترتيب المحافظات', icon: '🗺️', command: 'أي المحافظات الأكثر إرسالاً؟', category: 'query', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
   { id: 'users', label: 'فريق العمل', icon: '👥', command: 'كم مستخدم نشط لدينا؟', category: 'query', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
   { id: 'coverage', label: 'تغطية التطعيم', icon: '💉', command: 'ما تغطية التطعيم حالياً؟', category: 'query', color: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100' },
   { id: 'quality', label: 'جودة الإدخال', icon: '✅', command: 'حلل جودة الإدخال ونسبة الرفض', category: 'query', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
-  // Reports
+  // ─── تحليل النماذج ───
+  { id: 'forms', label: 'تعريفات النماذج', icon: '📋', command: 'أعرض لي تعريفات جميع النماذج وحقولها', category: 'query', color: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100' },
+  { id: 'field-analysis', label: 'تحليل حقول النماذج', icon: '🔍', command: 'حلل بيانات حقول النماذج — أي الحقول أكثر تعبأً وأيها فارغ', category: 'query', color: 'bg-lime-50 text-lime-700 border-lime-200 hover:bg-lime-100' },
+  { id: 'compare', label: 'مقارنة الفترات', icon: '📈', command: 'قارن أداء هذا الأسبوع بالأسبوع الماضي', category: 'query', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' },
+  { id: 'top-users', label: 'أكثر المُرسلين', icon: '🏆', command: 'مَن أكثر المستخدمين إرسالاً هذا الشهر؟', category: 'query', color: 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' },
+  // ─── تقارير ───
   { id: 'daily', label: 'تقرير يومي', icon: '📅', command: 'أنشئ تقريراً يومياً شاملاً', category: 'report', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-  { id: 'weekly', label: 'تقرير أسبوعي', icon: '📈', command: 'حلل اتجاه الأسبوع الحالي', category: 'report', color: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100' },
-  { id: 'gov-report', label: 'تقرير المحافظات', icon: '📋', command: 'أنشئ تقرير مقارنة المحافظات', category: 'report', color: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100' },
+  { id: 'weekly', label: 'تقرير أسبوعي', icon: '📊', command: 'أنشئ تقريراً أسبوعياً مفصلاً مع مقارنة', category: 'report', color: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100' },
+  { id: 'gov-report', label: 'تقرير المحافظات', icon: '🗺️', command: 'أنشئ تقرير مقارنة شامل لكل المحافظات', category: 'report', color: 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100' },
+  { id: 'campaign-report', label: 'تقرير الحملات', icon: '💉', command: 'قارن أداء حملة شلل الأطفال بالنشاط الإيصالي التكاملي', category: 'report', color: 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100' },
+  { id: 'alerts-report', label: 'تقرير التنبيهات', icon: '🚨', command: 'أعطيني تقرير شامل عن كل التنبيهات الحرجة', category: 'report', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
 ]
 
 // ═══════════════════════════════════════════════════════════
@@ -185,13 +192,22 @@ function useProactiveInsights() {
 function getContextualSuggestions(lastIntent?: string, lastData?: any): string[] {
   switch (lastIntent) {
     case 'query_submissions':
-      return ['حلل أسباب الرفض', 'قارن بالأسبوع الماضي', 'أي المحافظات لها أعلى رفض؟']
+      return ['حلل أسباب الرفض', 'قارن بالأسبوع الماضي', 'أي المحافظات لها أعلى رفض؟', 'أعرض تفاصيل آخر إرساليات']
     case 'query_governorates':
-      return ['حلل السبب في الأضعف', 'قارن بآخر شهر', 'اعرض تفاصيل كل محافظة']
+      return ['حلل السبب في الأضعف', 'قارن بآخر شهر', 'اعرض تفاصيل كل محافظة', 'أنشئ تقرير المحافظات']
     case 'query_users':
-      return ['المستخدمين غير النشطين', 'توزيع الصلاحيات', 'آخر تسجيل دخول']
+      return ['المستخدمين غير النشطين', 'توزيع الصلاحيات', 'آخر تسجيل دخول', 'مَن أكثر المُرسلين؟']
+    case 'query_health':
+    case 'query_coverage':
+      return ['حلل التغطية حسب المحافظة', 'اطلع على حقول النماذج', 'أين النواقص؟']
+    case 'get_form_schemas':
+      return ['حلل بيانات الحقول', 'أي الحقول فارغة؟', 'أعرض إحصائيات كل حقل']
+    case 'compare_periods':
+      return ['حلل أسباب التغيير', 'أعطني توصيات', 'قارن بالشهر الماضي']
+    case 'get_critical_alerts':
+      return ['أرسل تنبيهات للمستخدمين', 'حلل النواقص حسب المحافظة', 'أنشئ خطة פעולה']
     default:
-      return ['📊 حالة الإرساليات', '⚠️ النواقص الحرجة', '📈 تقرير يومي']
+      return ['📋 عرض النماذج وحقولها', '📊 مقارنة الفترات', '🚨 التنبيهات الحرجة', '📈 تقرير أسبوعي']
   }
 }
 
@@ -425,8 +441,21 @@ export function AIChatWidget() {
           { id: 'nav-users', label: 'إدارة المستخدمين', icon: 'navigate', type: 'navigate', payload: '/users', color: 'bg-purple-50 text-purple-700 border-purple-200' },
         )
         break
-      case 'query_health':
-      case 'query_coverage':
+      case 'get_form_schemas':
+      case 'aggregate_form_data':
+      case 'get_form_field_values':
+        actions.push(
+          { id: 'nav-forms', label: 'إدارة النماذج', icon: 'navigate', type: 'navigate', payload: '/forms', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+        )
+        break
+      case 'get_critical_alerts':
+      case 'get_shortages':
+        actions.push(
+          { id: 'nav-shortages', label: 'صفحة النواقص', icon: 'navigate', type: 'navigate', payload: '/shortages', color: 'bg-red-50 text-red-700 border-red-200' },
+        )
+        break
+      case 'compare_periods':
+      case 'get_submission_trend':
         actions.push(
           { id: 'nav-insights', label: 'الرؤى الذكية', icon: 'navigate', type: 'navigate', payload: '/insights', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
         )

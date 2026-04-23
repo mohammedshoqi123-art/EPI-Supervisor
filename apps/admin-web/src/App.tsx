@@ -7,7 +7,7 @@ import LoginPage from '@/pages/LoginPage'
 // Lazy load pages for better performance
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const UsersPage = lazy(() => import('@/pages/UsersPage'))
-const FormsPage = lazy(() => import('@/pages/FormsPage'))
+const FormsPage = lazy(() => import('@/pages/forms'))
 const SubmissionsPage = lazy(() => import('@/pages/SubmissionsPage'))
 const AIInsightsPage = lazy(() => import('@/pages/AIInsightsPage'))
 const AISettingsPage = lazy(() => import('@/pages/AISettingsPage'))

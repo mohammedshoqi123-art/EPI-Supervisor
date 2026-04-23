@@ -1919,6 +1919,8 @@ serve(async (req) => {
     const groqKey = Deno.env.get('GROQ_API_KEY')
     const hfToken = Deno.env.get('HF_API_TOKEN')
     const mimoKey = Deno.env.get('MIMO_API_KEY') ?? Deno.env.get('GEMINI_API_KEY')
+    const openrouterKey = Deno.env.get('OPENROUTER_API_KEY')
+    const zaiKey = Deno.env.get('ZAI_API_KEY')
 
     const dbModel = modelConfig.defaultModel
     const dbProvider = dbModel?.provider
@@ -1968,7 +1970,7 @@ serve(async (req) => {
       return jsonResponse({
         models: models || [],
         currentConfig: { defaultModel: dbModel?.id, enabled: modelConfig.enabled },
-        availableKeys: { groq: !!groqKey, mimo: !!mimoKey, huggingface: !!hfToken },
+        availableKeys: { groq: !!groqKey, mimo: !!mimoKey, huggingface: !!hfToken, openrouter: !!openrouterKey, zai: !!zaiKey },
         userProfile: profile ? { name: profile.full_name, role: profile.role, governorate: profile.governorate_name } : null,
       }, 200, origin)
     }
@@ -2125,7 +2127,79 @@ serve(async (req) => {
       }
     }
 
-    // MiMo fallback
+    // ═══ FALLBACK 2: OpenRouter (DeepSeek V3 — مجاني وقوي)
+    if (openrouterKey) {
+      try {
+        const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openrouterKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://epi-supervisor.app',
+            'X-Title': 'EPI Supervisor',
+          },
+          body: JSON.stringify({
+            model: 'deepseek/deepseek-chat',
+            messages,
+            max_tokens: dbMaxTokens,
+            temperature: 0.4,
+          }),
+        })
+        if (resp.ok) {
+          const json = await resp.json()
+          if (json.choices?.[0]?.message?.content) {
+            await logUsage(supabase, 'openrouter-deepseek', 0, Date.now() - startMs, true, undefined, 'openrouter_fallback')
+            return jsonResponse({
+              reply: json.choices[0].message.content,
+              source: 'openrouter_fallback',
+              model: 'deepseek/deepseek-chat',
+              intent, confidence, messageId: crypto.randomUUID(),
+            }, 200, origin)
+          }
+        } else {
+          console.warn(`OpenRouter failed: ${resp.status}`)
+        }
+      } catch (e) {
+        console.warn('OpenRouter fallback failed:', e)
+      }
+    }
+
+    // ═══ FALLBACK 3: ZAI (GLM — صيني مجاني)
+    if (zaiKey) {
+      try {
+        const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${zaiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'glm-4-flash',
+            messages,
+            max_tokens: Math.min(dbMaxTokens, 1024),
+            temperature: 0.4,
+          }),
+        })
+        if (resp.ok) {
+          const json = await resp.json()
+          if (json.choices?.[0]?.message?.content) {
+            await logUsage(supabase, 'zai-glm4', 0, Date.now() - startMs, true, undefined, 'zai_fallback')
+            return jsonResponse({
+              reply: json.choices[0].message.content,
+              source: 'zai_fallback',
+              model: 'glm-4-flash',
+              intent, confidence, messageId: crypto.randomUUID(),
+            }, 200, origin)
+          }
+        } else {
+          console.warn(`ZAI failed: ${resp.status}`)
+        }
+      } catch (e) {
+        console.warn('ZAI fallback failed:', e)
+      }
+    }
+
+    // ═══ FALLBACK 4: MiMo (Xiaomi)
     if (mimoKey) {
       const result = await mimoChat(messages, mimoKey)
       if (result?.choices?.[0]?.message?.content) {
@@ -2142,7 +2216,7 @@ serve(async (req) => {
     return jsonResponse({
       reply: '⚠️ لم أتمكن من توليد رد. تحقق من إعدادات مزود AI.',
       source: 'all_failed',
-      debug: { groqKeySet: !!groqKey, mimoKeySet: !!mimoKey, dbProvider },
+      debug: { groqKeySet: !!groqKey, mimoKeySet: !!mimoKey, hfKeySet: !!hfToken, orKeySet: !!openrouterKey, zaiKeySet: !!zaiKey, dbProvider },
     }, 200, origin)
 
   } catch (error) {

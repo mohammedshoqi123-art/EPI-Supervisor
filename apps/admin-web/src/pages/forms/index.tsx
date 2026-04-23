@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Plus, X, FileText, LayoutGrid, List, Filter } from 'lucide-react'
+import { Search, Plus, X, FileText, LayoutGrid, List, Filter, MoreVertical, Edit, Eye, Trash2, Database } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Header } from '@/components/layout/header'
 import { useForms, useFormSubmissionCounts } from '@/hooks/useApi'
 import { formatNumber, cn } from '@/lib/utils'
@@ -224,16 +226,28 @@ function FormListItem({ form, submissionCount, onEdit, onPreview, onDelete, onMa
         {submissionCount && submissionCount.total > 0 && (
           <Badge variant="secondary" className="text-xs shrink-0">{submissionCount.total} تقديم</Badge>
         )}
-        <div className={cn('flex items-center gap-1 shrink-0 transition-opacity', showActions ? 'opacity-100' : 'opacity-0')}>
-          <Button variant="ghost" size="icon-sm" className="h-8 w-8" onClick={e => { e.stopPropagation(); onManageData() }}>
-            <FileText className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon-sm" className="h-8 w-8" onClick={e => { e.stopPropagation(); onPreview() }}>
-            <FileText className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon-sm" className="h-8 w-8 text-destructive" onClick={e => { e.stopPropagation(); onDelete() }}>
-            <FileText className="w-4 h-4" />
-          </Button>
+        <div className={cn('shrink-0 transition-opacity', showActions ? 'opacity-100' : 'opacity-0')}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="h-8 w-8" onClick={e => e.stopPropagation()}>
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={e => { e.stopPropagation(); onManageData() }}>
+                <Database className="w-4 h-4 ml-2" />إدارة البيانات
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={e => { e.stopPropagation(); onPreview() }}>
+                <Eye className="w-4 h-4 ml-2" />معاينة
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={e => { e.stopPropagation(); onEdit() }}>
+                <Edit className="w-4 h-4 ml-2" />تعديل
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={e => { e.stopPropagation(); onDelete() }} className="text-destructive focus:text-destructive">
+                <Trash2 className="w-4 h-4 ml-2" />حذف
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <div className={cn(
           'w-2 h-2 rounded-full shrink-0',

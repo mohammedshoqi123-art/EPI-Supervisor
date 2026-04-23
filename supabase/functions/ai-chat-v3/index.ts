@@ -1,18 +1,18 @@
 // ═══════════════════════════════════════════════════════════
-// EPI Supervisor — AI Chat v5 (Production Hardened)
+// EPI Supervisor — System Assistant v6 (Lightweight)
 //
-// v5 Fixes (2026-04-21):
+// v6 (2026-04-23):
+// ⚡ RAG/Embeddings/Knowledge Base REMOVED — moved to مستشار التحصين
+// ⚡ System data only: forms, submissions, analytics, users
+// ⚡ Lightweight system prompt — no vaccination schedule
+// ⚡ Faster response times — no embedding generation
+//
+// v5 legacy:
 // 🔒 F1. SQL Injection eliminated — all queries use Supabase Query Builder
-// 🔒 F2. Hardcoded governorate data removed — dynamic DB fetch
-// ⚡ F3. Embedding cache layer — 80% fewer HF API calls
-// ⚡ F4. HF embedding timeout 10s → 25s (Yemen 3G support)
 // ⚡ F5. Conversation summary throttled — every 8 messages, not every call
 // ⚡ F6. Model config cache 5min → 2min
 // 🔒 F7. Prompt injection guard — sanitize user input
-//
-// v5 Developments:
 // 🚀 D1. Multi-step function calling — up to 3 tool rounds
-// 🚀 D2. Dynamic knowledge base — governorate data from DB
 // 🚀 D5. Response caching — 15min TTL for repeated queries
 // 🚀 D7. ReAct Agent pattern — reasoning + acting loop
 // ═══════════════════════════════════════════════════════════
@@ -21,32 +21,12 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
 import { createClient } from 'npm:@supabase/supabase-js'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { authenticateRequest, createUserClient, createAdminClient } from '../_shared/auth.ts'
-import knowledgeData from './knowledge_chunks.ts' // Fallback — primary source is ai_chunks DB table
-
-// Flatten knowledge once on cold start
-const _allChunks: any[] = []
-try {
-  for (const doc of knowledgeData as any[]) {
-    if (doc.chunks) {
-      for (const chunk of doc.chunks) {
-        _allChunks.push({
-          content: chunk.content,
-          title: doc.title,
-          section: chunk.section || chunk.metadata?.section || ''
-        })
-      }
-    }
-  }
-} catch (e) {
-  console.error('Failed to parse local knowledge', e)
-}
 
 // ═══════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════
 
 const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions'
-const HF_EMBEDDING_API = 'https://router.huggingface.co/hf-inference/models/intfloat/multilingual-e5-large'
 const MIMO_API = 'https://api.xiaomimimo.com/v1/chat/completions'
 
 let _modelConfigCache: { data: any; ts: number } | null = null
@@ -148,53 +128,6 @@ async function getUserProfile(supa: any, userId: string): Promise<UserProfile | 
 // ═══════════════════════════════════════════════════════════
 // F2: DYNAMIC KNOWLEDGE — fetch governorate data from DB
 // ═══════════════════════════════════════════════════════════
-
-const _knowledgeCache: { data: string; ts: number } = { data: '', ts: 0 }
-const KNOWLEDGE_TTL = 6 * 60 * 60 * 1000 // 6 hours
-
-async function fetchDynamicKnowledge(supa: any): Promise<string> {
-  const now = Date.now()
-  if (_knowledgeCache.data && (now - _knowledgeCache.ts) < KNOWLEDGE_TTL) {
-    return _knowledgeCache.data
-  }
-
-  try {
-    const parts: string[] = []
-
-    // Fetch weak governorates (low coverage) from ai_system_knowledge
-    const { data: weakData } = await supa
-      .from('ai_system_knowledge')
-      .select('key, value')
-      .like('key', 'weak_governorate_%')
-      .limit(10)
-
-    if (weakData?.length) {
-      parts.push('== محافظات تحتاج اهتمام ==')
-      for (const row of weakData) parts.push(`• ${row.value}`)
-    }
-
-    // Fetch top performers
-    const { data: topData } = await supa
-      .from('ai_system_knowledge')
-      .select('key, value')
-      .like('key', 'top_governorate_%')
-      .limit(5)
-
-    if (topData?.length) {
-      parts.push('\n== محافظات متميزة ==')
-      for (const row of topData) parts.push(`• ${row.value}`)
-    }
-
-    const result = parts.join('\n')
-    _knowledgeCache.data = result
-    _knowledgeCache.ts = now
-    return result
-  } catch {
-    return ''
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
 // IMPROVEMENT 2: DYNAMIC SYSTEM PROMPTS PER ROLE
 // ═══════════════════════════════════════════════════════════
 
@@ -239,10 +172,8 @@ const ROLE_CONFIGS: Record<string, {
 function buildDynamicSystemPrompt(
   profile: UserProfile,
   liveData: string,
-  rag: string,
   dbResult: string,
   conversationSummary: string,
-  dynamicKnowledge: string,
 ): string {
   const roleConfig = ROLE_CONFIGS[profile.role] || ROLE_CONFIGS.data_entry
   const now = new Date()
@@ -250,12 +181,12 @@ function buildDynamicSystemPrompt(
   const timeOfDay = hour < 12 ? 'صباحاً' : hour < 17 ? 'بعد الظهر' : 'مساءً'
   const dayName = now.toLocaleDateString('ar-SA', { weekday: 'long' })
 
-  let sys = `أنت "مساعد مشرف EPI" — مساعد ذكي متخصص في برنامج التحصين الموسّع (EPI) في اليمن.
-تتحدث العربية بطلاقة وتهتم بالصحة العامة والتطعيم.
+  let sys = `أنت "مساعد النظام" — مساعد ذكي لإدارة بيانات منصة مشرف EPI.
+تتحدث العربية بطلاقة. مهمتك مساعدة المستخدم في إدارة النماذج والإرساليات والتحليلات والإحصائيات.
 
 == هويتك ==
 • أنت ${roleConfig.title} ومحلل بيانات ميدانية موثوق
-• تقدم رؤى عملية مبنية على أرقام حقيقية
+• تقدم رؤى عملية مبنية على أرقام حقيقية من النظام
 • مستوى التحليل: ${roleConfig.depth}
 • مجال التركيز: ${roleConfig.focus}
 • الصلاحيات: ${roleConfig.permissions}
@@ -271,299 +202,32 @@ function buildDynamicSystemPrompt(
 
 == البيانات الأساسية ==
 • 22 محافظة يمنية
-• حملات: شلل الأطفال + نشاط إيصالي تكاملي
+• حملات: شلل الأطفال (polio_campaign) + نشاط إيصالي تكاملي (integrated_activity)
 • المؤشرات الرئيسية: Penta3 (التغطية), MR1, Dropout
 • 5 أدوار في النظام
 
-
-== جدول التحصين الرسمي في اليمن (محدث 2026) — مرجع موثق ==
-⚠️ هذا الجدول مصدروه الوحيد للإجابات عن مواعيد التطعيم. لا تستخدم معلومات أخرى.
-
-عند الولادة:
-• BCG (ضد السل) — داخل الجلد — الحد الأقصى: سنة واحدة (12 شهر) فقط
-• HepB0 (التهاب الكبد B) — عضلي — خلال 24 ساعة
-• OPV0 (شلل فموي) — فموي
-
-عمر 6 أسابيع (1.5 شهر):
-• OPV1 + Penta1 + PCV1 + Rota1
-
-عمر 10 أسابيع (2.5 شهر):
-• OPV2 + Penta2 + PCV2 + Rota2
-
-عمر 14 أسبوع (3.5 شهر):
-• OPV3 + Penta3 + PCV3 + IPV1 (شلل حقن — الجرعة الأولى)
-
-عمر 9 أشهر:
-• MR1 (الحصبة) + OPV4 + IPV2 (شلل حقن — الجرعة الثانية)
-• فيتامين أ — 100,000 وحدة دولية (كبسولة زرقاء) ← ليست عند 12 شهر!
-
-عمر 18 شهر:
-• MR2 + Penta4 (خماسي تعزيزية) + OPV5
-• فيتامين أ — 200,000 وحدة دولية (كبسولة حمراء)
-
-عمر 5-7 سنوات (دخول المدرسة):
-• Td (كزاز + خناق) + MR تعزيزية
-• فيتامين أ — 200,000 وحدة دولية
-
-الحدود القصوى:
-• BCG: لا يُعطي بعد سنة واحدة (12 شهر)
-• Rota: لا يُعطي بعد سنتين (24 شهر)
-• باقي اللقاحات: لا يُعطي بعد 5 سنوات
-• Td مدرسي: لا يُعطي بعد 7 سنوات
-
-الجرعة الصفرية (من لم يأخذ أي جرعة):
-• فوق العام إلى سنتين: كل اللقاحات ما عدا BCG + Rota (إذا عمره فوق سنتين)
-• فوق العامين إلى خمس سنوات: كل اللقاحات ما عدا BCG + Rota + بدون PCV في الزيارة الثانية
-• فيتامين أ في الجرعة الصفرية: 100,000 (أقل من سنتين) أو 200,000 (سنتين أو أكثر)
-
 == أسلوب الإجابة ==
 • ابدأ بالخلاصة العملية مباشرة بدون مقدمات طويلة.
-• استخدم أرقام حقيقية من الأدوات المتاحة — لا تختلق أرقاماً.
-• أنت خبير شامل — قادر على تحليل البيانات، إنشاء التقارير، مقارنة الفترات، البحث في الحقول، وإعطاء توصيات ميدانية.
-• اعتمد أولاً على مراجع قاعدة المعرفة. إن لم تتوفر، يمكن الاستعانة بمعرفتك العامة الموثوقة (WHO, UNICEF, MoHP) مع الإشارة لذلك.
-• الحملات المتاحة: شلل الأطفال (polio_campaign) + النشاط الإيصالي التكاملي (integrated_activity).
+• استخدم أرقام حقيقية من الأدوات المتاحة — لا تختلق أرقا��اً.
+• أنت متخصص في بيانات النظام فقط (نماذج، إرساليات، إحصائيات، مستخدمين، تحليلات).
+• أسئلة التطعيمات واللقاحات والآثار الجانبية → أرسل المستخدم لـ "مستشار التحصين" في تبويب البوت الثاني.
 • استخدم جداول مختصرة، قوائم، رموز (📊⚠️✅💡🚨) لتوضيح البيانات.
 • قدم توصيات عملية ميدانية تدعم أداء العمل.
 • إذا لا توجد بيانات، قل ذلك واقترح مصدرها.
 • تكيف مع دور المستخدم: ${profile.role === 'admin' ? 'محلل استراتيجي — أعطِ تحليلاً عميقاً وتوصيات استراتيجية' : profile.role === 'data_entry' ? 'مساعد عملي مبسط' : 'مستشار ميداني خبير'}
 • لديك صلاحية الوصول لكل النماذج والحقول والإرساليات — لا تتردد في استخدام كل الأدوات المتاحة.`
 
-  if (dynamicKnowledge) {
-    sys += `\n\n== بيانات المحافظات (محدّثة) ==\n${dynamicKnowledge}`
-  }
   if (conversationSummary) {
     sys += `\n\n== ذاكرة المحادثة السابقة ==\n${conversationSummary}`
   }
   if (liveData) {
     sys += `\n\n== بيانات النظام الحية ==\n${liveData}`
   }
-  if (rag) {
-    sys += `\n\n== مراجع من قاعدة المعرفة ==\n${rag}`
-  }
   if (dbResult) {
     sys += `\n\n== نتائج من قاعدة البيانات ==\n${dbResult}`
   }
 
   return sys
-}
-
-// ═══════════════════════════════════════════════════════════
-// F3+F4: EMBEDDING GENERATION WITH CACHE + EXTENDED TIMEOUT
-// ═══════════════════════════════════════════════════════════
-
-async function generateEmbedding(text: string, supa?: any): Promise<number[] | null> {
-  const hfToken = Deno.env.get('HF_API_TOKEN')
-  if (!hfToken) return null
-
-  // F3: Check embedding cache
-  if (supa) {
-    try {
-      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
-      const hashHex = Array.from(new Uint8Array(hashBuffer))
-        .map(b => b.toString(16).padStart(2, '0')).join('')
-
-      const { data: cached } = await supa
-        .from('ai_embedding_cache')
-        .select('embedding')
-        .eq('text_hash', hashHex)
-        .single()
-
-      if (cached?.embedding) {
-        console.log('[EMBEDDING_CACHE] Hit')
-        return cached.embedding
-      }
-    } catch { /* cache miss — continue to API */ }
-  }
-
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 25_000) // F4: 25s (was 10s)
-
-    const resp = await fetch(HF_EMBEDDING_API, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${hfToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ inputs: text }),
-      signal: controller.signal,
-    })
-    clearTimeout(timeoutId)
-
-    if (!resp.ok) return null
-    const embedding = await resp.json()
-
-    let result: number[] | null = null
-    if (Array.isArray(embedding) && Array.isArray(embedding[0])) result = embedding[0]
-    else if (Array.isArray(embedding) && typeof embedding[0] === 'number') result = embedding
-
-    // F3: Store in cache
-    if (result && supa) {
-      try {
-        const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
-        const hashHex = Array.from(new Uint8Array(hashBuffer))
-          .map(b => b.toString(16).padStart(2, '0')).join('')
-
-        await supa.from('ai_embedding_cache').upsert({
-          text_hash: hashHex,
-          embedding: result,
-        })
-        console.log('[EMBEDDING_CACHE] Stored')
-      } catch { /* non-critical */ }
-    }
-
-    return result
-  } catch {
-    return null
-  }
-}
-
-async function vectorSearch(supa: any, query: string): Promise<string> {
-  const embedding = await generateEmbedding(query, supa)
-  let vectorDocs = ''
-
-  if (embedding) {
-    try {
-      // Use admin client to bypass RLS
-      const adminSupa = createAdminClient()
-      const client = adminSupa || supa
-
-      const { data, error } = await client.rpc('search_knowledge', {
-        query_embedding: embedding,
-        match_count: 5,
-        similarity_threshold: 0.4,
-      })
-
-      if (!error && data?.length) {
-        vectorDocs = data.map((r: any) =>
-          `[${r.doc_title || 'مرجع'}] (صلة: ${(r.similarity * 100).toFixed(0)}%)\n${r.content.slice(0, 800)}`
-        ).join('\n\n---\n\n')
-      }
-    } catch (e) {
-      console.warn('Vector search failed:', e)
-    }
-  }
-
-  const keywordDocs = await keywordSearchEnhanced(supa, query)
-  if (!vectorDocs && !keywordDocs) return ''
-  return [keywordDocs, vectorDocs].filter(Boolean).join('\n\n---\n\n')
-}
-
-// ═══════════════════════════════════════════════════════════
-// ENHANCED KEYWORD SEARCH (Fallback)
-// ═══════════════════════════════════════════════════════════
-
-const STOP_WORDS = new Set([
-  'في', 'من', 'على', 'إلى', 'هل', 'ما', 'هذا', 'هذه', 'ذلك', 'التي',
-  'الذي', 'كيف', 'لماذا', 'متى', 'أين', 'كم', 'ماذا', 'لا',
-  'نعم', 'أو', 'و', 'ثم', 'أن', 'إن', 'كان', 'كانت', 'يكون', 'تكون',
-  'هو', 'هي', 'هم', 'نحن', 'أنت', 'أنا', 'عند', 'بعد', 'قبل', 'بين',
-  'حتى', 'عبر', 'حول', 'ضد', 'مع', 'بدون', 'خلال', 'نحو', 'لدى',
-  'كل', 'بعض', 'غير', 'أكثر', 'أقل', 'كذلك', 'أيضا', 'فقط',
-])
-
-const EPI_EXPANSIONS: Record<string, string[]> = {
-  'تطعيم': ['لقاح', 'تحصين', 'جرعة'],
-  'لقاح': ['تطعيم', 'تحصين', 'جرعة'],
-  'تغطية': ['وصول', 'انسحاب', 'dropout', 'penta'],
-  'نواقص': ['نقص', 'احتياج', 'مخزون'],
-  'إرساليات': ['إرسال', 'استمارة', 'نموذج'],
-  'penta': ['خماسي', 'تغطية', 'وصول'],
-  'opv': ['شلل', 'فموي'],
-  'mr': ['حصبة'],
-  'شلل': ['opv', 'فموي'],
-  'حصبة': ['mr'],
-  'جودة': ['اكتمال', 'رفض', 'خطأ'],
-  'أداء': ['ترتيب', 'مقارنة', 'تقييم'],
-}
-
-function extractKeywordsEnhanced(text: string): string[] {
-  const normalized = text
-    .replace(/[إأآا]/g, 'ا')
-    .replace(/[ى]/g, 'ي')
-    .replace(/[ة]/g, 'ه')
-    .replace(/[^\u0600-\u06FF\u0750-\u07FFa-zA-Z\s]/g, ' ')
-
-  const words = normalized.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w))
-  const expanded = new Set<string>()
-
-  for (const word of words) {
-    const lower = word.toLowerCase()
-    expanded.add(lower)
-    for (const [term, aliases] of Object.entries(EPI_EXPANSIONS)) {
-      if (lower.includes(term) || term.includes(lower)) {
-        aliases.forEach(a => expanded.add(a))
-      }
-    }
-  }
-
-  return [...expanded].slice(0, 8)
-}
-
-async function keywordSearchEnhanced(supa: any, message: string): Promise<string> {
-  const keywords = extractKeywordsEnhanced(message)
-  if (keywords.length === 0) return ''
-
-  try {
-    const scored: any[] = []
-    let dbSearchSucceeded = false
-
-    // 1. Search DB knowledge base first (primary source — always up-to-date)
-    try {
-      const adminSupa = createAdminClient()
-      const client = adminSupa || supa
-
-      const conditions = keywords.slice(0, 6).map(kw => `content.ilike.%${kw}%`)
-      const { data: dbChunks, error } = await client
-        .from('ai_chunks')
-        .select('content, metadata, document_id')
-        .or(conditions.join(','))
-        .limit(8)
-
-      if (!error && dbChunks?.length) {
-        dbSearchSucceeded = true
-        for (const chunk of dbChunks) {
-           const contentLower = chunk.content.toLowerCase()
-           let matchCount = 0
-           for (const kw of keywords) {
-             if (contentLower.includes(kw)) matchCount++
-           }
-           scored.push({ content: chunk.content, title: chunk.document_id || '', section: chunk.metadata?.section || '', score: matchCount, source: chunk.metadata?.source || chunk.document_id })
-        }
-      }
-    } catch (e) {
-      console.warn('DB knowledge search failed, falling back to local:', e)
-    }
-
-    // 2. Fall back to local embedded knowledge if DB failed or returned few results
-    if (!dbSearchSucceeded || scored.length < 3) {
-      for (const chunk of _allChunks) {
-        const contentLower = chunk.content.toLowerCase()
-        let matchCount = 0
-        for (const kw of keywords) {
-          if (contentLower.includes(kw)) matchCount++
-        }
-        if (matchCount > 0) {
-          // Avoid duplicates from DB results
-          const isDuplicate = scored.some(s => s.content === chunk.content)
-          if (!isDuplicate) {
-            scored.push({ ...chunk, score: matchCount + (contentLower.includes(message.trim()) ? 5 : 0) })
-          }
-        }
-      }
-    }
-
-    if (scored.length > 0) {
-      scored.sort((a, b) => b.score - a.score)
-      return scored.slice(0, 4).map(c =>
-        `[المصدر: ${c.title || c.source || 'مرجع EPI'} - ${c.section || ''}]\n${c.content.slice(0, 800)}`
-      ).join('\n\n---\n\n')
-    }
-
-    return ''
-  } catch {
-    return ''
-  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2002,24 +1666,17 @@ serve(async (req) => {
       }
     }
 
-    // ═══ STEP 2: Vector Search (RAG)
-    let rag = ''
-    if (message) rag = await vectorSearch(supabase, message).catch(() => '')
-
-    // ═══ STEP 3: Live data (role-filtered)
+    // ═══ STEP 2: Live data (role-filtered)
     const liveData = await fetchLiveData(supabase, profile).catch(() => '')
 
-    // ═══ STEP 3.5: Dynamic Knowledge (F2 — replaces hardcoded data)
-    const dynamicKnowledge = await fetchDynamicKnowledge(supabase).catch(() => '')
-
-    // ═══ STEP 4: Conversation memory
+    // ═══ STEP 3: Conversation memory
     const conversationSummary = groqKey ? await getConversationSummary(supabase, auth.userId).catch(() => '') : ''
 
-    // ═══ STEP 5: Build system prompt (with D7 Agent addition for complex queries)
+    // ═══ STEP 4: Build system prompt (with D7 Agent addition for complex queries)
     const isComplexQuery = confidence < 0.6 || ['analyze_trend', 'compare_data', 'query_governorates'].includes(intent)
     const systemPrompt = buildDynamicSystemPrompt(
       profile || { id: auth.userId, role: 'data_entry', full_name: 'مستخدم', governorate_id: null, district_id: null, governorate_name: null },
-      liveData, rag, '', conversationSummary, dynamicKnowledge,
+      liveData, '', conversationSummary,
     ) + (isComplexQuery ? AGENT_SYSTEM_ADDITION : '')
 
     // ═══ STEP 6: Build messages

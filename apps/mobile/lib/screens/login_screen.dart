@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
@@ -94,21 +96,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     HapticFeedback.lightImpact();
     setState(() => _isLoading = true);
 
-    try {
-      final auth = ref.read(authRepositoryProvider);
-      await auth.signIn(_emailController.text.trim(), _passwordController.text);
-      // FIX: Don't manually navigate — let GoRouter handle the redirect
-      // when authStateProvider emits the new authenticated state.
-      // Manual context.go('/dashboard') caused redirect loops.
-      // The router's redirect logic will move user to /dashboard automatically.
-    } catch (e) {
+    // ═══ FIX: إعادة محاولة تلقائية (3 محاولات مع backoff) ═══
+    const maxRetries = 3;
+    Exception? lastError;
+
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final auth = ref.read(authRepositoryProvider);
+        await auth.signIn(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+        // ═══ نجاح — GoRouter ينقل تلقائياً ═══
+        lastError = null;
+        break;
+      } catch (e) {
+        lastError = e is Exception ? e : Exception(e.toString());
+        debugPrint('[Login] Attempt $attempt/$maxRetries failed: $e');
+
+        // لا تعيد المحاولة على أخطاء بيانات الدخول
+        final errStr = e.toString().toLowerCase();
+        if (errStr.contains('invalid') ||
+            errStr.contains('wrong') ||
+            errStr.contains('not found') ||
+            errStr.contains('email')) {
+          break; // خطأ بيانات — لا فائدة من إعادة المحاولة
+        }
+
+        if (attempt < maxRetries) {
+          final delay = Duration(seconds: 2 * attempt);
+          debugPrint('[Login] Retrying in ${delay.inSeconds}s...');
+          await Future.delayed(delay);
+        }
+      }
+    }
+
+    if (lastError != null) {
       HapticFeedback.heavyImpact();
       if (mounted) {
-        context.showError('فشل تسجيل الدخول: ${e.toString()}');
+        final errStr = lastError.toString();
+        String message = 'فشل تسجيل الدخول';
+        if (errStr.contains('SocketException') || errStr.contains('Failed host')) {
+          message = 'لا يوجد اتصال بالإنترنت. تحقق من الشبكة.';
+        } else if (errStr.contains('timeout') || errStr.contains('Timeout')) {
+          message = 'انتهت مهلة الاتصال. حاول مرة أخرى.';
+        } else if (errStr.contains('invalid') || errStr.contains('Invalid')) {
+          message = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+        } else if (errStr.contains('not configured')) {
+          message = 'Supabase غير مُعدّ. تحقق من الإعدادات.';
+        }
+        context.showError(message);
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override

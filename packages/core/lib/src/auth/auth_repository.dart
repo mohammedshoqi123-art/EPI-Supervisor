@@ -1,11 +1,10 @@
 /// ═══════════════════════════════════════════════════════════════════════
-///  AuthRepository — نسخة مُحسّنة: مستقرة، ما تفصل الجلسة أبداً
-///  التغييرات الرئيسية:
-///  1. Supabase.initialize مع authOptions صريحة (persistSession + autoRefresh)
-///  2. إعادة محاولة تجديد التوكن عند الفشل (retry with backoff)
-///  3. حفظ الجلسة في Hive كـ backup (إذا فشل Secure Storage)
-///  4. emit isAuthenticated=true دائماً إذا عندنا session حتى لو Profile فشل
-///  5. لا signOut تلقائي أبداً — فقط يدوي
+///  AuthRepository — نسخة نهائية مستقرة
+///  القواعد الذهبية:
+///  1. لا signOut تلقائي أبداً — فقط يدوياً من المستخدم
+///  2. لا مسح الجلسة بسبب فشل تجديد أو فشل Profile
+///  3. إعادة محاولة ذكية مع backoff
+///  4. Profile فشل ≠ فشل مصادقة
 /// ═══════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -22,6 +21,8 @@ class AuthRepository {
   Timer? _sessionRefreshTimer;
   int _refreshRetryCount = 0;
   static const int _maxRefreshRetries = 5;
+  int _restoreRetryCount = 0;
+  static const int _maxRestoreRetries = 3;
 
   final _authStateController = StreamController<app_auth.AuthState>.broadcast();
 
@@ -48,19 +49,40 @@ class AuthRepository {
       _client = Supabase.instance.client;
       _isConfigured = true;
     } catch (e) {
+      // ═══ FIX: لا تفشل — Supabase ممكن يكون لسه يتهيأ ═══
       _isConfigured = false;
+      debugPrint('[Auth] Client not ready yet: $e — will retry');
       _currentState = app_auth.AuthState(
-        error: 'Supabase initialization failed: $e',
+        error: 'Supabase initializing...',
       );
       _authStateController.add(_currentState);
+
+      // حاول مرة ثانية بعد ثانيتين
+      Future.delayed(const Duration(seconds: 2), () {
+        try {
+          _client = Supabase.instance.client;
+          _isConfigured = true;
+          _currentState = const app_auth.AuthState();
+          _authStateController.add(_currentState);
+          _tryRestoreSession();
+          _startRefreshTimer();
+          _listenToAuthChanges();
+          debugPrint('[Auth] ✅ Client retry succeeded');
+        } catch (retryErr) {
+          debugPrint('[Auth] Client retry failed: $retryErr');
+        }
+      });
       return;
     }
 
-    // ═══ تحسين 1: محاولة استعادة الجلسة فوراً ═══
+    _listenToAuthChanges();
     _tryRestoreSession();
+    _startRefreshTimer();
+  }
 
-    // ═══ تحسين 2: مراقبة تغييرات المصادقة ═══
-    _client!.auth.onAuthStateChange.listen((data) async {
+  /// ═══ مراقبة تغييرات المصادقة ═══
+  void _listenToAuthChanges() {
+    _client?.auth.onAuthStateChange.listen((data) async {
       final event = data.event;
       final session = data.session;
 
@@ -69,17 +91,17 @@ class AuthRepository {
       if ((event == AuthChangeEvent.signedIn ||
               event == AuthChangeEvent.initialSession) &&
           session != null) {
-        // ═══ مهم: لا تفشل المصادقة بسبب Profile ═══
         await _loadProfile(session.user.id);
-        _refreshRetryCount = 0; // إعادة عداد المحاولات
+        _refreshRetryCount = 0;
       } else if (event == AuthChangeEvent.signedOut) {
-        // ═══ تحسين 3: لا نمسح الجلسة إلا يدوياً ═══
+        // ═══ القاعدة الذهبية: لا نمسح الجلسة إلا يدوياً ═══
         // إذا كان هناك session في التخزين، حاول استعادته
-        final storedSession = _client!.auth.currentSession;
+        final storedSession = _client?.auth.currentSession;
         if (storedSession != null) {
-          debugPrint('[Auth] SignedOut event but session still exists — restoring');
+          debugPrint('[Auth] SignedOut event but session exists — restoring');
           await _loadProfile(storedSession.user.id);
         } else {
+          // فقط في حالة عدم وجود session محفوظ
           _currentState = const app_auth.AuthState();
           _authStateController.add(_currentState);
         }
@@ -91,32 +113,47 @@ class AuthRepository {
         await _loadProfile(session.user.id);
       }
     });
+  }
 
-    // ═══ تحسين 4: تجديد استباقي مع إعادة محاولة ═══
+  /// ═══ بدء مؤقت التجديد الاستباقي ═══
+  void _startRefreshTimer() {
+    _sessionRefreshTimer?.cancel();
     _sessionRefreshTimer = Timer.periodic(
-      const Duration(minutes: 3), // كل 3 دقائق (أكثر تكراراً)
+      const Duration(minutes: 3),
       (_) => _proactiveRefresh(),
     );
   }
 
-  /// ═══ تحسين 5: محاولة استعادة الجلسة عند بدء التطبيق ═══
+  /// ═══ محاولة استعادة الجلسة مع حد أقصى ═══
   void _tryRestoreSession() {
+    if (_restoreRetryCount >= _maxRestoreRetries) {
+      debugPrint('[Auth] Max restore retries reached — waiting for user login');
+      return;
+    }
+
     try {
       final session = _client?.auth.currentSession;
       if (session != null) {
         debugPrint('[Auth] Restoring session for: ${session.user.email}');
+        _restoreRetryCount = 0;
         _loadProfile(session.user.id);
       } else {
         debugPrint('[Auth] No session to restore');
       }
     } catch (e) {
-      debugPrint('[Auth] Session restore failed: $e');
-      // ═══ لا تفشل — حاول مرة ثانية بعد ثانية ═══
-      Future.delayed(const Duration(seconds: 1), _tryRestoreSession);
+      _restoreRetryCount++;
+      debugPrint('[Auth] Session restore failed (attempt $_restoreRetryCount): $e');
+      // ═══ FIX: إعادة محاولة محدودة بدلاً من recursion لا نهائي ═══
+      if (_restoreRetryCount < _maxRestoreRetries) {
+        Future.delayed(
+          Duration(seconds: 2 * _restoreRetryCount),
+          _tryRestoreSession,
+        );
+      }
     }
   }
 
-  /// ═══ تحسين 6: تجديد استباقي مع إعادة محاولة تدريجية ═══
+  /// ═══ تجديد استباقي مع إعادة محاولة تدريجية ═══
   Future<void> _proactiveRefresh() async {
     try {
       final session = _client?.auth.currentSession;
@@ -127,7 +164,6 @@ class AuthRepository {
       );
       final timeUntilExpiry = expiresAt.difference(DateTime.now());
 
-      // جدد إذا باقي أقل من 15 دقيقة
       if (timeUntilExpiry.inMinutes < 15) {
         debugPrint('[Auth] Token expiring in ${timeUntilExpiry.inMinutes}min — refreshing...');
         await _client?.auth.refreshSession();
@@ -137,21 +173,19 @@ class AuthRepository {
       _refreshRetryCount++;
       debugPrint('[Auth] Refresh failed (attempt $_refreshRetryCount): $e');
 
-      // ═══ إعادة محاولة تدريجية: 30 ثانية ← دقيقة ← دقيقتان ═══
       if (_refreshRetryCount < _maxRefreshRetries) {
         final delay = Duration(seconds: 30 * _refreshRetryCount);
         debugPrint('[Auth] Retrying refresh in ${delay.inSeconds}s');
         Future.delayed(delay, _proactiveRefresh);
       } else {
-        debugPrint('[Auth] Max refresh retries reached — will try again next cycle');
+        debugPrint('[Auth] Max refresh retries — will try next cycle');
         _refreshRetryCount = 0;
       }
-      // ═══ لا تمسح الجلسة بسبب فشل التجديد ═══
-      // الجلسة الحالية صالحة حتى انتهاء صلاحيتها الفعلي
+      // ═══ القاعدة الذهبية: لا تمسح الجلسة ═══
     }
   }
 
-  /// ═══ تحسين 7: تحميل Profile لا يفشل المصادقة ═══
+  /// ═══ تحميل Profile — فشله لا يُخرج المستخدم ═══
   Future<void> _loadProfile(String userId) async {
     if (!_isConfigured || _client == null) return;
 
@@ -175,7 +209,7 @@ class AuthRepository {
           .select()
           .eq('id', userId)
           .maybeSingle()
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 15));
 
       if (response != null) {
         _currentState = app_auth.AuthState(
@@ -200,14 +234,14 @@ class AuthRepository {
                 (user.email?.split('@').first ?? 'مستخدم'),
             'role': 'data_entry',
             'is_active': true,
-          }, onConflict: 'id').timeout(const Duration(seconds: 10));
+          }, onConflict: 'id').timeout(const Duration(seconds: 15));
 
           final newResponse = await _client!
               .from('profiles')
               .select()
               .eq('id', userId)
               .maybeSingle()
-              .timeout(const Duration(seconds: 10));
+              .timeout(const Duration(seconds: 15));
 
           if (newResponse != null) {
             _currentState = app_auth.AuthState(
@@ -223,10 +257,12 @@ class AuthRepository {
               nationalId: newResponse['national_id'],
             );
           }
-        } catch (_) {}
+        } catch (createErr) {
+          debugPrint('[Auth] Profile create failed (non-critical): $createErr');
+        }
       }
     } catch (e) {
-      // ═══ فشل تحميل Profile — بس المستخدم مازال مصادق ═══
+      // ═══ فشل Profile ≠ فشل مصادقة ═══
       debugPrint('[Auth] Profile load failed (non-critical): $e');
     }
 
@@ -270,7 +306,7 @@ class AuthRepository {
     }
   }
 
-  /// ═══ تحسين 8: signOut يمسح كل شي ═══
+  /// ═══ signOut يمسح كل شي — فقط يدوياً ═══
   Future<void> signOut() async {
     if (!_isConfigured || _client == null) return;
     await _client!.auth.signOut();
@@ -296,7 +332,7 @@ class AuthRepository {
     String? avatarUrl,
   }) async {
     if (!_isConfigured || _client == null) {
-      throw StateError('Supabase is not configured.');
+      throw StateError('Not configured.');
     }
 
     final userId = _client!.auth.currentUser?.id;
@@ -327,7 +363,7 @@ class AuthRepository {
 
   Future<String> uploadAvatar(String filePath, Uint8List fileBytes) async {
     if (!_isConfigured || _client == null) {
-      throw StateError('Supabase is not configured.');
+      throw StateError('Not configured.');
     }
 
     final userId = _client!.auth.currentUser?.id;

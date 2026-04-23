@@ -38,10 +38,11 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
 
   // On mobile, initialize Hive with timeout
   try {
+    // ═══ FIX: timeout أطول (30 ثانية) للأجهزة البطيئة ═══
     await manager.init().timeout(
-      const Duration(seconds: 15),
+      const Duration(seconds: 30),
       onTimeout: () {
-        debugPrint('[offlineManagerProvider] Hive init timed out after 15s');
+        debugPrint('[offlineManagerProvider] Hive init timed out after 30s');
         throw TimeoutException('Offline storage initialization timed out');
       },
     );
@@ -556,8 +557,9 @@ final enhancedLocalAIProvider = Provider<EnhancedLocalAI>((ref) {
 // ═══════════════════════════════════════════════════════════════
 
 /// Z AI Service — GLM-based AI model
+/// ═══ FIX: لا مفاتيح مكشوفة — فقط من --dart-define أو .env ═══
 final zaiServiceProvider = Provider<ZAIService?>((ref) {
-  const apiKey = String.fromEnvironment('ZAI_API_KEY', defaultValue: '7e3302f88b9b415ab4acffb2ec2ae527');
+  const apiKey = String.fromEnvironment('ZAI_API_KEY', defaultValue: '');
   if (apiKey.isEmpty) return null;
   final service = ZAIService(apiKey);
   ref.onDispose(service.dispose);
@@ -565,8 +567,9 @@ final zaiServiceProvider = Provider<ZAIService?>((ref) {
 });
 
 /// OpenRouter Service — Gateway to multiple LLM models
+/// ═══ FIX: لا مفاتيح مكشوفة — فقط من --dart-define أو .env ═══
 final openRouterServiceProvider = Provider<OpenRouterService?>((ref) {
-  const apiKey = String.fromEnvironment('OPENROUTER_API_KEY', defaultValue: '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');
+  const apiKey = String.fromEnvironment('OPENROUTER_API_KEY', defaultValue: '');
   if (apiKey.isEmpty) return null;
   final service = OpenRouterService(apiKey);
   ref.onDispose(service.dispose);

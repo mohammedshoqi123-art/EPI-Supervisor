@@ -26,11 +26,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    // Minimal splash time — just enough for the logo to render
+    // ═══ وقت أقصر للـ splash — فقط للوجو ═══
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted || _hasNavigated) return;
 
-    // Check if Supabase is properly configured
+    // ═══ إذا Supabase مو مُعدّ — روح للّوجن ═══
     if (!SupabaseConfig.isConfigured) {
       setState(() => _status = 'Supabase غير مُعدّ — الانتقال لتسجيل الدخول');
       await Future.delayed(const Duration(milliseconds: 500));
@@ -40,25 +40,29 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       return;
     }
 
-    // Check if Supabase was initialized
+    // ═══ تحقق من الجلسة ═══
     try {
       final client = Supabase.instance.client;
       final session = client.auth.currentSession;
 
       if (session != null) {
         setState(() => _status = 'تم العثور على جلسة — جاري التحميل...');
-        // Try to load profile with timeout
+
+        // ═══ FIX: timeout أطول (20 ثانية) بدلاً من 10 ═══
         try {
           await ref.read(authStateProvider.future).timeout(
-            const Duration(seconds: 10),
+            const Duration(seconds: 20),
             onTimeout: () {
-              // Profile load timed out — go to dashboard anyway
+              debugPrint('[Splash] Profile load timed out — going to dashboard anyway');
               throw TimeoutException('Profile load timed out');
             },
           );
         } catch (_) {
-          // Profile failed but user is authenticated — go to dashboard
+          // ═══ القاعدة الذهبية: فشل Profile ≠ فشل دخول ═══
+          // المستخدم مصادق → روح للداشبورد
+          debugPrint('[Splash] Profile failed but user is authenticated — proceeding');
         }
+
         if (!mounted || _hasNavigated) return;
         _hasNavigated = true;
         context.go('/dashboard');
@@ -70,8 +74,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         context.go('/login');
       }
     } catch (e) {
-      // Supabase not initialized — go to login
-      debugPrint('SplashScreen: Supabase access failed: $e');
+      // ═══ Supabase init فشل — روح للّوجن (مو crash) ═══
+      debugPrint('[Splash] Supabase access failed: $e');
       setState(() => _status = 'الانتقال لتسجيل الدخول...');
       await Future.delayed(const Duration(milliseconds: 300));
       if (!mounted || _hasNavigated) return;
@@ -95,7 +99,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo image
               ClipRRect(
                 borderRadius: BorderRadius.circular(24),
                 child: Image.asset(

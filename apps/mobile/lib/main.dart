@@ -1,12 +1,14 @@
 /// ═══════════════════════════════════════════════════════════════════════
 ///  main.dart — نسخة مُحسّنة: تضمن تسجيل الدخول المستقر
 ///  التغييرات:
-///  1. Supabase.initialize مع authOptions صريحة
+///  1. Supabase.initialize مُزامن (await) قبل runApp
 ///  2. لا signOut تلقائي أبداً
-///  3. إعادة محاولة init عند الفشل
+///  3. إعادة محاولة init عند الفشل (مع backoff)
 ///  4. Splash screen ينتظر الجلسة قبل التوجيه
+///  5. الحفاظ على نظام الأوفلاين سليم
 /// ═══════════════════════════════════════════════════════════════════════
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -21,23 +23,16 @@ import 'screens/onboarding_screen.dart';
 final themeModeProvider = StateProvider<ThemeMode>((_) => ThemeMode.system);
 
 /// حالة تهيئة Supabase
-final supabaseInitProvider = StateProvider<SupabaseInitState>((_) => SupabaseInitState.initial);
+final supabaseInitProvider =
+    StateProvider<SupabaseInitState>((_) => SupabaseInitState.initial);
 
 enum SupabaseInitState { initial, initializing, ready, failed }
 
+/// ═══ FIX: تهيئة Supabase مُزامنة قبل runApp لتجنب race condition ═══
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  runApp(const ProviderScope(child: EpiSupervisorApp()));
-
-  // تهيئة مُؤجّلة
-  Future.microtask(() async {
-    await _initServices();
-  });
-}
-
-Future<void> _initServices() async {
-  // Load .env
+  // ═══ الخطوة 1: تحميل .env أولاً ═══
   try {
     final dotenv = await EnvLoader.load();
     if (dotenv.isNotEmpty) {
@@ -48,24 +43,48 @@ Future<void> _initServices() async {
     }
   } catch (_) {}
 
-  // Init connectivity
+  // ═══ الخطوة 2: تهيئة Connectivity ═══
   try {
-    await ConnectivityUtils.initialize().timeout(const Duration(seconds: 5));
+    await ConnectivityUtils.initialize()
+        .timeout(const Duration(seconds: 5));
   } catch (_) {}
 
-  // ═══ تحسين 1: تهيئة Supabase مع خيارات صريحة ═══
-  try {
-    if (!EnvValidator.isOfflineMode && SupabaseConfig.url.isNotEmpty) {
+  // ═══ الخطوة 3: تهيئة Supabase مُزامنة (await) قبل runApp ═══
+  // هذا يحل مشكلة Race Condition: AuthRepository لن يجد _client = null
+  await _initSupabase();
+
+  // ═══ الخطوة 4: تشغيل التطبيق بعد التهيئة ═══
+  runApp(const ProviderScope(child: EpiSupervisorApp()));
+
+  // ═══ الخطوة 5: تهيئة الخدمات غير الحرجة في الخلفية ═══
+  Future.microtask(() async {
+    try {
+      if (SupabaseConfig.isConfigured) {
+        NotificationService.init(ApiClient());
+      }
+    } catch (_) {}
+  });
+}
+
+/// ═══ تهيئة Supabase مع إعادة محاولة (3 محاولات مع backoff) ═══
+Future<void> _initSupabase() async {
+  if (EnvValidator.isOfflineMode || SupabaseConfig.url.isEmpty) {
+    debugPrint('[Init] Offline mode or no URL — skipping Supabase');
+    return;
+  }
+
+  const maxRetries = 3;
+  for (int attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
       SupabaseConfig.validate();
 
       await Supabase.initialize(
         url: SupabaseConfig.url,
         anonKey: SupabaseConfig.anonKey,
         debug: AppConfig.isDevelopment,
-        // ═══ تحسين 2: خيارات المصادقة الصريحة ═══
         authOptions: const FlutterAuthClientOptions(
           authFlowType: AuthFlowType.pkce,
-          autoRefreshToken: true,    // تجديد التوكن تلقائياً
+          autoRefreshToken: true,
         ),
         realtimeClientOptions: const RealtimeClientOptions(
           logLevel: RealtimeLogLevel.info,
@@ -75,37 +94,19 @@ Future<void> _initServices() async {
         ),
       ).timeout(const Duration(seconds: 20));
 
-      debugPrint('[Init] Supabase initialized successfully');
-    }
-  } catch (e) {
-    debugPrint('[Init] Supabase init failed: $e');
-    // ═══ تحسين 3: إعادة محاولة بعد 3 ثوان ═══
-    Future.delayed(const Duration(seconds: 3), () async {
-      try {
-        if (SupabaseConfig.url.isNotEmpty) {
-          await Supabase.initialize(
-            url: SupabaseConfig.url,
-            anonKey: SupabaseConfig.anonKey,
-            debug: false,
-            authOptions: const FlutterAuthClientOptions(
-              authFlowType: AuthFlowType.pkce,
-              autoRefreshToken: true,
-            ),
-          ).timeout(const Duration(seconds: 20));
-          debugPrint('[Init] Supabase retry succeeded');
-        }
-      } catch (retryError) {
-        debugPrint('[Init] Supabase retry also failed: $retryError');
+      debugPrint('[Init] ✅ Supabase initialized (attempt $attempt)');
+      return; // ← نجاح، اخرج
+    } catch (e) {
+      debugPrint('[Init] ❌ Supabase attempt $attempt/$maxRetries failed: $e');
+      if (attempt < maxRetries) {
+        final delay = Duration(seconds: 3 * attempt); // 3s, 6s
+        debugPrint('[Init] Retrying in ${delay.inSeconds}s...');
+        await Future.delayed(delay);
       }
-    });
+    }
   }
 
-  // Init notifications
-  try {
-    if (SupabaseConfig.isConfigured) {
-      NotificationService.init(ApiClient());
-    }
-  } catch (_) {}
+  debugPrint('[Init] ⚠️ Supabase failed after $maxRetries attempts — running offline');
 }
 
 class EpiSupervisorApp extends ConsumerStatefulWidget {

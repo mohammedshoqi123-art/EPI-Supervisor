@@ -178,7 +178,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       // ═══ OFFLINE FALLBACK: Use local BotEngine when no internet ═══
       if (!ConnectivityUtils.isOnline) {
         final localResp = _botEngine.sendMessage(text);
-        if (_mounted) {
+        if (_mounted && localResp != null) {
           setState(() {
             _msgs.add(ChatMsg(
               role: 'assistant',
@@ -188,6 +188,8 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             _loading = false;
           });
           unawaited(_ChatStore.save(_msgs));
+        } else if (_mounted) {
+          setState(() => _loading = false);
         }
         return;
       }
@@ -341,14 +343,25 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           errorMsg.contains('Timeout') || errorMsg.contains('timeout') ||
           errorMsg.contains('Failed host') || errorMsg.contains('Internet')) {
         final localResp = _botEngine.sendMessage(text);
-        setState(() {
-          _msgs.add(ChatMsg(
-            role: 'assistant',
-            content: '${localResp.text}\n\n_📡 تم الرد من الذاكرة المحلية (أوفلاين)_',
-            source: 'offline',
-          ));
-          _loading = false;
-        });
+        if (localResp != null) {
+          setState(() {
+            _msgs.add(ChatMsg(
+              role: 'assistant',
+              content: '${localResp.text}\n\n_📡 تم الرد من الذاكرة المحلية (أوفلاين)_',
+              source: 'offline',
+            ));
+            _loading = false;
+          });
+        } else {
+          setState(() {
+            _msgs.add(ChatMsg(
+              role: 'assistant',
+              content: '📡 لا يوجد اتصال بالإنترنت. حاول مرة أخرى لاحقاً.',
+              source: 'offline',
+            ));
+            _loading = false;
+          });
+        }
         unawaited(_ChatStore.save(_msgs));
         _scrollDown();
         return;

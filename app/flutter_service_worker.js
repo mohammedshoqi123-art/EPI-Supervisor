@@ -26,7 +26,7 @@ const RESOURCES = {"assets/assets/icons/placeholder.svg": "bde3c76b55aa7f26bf987
 "/": "e15a2fb46d0dad1da2e44c10d410a5e3",
 "main.dart.js": "fd4f7e06329ae52418fa209b7256d9e2",
 "manifest.json": "15ef2bcd9c1590ae9229a0e16e1559de",
-"flutter_bootstrap.js": "dd584be3568276721404414c9b42133d",
+"flutter_bootstrap.js": "73072d802bb8d4cabca0e3c8ec41f8bc",
 "canvaskit/canvaskit.wasm": "e7602c687313cfac5f495c5eac2fb324",
 "canvaskit/skwasm.js": "ac0f73826b925320a1e9b0d3fd7da61c",
 "canvaskit/canvaskit.js.symbols": "efc2cd87d1ff6c586b7d4c7083063a40",

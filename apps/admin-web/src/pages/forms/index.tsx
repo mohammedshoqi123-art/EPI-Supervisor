@@ -300,7 +300,7 @@ function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
 
     const schema: FormSchema = {
       sections: sections.map((s, i) => ({ ...s, order: i + 1 })),
-      version: form?.schema_version || 1,
+      version: form?.version || 1,
     }
 
     try {
@@ -308,25 +308,25 @@ function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
         await updateForm.mutateAsync({
           id: form!.id,
           title_ar: titleAr,
-          title_en: titleEn || null,
-          description_ar: descriptionAr || null,
+          title_en: titleEn || undefined,
+          description_ar: descriptionAr || undefined,
           is_active: isActive,
           campaign_type: campaignType,
           requires_gps: requiresGps,
           requires_photo: requiresPhoto,
-          schema: schema as any,
+          schema: schema as unknown as Record<string, unknown>,
         })
         toast({ title: 'تم التحديث', description: 'تم تحديث النموذج بنجاح' })
       } else {
         await createForm.mutateAsync({
           title_ar: titleAr,
-          title_en: titleEn || null,
-          description_ar: descriptionAr || null,
+          title_en: titleEn || '',
+          description_ar: descriptionAr || undefined,
           is_active: isActive,
           campaign_type: campaignType,
           requires_gps: requiresGps,
           requires_photo: requiresPhoto,
-          schema: schema as any,
+          schema: schema as unknown as Record<string, unknown>,
           allowed_roles: ['data_entry', 'district', 'governorate', 'central', 'admin'],
         })
         toast({ title: 'تم الإنشاء', description: 'تم إنشاء النموذج بنجاح' })
@@ -860,9 +860,9 @@ function FormDataDialog({ open, onOpenChange, form }: {
           const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
           records = lines.slice(1).map(line => {
             const values = line.match(/(".*?"|[^,]+)/g) || []
-            const obj: any = {}
+            const obj: Record<string, any> = {}
             headers.forEach((h, i) => {
-              let val = (values[i] || '').replace(/^"|"$/g, '').replace(/""/g, '"')
+              let val: any = (values[i] || '').replace(/^"|"$/g, '').replace(/""/g, '"')
               if (h === 'data') {
                 try { val = JSON.parse(val) } catch { val = {} }
               }

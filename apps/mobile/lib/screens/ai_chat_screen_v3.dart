@@ -433,6 +433,24 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         appBar: _buildAppBar(cs),
         body: Column(
           children: [
+            // ═══ Offline indicator ═══
+            if (!ConnectivityUtils.isOnline)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                color: Colors.orange.shade700,
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.wifi_off, color: Colors.white, size: 14),
+                    SizedBox(width: 8),
+                    Text(
+                      'أوفلاين — مستشار التحصين يعمل محلياً',
+                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
             _buildTabBar(cs),
             Expanded(
               child: TabBarView(
@@ -1110,14 +1128,19 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   // ═══════════════════════════════════════════════════════════
 
   Widget _buildAlertsTab(ColorScheme cs) {
-    // Get data for alerts analysis
-    final analyticsAsync = ref.watch(dashboardAnalyticsProvider(const AnalyticsFilter()));
+    // Get data for alerts analysis — wrapped in error boundary for offline
+    try {
+      final analyticsAsync = ref.watch(dashboardAnalyticsProvider(const AnalyticsFilter()));
 
-    return analyticsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => _buildAlertsContent(cs, {}),
-      data: (analytics) => _buildAlertsContent(cs, analytics),
-    );
+      return analyticsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => _buildAlertsContent(cs, {}),
+        data: (analytics) => _buildAlertsContent(cs, analytics),
+      );
+    } catch (_) {
+      // ═══ OFFLINE: If provider fails, show alerts with empty data ═══
+      return _buildAlertsContent(cs, {});
+    }
   }
 
   Widget _buildAlertsContent(ColorScheme cs, Map<String, dynamic> analytics) {

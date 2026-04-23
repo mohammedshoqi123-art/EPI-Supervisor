@@ -274,7 +274,7 @@ class EpiDrawer extends StatelessWidget {
                   ),
 
                   // Admin-only sections
-                  if (userRoleLevel >= 4) ...[
+                  if (userRoleLevel >= 5) ...[
                     const Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: 16,

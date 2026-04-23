@@ -45,7 +45,7 @@ enum UserRole {
   bool get canAccessAdminDashboard => this == UserRole.admin;
   bool get canManageUsers => this == UserRole.admin;
   bool get canManageForms => this == UserRole.admin;
-  bool get canViewAuditLogs => hierarchyLevel >= 4; // admin + central
+  bool get canViewAuditLogs => this == UserRole.admin; // admin only
 
   /// Viewing scope — analytics data visibility
   bool get canViewAllGovernorates => hierarchyLevel >= 4; // admin + central

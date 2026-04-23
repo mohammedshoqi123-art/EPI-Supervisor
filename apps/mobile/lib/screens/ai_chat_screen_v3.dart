@@ -1141,7 +1141,11 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   // ═══════════════════════════════════════════════════════════
 
   Widget _buildAlertsTab(ColorScheme cs) {
-    // Get data for alerts analysis — wrapped in error boundary for offline
+    // ═══ OFFLINE: Skip network provider entirely when offline ═══
+    if (!ConnectivityUtils.isOnline) {
+      return _buildAlertsContent(cs, {});
+    }
+
     try {
       final analyticsAsync = ref.watch(dashboardAnalyticsProvider(const AnalyticsFilter()));
 
@@ -1151,7 +1155,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         data: (analytics) => _buildAlertsContent(cs, analytics),
       );
     } catch (_) {
-      // ═══ OFFLINE: If provider fails, show alerts with empty data ═══
       return _buildAlertsContent(cs, {});
     }
   }

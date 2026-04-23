@@ -9,7 +9,7 @@ class ConnectivityUtils {
   static final StreamController<bool> _controller =
       StreamController<bool>.broadcast();
 
-  static bool _isOnline = true;
+  static bool _isOnline = false;
   static StreamSubscription? _subscription;
   static DateTime? _lastEmit;
 
@@ -26,7 +26,7 @@ class ConnectivityUtils {
     // ═══ FIX: On web, skip connectivity_plus entirely — navigator.onLine is sufficient ═══
     // connectivity_plus on web can hang or emit no events, blocking the whole app.
     if (kIsWeb) {
-      _isOnline = true;
+      _isOnline = true; // web always online
       return;
     }
 
@@ -37,7 +37,7 @@ class ConnectivityUtils {
           );
       _isOnline = _isConnected(result);
     } catch (_) {
-      _isOnline = true;
+      _isOnline = false; // assume offline on error
     }
 
     _subscription = _connectivity.onConnectivityChanged.listen((results) {

@@ -57,6 +57,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = authAsync.valueOrNull;
       final isAuthenticated = authState?.isAuthenticated ?? false;
 
+      // ═══ FIX: When offline, don't redirect to login if auth state is unknown ═══
+      // The auth stream may not have emitted yet when offline.
+      // Allow navigation to proceed — pages handle their own offline state.
+      final isOffline = !ConnectivityUtils.isOnline;
+      if (isOffline && authState == null && !isLoginRoute) {
+        return null; // Let the user through — don't block on missing auth when offline
+      }
+
       // Not authenticated and not on login page -> redirect to login
       if (!isAuthenticated && !isLoginRoute) return '/login';
       // Authenticated and on login page -> redirect to dashboard
@@ -172,6 +180,7 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   bool _isSyncing = false;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   Future<void> _triggerManualSync() async {
     if (_isSyncing) return;
@@ -218,6 +227,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     final pendingCount = pendingAsync.valueOrNull ?? 0;
 
     return Scaffold(
+      key: _scaffoldKey,
       body: Column(
         children: [
           // Offline/Online status banner
@@ -230,10 +240,10 @@ class _MainShellState extends ConsumerState<MainShell> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // ═══ Drawer menu button ═══
+          // ═══ Drawer menu button — uses GlobalKey to reliably open drawer ═══
           FloatingActionButton.small(
             heroTag: 'menu_fab',
-            onPressed: () => Scaffold.of(context).openDrawer(),
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
             backgroundColor: AppTheme.primaryDark,
             foregroundColor: Colors.white,
             elevation: 4,

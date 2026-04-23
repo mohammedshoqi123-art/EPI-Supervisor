@@ -230,6 +230,16 @@ class _MainShellState extends ConsumerState<MainShell> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // ═══ Drawer menu button ═══
+          FloatingActionButton.small(
+            heroTag: 'menu_fab',
+            onPressed: () => Scaffold.of(context).openDrawer(),
+            backgroundColor: AppTheme.primaryDark,
+            foregroundColor: Colors.white,
+            elevation: 4,
+            child: const Icon(Icons.menu_rounded, size: 22),
+          ),
+          const SizedBox(height: 10),
           // ═══ Sync button (only when pending) ═══
           if (pendingCount > 0) ...[
             FloatingActionButton.small(
@@ -255,7 +265,7 @@ class _MainShellState extends ConsumerState<MainShell> {
                       child: const Icon(Icons.cloud_upload_rounded, size: 20),
                     ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
           ],
           // ═══ AI Assistant — hidden on /ai page ═══
           if (!GoRouterState.of(context).matchedLocation.startsWith('/ai'))

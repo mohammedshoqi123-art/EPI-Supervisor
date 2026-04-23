@@ -175,6 +175,23 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     unawaited(_ChatStore.save(_msgs));
 
     try {
+      // ═══ OFFLINE FALLBACK: Use local BotEngine when no internet ═══
+      if (!ConnectivityUtils.isOnline) {
+        final localResp = _botEngine.sendMessage(text);
+        if (_mounted) {
+          setState(() {
+            _msgs.add(ChatMsg(
+              role: 'assistant',
+              content: localResp.text,
+              source: 'offline',
+            ));
+            _loading = false;
+          });
+          unawaited(_ChatStore.save(_msgs));
+        }
+        return;
+      }
+
       final api = ref.read(apiClientProvider);
       final modelSelection = ref.read(aiModelSelectionProvider);
 
@@ -318,13 +335,30 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     } catch (e) {
       if (!_mounted) return;
       final errorMsg = e.toString();
+
+      // ═══ OFFLINE FALLBACK: If network error, use local BotEngine ═══
+      if (errorMsg.contains('Network') || errorMsg.contains('Socket') ||
+          errorMsg.contains('Timeout') || errorMsg.contains('timeout') ||
+          errorMsg.contains('Failed host') || errorMsg.contains('Internet')) {
+        final localResp = _botEngine.sendMessage(text);
+        setState(() {
+          _msgs.add(ChatMsg(
+            role: 'assistant',
+            content: '${localResp.text}\n\n_📡 تم الرد من الذاكرة المحلية (أوفلاين)_',
+            source: 'offline',
+          ));
+          _loading = false;
+        });
+        unawaited(_ChatStore.save(_msgs));
+        _scrollDown();
+        return;
+      }
+
       String userMessage;
       if (errorMsg.contains('Unauthorized') || errorMsg.contains('401')) {
         userMessage = '🔒 انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.';
       } else if (errorMsg.contains('429')) {
         userMessage = '⏳ أرسلت رسائل كثيرة. انتظر دقيقة وحاول مرة أخرى.';
-      } else if (errorMsg.contains('Network') || errorMsg.contains('Socket')) {
-        userMessage = '📡 لا يوجد اتصال بالإنترنت. تحقق من الاتصال.';
       } else {
         userMessage = '⚠️ حدث خطأ. حاول مرة أخرى.';
       }

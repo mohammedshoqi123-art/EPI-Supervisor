@@ -402,7 +402,7 @@ function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col w-[calc(100vw-2rem)] sm:w-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'تعديل النموذج' : 'إنشاء نموذج جديد'}</DialogTitle>
           <DialogDescription>
@@ -431,7 +431,7 @@ function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
                 <Label>الوصف</Label>
                 <Input value={descriptionAr} onChange={e => setDescriptionAr(e.target.value)} placeholder="وصف مختصر للنموذج" />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>الحملة</Label>
                   <Select value={campaignType} onValueChange={setCampaignType}>
@@ -665,7 +665,7 @@ function FieldEditorDialog({ open, onOpenChange, field, existingKeys, onSave }: 
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>عنوان الحقل (عربي) *</Label>
               <Input value={labelAr} onChange={e => setLabelAr(e.target.value)} placeholder="مثال: اسم المشرف" />
@@ -676,7 +676,7 @@ function FieldEditorDialog({ open, onOpenChange, field, existingKeys, onSave }: 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>نوع الحقل</Label>
               <Select value={type} onValueChange={v => setType(v as FormFieldType)}>
@@ -921,7 +921,7 @@ function FormDataDialog({ open, onOpenChange, form }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col w-[calc(100vw-2rem)] sm:w-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Database className="w-5 h-5" />

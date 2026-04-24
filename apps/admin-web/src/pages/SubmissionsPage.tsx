@@ -181,7 +181,7 @@ export default function SubmissionsPage() {
               </Tabs>
 
               <Select value={formFilter} onValueChange={(v) => { setFormFilter(v); setPage(1) }}>
-                <SelectTrigger className="w-36 h-8 text-xs">
+                <SelectTrigger className="w-full sm:w-36 h-8 text-xs">
                   <SelectValue placeholder="النموذج" />
                 </SelectTrigger>
                 <SelectContent>
@@ -191,7 +191,7 @@ export default function SubmissionsPage() {
               </Select>
 
               <Select value={govFilter} onValueChange={(v) => { setGovFilter(v); setPage(1) }}>
-                <SelectTrigger className="w-36 h-8 text-xs">
+                <SelectTrigger className="w-full sm:w-36 h-8 text-xs">
                   <SelectValue placeholder="المحافظة" />
                 </SelectTrigger>
                 <SelectContent>
@@ -230,7 +230,8 @@ export default function SubmissionsPage() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
+                <div className="min-w-[600px] px-3 sm:px-0">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/30">
@@ -287,6 +288,7 @@ export default function SubmissionsPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             )}
           </CardContent>

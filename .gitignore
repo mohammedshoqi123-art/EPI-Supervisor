@@ -67,3 +67,7 @@ coverage/
 
 # ─── Android Local Config ───────────────────────────────────
 **/android/app/google-services.json
+
+# Environment (security)
+.env
+.env.local

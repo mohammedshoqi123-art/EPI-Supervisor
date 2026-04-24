@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Header } from '@/components/layout/header'
-import { useSubmissions, useUpdateSubmissionStatus, useForms, useGovernorates } from '@/hooks/useApi'
+import { useSubmissions, useUpdateSubmissionStatus, useForms, useGovernorates, useAuth, getCampaignFormIds } from '@/hooks/useApi'
 import { supabase } from '@/lib/supabase'
 import { STATUS_LABELS, STATUS_COLORS, type SubmissionStatus, type FormSubmission } from '@/types/database'
 import { formatDateTime, formatRelativeTime, cn } from '@/lib/utils'
@@ -59,6 +59,9 @@ export default function SubmissionsPage() {
   const [deleteTarget, setDeleteTarget] = useState<FormSubmission | null>(null)
   const { campaign, labelAr, isFiltered } = useCampaign()
   const { toast } = useToast()
+  const { data: authData } = useAuth()
+  const userRole = authData?.profile?.role
+  const canDelete = userRole === 'admin'
 
   const { data, isLoading, isError, error, refetch } = useSubmissions({
     status: statusFilter !== 'all' ? (statusFilter as SubmissionStatus) : undefined,
@@ -78,12 +81,26 @@ export default function SubmissionsPage() {
   const totalPages = Math.ceil(totalCount / 20)
 
   const exportAll = async () => {
-    const { data: allData } = await supabase
+    let exportQuery = supabase
       .from('form_submissions')
       .select('*, forms(title_ar), profiles(full_name, email), governorates(name_ar)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(10000)
+
+    // Apply current filters to export
+    if (statusFilter !== 'all') exportQuery = exportQuery.eq('status', statusFilter)
+    if (formFilter !== 'all') exportQuery = exportQuery.eq('form_id', formFilter)
+    if (govFilter !== 'all') exportQuery = exportQuery.eq('governorate_id', govFilter)
+    if (search) exportQuery = exportQuery.or(`profiles.full_name.ilike.%${search}%,profiles.email.ilike.%${search}%`)
+
+    // Campaign filter
+    if (campaign && campaign !== 'all') {
+      const formIds = await getCampaignFormIds(campaign)
+      if (formIds && formIds.length > 0) exportQuery = exportQuery.in('form_id', formIds)
+    }
+
+    const { data: allData } = await exportQuery
 
     if (!allData || allData.length === 0) {
       toast({ title: 'لا توجد بيانات للتصدير', variant: 'destructive' })
@@ -278,9 +295,11 @@ export default function SubmissionsPage() {
                               <DropdownMenuItem onClick={() => setSelectedSubmission(sub)}>
                                 <Eye className="w-3.5 h-3.5 ml-2" /> عرض
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setDeleteTarget(sub)} className="text-destructive">
-                                <Trash2 className="w-3.5 h-3.5 ml-2" /> حذف
-                              </DropdownMenuItem>
+                              {canDelete && (
+                                <DropdownMenuItem onClick={() => setDeleteTarget(sub)} className="text-destructive">
+                                  <Trash2 className="w-3.5 h-3.5 ml-2" /> حذف
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -353,6 +372,8 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
   const [reviewNotes, setReviewNotes] = useState('')
   const updateStatus = useUpdateSubmissionStatus()
   const { toast } = useToast()
+  const { data: authData } = useAuth()
+  const canDelete = authData?.profile?.role === 'admin'
 
   const handleStatusChange = (newStatus: SubmissionStatus) => {
     updateStatus.mutate(
@@ -479,9 +500,11 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
                   إرجاع لمسودة
                 </Button>
               )}
-              <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleDelete}>
-                <Trash2 className="w-3.5 h-3.5" /> حذف
-              </Button>
+              {canDelete && (
+                <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleDelete}>
+                  <Trash2 className="w-3.5 h-3.5" /> حذف
+                </Button>
+              )}
             </div>
           </div>
         </div>

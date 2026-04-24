@@ -35,11 +35,22 @@ export function formatRelativeTime(date: string | Date): string {
   const now = new Date()
   const then = new Date(date)
   const diffMs = now.getTime() - then.getTime()
-  const diffSec = Math.floor(diffMs / 1000)
+  const absDiffMs = Math.abs(diffMs)
+  const diffSec = Math.floor(absDiffMs / 1000)
   const diffMin = Math.floor(diffSec / 60)
   const diffHour = Math.floor(diffMin / 60)
   const diffDay = Math.floor(diffHour / 24)
 
+  // Future dates
+  if (diffMs < 0) {
+    if (diffSec < 60) return 'الآن'
+    if (diffMin < 60) return `بعد ${diffMin} دقيقة`
+    if (diffHour < 24) return `بعد ${diffHour} ساعة`
+    if (diffDay < 7) return `بعد ${diffDay} يوم`
+    return formatDate(date)
+  }
+
+  // Past dates
   if (diffSec < 60) return 'الآن'
   if (diffMin < 60) return `منذ ${diffMin} دقيقة`
   if (diffHour < 24) return `منذ ${diffHour} ساعة`

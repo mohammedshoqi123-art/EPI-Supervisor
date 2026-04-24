@@ -44,26 +44,49 @@ export default function App() {
         {/* Public route — Login */}
         <Route path="/login" element={<LoginPage />} />
 
-        {/* Protected routes — require authentication */}
+        {/* ═══════════════════════════════════════════════════════
+            Protected routes — authentication + RBAC
+            Roles: admin, central, governorate, district, data_entry
+        ═══════════════════════════════════════════════════════ */}
+
+        {/* Routes accessible to ALL authenticated roles */}
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
-            <Route path="users" element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
-            <Route path="forms" element={<Suspense fallback={<PageLoader />}><FormsPage /></Suspense>} />
             <Route path="submissions" element={<Suspense fallback={<PageLoader />}><SubmissionsPage /></Suspense>} />
-            <Route path="shortages" element={<Suspense fallback={<PageLoader />}><ShortagesPage /></Suspense>} />
-            <Route path="insights" element={<Suspense fallback={<PageLoader />}><AIInsightsPage /></Suspense>} />
-            <Route path="ai-settings" element={<Suspense fallback={<PageLoader />}><AISettingsPage /></Suspense>} />
-            <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditPage /></Suspense>} />
-            <Route path="governorates" element={<Suspense fallback={<PageLoader />}><GovernoratesPage /></Suspense>} />
+            <Route path="forms" element={<Suspense fallback={<PageLoader />}><FormsPage /></Suspense>} />
             <Route path="map" element={<Suspense fallback={<PageLoader />}><MapPage /></Suspense>} />
-            <Route path="pages" element={<Suspense fallback={<PageLoader />}><PagesManagementPage /></Suspense>} />
-            <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
             <Route path="chat" element={<Suspense fallback={<PageLoader />}><ChatPage /></Suspense>} />
             <Route path="bot" element={<Suspense fallback={<PageLoader />}><BotChatPage /></Suspense>} />
             <Route path="notifications" element={<Suspense fallback={<PageLoader />}><NotificationsPage /></Suspense>} />
             <Route path="references" element={<Suspense fallback={<PageLoader />}><ReferencesPage /></Suspense>} />
+          </Route>
+        </Route>
+
+        {/* Routes for admin, central, governorate, district — management level */}
+        <Route element={<ProtectedRoute allowedRoles={['admin', 'central', 'governorate', 'district']} />}>
+          <Route element={<AppLayout />}>
+            <Route path="shortages" element={<Suspense fallback={<PageLoader />}><ShortagesPage /></Suspense>} />
+            <Route path="insights" element={<Suspense fallback={<PageLoader />}><AIInsightsPage /></Suspense>} />
             <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
+            <Route path="governorates" element={<Suspense fallback={<PageLoader />}><GovernoratesPage /></Suspense>} />
+          </Route>
+        </Route>
+
+        {/* Routes for admin and central only */}
+        <Route element={<ProtectedRoute allowedRoles={['admin', 'central']} />}>
+          <Route element={<AppLayout />}>
+            <Route path="users" element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
+          </Route>
+        </Route>
+
+        {/* Routes for admin only */}
+        <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+          <Route element={<AppLayout />}>
+            <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditPage /></Suspense>} />
+            <Route path="ai-settings" element={<Suspense fallback={<PageLoader />}><AISettingsPage /></Suspense>} />
+            <Route path="pages" element={<Suspense fallback={<PageLoader />}><PagesManagementPage /></Suspense>} />
+            <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
           </Route>
         </Route>
 

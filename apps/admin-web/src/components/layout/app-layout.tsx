@@ -25,6 +25,9 @@ export function AppLayout() {
     updated_at: new Date().toISOString(),
   } : null)
 
+  // AI Widget only for admin and central roles
+  const showAIWidget = user?.role === 'admin' || user?.role === 'central'
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop Sidebar */}
@@ -62,8 +65,8 @@ export function AppLayout() {
         </main>
       </div>
 
-      {/* AI Chat Widget */}
-      <AIChatWidget />
+      {/* AI Chat Widget — only for admin/central */}
+      {showAIWidget && <AIChatWidget />}
     </div>
   )
 }

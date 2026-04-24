@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Header } from '@/components/layout/header'
-import { useUsers, useCreateUser, useUpdateUserRole, useToggleUserActive, useDeleteUser, useGovernorates, useDistricts } from '@/hooks/useApi'
+import { useUsers, useCreateUser, useUpdateUserRole, useToggleUserActive, useDeleteUser, useGovernorates, useDistricts, useAuth } from '@/hooks/useApi'
 import { ROLE_LABELS, ROLE_COLORS, type UserRole, type UserProfile } from '@/types/database'
 import { formatRelativeTime, getInitials, cn } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
@@ -26,6 +26,8 @@ export default function UsersPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editUser, setEditUser] = useState<UserProfile | null>(null)
   const [deleteUser, setDeleteUser] = useState<UserProfile | null>(null)
+  const { data: authData } = useAuth()
+  const canManageUsers = authData?.profile?.role === 'admin' || authData?.profile?.role === 'central'
 
   const { data: users, isLoading, isError, error, refetch } = useUsers({
     role: roleFilter !== 'all' ? (roleFilter as UserRole) : undefined,
@@ -72,10 +74,12 @@ export default function UsersPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            إضافة مستخدم
-          </Button>
+          {canManageUsers && (
+            <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              إضافة مستخدم
+            </Button>
+          )}
         </div>
 
         {/* Users Grid */}
@@ -88,6 +92,7 @@ export default function UsersPage() {
                 <UserCard
                   key={user.id}
                   user={user}
+                  canManage={canManageUsers}
                   onEdit={() => setEditUser(user)}
                   onDelete={() => setDeleteUser(user)}
                 />
@@ -122,7 +127,7 @@ export default function UsersPage() {
   )
 }
 
-function UserCard({ user, onEdit, onDelete }: { user: UserProfile; onEdit: () => void; onDelete: () => void }) {
+function UserCard({ user, canManage, onEdit, onDelete }: { user: UserProfile; canManage: boolean; onEdit: () => void; onDelete: () => void }) {
   const toggleActive = useToggleUserActive()
   const { toast } = useToast()
 
@@ -157,32 +162,34 @@ function UserCard({ user, onEdit, onDelete }: { user: UserProfile; onEdit: () =>
               </p>
             )}
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100">
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onEdit}>
-                <Edit className="w-4 h-4 ml-2" />
-                تعديل
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => {
-                toggleActive.mutate({ userId: user.id, isActive: !user.is_active }, {
-                  onSuccess: () => toast({ title: user.is_active ? 'تم تعطيل الحساب' : 'تم تفعيل الحساب', variant: 'success' })
-                })
-              }}>
-                {user.is_active ? <UserX className="w-4 h-4 ml-2" /> : <UserCheck className="w-4 h-4 ml-2" />}
-                {user.is_active ? 'تعطيل' : 'تفعيل'}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onDelete} className="text-red-600 focus:text-red-600">
-                <Trash2 className="w-4 h-4 ml-2" />
-                حذف
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {canManage && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100">
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onEdit}>
+                  <Edit className="w-4 h-4 ml-2" />
+                  تعديل
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  toggleActive.mutate({ userId: user.id, isActive: !user.is_active }, {
+                    onSuccess: () => toast({ title: user.is_active ? 'تم تعطيل الحساب' : 'تم تفعيل الحساب', variant: 'success' })
+                  })
+                }}>
+                  {user.is_active ? <UserX className="w-4 h-4 ml-2" /> : <UserCheck className="w-4 h-4 ml-2" />}
+                  {user.is_active ? 'تعطيل' : 'تفعيل'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onDelete} className="text-red-600 focus:text-red-600">
+                  <Trash2 className="w-4 h-4 ml-2" />
+                  حذف
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
         <div className="mt-4 flex items-center justify-between">
           <Badge className={cn('text-xs border', ROLE_COLORS[user.role])}>
@@ -207,11 +214,31 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   const { data: districts } = useDistricts(form.governorate_id)
   const { toast } = useToast()
 
+  const [passwordError, setPasswordError] = useState('')
+
+  const validatePassword = (pwd: string): string => {
+    if (pwd.length < 8) return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'
+    if (!/[A-Z]/.test(pwd)) return 'كلمة المرور يجب أن تحتوي على حرف كبير واحد على الأقل'
+    if (!/[a-z]/.test(pwd)) return 'كلمة المرور يجب أن تحتوي على حرف صغير واحد على الأقل'
+    if (!/[0-9]/.test(pwd)) return 'كلمة المرور يجب أن تحتوي على رقم واحد على الأقل'
+    return ''
+  }
+
   const handleSubmit = () => {
     if (!form.full_name || !form.email || !form.password) {
       toast({ title: 'جميع الحقول مطلوبة', variant: 'destructive' })
       return
     }
+
+    // Password strength validation (matches Edge Function rules)
+    const pwdErr = validatePassword(form.password)
+    if (pwdErr) {
+      setPasswordError(pwdErr)
+      toast({ title: pwdErr, variant: 'destructive' })
+      return
+    }
+    setPasswordError('')
+
     createUser.mutate(form, {
       onSuccess: () => {
         toast({ title: 'تم إضافة المستخدم بنجاح', variant: 'success' })
@@ -240,7 +267,25 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           </div>
           <div className="space-y-2">
             <Label>كلمة المرور</Label>
-            <Input type="password" dir="ltr" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            <Input
+              type="password"
+              dir="ltr"
+              value={form.password}
+              onChange={(e) => {
+                setForm({ ...form, password: e.target.value })
+                if (passwordError) setPasswordError(validatePassword(e.target.value))
+              }}
+              className={passwordError ? 'border-red-400 focus:border-red-500' : ''}
+            />
+            {passwordError && (
+              <p className="text-xs text-red-500 mt-1">{passwordError}</p>
+            )}
+            {form.password && !passwordError && (
+              <p className="text-xs text-emerald-500 mt-1">✓ كلمة المرور قوية</p>
+            )}
+            <p className="text-[10px] text-muted-foreground mt-1">
+              8 أحرف على الأقل — حرف كبير + حرف صغير + رقم
+            </p>
           </div>
           <div className="space-y-2">
             <Label>الدور</Label>

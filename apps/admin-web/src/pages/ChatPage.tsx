@@ -84,9 +84,27 @@ export default function ChatPage() {
     }
   }, [room, refetch])
 
+  const MAX_MESSAGE_LENGTH = 2000
+  const lastSendRef = useRef<number>(0)
+
   const handleSend = () => {
     const text = message.trim()
     if (!text) return
+
+    // Rate limit: minimum 1 second between sends
+    const now = Date.now()
+    if (now - lastSendRef.current < 1000) {
+      toast({ title: 'انتظر قليلاً قبل إرسال رسالة أخرى', variant: 'destructive' })
+      return
+    }
+
+    // Message length limit
+    if (text.length > MAX_MESSAGE_LENGTH) {
+      toast({ title: `الرسالة طويلة جداً (الحد ${MAX_MESSAGE_LENGTH} حرف)`, variant: 'destructive' })
+      return
+    }
+
+    lastSendRef.current = now
 
     const finalMessage = replyTo
       ? `↩️ رد على: "${replyTo.content.slice(0, 50)}..."\n\n${text}`

@@ -1,15 +1,20 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/useApi'
 import { isConfigured } from '@/lib/supabase'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw, ShieldX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import type { UserRole } from '@/types/database'
 
 /**
- * ProtectedRoute — wraps authenticated routes with proper auth checking.
- * Redirects to /login if not authenticated.
- * Shows error state if auth check fails.
+ * ProtectedRoute — wraps authenticated routes with proper auth + role checking.
+ * @param allowedRoles - If provided, only these roles can access the route.
+ *                        If omitted, any authenticated user can access.
  */
-export function ProtectedRoute() {
+interface ProtectedRouteProps {
+  allowedRoles?: UserRole[]
+}
+
+export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   const { data: authData, isLoading, isError, refetch } = useAuth()
 
   // If Supabase is not configured, redirect to login
@@ -67,6 +72,29 @@ export function ProtectedRoute() {
     return <Navigate to="/login" replace />
   }
 
-  // Authenticated — render child routes
+  // Role check — if allowedRoles is specified, verify user has permission
+  if (allowedRoles && allowedRoles.length > 0) {
+    const userRole = authData.profile?.role as UserRole | undefined
+    if (!userRole || !allowedRoles.includes(userRole)) {
+      return (
+        <div className="flex h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+          <div className="flex flex-col items-center gap-4 max-w-md text-center p-8">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+              <ShieldX className="w-8 h-8 text-amber-500" />
+            </div>
+            <h2 className="text-xl font-heading font-bold text-gray-800">غير مصرح</h2>
+            <p className="text-sm text-muted-foreground">
+              ليس لديك صلاحية للوصول إلى هذه الصفحة. يرجى التواصل مع مدير النظام.
+            </p>
+            <Button variant="outline" onClick={() => window.history.back()}>
+              العودة
+            </Button>
+          </div>
+        </div>
+      )
+    }
+  }
+
+  // Authenticated + authorized — render child routes
   return <Outlet />
 }

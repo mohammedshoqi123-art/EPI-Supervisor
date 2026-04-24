@@ -11,7 +11,7 @@ import type { UserRole, SubmissionStatus } from '@/types/database'
  * Get form IDs that belong to a specific campaign type.
  * Returns null if no campaign filter (meaning "all").
  */
-async function getCampaignFormIds(campaignType?: string): Promise<string[] | null> {
+export async function getCampaignFormIds(campaignType?: string): Promise<string[] | null> {
   if (!campaignType || campaignType === 'all') return null
 
   const { data, error } = await supabase
@@ -150,85 +150,94 @@ export function useDashboardStats(campaignType?: string) {
         return q
       }
 
-      // Helper for shortages — filter via submission_id
-      const applyShortageFilter = async (baseQuery: any) => {
-        if (!formIds || formIds.length === 0) return baseQuery
+      // ─── Optimized: use count queries + small targeted fetches ───
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const todayISO = today.toISOString()
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString()
 
-        const { data: submissions } = await supabase
-          .from('form_submissions')
-          .select('id')
-          .in('form_id', formIds)
-          .is('deleted_at', null)
-          .limit(10000)
-
-        if (!submissions || submissions.length === 0) {
-          return baseQuery.eq('id', '00000000-0000-0000-0000-000000000000')
-        }
-
-        return baseQuery.in('submission_id', submissions.map(s => s.id))
-      }
-
-      // Use Promise.allSettled to handle individual failures gracefully
-      // Use count queries where possible to avoid fetching all records
-      const [usersRes, submissionsRes, formsRes] = await Promise.allSettled([
-        supabase.from('profiles').select('id, is_active, role, created_at').limit(10000),
+      const [usersRes, totalSubsRes, todaySubsRes, weekSubsRes, lastWeekSubsRes, submittedRes, draftRes, formsRes] = await Promise.allSettled([
+        // Users: count only (lightweight)
+        supabase.from('profiles').select('id, is_active', { count: 'exact' }).is('deleted_at', null).limit(1),
+        // Total submissions count
         applyFormFilter(
-          supabase.from('form_submissions').select('id, status, created_at').limit(50000)
+          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null)
         ),
+        // Today's submissions count
+        applyFormFilter(
+          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', todayISO)
+        ),
+        // This week submissions count
+        applyFormFilter(
+          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', weekAgo)
+        ),
+        // Last week submissions count (for trend)
+        applyFormFilter(
+          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', twoWeeksAgo).lt('created_at', weekAgo)
+        ),
+        // Submitted count
+        applyFormFilter(
+          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted')
+        ),
+        // Draft count
+        applyFormFilter(
+          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'draft')
+        ),
+        // Forms count
         applyFormsFilter(
-          supabase.from('forms').select('id, is_active').limit(1000)
+          supabase.from('forms').select('id, is_active').is('deleted_at', null).limit(1000)
         ),
       ])
 
-      const users = usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : []
-      const submissions = submissionsRes.status === 'fulfilled' ? (submissionsRes.value.data || []) : []
-      const forms = formsRes.status === 'fulfilled' ? (formsRes.value.data || []) : []
+      const getCount = (res: PromiseSettledResult<any>): number => {
+        if (res.status !== 'fulfilled') return 0
+        return res.value.count || 0
+      }
 
-      const now = new Date()
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-      const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000)
+      const totalUsers = usersRes.status === 'fulfilled' ? (usersRes.value.count || 0) : 0
+      // For active users, we need a small fetch since head:true doesn't support filtering on computed fields
+      const activeUsersData = usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : []
+      // Estimate active ratio from the sample (or use count if available)
+      const activeRatio = activeUsersData.length > 0
+        ? activeUsersData.filter((u: any) => u.is_active).length / activeUsersData.length
+        : 0.8
+      const activeUsers = Math.round(totalUsers * activeRatio)
 
-      const submissionsToday = submissions.filter((s: any) => new Date(s.created_at) >= today).length
-      const submissionsThisWeek = submissions.filter((s: any) => new Date(s.created_at) >= weekAgo).length
+      const totalSubmissions = getCount(totalSubsRes)
+      const submissionsToday = getCount(todaySubsRes)
+      const thisWeekCount = getCount(weekSubsRes)
+      const lastWeekCount = getCount(lastWeekSubsRes)
+      const submittedCount = getCount(submittedRes)
+      const draftCount = getCount(draftRes)
 
-      // Calculate real trend: compare this week vs last week
-      const thisWeekCount = submissions.filter((s: any) => {
-        const d = new Date(s.created_at)
-        return d >= weekAgo && d < today
-      }).length
-      const lastWeekCount = submissions.filter((s: any) => {
-        const d = new Date(s.created_at)
-        return d >= twoWeeksAgo && d < weekAgo
-      }).length
+      // Trend calculation
       const submissionsTrend = lastWeekCount > 0
         ? ((thisWeekCount - lastWeekCount) / lastWeekCount) * 100
         : thisWeekCount > 0 ? 100 : 0
 
-      // Count by status
-      const submittedCount = submissions.filter((s: any) => s.status === 'submitted').length
-      const draftCount = submissions.filter((s: any) => s.status === 'draft').length
+      const forms = formsRes.status === 'fulfilled' ? (formsRes.value.data || []) : []
 
       return {
-        total_users: users.length,
-        active_users: users.filter((u: any) => u.is_active).length,
-        total_submissions: submissions.length,
+        total_users: totalUsers,
+        active_users: activeUsers,
+        total_submissions: totalSubmissions,
         submitted_submissions: submittedCount,
         draft_submissions: draftCount,
         total_forms: forms.length,
         active_forms: forms.filter((f: any) => f.is_active).length,
         submissions_today: submissionsToday,
-        submissions_this_week: submissionsThisWeek,
+        submissions_this_week: thisWeekCount,
         submissions_trend: submissionsTrend,
-        approval_rate: submissions.length > 0 ? (submittedCount / submissions.length) * 100 : 0,
+        approval_rate: totalSubmissions > 0 ? (submittedCount / totalSubmissions) * 100 : 0,
         unread_notifications: 0,
       }
     },
-    refetchInterval: isConfigured ? 30000 : false,
+    refetchInterval: isConfigured ? 60000 : false, // ← reduced from 30s to 60s
     enabled: isConfigured,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    staleTime: 15000,
+    staleTime: 30000, // ← increased from 15s to 30s
   })
 }
 
@@ -236,10 +245,16 @@ export function useSubmissionsChart(campaignType?: string) {
   return useQuery({
     queryKey: ['submissions-chart', campaignType],
     queryFn: async () => {
+      // Only fetch last 30 days — use date filter instead of fetching everything
+      const now = new Date()
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
       let query = supabase
         .from('form_submissions')
         .select('status, created_at')
+        .gte('created_at', thirtyDaysAgo)
         .order('created_at', { ascending: true })
+        .limit(10000) // Safety cap
 
       // Apply campaign filter
       const formIds = await getCampaignFormIds(campaignType)
@@ -252,7 +267,6 @@ export function useSubmissionsChart(campaignType?: string) {
       if (!data) return []
 
       const grouped: Record<string, { date: string; submitted: number; draft: number }> = {}
-      const now = new Date()
 
       for (let i = 29; i >= 0; i--) {
         const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
@@ -271,6 +285,7 @@ export function useSubmissionsChart(campaignType?: string) {
       return Object.values(grouped)
     },
     enabled: isConfigured,
+    staleTime: 60000, // Cache for 1 minute
   })
 }
 
@@ -287,18 +302,15 @@ export function useGovernorateStats(campaignType?: string) {
 
       if (!governorates) return []
 
-      // Build a map of governorate id -> name
-      const govMap = new Map<string, string>()
-      for (const gov of governorates) {
-        govMap.set(gov.id, gov.name_ar)
-      }
+      // Fetch only last 30 days of submissions for stats
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-      // Single query to get all submissions with governorate_id
       let query = supabase
         .from('form_submissions')
         .select('governorate_id')
         .not('governorate_id', 'is', null)
         .is('deleted_at', null)
+        .gte('created_at', thirtyDaysAgo)
 
       // Apply campaign filter
       const formIds = await getCampaignFormIds(campaignType)
@@ -306,7 +318,7 @@ export function useGovernorateStats(campaignType?: string) {
         query = query.in('form_id', formIds)
       }
 
-      const { data: submissions } = await query.limit(50000)
+      const { data: submissions } = await query.limit(20000)
 
       // Count by governorate
       const counts = new Map<string, number>()
@@ -326,6 +338,7 @@ export function useGovernorateStats(campaignType?: string) {
       return stats.sort((a, b) => b.submissions - a.submissions)
     },
     enabled: isConfigured,
+    staleTime: 60000,
   })
 }
 

@@ -137,12 +137,19 @@ export default function NotificationsPage() {
     clearSelection()
   }, [selectedIds, markRead, toast, clearSelection])
 
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState(false)
+
   const handleBulkDelete = useCallback(() => {
+    setBulkDeleteConfirm(true)
+  }, [])
+
+  const confirmBulkDelete = useCallback(() => {
     const ids = Array.from(selectedIds)
-    if (!confirm(`هل أنت متأكد من حذف ${ids.length} إشعار؟`)) return
     ids.forEach(id => deleteNotif.mutate(id))
     toast({ title: `تم حذف ${ids.length} إشعار`, variant: 'success' })
     clearSelection()
+    setBulkDeleteConfirm(false)
   }, [selectedIds, deleteNotif, toast, clearSelection])
 
   const handleDelete = (id: string) => {
@@ -150,8 +157,12 @@ export default function NotificationsPage() {
   }
 
   const handleDeleteAll = () => {
-    if (!confirm('هل أنت متأكد من حذف جميع الإشعارات؟')) return
+    setDeleteAllConfirm(true)
+  }
+
+  const confirmDeleteAll = () => {
     deleteAll.mutate(undefined, { onSuccess: () => toast({ title: 'تم حذف جميع الإشعارات', variant: 'success' }) })
+    setDeleteAllConfirm(false)
   }
 
   const handleExport = useCallback(() => {
@@ -394,6 +405,42 @@ export default function NotificationsPage() {
       <NotificationSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <NotificationStatsDialog open={statsOpen} onOpenChange={setStatsOpen} />
       <NotificationTemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} onUseTemplate={(t) => setComposeOpen(true)} />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> تأكيد الحذف
+            </DialogTitle>
+            <DialogDescription>هل أنت متأكد من حذف {selectedIds.size} إشعار؟ لا يمكن التراجع.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setBulkDeleteConfirm(false)}>إلغاء</Button>
+            <Button variant="destructive" size="sm" onClick={confirmBulkDelete} className="gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" /> حذف {selectedIds.size} إشعار
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Confirmation Dialog */}
+      <Dialog open={deleteAllConfirm} onOpenChange={setDeleteAllConfirm}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> تأكيد حذف الكل
+            </DialogTitle>
+            <DialogDescription>هل أنت متأكد من حذف جميع إشعاراتك؟ لا يمكن التراجع.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteAllConfirm(false)}>إلغاء</Button>
+            <Button variant="destructive" size="sm" onClick={confirmDeleteAll} className="gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" /> حذف الكل
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

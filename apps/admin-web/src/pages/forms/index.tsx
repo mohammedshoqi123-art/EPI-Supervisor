@@ -178,6 +178,8 @@ function FormCard({ form, submissionCount, onEdit, onDelete, onData }: {
   onDelete: () => void
   onData: () => void
 }) {
+  const { getCampaign } = useCampaign()
+  const campaignOption = getCampaign(form.campaign_type)
   const schema = parseFormSchema(form.schema)
   const fieldCount = schema.sections.reduce((sum, s) => sum + s.fields.length, 0)
   const sectionCount = schema.sections.length
@@ -230,7 +232,7 @@ function FormCard({ form, submissionCount, onEdit, onDelete, onData }: {
         {/* Campaign badge */}
         <div className="px-5 pb-3">
           <Badge variant="secondary" className="text-[10px]">
-            {form.campaign_type === 'polio_campaign' ? '🧬 حملة شلل الأطفال' : '📋 النشاط الإيصالي التكاملي'}
+            {campaignOption ? `${campaignOption.icon} ${campaignOption.labelAr}` : form.campaign_type}
           </Badge>
         </div>
 
@@ -267,6 +269,7 @@ function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
   const { toast } = useToast()
   const createForm = useCreateForm()
   const updateForm = useUpdateForm()
+  const { allCampaigns } = useCampaign()
 
   const initialSchema = form ? parseFormSchema(form.schema) : { sections: [] }
 
@@ -437,8 +440,9 @@ function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
                   <Select value={campaignType} onValueChange={setCampaignType}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="polio_campaign">🧬 حملة شلل الأطفال</SelectItem>
-                      <SelectItem value="integrated_activity">📋 النشاط الإيصالي التكاملي</SelectItem>
+                      {allCampaigns.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.icon} {c.labelAr}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

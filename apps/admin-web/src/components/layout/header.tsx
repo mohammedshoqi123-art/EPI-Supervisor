@@ -4,7 +4,7 @@ import { Bell, Search, RefreshCw, Clock, Filter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useNotifications } from '@/hooks/useApi'
-import { useCampaign, CAMPAIGN_OPTIONS } from '@/lib/campaign-context'
+import { useCampaign } from '@/lib/campaign-context'
 
 interface HeaderProps {
   title: string
@@ -18,8 +18,7 @@ export function Header({ title, subtitle, onRefresh, onSearch }: HeaderProps) {
   const [time, setTime] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
-  const { campaign, isFiltered, labelAr } = useCampaign()
-  const currentCampaign = CAMPAIGN_OPTIONS.find(o => o.id === campaign)
+  const { campaign, isFiltered, labelAr, currentOption } = useCampaign()
   const { data: notifications } = useNotifications()
 
   const unreadCount = (notifications || []).filter(n => !n.is_read).length
@@ -67,10 +66,10 @@ export function Header({ title, subtitle, onRefresh, onSearch }: HeaderProps) {
             <span className="text-[10px] font-medium text-emerald-700">مباشر</span>
           </div>
           {/* Campaign Badge */}
-          {isFiltered && currentCampaign && (
+          {isFiltered && currentOption && (
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200/60">
               <Filter className="w-3 h-3 text-blue-600" />
-              <span className="text-[10px] font-medium text-blue-700">{currentCampaign.icon} {labelAr}</span>
+              <span className="text-[10px] font-medium text-blue-700">{currentOption.icon} {labelAr}</span>
             </div>
           )}
         </div>

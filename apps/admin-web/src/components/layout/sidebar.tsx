@@ -19,7 +19,7 @@ import { useTheme } from './theme-provider'
 import { useSignOut, useDashboardStats } from '@/hooks/useApi'
 import { ROLE_LABELS, type UserRole } from '@/types/database'
 import { getInitials } from '@/lib/utils'
-import { useCampaign, CAMPAIGN_OPTIONS, type CampaignType } from '@/lib/campaign-context'
+import { useCampaign, type CampaignType } from '@/lib/campaign-context'
 
 // Helper to get logo URL with base path support
 function getLogoUrl(size: '64' | '128' | '256' = '128') {

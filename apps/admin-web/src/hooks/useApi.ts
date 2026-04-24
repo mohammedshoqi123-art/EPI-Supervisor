@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase, isConfigured } from '@/lib/supabase'
 import type { UserRole, SubmissionStatus } from '@/types/database'
@@ -808,7 +809,49 @@ export function useNotifications() {
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     staleTime: 10000,
+    refetchInterval: isConfigured ? 30000 : false, // Poll every 30s as fallback
   })
+}
+
+// Real-time notification subscription
+export function useNotificationRealtime() {
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (!isConfigured) return
+
+    const channel = supabase
+      .channel('notifications-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+        },
+        () => {
+          // Invalidate and refetch notifications when a new one arrives
+          queryClient.invalidateQueries({ queryKey: ['notifications'] })
+          queryClient.invalidateQueries({ queryKey: ['notification-stats'] })
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['notifications'] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [queryClient])
 }
 
 export function useMarkNotificationRead() {

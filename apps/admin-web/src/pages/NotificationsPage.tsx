@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
-import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead, useDeleteNotification, useDeleteAllNotifications, useToggleNotificationRead, useSendNotification, useGovernorates, useNotificationStats, useNotificationTemplates } from '@/hooks/useApi'
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead, useDeleteNotification, useDeleteAllNotifications, useToggleNotificationRead, useSendNotification, useGovernorates, useNotificationStats, useNotificationTemplates, useNotificationRealtime } from '@/hooks/useApi'
 import { formatRelativeTime, formatDateTime, cn } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import type { Notification } from '@/types/database'
@@ -78,6 +78,9 @@ export default function NotificationsPage() {
   const deleteAll = useDeleteAllNotifications()
   const toggleRead = useToggleNotificationRead()
   const { toast } = useToast()
+
+  // Real-time notifications
+  useNotificationRealtime()
 
   // Auto-refresh
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)

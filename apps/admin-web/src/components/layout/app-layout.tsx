@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar, MobileSidebar } from './sidebar'
-import { useAuth } from '@/hooks/useApi'
+import { useAuth, useNotificationRealtime } from '@/hooks/useApi'
 import { AIChatWidget } from '@/components/ai/AIChatWidget'
 
 /**
@@ -11,6 +11,9 @@ import { AIChatWidget } from '@/components/ai/AIChatWidget'
 export function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { data: authData } = useAuth()
+
+  // Real-time notifications across all pages
+  useNotificationRealtime()
 
   const user = authData?.profile || (authData?.session ? {
     id: authData.session.user.id,

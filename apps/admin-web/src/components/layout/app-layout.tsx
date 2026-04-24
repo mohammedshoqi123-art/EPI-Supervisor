@@ -1,88 +1,18 @@
 import { useState } from 'react'
-import { Outlet, Navigate } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { Sidebar, MobileSidebar } from './sidebar'
 import { useAuth } from '@/hooks/useApi'
-import { Skeleton } from '@/components/ui/skeleton'
-import { isConfigured } from '@/lib/supabase'
 import { AIChatWidget } from '@/components/ai/AIChatWidget'
-import { AlertTriangle, RefreshCw, LogIn } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 
+/**
+ * AppLayout — renders the main app shell (sidebar + content).
+ * Auth checking is handled by the parent ProtectedRoute.
+ */
 export function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const { data: authData, isLoading, isError, error, refetch } = useAuth()
+  const { data: authData } = useAuth()
 
-  // If Supabase is not configured, redirect to login
-  if (!isConfigured) {
-    return <Navigate to="/login" replace />
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-        <div className="flex flex-col items-center gap-5">
-          <div className="relative">
-            <div className="w-20 h-20 rounded-2xl bg-white shadow-xl shadow-blue-500/10 flex items-center justify-center animate-pulse border border-blue-100/50">
-              <img
-                src={`${import.meta.env.BASE_URL}logo-epi-256.png`.replace(/\/+/g, '/')}
-                alt="EPI"
-                className="w-14 h-14 object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none'
-                  e.currentTarget.parentElement!.innerHTML = '<div class="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 animate-pulse"></div>'
-                }}
-              />
-            </div>
-            <div className="absolute inset-0 rounded-2xl bg-blue-400/20 blur-xl -z-10 scale-110" />
-          </div>
-          <div className="text-center space-y-2">
-            <Skeleton className="w-40 h-5 mx-auto" />
-            <Skeleton className="w-24 h-3 mx-auto" />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-2 h-2 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Auth error - show error screen with retry
-  if (isError) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-        <div className="flex flex-col items-center gap-4 max-w-md text-center p-8">
-          <div className="w-16 h-16 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
-          </div>
-          <h2 className="text-xl font-heading font-bold text-gray-800">خطأ في الاتصال</h2>
-          <p className="text-sm text-muted-foreground">
-            تعذر الاتصال بخادم Supabase. تأكد من اتصالك بالإنترنت أو حاول مرة أخرى.
-          </p>
-          <p className="text-xs text-red-500 font-mono" dir="ltr">
-            {(error as Error)?.message || 'Connection failed'}
-          </p>
-          <div className="flex gap-3">
-            <Button onClick={() => refetch()} className="gap-2">
-              <RefreshCw className="w-4 h-4" /> إعادة المحاولة
-            </Button>
-            <Button variant="outline" onClick={() => window.location.reload()}>
-              تحديث الصفحة
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // No session - redirect to login
-  if (!authData?.session) {
-    return <Navigate to="/login" replace />
-  }
-
-  const user = authData.profile || {
+  const user = authData?.profile || (authData?.session ? {
     id: authData.session.user.id,
     email: authData.session.user.email || '',
     full_name: authData.session.user.email?.split('@')[0] || 'مستخدم',
@@ -90,7 +20,7 @@ export function AppLayout() {
     is_active: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-  }
+  } : null)
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

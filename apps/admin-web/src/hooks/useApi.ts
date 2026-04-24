@@ -168,13 +168,14 @@ export function useDashboardStats(campaignType?: string) {
       }
 
       // Use Promise.allSettled to handle individual failures gracefully
+      // Use count queries where possible to avoid fetching all records
       const [usersRes, submissionsRes, formsRes] = await Promise.allSettled([
-        supabase.from('profiles').select('id, is_active, role, created_at', { count: 'exact' }),
+        supabase.from('profiles').select('id, is_active, role, created_at').limit(10000),
         applyFormFilter(
-          supabase.from('form_submissions').select('id, status, created_at', { count: 'exact' })
+          supabase.from('form_submissions').select('id, status, created_at').limit(50000)
         ),
         applyFormsFilter(
-          supabase.from('forms').select('id, is_active', { count: 'exact' })
+          supabase.from('forms').select('id, is_active').limit(1000)
         ),
       ])
 
@@ -185,23 +186,40 @@ export function useDashboardStats(campaignType?: string) {
       const now = new Date()
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+      const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000)
 
       const submissionsToday = submissions.filter((s: any) => new Date(s.created_at) >= today).length
       const submissionsThisWeek = submissions.filter((s: any) => new Date(s.created_at) >= weekAgo).length
+
+      // Calculate real trend: compare this week vs last week
+      const thisWeekCount = submissions.filter((s: any) => {
+        const d = new Date(s.created_at)
+        return d >= weekAgo && d < today
+      }).length
+      const lastWeekCount = submissions.filter((s: any) => {
+        const d = new Date(s.created_at)
+        return d >= twoWeeksAgo && d < weekAgo
+      }).length
+      const submissionsTrend = lastWeekCount > 0
+        ? ((thisWeekCount - lastWeekCount) / lastWeekCount) * 100
+        : thisWeekCount > 0 ? 100 : 0
+
+      // Count by status
+      const submittedCount = submissions.filter((s: any) => s.status === 'submitted').length
+      const draftCount = submissions.filter((s: any) => s.status === 'draft').length
 
       return {
         total_users: users.length,
         active_users: users.filter((u: any) => u.is_active).length,
         total_submissions: submissions.length,
-        approved_submissions: 0,
-        rejected_submissions: 0,
-        draft_submissions: submissions.filter((s: any) => s.status === 'draft').length,
+        submitted_submissions: submittedCount,
+        draft_submissions: draftCount,
         total_forms: forms.length,
         active_forms: forms.filter((f: any) => f.is_active).length,
         submissions_today: submissionsToday,
         submissions_this_week: submissionsThisWeek,
-        submissions_trend: 12.5,
-        approval_rate: submissions.length > 0 ? ((submissions.filter((s: any) => s.status === 'submitted').length) / submissions.length) * 100 : 0,
+        submissions_trend: submissionsTrend,
+        approval_rate: submissions.length > 0 ? (submittedCount / submissions.length) * 100 : 0,
         unread_notifications: 0,
       }
     },
@@ -259,6 +277,7 @@ export function useGovernorateStats(campaignType?: string) {
   return useQuery({
     queryKey: ['governorate-stats', campaignType],
     queryFn: async () => {
+      // Get all governorates
       const { data: governorates } = await supabase
         .from('governorates')
         .select('id, name_ar')
@@ -267,28 +286,41 @@ export function useGovernorateStats(campaignType?: string) {
 
       if (!governorates) return []
 
-      // Resolve form IDs for campaign filtering
+      // Build a map of governorate id -> name
+      const govMap = new Map<string, string>()
+      for (const gov of governorates) {
+        govMap.set(gov.id, gov.name_ar)
+      }
+
+      // Single query to get all submissions with governorate_id
+      let query = supabase
+        .from('form_submissions')
+        .select('governorate_id')
+        .not('governorate_id', 'is', null)
+        .is('deleted_at', null)
+
+      // Apply campaign filter
       const formIds = await getCampaignFormIds(campaignType)
+      if (formIds && formIds.length > 0) {
+        query = query.in('form_id', formIds)
+      }
 
-      const stats = await Promise.all(
-        governorates.map(async (gov) => {
-          let query = supabase
-            .from('form_submissions')
-            .select('id', { count: 'exact', head: true })
-            .eq('governorate_id', gov.id)
+      const { data: submissions } = await query.limit(50000)
 
-          if (formIds && formIds.length > 0) {
-            query = query.in('form_id', formIds)
-          }
+      // Count by governorate
+      const counts = new Map<string, number>()
+      for (const s of submissions || []) {
+        const govId = s.governorate_id
+        if (govId) {
+          counts.set(govId, (counts.get(govId) || 0) + 1)
+        }
+      }
 
-          const { count } = await query
-
-          return {
-            name: gov.name_ar,
-            submissions: count || 0,
-          }
-        })
-      )
+      // Build result for all governorates (including those with 0 submissions)
+      const stats = governorates.map(gov => ({
+        name: gov.name_ar,
+        submissions: counts.get(gov.id) || 0,
+      }))
 
       return stats.sort((a, b) => b.submissions - a.submissions)
     },
@@ -702,7 +734,7 @@ export function useChatMessages(room = 'general') {
       return data
     },
     enabled: isConfigured,
-    refetchInterval: isConfigured ? 5000 : false,
+    refetchInterval: isConfigured ? 15000 : false,
   })
 }
 

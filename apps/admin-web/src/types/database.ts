@@ -134,12 +134,11 @@ export interface FormSubmission {
 }
 
 export interface DashboardStats {
-  role: UserRole
+  role?: UserRole
   total_users: number
   active_users: number
   total_submissions: number
-  approved_submissions: number
-  rejected_submissions: number
+  submitted_submissions: number
   draft_submissions: number
   total_forms: number
   active_forms: number

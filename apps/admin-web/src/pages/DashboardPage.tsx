@@ -440,7 +440,10 @@ export default function DashboardPage() {
               {govLoading ? (
                 <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="w-full h-9 rounded-lg" />)}</div>
               ) : (govStats || []).length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground text-sm">لا توجد بيانات</div>
+                <div className="text-center py-8">
+                  <MapPin className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">لا توجد بيانات محافظات بعد</p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={(govStats || []).slice(0, 10)} layout="vertical">
@@ -538,7 +541,13 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="px-5 pb-4">
                 {recentSubmissions.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-4">لا توجد إرساليات بعد</p>
+                  <div className="text-center py-6">
+                    <FileStack className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-xs text-muted-foreground">لا توجد إرساليات بعد</p>
+                    <Button variant="ghost" size="sm" className="text-xs mt-2 gap-1" onClick={() => navigate('/forms')}>
+                      <Plus className="w-3 h-3" /> إنشاء نموذج
+                    </Button>
+                  </div>
                 ) : (
                   <div className="space-y-0">
                     {recentSubmissions.slice(0, 5).map((sub) => (

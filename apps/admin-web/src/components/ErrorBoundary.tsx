@@ -52,7 +52,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <Button onClick={this.handleReset} className="gap-2">
                 <RefreshCw className="w-4 h-4" /> إعادة المحاولة
               </Button>
-              <Button variant="outline" onClick={() => window.location.href = '/EPI-Supervisor/'}>
+              <Button variant="outline" onClick={() => window.location.href = import.meta.env.BASE_URL}>
                 العودة للرئيسية
               </Button>
             </div>

@@ -8,7 +8,7 @@ import {
   AlertTriangle, Bell, Moon, Sun, Menu, X, Sparkles, Layout, Clock,
   Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
   FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare,
-  FileSpreadsheet
+  FileSpreadsheet, PackageX
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -49,6 +49,7 @@ const navItems: NavItem[] = [
   { icon: Users, label: 'المستخدمون', href: '/users' },
   { icon: FileSearch, label: 'النماذج', href: '/forms' },
   { icon: FileStack, label: 'الإرساليات', href: '/submissions' },
+  { icon: PackageX, label: 'النواقص', href: '/shortages', roles: ['admin', 'central', 'governorate', 'district'] },
   { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin'] },
   { icon: MapPinned, label: 'المحافظات', href: '/governorates', roles: ['admin'] },
   { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
@@ -63,11 +64,11 @@ const navItems: NavItem[] = [
 function LiveClock({ collapsed }: { collapsed: boolean }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
-    const interval = setInterval(() => setTime(new Date()), 1000)
+    const interval = setInterval(() => setTime(new Date()), 60000) // Update every minute, not every second
     return () => clearInterval(interval)
   }, [])
 
-  const timeStr = time.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+  const timeStr = time.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: true })
   const dateStr = time.toLocaleDateString('ar-SA', { weekday: 'short', day: 'numeric', month: 'short' })
 
   if (collapsed) return null
@@ -273,28 +274,34 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
       {/* User Info / Login */}
       <div className="p-3 border-t border-white/10">
         {user ? (
-          <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
-            <Avatar className="w-9 h-9">
-              <AvatarFallback className="bg-white/20 text-white text-sm font-bold">
-                {getInitials(user.full_name)}
-              </AvatarFallback>
-            </Avatar>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate text-white">{user.full_name}</p>
-                <p className="text-xs text-blue-200 truncate">
-                  {ROLE_LABELS[user.role]}
-                </p>
-              </div>
-            )}
+          <div className="space-y-2">
+            <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
+              <Avatar className="w-9 h-9">
+                <AvatarFallback className="bg-white/20 text-white text-sm font-bold">
+                  {getInitials(user.full_name)}
+                </AvatarFallback>
+              </Avatar>
+              {!collapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate text-white">{user.full_name}</p>
+                  <p className="text-xs text-blue-200 truncate">
+                    {ROLE_LABELS[user.role]}
+                  </p>
+                </div>
+              )}
+            </div>
             <Button
               variant="ghost"
-              size={collapsed ? 'icon' : 'icon-sm'}
+              size={collapsed ? 'icon' : 'default'}
               onClick={() => signOut.mutate()}
-              className="text-blue-200 hover:text-white hover:bg-white/10"
+              className={cn(
+                'w-full text-blue-100 hover:text-white hover:bg-white/15 transition-all duration-200',
+                collapsed ? 'justify-center' : 'justify-start gap-2.5 px-3'
+              )}
               title="تسجيل الخروج"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-4.5 h-4.5" />
+              {!collapsed && <span className="text-sm">تسجيل الخروج</span>}
             </Button>
           </div>
         ) : (
@@ -319,6 +326,7 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const { campaign, setCampaign } = useCampaign()
+  const signOut = useSignOut()
 
   // Close on route change
   useEffect(() => {
@@ -424,9 +432,9 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
           })}
         </nav>
 
-        {/* User Info at bottom */}
+        {/* User Info + Logout at bottom */}
         {user && (
-          <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-white/10">
+          <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-white/10 space-y-2">
             <div className="flex items-center gap-3">
               <Avatar className="w-9 h-9">
                 <AvatarFallback className="bg-white/20 text-white text-sm font-bold">
@@ -438,6 +446,18 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
                 <p className="text-xs text-blue-200 truncate">{ROLE_LABELS[user.role]}</p>
               </div>
             </div>
+            <Button
+              variant="ghost"
+              size="default"
+              onClick={() => {
+                signOut.mutate()
+                setOpen(false)
+              }}
+              className="w-full justify-start gap-2.5 px-3 text-blue-100 hover:text-white hover:bg-white/15 transition-all duration-200"
+            >
+              <LogOut className="w-4.5 h-4.5" />
+              <span className="text-sm">تسجيل الخروج</span>
+            </Button>
           </div>
         )}
       </div>

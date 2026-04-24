@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppLayout } from '@/components/layout/app-layout'
+import { ProtectedRoute } from '@/components/layout/protected-route'
 import LoginPage from '@/pages/LoginPage'
 
 // Lazy load pages for better performance
@@ -21,6 +22,7 @@ const BotChatPage = lazy(() => import('@/pages/BotChatPage'))
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
 const ReferencesPage = lazy(() => import('@/pages/ReferencesPage'))
 const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
+const ShortagesPage = lazy(() => import('@/pages/ShortagesPage'))
 
 function PageLoader() {
   return (
@@ -39,29 +41,35 @@ export default function App() {
   return (
     <TooltipProvider>
       <Routes>
-        {/* Login is the first page */}
+        {/* Public route — Login */}
         <Route path="/login" element={<LoginPage />} />
-        <Route element={<AppLayout />}>
-          <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
-          <Route path="users" element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
-          <Route path="forms" element={<Suspense fallback={<PageLoader />}><FormsPage /></Suspense>} />
-          <Route path="submissions" element={<Suspense fallback={<PageLoader />}><SubmissionsPage /></Suspense>} />
-          <Route path="insights" element={<Suspense fallback={<PageLoader />}><AIInsightsPage /></Suspense>} />
-          <Route path="ai-settings" element={<Suspense fallback={<PageLoader />}><AISettingsPage /></Suspense>} />
-          <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditPage /></Suspense>} />
-          <Route path="governorates" element={<Suspense fallback={<PageLoader />}><GovernoratesPage /></Suspense>} />
-          <Route path="map" element={<Suspense fallback={<PageLoader />}><MapPage /></Suspense>} />
-          <Route path="pages" element={<Suspense fallback={<PageLoader />}><PagesManagementPage /></Suspense>} />
-          <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
-          <Route path="chat" element={<Suspense fallback={<PageLoader />}><ChatPage /></Suspense>} />
-          <Route path="bot" element={<Suspense fallback={<PageLoader />}><BotChatPage /></Suspense>} />
-          <Route path="notifications" element={<Suspense fallback={<PageLoader />}><NotificationsPage /></Suspense>} />
-          <Route path="references" element={<Suspense fallback={<PageLoader />}><ReferencesPage /></Suspense>} />
-          <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
+
+        {/* Protected routes — require authentication */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
+            <Route path="users" element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
+            <Route path="forms" element={<Suspense fallback={<PageLoader />}><FormsPage /></Suspense>} />
+            <Route path="submissions" element={<Suspense fallback={<PageLoader />}><SubmissionsPage /></Suspense>} />
+            <Route path="shortages" element={<Suspense fallback={<PageLoader />}><ShortagesPage /></Suspense>} />
+            <Route path="insights" element={<Suspense fallback={<PageLoader />}><AIInsightsPage /></Suspense>} />
+            <Route path="ai-settings" element={<Suspense fallback={<PageLoader />}><AISettingsPage /></Suspense>} />
+            <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditPage /></Suspense>} />
+            <Route path="governorates" element={<Suspense fallback={<PageLoader />}><GovernoratesPage /></Suspense>} />
+            <Route path="map" element={<Suspense fallback={<PageLoader />}><MapPage /></Suspense>} />
+            <Route path="pages" element={<Suspense fallback={<PageLoader />}><PagesManagementPage /></Suspense>} />
+            <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
+            <Route path="chat" element={<Suspense fallback={<PageLoader />}><ChatPage /></Suspense>} />
+            <Route path="bot" element={<Suspense fallback={<PageLoader />}><BotChatPage /></Suspense>} />
+            <Route path="notifications" element={<Suspense fallback={<PageLoader />}><NotificationsPage /></Suspense>} />
+            <Route path="references" element={<Suspense fallback={<PageLoader />}><ReferencesPage /></Suspense>} />
+            <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
+          </Route>
         </Route>
-        {/* Root redirects to login */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+
+        {/* Root redirects to dashboard (auth will redirect to login if needed) */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </TooltipProvider>
   )

@@ -1,99 +1,33 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Users, FileText, FileStack, TrendingUp, TrendingDown,
-  CheckCircle2, XCircle, Clock, Activity, BarChart3, ArrowUpRight,
-  Shield, ShieldCheck, Zap, Target, Sparkles, Calendar, RefreshCw,
+  Users, FileStack, TrendingUp, TrendingDown,
+  CheckCircle2, Clock, Activity, ArrowUpRight,
+  Shield, Zap, Sparkles, RefreshCw,
   AlertTriangle, Database, Plus, Eye, Bell, Wifi, WifiOff,
-  FileSearch, Send, MessageSquare, Stethoscope, MapPin, Globe,
-  ChevronLeft, Timer, Percent, Hash
+  FileSearch, MapPin, PackageX,
+  ChevronLeft, Timer, FileText, Target,
+  AlertCircle, UserX, MapPinOff, Send, BarChart3
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import {
   useDashboardStats, useSubmissionsChart, useGovernorateStats,
-  useRoleDistribution, useNotifications, useSubmissions, useForms
+  useNotifications, useSubmissions, useForms, useUsers, useShortages
 } from '@/hooks/useApi'
-import { formatNumber, formatPercent, formatRelativeTime, cn } from '@/lib/utils'
+import { formatNumber, formatRelativeTime, cn } from '@/lib/utils'
 import { useCampaign } from '@/lib/campaign-context'
-import { isConfigured, supabase } from '@/lib/supabase'
+import { isConfigured } from '@/lib/supabase'
 import { STATUS_LABELS, STATUS_COLORS, type SubmissionStatus } from '@/types/database'
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
 
-const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899']
-
-// ═══ Stat Card ═══
-
-interface StatCardProps {
-  title: string
-  value: number | string
-  change?: number
-  icon: React.ElementType
-  color: string
-  bgColor: string
-  description?: string
-  gradient?: string
-  loading?: boolean
-}
-
-function StatCard({ title, value, change, icon: Icon, color, bgColor, description, gradient, loading }: StatCardProps) {
-  if (loading) {
-    return (
-      <Card className="border-0 shadow-md">
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <div className="space-y-3 flex-1">
-              <Skeleton className="w-24 h-3.5" />
-              <Skeleton className="w-16 h-8" />
-              <Skeleton className="w-28 h-3" />
-            </div>
-            <Skeleton className="w-11 h-11 rounded-xl" />
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <Card className="group relative overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 border-0 shadow-md">
-      <div className={cn('absolute top-0 left-0 right-0 h-[3px] opacity-0 group-hover:opacity-100 transition-opacity duration-300', gradient || 'bg-gradient-to-r from-blue-500 to-blue-600')} />
-      <div className={cn('absolute -top-12 -right-12 w-32 h-32 rounded-full blur-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-500', bgColor)} />
-      <CardContent className="p-5 relative">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">{title}</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-heading font-bold tabular-nums">{value}</span>
-              {change !== undefined && change !== 0 && (
-                <span className={cn(
-                  'text-[10px] font-semibold flex items-center gap-0.5 px-1.5 py-0.5 rounded-full',
-                  change >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'
-                )}>
-                  {change >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
-                  {Math.abs(change).toFixed(1)}%
-                </span>
-              )}
-            </div>
-            {description && <p className="text-[11px] text-muted-foreground">{description}</p>}
-          </div>
-          <div className={cn('p-2.5 rounded-xl transition-all duration-300 group-hover:scale-110', bgColor)}>
-            <Icon className={cn('w-5 h-5', color)} />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ═══ Custom Chart Tooltip ═══
+// ═══ Custom Tooltip ═══
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
@@ -113,44 +47,87 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
-// ═══ Recent Activity Item ═══
+// ═══ Alert Card ═══
 
-function ActivityItem({ submission }: { submission: any }) {
-  const statusIcon = submission.status === 'submitted'
-    ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-    : <Clock className="w-4 h-4 text-amber-500" />
+function AlertCard({ icon: Icon, iconColor, iconBg, title, value, subtitle, action, actionLabel, urgent }: {
+  icon: React.ElementType
+  iconColor: string
+  iconBg: string
+  title: string
+  value: number | string
+  subtitle?: string
+  action?: () => void
+  actionLabel?: string
+  urgent?: boolean
+}) {
+  return (
+    <Card className={cn(
+      'border-0 shadow-md hover:shadow-lg transition-all',
+      urgent && 'ring-1 ring-red-200 bg-red-50/30'
+    )}>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div className={cn('p-2.5 rounded-xl shrink-0', iconBg)}>
+            <Icon className={cn('w-5 h-5', iconColor)} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-muted-foreground">{title}</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-heading font-bold tabular-nums">{value}</span>
+              {urgent && (
+                <Badge variant="destructive" className="text-[9px] px-1.5 py-0 animate-pulse">
+                  عاجل
+                </Badge>
+              )}
+            </div>
+            {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
+            {action && actionLabel && (
+              <Button variant="ghost" size="sm" className="text-xs h-7 gap-1 mt-2 px-0 hover:px-2 transition-all"
+                onClick={action}>
+                {actionLabel} <ChevronLeft className="w-3 h-3" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
+// ═══ Inactive Supervisor Item ═══
+
+function InactiveSupervisor({ user }: { user: any }) {
   return (
     <div className="flex items-center gap-3 py-2.5 border-b last:border-0">
-      <div className="p-1.5 rounded-lg bg-muted/50">{statusIcon}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium truncate">{submission.profiles?.full_name || 'مستخدم'}</p>
-        <p className="text-[10px] text-muted-foreground truncate">
-          {submission.forms?.title_ar || 'نموذج'} • {formatRelativeTime(submission.created_at)}
-        </p>
+      <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+        <UserX className="w-4 h-4 text-red-500" />
       </div>
-      <Badge className={cn('text-[9px] shrink-0', STATUS_COLORS[submission.status as SubmissionStatus])}>
-        {STATUS_LABELS[submission.status as SubmissionStatus]}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium truncate">{user.full_name}</p>
+        <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+      </div>
+      <Badge variant="secondary" className="text-[9px] shrink-0">
+        {user.role === 'data_entry' ? 'إدخال بيانات' : user.role === 'district' ? 'قضاء' : user.role === 'governorate' ? 'محافظة' : user.role}
       </Badge>
     </div>
   )
 }
 
-// ═══ Quick Action Button ═══
+// ═══ Zero Coverage Governorate ═══
 
-function QuickAction({ icon: Icon, label, color, onClick }: {
-  icon: React.ElementType; label: string; color: string; onClick: () => void
-}) {
+function ZeroCoverageGov({ gov }: { gov: any }) {
   return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center gap-2 p-3 rounded-xl border bg-card hover:bg-muted/50 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
-    >
-      <div className={cn('p-2.5 rounded-xl', color)}>
-        <Icon className="w-5 h-5" />
+    <div className="flex items-center gap-3 py-2.5 border-b last:border-0">
+      <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+        <MapPinOff className="w-4 h-4 text-amber-500" />
       </div>
-      <span className="text-[11px] font-medium text-center leading-tight">{label}</span>
-    </button>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium truncate">{gov.name}</p>
+      </div>
+      <Badge variant="outline" className="text-[9px] text-amber-600 border-amber-300 shrink-0">
+        صفر إرساليات
+      </Badge>
+    </div>
   )
 }
 
@@ -162,12 +139,12 @@ export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading, refetch, isFetching, error: statsError } = useDashboardStats(campaign)
   const { data: chartData, isLoading: chartLoading } = useSubmissionsChart(campaign)
   const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign)
-  const { data: roleDistribution, isLoading: roleLoading } = useRoleDistribution()
   const { data: notifications } = useNotifications()
   const { data: recentData } = useSubmissions({ pageSize: 5 })
   const { data: formsResult } = useForms({ pageSize: 100 })
+  const { data: users } = useUsers()
+  const { data: shortages } = useShortages(campaign)
 
-  const [chartRange, setChartRange] = useState('30d')
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
@@ -188,10 +165,49 @@ export default function DashboardPage() {
     setLastRefresh(new Date())
   }
 
-  // Filter chart data by range
-  const filteredChartData = chartRange === '7d'
-    ? (chartData || []).slice(-7)
-    : (chartData || [])
+  // ─── Computed intelligence ──────────────────────────────
+
+  const recentSubmissions = recentData?.data || []
+  const unreadNotifs = (notifications || []).filter(n => !n.is_read).length
+  const activeForms = formsResult?.data?.filter(f => f.is_active).length || 0
+  const totalForms = formsResult?.data?.length || 0
+  const unresolvedShortages = (shortages || []).filter(s => !s.is_resolved).length
+
+  // Today vs Yesterday comparison
+  const todayVsYesterday = useMemo(() => {
+    if (!chartData || chartData.length < 2) return null
+    const today = chartData[chartData.length - 1]
+    const yesterday = chartData[chartData.length - 2]
+    const todayTotal = (today?.submitted || 0) + (today?.draft || 0)
+    const yesterdayTotal = (yesterday?.submitted || 0) + (yesterday?.draft || 0)
+    const diff = todayTotal - yesterdayTotal
+    const percent = yesterdayTotal > 0 ? ((diff / yesterdayTotal) * 100) : todayTotal > 0 ? 100 : 0
+    return { today: todayTotal, yesterday: yesterdayTotal, diff, percent }
+  }, [chartData])
+
+  // Zero coverage governorates
+  const zeroGovs = useMemo(() => {
+    if (!govStats) return []
+    return govStats.filter(g => g.submissions === 0)
+  }, [govStats])
+
+  // Inactive supervisors (users with data_entry/district/governorate roles who haven't submitted today)
+  const inactiveSupervisors = useMemo(() => {
+    if (!users) return []
+    const fieldRoles = ['data_entry', 'district', 'governorate']
+    const fieldUsers = users.filter(u => fieldRoles.includes(u.role) && u.is_active)
+    // Get today's submitters
+    const todaySubmitters = new Set(
+      recentSubmissions
+        .filter(s => {
+          const d = new Date(s.created_at)
+          const today = new Date()
+          return d.toDateString() === today.toDateString()
+        })
+        .map(s => s.submitted_by)
+    )
+    return fieldUsers.filter(u => !todaySubmitters.has(u.id)).slice(0, 5)
+  }, [users, recentSubmissions])
 
   // ─── Error states ─────────────────────────────────────
   if (!isConfigured) {
@@ -238,53 +254,6 @@ export default function DashboardPage() {
     )
   }
 
-  // ─── Computed values ──────────────────────────────────
-  const recentSubmissions = recentData?.data || []
-  const unreadNotifs = (notifications || []).filter(n => !n.is_read).length
-  const activeForms = formsResult?.data?.filter(f => f.is_active).length || 0
-  const totalForms = formsResult?.data?.length || 0
-
-  // Stat cards config
-  const statCards: StatCardProps[] = [
-    {
-      title: 'إجمالي المستخدمين',
-      value: stats ? formatNumber(stats.total_users) : '—',
-      icon: Users,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      gradient: 'bg-gradient-to-r from-blue-500 to-blue-600',
-      description: stats ? `${stats.active_users} نشط` : undefined,
-    },
-    {
-      title: 'إرساليات اليوم',
-      value: stats ? formatNumber(stats.submissions_today) : '—',
-      change: stats?.submissions_trend,
-      icon: FileStack,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50',
-      gradient: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
-      description: stats ? `${formatNumber(stats.total_submissions)} إجمالي` : undefined,
-    },
-    {
-      title: 'معدل الإرسال',
-      value: stats ? `${stats.approval_rate.toFixed(1)}%` : '—',
-      icon: ShieldCheck,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      gradient: 'bg-gradient-to-r from-purple-500 to-purple-600',
-      description: 'نسبة الإرساليات المُرسلة',
-    },
-    {
-      title: 'النماذج النشطة',
-      value: `${activeForms}/${totalForms}`,
-      icon: FileText,
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-50',
-      gradient: 'bg-gradient-to-r from-amber-500 to-amber-600',
-      description: `${totalForms - activeForms} معطّل`,
-    },
-  ]
-
   return (
     <div className="page-enter">
       <Header
@@ -318,16 +287,152 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ═══ Stat Cards ═══ */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {statCards.map((card, i) => (
-            <div key={i} className="animate-fade-in" style={{ animationDelay: `${i * 0.06}s` }}>
-              <StatCard {...card} loading={statsLoading} />
-            </div>
-          ))}
+        {/* ═══ 1. ALERTS — Needs Attention Now ═══ */}
+        <div>
+          <h2 className="text-sm font-heading font-bold mb-3 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500" />
+            يحتاج انتباهك
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <AlertCard
+              icon={Clock}
+              iconColor="text-amber-600"
+              iconBg="bg-amber-50"
+              title="إرساليات معلقة"
+              value={stats?.draft_submissions || 0}
+              subtitle="مسودات تحتاج إرسال"
+              action={() => navigate('/submissions?status=draft')}
+              actionLabel="عرض المعلقة"
+              urgent={(stats?.draft_submissions || 0) > 10}
+            />
+            <AlertCard
+              icon={PackageX}
+              iconColor="text-red-600"
+              iconBg="bg-red-50"
+              title="نواقص غير محلولة"
+              value={unresolvedShortages}
+              subtitle="نواقص تحتاج متابعة"
+              action={() => navigate('/shortages')}
+              actionLabel="عرض النواقص"
+              urgent={unresolvedShortages > 0}
+            />
+            <AlertCard
+              icon={MapPinOff}
+              iconColor="text-orange-600"
+              iconBg="bg-orange-50"
+              title="محافظات بدون إرساليات"
+              value={zeroGovs.length}
+              subtitle={zeroGovs.length > 0 ? zeroGovs.slice(0, 3).map(g => g.name).join('، ') : 'جميع المحافظات نشطة'}
+              action={zeroGovs.length > 0 ? () => navigate('/governorates') : undefined}
+              actionLabel={zeroGovs.length > 0 ? 'عرض المحافظات' : undefined}
+              urgent={zeroGovs.length > 3}
+            />
+            <AlertCard
+              icon={UserX}
+              iconColor="text-purple-600"
+              iconBg="bg-purple-50"
+              title="مشرفين غير نشطين اليوم"
+              value={inactiveSupervisors.length}
+              subtitle="لم يرسلوا أي بيانات اليوم"
+              action={inactiveSupervisors.length > 0 ? () => navigate('/users') : undefined}
+              actionLabel={inactiveSupervisors.length > 0 ? 'عرض المستخدمين' : undefined}
+              urgent={inactiveSupervisors.length > 5}
+            />
+          </div>
         </div>
 
-        {/* ═══ Charts Row ═══ */}
+        {/* ═══ 2. TODAY'S PULSE ═══ */}
+        <div>
+          <h2 className="text-sm font-heading font-bold mb-3 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-primary" />
+            نبض اليوم
+          </h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Today's submissions */}
+            <Card className="border-0 shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Send className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs font-medium text-muted-foreground">إرساليات اليوم</span>
+                </div>
+                {statsLoading ? (
+                  <Skeleton className="w-16 h-8" />
+                ) : (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-heading font-bold">{stats?.submissions_today || 0}</span>
+                    {todayVsYesterday && todayVsYesterday.diff !== 0 && (
+                      <span className={cn(
+                        'text-xs font-semibold flex items-center gap-0.5',
+                        todayVsYesterday.diff > 0 ? 'text-emerald-600' : 'text-red-600'
+                      )}>
+                        {todayVsYesterday.diff > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                        {Math.abs(todayVsYesterday.percent).toFixed(0)}%
+                      </span>
+                    )}
+                  </div>
+                )}
+                {todayVsYesterday && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {todayVsYesterday.diff > 0 ? 'أعلى' : 'أقل'} من أمس بـ {Math.abs(todayVsYesterday.diff)} إرسالية
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* This week */}
+            <Card className="border-0 shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 className="w-4 h-4 text-emerald-500" />
+                  <span className="text-xs font-medium text-muted-foreground">هذا الأسبوع</span>
+                </div>
+                {statsLoading ? (
+                  <Skeleton className="w-16 h-8" />
+                ) : (
+                  <span className="text-3xl font-heading font-bold">{stats?.submissions_this_week || 0}</span>
+                )}
+                <p className="text-[10px] text-muted-foreground mt-1">إرسالية هذا الأسبوع</p>
+              </CardContent>
+            </Card>
+
+            {/* Total submitted */}
+            <Card className="border-0 shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span className="text-xs font-medium text-muted-foreground">مُرسلة</span>
+                </div>
+                {statsLoading ? (
+                  <Skeleton className="w-16 h-8" />
+                ) : (
+                  <span className="text-3xl font-heading font-bold">{stats?.submitted_submissions || 0}</span>
+                )}
+                <p className="text-[10px] text-muted-foreground mt-1">من أصل {stats?.total_submissions || 0}</p>
+              </CardContent>
+            </Card>
+
+            {/* Active users today */}
+            <Card className="border-0 shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="w-4 h-4 text-violet-500" />
+                  <span className="text-xs font-medium text-muted-foreground">مشرفين نشطين</span>
+                </div>
+                {statsLoading ? (
+                  <Skeleton className="w-16 h-8" />
+                ) : (
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-heading font-bold">{stats?.active_users || 0}</span>
+                    <span className="text-sm text-muted-foreground">/ {stats?.total_users || 0}</span>
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground mt-1">نشطون من إجمالي المستخدمين</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* ═══ 3. CHARTS ═══ */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
           {/* Submissions Trend */}
@@ -336,25 +441,16 @@ export default function DashboardPage() {
               <div>
                 <CardTitle className="text-base font-heading flex items-center gap-2">
                   <Activity className="w-4 h-4 text-primary" />
-                  حركة الإرساليات
+                  حركة الإرساليات — آخر 30 يوم
                 </CardTitle>
-                <CardDescription className="text-xs">
-                  {chartRange === '7d' ? 'آخر 7 أيام' : 'آخر 30 يوم'}
-                </CardDescription>
               </div>
-              <Tabs value={chartRange} onValueChange={setChartRange}>
-                <TabsList className="h-7 bg-muted/50">
-                  <TabsTrigger value="7d" className="text-[10px] px-2.5 data-[state=active]:bg-white">7 أيام</TabsTrigger>
-                  <TabsTrigger value="30d" className="text-[10px] px-2.5 data-[state=active]:bg-white">30 يوم</TabsTrigger>
-                </TabsList>
-              </Tabs>
             </CardHeader>
             <CardContent className="pt-0 px-3">
               {chartLoading ? (
                 <Skeleton className="w-full h-[250px] rounded-xl" />
               ) : (
                 <ResponsiveContainer width="100%" height={250}>
-                  <AreaChart data={filteredChartData}>
+                  <AreaChart data={chartData || []}>
                     <defs>
                       <linearGradient id="colorSubmitted" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -378,160 +474,13 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Role Distribution */}
-          <Card className="border-0 shadow-md overflow-hidden">
-            <CardHeader className="pb-1 px-5 pt-4">
-              <CardTitle className="text-base font-heading flex items-center gap-2">
-                <Shield className="w-4 h-4 text-primary" />
-                توزيع الأدوار
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3">
-              {roleLoading ? (
-                <Skeleton className="w-full h-[260px] rounded-xl" />
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <PieChart>
-                      <Pie
-                        data={roleDistribution || []}
-                        cx="50%" cy="50%"
-                        innerRadius={45} outerRadius={72}
-                        paddingAngle={3} dataKey="value"
-                        strokeWidth={2} stroke="#fff"
-                      >
-                        {(roleDistribution || []).map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<CustomTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="space-y-1.5 mt-1">
-                    {(roleDistribution || []).map((item, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
-                          <span className="text-muted-foreground">{item.name}</span>
-                        </div>
-                        <span className="font-bold tabular-nums">{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ═══ Governorate + Quick Stats + Recent Activity ═══ */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-
-          {/* Governorate Stats */}
-          <Card className="xl:col-span-2 border-0 shadow-md overflow-hidden">
-            <CardHeader className="pb-2 px-5 pt-4">
-              <CardTitle className="text-base font-heading flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-primary" />
-                الإرساليات حسب المحافظة
-              </CardTitle>
-              <CardDescription className="text-xs">أعلى المحافظات نشاطاً</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0 px-3">
-              {govLoading ? (
-                <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="w-full h-9 rounded-lg" />)}</div>
-              ) : (govStats || []).length === 0 ? (
-                <div className="text-center py-8">
-                  <MapPin className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">لا توجد بيانات محافظات بعد</p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={(govStats || []).slice(0, 10)} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" width={75} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="submissions" name="إرساليات" radius={[0, 6, 6, 0]} fill="url(#barGrad)">
-                      <defs>
-                        <linearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="#3b82f6" />
-                          <stop offset="100%" stopColor="#6366f1" />
-                        </linearGradient>
-                      </defs>
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Right column: Quick Stats + Recent + Quick Actions */}
+          {/* Right column: Recent + Inactive Supervisors */}
           <div className="space-y-4">
 
-            {/* Performance Indicators */}
-            <Card className="border-0 shadow-md">
-              <CardHeader className="pb-2 px-5 pt-4">
-                <CardTitle className="text-base font-heading flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-500" />
-                  مؤشرات الأداء
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3.5 px-5 pb-4">
-                {statsLoading ? (
-                  Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="w-full h-10 rounded-lg" />)
-                ) : stats ? (
-                  <>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> معدل الإرسال
-                        </span>
-                        <span className="font-bold tabular-nums">{stats.approval_rate.toFixed(1)}%</span>
-                      </div>
-                      <Progress value={stats.approval_rate} indicatorClassName="bg-gradient-to-r from-emerald-500 to-emerald-600" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground flex items-center gap-1.5">
-                          <Users className="w-3.5 h-3.5 text-blue-500" /> المستخدمون النشطون
-                        </span>
-                        <span className="font-bold tabular-nums">{stats.active_users}/{stats.total_users}</span>
-                      </div>
-                      <Progress value={stats.total_users > 0 ? (stats.active_users / stats.total_users) * 100 : 0} indicatorClassName="bg-gradient-to-r from-blue-500 to-blue-600" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5 text-amber-500" /> النماذج النشطة
-                        </span>
-                        <span className="font-bold tabular-nums">{activeForms}/{totalForms}</span>
-                      </div>
-                      <Progress value={totalForms > 0 ? (activeForms / totalForms) * 100 : 0} indicatorClassName="bg-gradient-to-r from-amber-500 to-amber-600" />
-                    </div>
-
-                    {/* Weekly highlight */}
-                    <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/5 to-indigo-500/5 border border-blue-200/20">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shadow-sm">
-                          <Sparkles className="w-4 h-4 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-xl font-heading font-bold text-blue-700">
-                            {formatNumber(stats.submissions_this_week)}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">إرسالية هذا الأسبوع</p>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : null}
-              </CardContent>
-            </Card>
-
-            {/* Recent Activity */}
+            {/* Recent Submissions */}
             <Card className="border-0 shadow-md">
               <CardHeader className="flex flex-row items-center justify-between pb-2 px-5 pt-4">
-                <CardTitle className="text-base font-heading flex items-center gap-2">
+                <CardTitle className="text-sm font-heading flex items-center gap-2">
                   <Clock className="w-4 h-4 text-primary" />
                   آخر الإرساليات
                 </CardTitle>
@@ -551,53 +500,137 @@ export default function DashboardPage() {
                 ) : (
                   <div className="space-y-0">
                     {recentSubmissions.slice(0, 5).map((sub) => (
-                      <ActivityItem key={sub.id} submission={sub} />
+                      <div key={sub.id} className="flex items-center gap-3 py-2.5 border-b last:border-0">
+                        <div className="p-1.5 rounded-lg bg-muted/50">
+                          {sub.status === 'submitted'
+                            ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            : <Clock className="w-4 h-4 text-amber-500" />
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{sub.profiles?.full_name || 'مستخدم'}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {sub.forms?.title_ar || 'نموذج'} • {formatRelativeTime(sub.created_at)}
+                          </p>
+                        </div>
+                        <Badge className={cn('text-[9px] shrink-0', STATUS_COLORS[sub.status as SubmissionStatus])}>
+                          {STATUS_LABELS[sub.status as SubmissionStatus]}
+                        </Badge>
+                      </div>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Notifications Badge */}
-            {unreadNotifs > 0 && (
-              <Card className="border-0 shadow-md bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200/50 cursor-pointer hover:shadow-lg transition-all"
-                onClick={() => navigate('/notifications')}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-amber-100">
-                    <Bell className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-amber-900">{unreadNotifs} إشعار غير مقروء</p>
-                    <p className="text-[10px] text-amber-600">اضغط لعرض الإشعارات</p>
-                  </div>
-                  <ArrowUpRight className="w-4 h-4 text-amber-500" />
+            {/* Inactive Supervisors */}
+            {inactiveSupervisors.length > 0 && (
+              <Card className="border-0 shadow-md border-l-4 border-l-red-400">
+                <CardHeader className="pb-2 px-5 pt-4">
+                  <CardTitle className="text-sm font-heading flex items-center gap-2">
+                    <UserX className="w-4 h-4 text-red-500" />
+                    مشرفين لم يرسلوا اليوم ({inactiveSupervisors.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-5 pb-4">
+                  {inactiveSupervisors.map(user => (
+                    <InactiveSupervisor key={user.id} user={user} />
+                  ))}
+                  {inactiveSupervisors.length >= 5 && (
+                    <Button variant="ghost" size="sm" className="text-xs h-7 gap-1 mt-2 w-full"
+                      onClick={() => navigate('/users')}>
+                      عرض الكل <ChevronLeft className="w-3 h-3" />
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             )}
           </div>
         </div>
 
-        {/* ═══ Quick Actions ═══ */}
-        <Card className="border-0 shadow-md">
+        {/* ═══ 4. GOVERNORATE COVERAGE ═══ */}
+        <Card className="border-0 shadow-md overflow-hidden">
           <CardHeader className="pb-2 px-5 pt-4">
-            <CardTitle className="text-base font-heading flex items-center gap-2">
-              <Target className="w-4 h-4 text-primary" />
-              إجراءات سريعة
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-4">
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-              <QuickAction icon={Users} label="المستخدمون" color="bg-blue-50 text-blue-600" onClick={() => navigate('/users')} />
-              <QuickAction icon={FileSearch} label="النماذج" color="bg-emerald-50 text-emerald-600" onClick={() => navigate('/forms')} />
-              <QuickAction icon={FileStack} label="الإرساليات" color="bg-purple-50 text-purple-600" onClick={() => navigate('/submissions')} />
-              <QuickAction icon={BarChart3} label="التقارير" color="bg-amber-50 text-amber-600" onClick={() => navigate('/reports')} />
-              <QuickAction icon={MapPin} label="المحافظات" color="bg-rose-50 text-rose-600" onClick={() => navigate('/governorates')} />
-              <QuickAction icon={Globe} label="الخريطة" color="bg-cyan-50 text-cyan-600" onClick={() => navigate('/map')} />
-              <QuickAction icon={MessageSquare} label="الشات" color="bg-indigo-50 text-indigo-600" onClick={() => navigate('/chat')} />
-              <QuickAction icon={Stethoscope} label="مستشار التحصين" color="bg-teal-50 text-teal-600" onClick={() => navigate('/bot')} />
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-heading flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-primary" />
+                  تغطية المحافظات
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  الإرساليات حسب المحافظة — {zeroGovs.length > 0 && (
+                    <span className="text-red-500 font-medium">{zeroGovs.length} محافظات بدون تغطية</span>
+                  )}
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" className="text-xs h-7 gap-1" onClick={() => navigate('/governorates')}>
+                عرض الكل <ChevronLeft className="w-3 h-3" />
+              </Button>
             </div>
+          </CardHeader>
+          <CardContent className="pt-0 px-3">
+            {govLoading ? (
+              <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="w-full h-9 rounded-lg" />)}</div>
+            ) : (govStats || []).length === 0 ? (
+              <div className="text-center py-8">
+                <MapPin className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">لا توجد بيانات محافظات بعد</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {/* Chart */}
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={(govStats || []).slice(0, 10)} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" width={75} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="submissions" name="إرساليات" radius={[0, 6, 6, 0]} fill="url(#barGrad)">
+                      <defs>
+                        <linearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#3b82f6" />
+                          <stop offset="100%" stopColor="#6366f1" />
+                        </linearGradient>
+                      </defs>
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+
+                {/* Zero coverage list */}
+                {zeroGovs.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-red-600 mb-2 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      محافظات بدون تغطية ({zeroGovs.length})
+                    </p>
+                    <div className="space-y-0 max-h-[240px] overflow-y-auto">
+                      {zeroGovs.map(gov => (
+                        <ZeroCoverageGov key={gov.name} gov={gov} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* ═══ 5. NOTIFICATIONS ═══ */}
+        {unreadNotifs > 0 && (
+          <Card className="border-0 shadow-md bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200/50 cursor-pointer hover:shadow-lg transition-all"
+            onClick={() => navigate('/notifications')}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-amber-100">
+                <Bell className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-900">{unreadNotifs} إشعار غير مقروء</p>
+                <p className="text-[10px] text-amber-600">اضغط لعرض الإشعارات</p>
+              </div>
+              <ArrowUpRight className="w-4 h-4 text-amber-500" />
+            </CardContent>
+          </Card>
+        )}
 
       </div>
     </div>

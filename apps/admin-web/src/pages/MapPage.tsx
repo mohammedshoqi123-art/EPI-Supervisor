@@ -375,7 +375,6 @@ export default function MapPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">كل الحالات</SelectItem>
-                      <SelectItem value="draft">مسودة</SelectItem>
                       <SelectItem value="submitted">مرسلة</SelectItem>
                       <SelectItem value="draft">مسودة</SelectItem>
                     </SelectContent>

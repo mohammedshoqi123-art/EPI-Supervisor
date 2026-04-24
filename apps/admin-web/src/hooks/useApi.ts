@@ -567,7 +567,7 @@ export function useSubmissions(filters?: {
 
       let query = supabase
         .from('form_submissions')
-        .select('*, forms(title_ar, campaign_type), profiles(full_name, email)', { count: 'exact' })
+        .select('*, forms(title_ar, campaign_type), profiles(full_name, email), governorates(name_ar), districts(name_ar)', { count: 'exact' })
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range((page - 1) * pageSize, page * pageSize - 1)

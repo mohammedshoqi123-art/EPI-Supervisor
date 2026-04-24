@@ -39,25 +39,32 @@ interface NavItem {
   href: string
   badge?: number
   roles?: UserRole[]
+  separator?: boolean
 }
 
 const navItems: NavItem[] = [
+  // ─── نظرة عامة ───
   { icon: Gauge, label: 'لوحة التحكم', href: '/dashboard' },
-  { icon: BarChart3, label: 'التحليلات', href: '/insights' },
-  { icon: FileSpreadsheet, label: 'التقارير والبيانات', href: '/reports', roles: ['admin', 'central', 'governorate', 'district'] },
-  { icon: Brain, label: 'إعدادات الذكاء الاصطناعي', href: '/ai-settings', roles: ['admin'] },
-  { icon: Users, label: 'المستخدمون', href: '/users' },
-  { icon: FileSearch, label: 'النماذج', href: '/forms' },
+  // ─── إدارة البيانات ───
+  { icon: FileSearch, label: 'النماذج', href: '/forms', separator: true },
   { icon: FileStack, label: 'الإرساليات', href: '/submissions' },
   { icon: PackageX, label: 'النواقص', href: '/shortages', roles: ['admin', 'central', 'governorate', 'district'] },
-  { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin'] },
-  { icon: MapPinned, label: 'المحافظات', href: '/governorates', roles: ['admin'] },
+  // ─── التحليلات والتقارير ───
+  { icon: BarChart3, label: 'التحليلات', href: '/insights', separator: true },
+  { icon: FileSpreadsheet, label: 'التقارير والبيانات', href: '/reports', roles: ['admin', 'central', 'governorate', 'district'] },
   { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
-  { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
-  { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
-  { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
+  // ─── التواصل ───
+  { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat', separator: true },
   { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },
   { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
+  // ─── الإدارة ───
+  { icon: Users, label: 'المستخدمون', href: '/users', separator: true },
+  { icon: MapPinned, label: 'المحافظات', href: '/governorates', roles: ['admin'] },
+  { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
+  { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
+  // ─── النظام ───
+  { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin'], separator: true },
+  { icon: Brain, label: 'إعدادات الذكاء الاصطناعي', href: '/ai-settings', roles: ['admin'] },
   { icon: Cog, label: 'الإعدادات', href: '/settings', roles: ['admin'] },
 ]
 
@@ -213,17 +220,22 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
             const Icon = item.icon
 
             return (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 relative group',
-                  isActive
-                    ? 'bg-white/20 text-white shadow-md shadow-black/10'
-                    : 'text-blue-100 hover:bg-white/10 hover:text-white',
-                  collapsed && 'justify-center px-0'
+              <div key={item.href}>
+                {item.separator && !collapsed && (
+                  <div className="pt-3 pb-1 px-1">
+                    <div className="h-px bg-white/10" />
+                  </div>
                 )}
-              >
+                <Link
+                  to={item.href}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 relative group',
+                    isActive
+                      ? 'bg-white/20 text-white shadow-md shadow-black/10'
+                      : 'text-blue-100 hover:bg-white/10 hover:text-white',
+                    collapsed && 'justify-center px-0'
+                  )}
+                >
                 {isActive && !collapsed && (
                   <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-l-full" />
                 )}
@@ -246,6 +258,7 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
                   </div>
                 )}
               </Link>
+              </div>
             )
           })}
         </nav>

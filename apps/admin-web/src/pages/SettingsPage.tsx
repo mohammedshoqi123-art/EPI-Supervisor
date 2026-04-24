@@ -6,7 +6,7 @@ import {
   FileText, HardDrive, Wifi, ChevronDown, ChevronUp,
   X, Loader2, Image, Monitor, Sun, Moon, Volume2,
   VolumeX, RotateCcw, FileUp, FileDown, Archive, SlidersHorizontal,
-  ListChecks, Users, ClipboardList, PackageX, Info,
+  ListChecks, Users, ClipboardList, PackageX, Info, Filter,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,7 @@ import { Header } from '@/components/layout/header'
 import { useTheme } from '@/components/layout/theme-provider'
 import { supabase, isConfigured } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { useCampaign } from '@/lib/campaign-context'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -874,6 +875,9 @@ export default function SettingsPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* ─── Campaign Visibility ──────────────────────────────────────── */}
+                <CampaignVisibilityCard />
               </div>
             )}
 
@@ -1910,5 +1914,59 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// ═══ Campaign Visibility Card ═══
+function CampaignVisibilityCard() {
+  const { allOptions, isCampaignVisible, toggleCampaignVisibility } = useCampaign()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-heading flex items-center gap-2">
+          <Filter className="w-5 h-5" />
+          إظهار / إخفاء الأنشطة
+        </CardTitle>
+        <CardDescription>تحكم بظهور حملة شلل الأطفال والنشاط الإيصالي التكاملي في القوائم والفلاتر</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {allOptions.filter(o => o.id !== 'all').map((option) => {
+          const visible = isCampaignVisible(option.id)
+          return (
+            <div
+              key={option.id}
+              className={cn(
+                'flex items-center justify-between p-4 rounded-xl border transition-all duration-200',
+                visible
+                  ? 'bg-card border-border shadow-sm'
+                  : 'bg-muted/30 border-dashed opacity-60'
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{option.icon}</span>
+                <div>
+                  <p className="font-medium text-sm">{option.labelAr}</p>
+                  <p className="text-xs text-muted-foreground">{option.labelEn}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant={visible ? 'default' : 'secondary'} className="text-xs">
+                  {visible ? 'ظاهر' : 'مخفي'}
+                </Badge>
+                <Switch
+                  checked={visible}
+                  onCheckedChange={() => toggleCampaignVisibility(option.id)}
+                />
+              </div>
+            </div>
+          )
+        })}
+        <p className="text-xs text-muted-foreground mt-2">
+          💡 النشاط المخفي لن يظهر في فلتر الشريط الجانبي ولا في أي مكان بالتطبيق.
+          البيانات ستبقى موجودة في قاعدة البيانات.
+        </p>
+      </CardContent>
+    </Card>
   )
 }

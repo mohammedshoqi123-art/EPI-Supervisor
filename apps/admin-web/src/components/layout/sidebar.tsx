@@ -89,7 +89,7 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
   const { theme, setTheme } = useTheme()
   const signOut = useSignOut()
   const { data: stats } = useDashboardStats()
-  const { campaign, setCampaign } = useCampaign()
+  const { campaign, setCampaign, visibleOptions } = useCampaign()
 
   const filteredItems = navItems.filter(item => {
     if (!item.roles) return true
@@ -168,7 +168,7 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
             <span className="text-[11px] font-medium text-blue-200 uppercase tracking-wider">فلتر النشاط</span>
           </div>
           <div className="space-y-1">
-            {CAMPAIGN_OPTIONS.map((option) => {
+            {visibleOptions.map((option) => {
               const isActive = campaign === option.id
               return (
                 <button
@@ -195,9 +195,9 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
 
       {/* Collapsed campaign indicator */}
       {collapsed && (
-        <div className="px-3 py-2 flex justify-center" title={CAMPAIGN_OPTIONS.find(o => o.id === campaign)?.labelAr}>
+        <div className="px-3 py-2 flex justify-center" title={visibleOptions.find(o => o.id === campaign)?.labelAr}>
           <span className="text-lg">
-            {CAMPAIGN_OPTIONS.find(o => o.id === campaign)?.icon}
+            {visibleOptions.find(o => o.id === campaign)?.icon}
           </span>
         </div>
       )}
@@ -325,7 +325,7 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
 export function MobileSidebar({ user }: { user?: { full_name: string; email: string; role: UserRole } | null }) {
   const [open, setOpen] = useState(false)
   const location = useLocation()
-  const { campaign, setCampaign } = useCampaign()
+  const { campaign, setCampaign, visibleOptions } = useCampaign()
   const signOut = useSignOut()
 
   // Close on route change
@@ -382,7 +382,7 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
             <span className="text-[11px] font-medium text-blue-200 uppercase tracking-wider">فلتر النشاط</span>
           </div>
           <div className="space-y-1">
-            {CAMPAIGN_OPTIONS.map((option) => {
+            {visibleOptions.map((option) => {
               const isActive = campaign === option.id
               return (
                 <button

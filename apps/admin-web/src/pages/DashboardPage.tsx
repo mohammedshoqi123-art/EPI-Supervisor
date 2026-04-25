@@ -21,6 +21,7 @@ import {
 } from '@/hooks/useApi'
 import { formatNumber, formatRelativeTime, cn } from '@/lib/utils'
 import { useCampaign } from '@/lib/campaign-context'
+import { AIBriefingCard } from '@/components/ai/AIBriefingCard'
 import { isConfigured, supabase } from '@/lib/supabase'
 import { STATUS_LABELS, STATUS_COLORS, type SubmissionStatus } from '@/types/database'
 import {

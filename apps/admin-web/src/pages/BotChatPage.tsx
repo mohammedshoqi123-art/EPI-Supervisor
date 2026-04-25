@@ -1,5 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, User, RefreshCw, Sparkles, Zap } from 'lucide-react'
+import {
+  Send, Bot, User, RefreshCw, Sparkles, Zap, Mic, MicOff,
+  Download, ThumbsUp, ThumbsDown, Copy, Check, Trash2,
+  Volume2, Search, ChevronDown
+} from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,6 +14,7 @@ import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
 import { epiBotEngine, type BotResponse, type ConversationContext } from '@/lib/epi-bot-engine'
 import { queryAI, type AIMessage } from '@/lib/ai-providers'
+import { useVoiceInput } from '@/hooks/useVoiceInput'
 
 interface BotMessage {
   id: string
@@ -19,6 +24,7 @@ interface BotMessage {
   suggestions?: string[]
   source?: 'local' | 'ai' | 'hybrid'
   intent?: string
+  feedback?: 'up' | 'down' | null
 }
 
 const WELCOME_SUGGESTIONS = [
@@ -37,8 +43,21 @@ export default function BotChatPage() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [useAI, setUseAI] = useState(true)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Voice input
+  const voice = useVoiceInput('ar-SA')
+
+  // Apply voice transcript to input
+  useEffect(() => {
+    if (voice.transcript) {
+      setInput(voice.transcript)
+    }
+  }, [voice.transcript])
 
   // Scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -61,7 +80,7 @@ export default function BotChatPage() {
       setMessages([{
         id: 'welcome',
         role: 'bot',
-        text: '🌟 مرحباً! أنا مستشار التحصين الصحي الموسع باليمن 🇾🇪\n\n'
+        text: '🌟 مرحباً! أنا مستشار التحصين الصحي الموسع 🇾🇪\n\n'
           + '🧠 فاهم كل شيء عن التطعيمات — اسألني براحتك!\n\n'
           + '💉 تطعيمات طفلك (حسب عمره وحالته)\n'
           + '⚠️ الآثار الجانبية (حرارة، تورم، تشنجات...)\n'
@@ -82,6 +101,8 @@ export default function BotChatPage() {
     if (!msgText || isLoading) return
 
     setInput('')
+    voice.stopListening()
+
     const userMsg: BotMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -92,7 +113,6 @@ export default function BotChatPage() {
     setIsLoading(true)
 
     try {
-      // Try local engine first
       const context: ConversationContext = {
         userId: 'web-user',
         sessionId: 'web-session',
@@ -108,7 +128,6 @@ export default function BotChatPage() {
 
       const localResponse = epiBotEngine.processMessage(msgText, context)
 
-      // If AI is enabled, enhance the response
       if (useAI) {
         try {
           const aiHistory: AIMessage[] = messages.slice(-8).map(m => ({
@@ -116,7 +135,7 @@ export default function BotChatPage() {
             content: m.text,
           }))
 
-          const systemPrompt = `أنت "مستشار التحصين الصحي الموسع" — مساعد ذكي متخصص في برنامج التحصين باليمن 🇾🇪
+          const systemPrompt = `أنت "مستشار التحصين الصحي الموسع" — مساعد ذكي متخصص في برنامج التحصين 🇾🇪
 تعليمات:
 - أجب باللغة العربية دائماً
 - كن دقيقاً طبياً واستند للإرشادات الرسمية
@@ -141,17 +160,15 @@ ${localResponse.text.substring(0, 500)}`
             }
             setMessages(prev => [...prev, botMsg])
           } else {
-            // Fallback to local
             addLocalResponse(localResponse)
           }
         } catch {
-          // AI failed, use local
           addLocalResponse(localResponse)
         }
       } else {
         addLocalResponse(localResponse)
       }
-    } catch (err) {
+    } catch {
       const errorMsg: BotMessage = {
         id: `bot-err-${Date.now()}`,
         role: 'bot',
@@ -193,16 +210,43 @@ ${localResponse.text.substring(0, 500)}`
     return suggestions.slice(0, 4)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
+  // ─── Message Actions ───────────────────────────────────
+
+  const handleCopy = async (msgId: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedId(msgId)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch { /* ignore */ }
+  }
+
+  const handleFeedback = (msgId: string, feedback: 'up' | 'down') => {
+    setMessages(prev => prev.map(m =>
+      m.id === msgId ? { ...m, feedback: m.feedback === feedback ? null : feedback } : m
+    ))
+  }
+
+  const handleExport = () => {
+    const text = messages
+      .filter(m => m.role === 'user' || m.role === 'bot')
+      .map(m => {
+        const role = m.role === 'user' ? '👤 أنت' : '💉 مستشار التحصين'
+        const time = m.timestamp.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
+        return `[${time}] ${role}:\n${m.text}\n`
+      })
+      .join('\n---\n\n')
+
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `epi-chat-${new Date().toISOString().split('T')[0]}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleClear = () => {
     setMessages([])
-    // Re-trigger welcome
     setTimeout(() => {
       setMessages([{
         id: 'welcome-new',
@@ -215,18 +259,31 @@ ${localResponse.text.substring(0, 500)}`
     }, 100)
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  // ─── Filtered messages for search ──────────────────────
+
+  const filteredMessages = searchQuery
+    ? messages.filter(m => m.text.includes(searchQuery))
+    : messages
+
   return (
     <div className="page-enter flex flex-col h-[calc(100vh-4rem)]">
       <Header
         title="مستشار التحصين الذكي"
-        subtitle="💉 مستشار التحصين الصحي الموسع باليمن — 180+ موضوع معرفي"
+        subtitle="💉 180+ موضوع معرفي • يعمل بدون إنترنت"
         onRefresh={handleClear}
       />
 
       <div className="flex-1 p-4 lg:p-6 flex flex-col min-h-0">
-        {/* AI Toggle */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setUseAI(true)}
               className={cn(
@@ -252,21 +309,44 @@ ${localResponse.text.substring(0, 500)}`
               <span>وضع محلي</span>
             </button>
           </div>
-          <Badge variant="outline" className="text-xs">
-            {useAI ? '🤖 متصل بالذكاء الاصطناعي' : '📴 يعمل بدون إنترنت'}
-          </Badge>
+
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setShowSearch(!showSearch)}>
+              <Search className="w-3.5 h-3.5" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleExport}>
+              <Download className="w-3.5 h-3.5" />
+              تصدير
+            </Button>
+            <Badge variant="outline" className="text-xs hidden sm:flex">
+              {useAI ? '🤖 AI' : '📴 محلي'}
+            </Badge>
+          </div>
         </div>
+
+        {/* Search Bar */}
+        {showSearch && (
+          <div className="mb-3 animate-fade-in">
+            <Input
+              placeholder="ابحث في المحادثة..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="text-right h-8 text-sm"
+              dir="rtl"
+            />
+          </div>
+        )}
 
         {/* Chat Area */}
         <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="flex-1 min-h-0" ref={scrollRef}>
             <ScrollArea className="h-full">
               <div className="p-4 lg:p-6 space-y-4">
-                {messages.map((msg) => (
+                {filteredMessages.map((msg) => (
                   <div
                     key={msg.id}
                     className={cn(
-                      'flex gap-3',
+                      'flex gap-3 group',
                       msg.role === 'user' ? 'flex-row-reverse' : ''
                     )}
                   >
@@ -307,12 +387,45 @@ ${localResponse.text.substring(0, 500)}`
                       </div>
 
                       <div className={cn(
-                        'rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words',
+                        'rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words relative',
                         msg.role === 'user'
                           ? 'bg-primary text-primary-foreground rounded-tr-md'
                           : 'bg-muted/60 rounded-tl-md'
                       )}>
                         {msg.text}
+
+                        {/* Message Actions (bot messages only) */}
+                        {msg.role === 'bot' && (
+                          <div className="absolute -bottom-3 left-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                            <button
+                              onClick={() => handleCopy(msg.id, msg.text)}
+                              className="p-1 rounded-md bg-background border text-muted-foreground hover:text-foreground transition-colors"
+                              title="نسخ"
+                            >
+                              {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                            </button>
+                            <button
+                              onClick={() => handleFeedback(msg.id, 'up')}
+                              className={cn(
+                                'p-1 rounded-md bg-background border transition-colors',
+                                msg.feedback === 'up' ? 'text-emerald-500 border-emerald-200' : 'text-muted-foreground hover:text-foreground'
+                              )}
+                              title="مفيد"
+                            >
+                              <ThumbsUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleFeedback(msg.id, 'down')}
+                              className={cn(
+                                'p-1 rounded-md bg-background border transition-colors',
+                                msg.feedback === 'down' ? 'text-red-500 border-red-200' : 'text-muted-foreground hover:text-foreground'
+                              )}
+                              title="غير مفيد"
+                            >
+                              <ThumbsDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* Quick Reply Suggestions */}
@@ -353,12 +466,28 @@ ${localResponse.text.substring(0, 500)}`
             </ScrollArea>
           </div>
 
-          {/* Input */}
+          {/* Input Area */}
           <div className="border-t p-4 bg-background">
             <div className="flex gap-2">
+              {/* Voice Button */}
+              {voice.isSupported && (
+                <Button
+                  variant={voice.isListening ? 'destructive' : 'outline'}
+                  size="icon"
+                  className={cn(
+                    'shrink-0 transition-all',
+                    voice.isListening && 'animate-pulse'
+                  )}
+                  onClick={voice.toggleListening}
+                  title={voice.isListening ? 'إيقاف التسجيل' : 'تسجيل صوتي'}
+                >
+                  {voice.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </Button>
+              )}
+
               <Input
                 ref={inputRef}
-                placeholder="اسأل عن التطعيمات..."
+                placeholder={voice.isListening ? '🎤 جاري الاستماع...' : 'اسأل عن التطعيمات...'}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -379,8 +508,14 @@ ${localResponse.text.substring(0, 500)}`
                 )}
               </Button>
             </div>
+
+            {/* Voice Error */}
+            {voice.error && (
+              <p className="text-[10px] text-red-500 mt-1 text-center">{voice.error}</p>
+            )}
+
             <p className="text-[10px] text-muted-foreground mt-2 text-center">
-              اضغط Enter للإرسال • 180+ موضوع معرفي • يعمل بدون إنترنت
+              Enter للإرسال • {voice.isSupported ? '🎤 صوتي • ' : ''}180+ موضوع معرفي • يعمل بدون إنترنت
             </p>
           </div>
         </Card>

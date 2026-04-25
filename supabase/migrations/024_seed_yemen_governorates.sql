@@ -1,29 +1,27 @@
 -- ═══════════════════════════════════════════════════════════
 -- 024: Seed Yemen Governorates (15 active only)
 -- Idempotent — uses ON CONFLICT to avoid duplicates
--- Only includes the 15 governorates where EPI is active.
 -- ═══════════════════════════════════════════════════════════
 
 BEGIN;
 
--- Upsert only 15 active governorates
 INSERT INTO governorates (name_ar, name_en, code, center_lat, center_lng, population, is_active)
 VALUES
-  ('صنعاء', 'Sana''a', 'SA', 15.3694, 44.1910, 3828000, true),
-  ('عدن', 'Aden', 'AD', 12.8000, 45.0300, 1080000, true),
-  ('تعز', 'Taiz', 'TA', 13.5789, 44.0219, 3275000, true),
-  ('الحديدة', 'Al Hudaydah', 'HU', 14.7979, 42.9545, 3752000, true),
-  ('إب', 'Ibb', 'IB', 13.9667, 44.1833, 2780000, true),
-  ('ذمار', 'Dhamar', 'DH', 14.5553, 44.4056, 1870000, true),
-  ('حجة', 'Hajjah', 'HA', 15.6917, 43.6022, 2080000, true),
-  ('البيضاء', 'Al Bayda', 'BA', 14.1667, 45.4500, 820000, true),
-  ('مأرب', 'Marib', 'MA', 15.4625, 45.3250, 540000, true),
-  ('الجوف', 'Al Jawf', 'JA', 16.2000, 44.7833, 660000, true),
-  ('صعدة', 'Sa''da', 'SD', 16.9400, 43.7600, 1020000, true),
-  ('المحويت', 'Al Mahwit', 'MW', 15.4667, 43.5500, 690000, true),
-  ('ريمة', 'Raymah', 'RA', 14.6333, 43.6167, 520000, true),
-  ('عمران', 'Amran', 'AM', 15.6594, 43.9439, 1120000, true),
-  ('الضالع', 'Al Dali''', 'DA', 13.7000, 44.7333, 650000, true)
+  ('أبين', 'Abyan', 'ABYAN', 13.6333, 46.0167, 640000, true),
+  ('البيضاء', 'Al Bayda', 'ALBAYD', 14.1667, 45.4500, 820000, true),
+  ('الجوف', 'Al Jawf', 'JOF', 16.2000, 44.7833, 660000, true),
+  ('الحديدة', 'Al Hudaydah', 'ALHUDA', 14.7979, 42.9545, 3752000, true),
+  ('الضالع', 'Al Dhalee', 'ALDHAL', 13.7000, 44.7333, 650000, true),
+  ('المكلا', 'Al Mukalla', 'ALMUKA', 14.5400, 49.1300, 500000, true),
+  ('المهرة', 'Al Maharah', 'ALMAHA', 16.8000, 51.0000, 260000, true),
+  ('تعز', 'Taiz', 'TAIZZ', 13.5789, 44.0219, 3275000, true),
+  ('حجة', 'Hajjah', 'HAJ', 15.6917, 43.6022, 2080000, true),
+  ('سقطرى', 'Socotra', 'SOCOTR', 12.4634, 53.8238, 80000, true),
+  ('سيئون', 'Sayun', 'SAYUN', 15.9500, 48.8000, 400000, true),
+  ('شبوة', 'Shabwah', 'SHABWA', 14.8300, 46.8300, 680000, true),
+  ('عدن', 'Aden', 'ADEN', 12.8000, 45.0300, 1080000, true),
+  ('لحج', 'Lahij', 'LAHJ', 13.0567, 44.8819, 1050000, true),
+  ('مأرب', 'Marib', 'MARIB', 15.4625, 45.3250, 540000, true)
 ON CONFLICT (code) DO UPDATE SET
   name_ar = EXCLUDED.name_ar,
   name_en = EXCLUDED.name_en,
@@ -33,10 +31,10 @@ ON CONFLICT (code) DO UPDATE SET
   is_active = EXCLUDED.is_active,
   updated_at = now();
 
--- Soft-delete the 7 removed governorates (in case they exist from old seeds)
+-- Soft-delete any other governorates that shouldn't exist
 UPDATE governorates
 SET deleted_at = now(), is_active = false, updated_at = now()
-WHERE name_ar IN ('لحج', 'أبين', 'شبوة', 'المهرة', 'حضرموت', 'سقطرى', 'أرخبيل سقطرى')
+WHERE code NOT IN ('ABYAN','ALBAYD','JOF','ALHUDA','ALDHAL','ALMUKA','ALMAHA','TAIZZ','HAJ','SOCOTR','SAYUN','SHABWA','ADEN','LAHJ','MARIB')
 AND deleted_at IS NULL;
 
 COMMIT;

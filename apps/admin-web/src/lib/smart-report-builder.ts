@@ -173,8 +173,8 @@ async function generateDailyReport(format: 'pdf' | 'excel') {
   // KPIs
   sections.push({
     title: 'مؤشرات اليوم',
-    type: 'kpi' as const,
-    items: [
+    type: 'kpi-grid' as const,
+    kpis: [
       { label: 'إرساليات اليوم', value: data.submissions.length, icon: '📊', color: '#3b82f6' },
       { label: 'مستخدمين نشطين', value: data.users.filter(u => u.is_active).length, icon: '👥', color: '#10b981' },
       { label: 'نماذج نشطة', value: data.forms.length, icon: '📝', color: '#8b5cf6' },
@@ -299,8 +299,8 @@ async function generateWeeklyReport(format: 'pdf' | 'excel') {
       sections: [
         {
           title: 'مقارنة أسبوعية',
-          type: 'kpi' as const,
-          items: [
+          type: 'kpi-grid' as const,
+          kpis: [
             { label: 'إرساليات هذا الأسبوع', value: thisWeekCount, icon: '📊', color: '#3b82f6' },
             { label: 'إرساليات الأسبوع الماضي', value: lastWeekCount, icon: '📊', color: '#6b7280' },
             { label: 'مرسلة', value: submitted, icon: '✅', color: '#10b981' },
@@ -394,8 +394,8 @@ async function generateShortageReport(format: 'pdf' | 'excel') {
       sections: [
         {
           title: 'ملخص النواقص',
-          type: 'kpi' as const,
-          items: [
+          type: 'kpi-grid' as const,
+          kpis: [
             { label: 'إجمالي النواقص', value: shortages.length, icon: '📦', color: '#3b82f6' },
             { label: 'حرجة', value: critical.length, icon: '🔴', color: '#ef4444' },
             { label: 'عالية', value: high.length, icon: '🟠', color: '#f97316' },
@@ -456,8 +456,8 @@ async function generateUserActivityReport(format: 'pdf' | 'excel') {
       sections: [
         {
           title: 'ملخص المستخدمين',
-          type: 'kpi' as const,
-          items: [
+          type: 'kpi-grid' as const,
+          kpis: [
             { label: 'إجمالي', value: users.length, icon: '👥', color: '#3b82f6' },
             { label: 'نشطين', value: active.length, icon: '✅', color: '#10b981' },
             { label: 'غير نشطين', value: inactive.length, icon: '😴', color: '#ef4444' },

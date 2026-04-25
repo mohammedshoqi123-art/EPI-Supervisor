@@ -15,6 +15,7 @@ import { Header } from '@/components/layout/header'
 import { useDashboardStats, useGovernorateStats, useSubmissionsChart, useShortages } from '@/hooks/useApi'
 import { cn, formatNumber } from '@/lib/utils'
 import { generateAIInsights } from '@/lib/ai-providers'
+import { PredictiveEngine, AnomalyDetector, SmartReportGenerator } from '@/lib/epi-bot-engine'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -120,38 +121,36 @@ function calculateHealthScore(stats: any): number {
   return Math.max(0, Math.min(100, Math.round(score)))
 }
 
-// ─── Smart Predictions (Weighted Moving Average) ─────────────
+// ─── Smart Predictions (Enhanced with PredictiveEngine) ──────
 
 function generatePredictions(chartData: any[]) {
   if (!chartData || chartData.length < 7) return []
 
-  const last7 = chartData.slice(-7)
-  const values = last7.map(d => d.submitted + d.draft)
+  const values = chartData.map(d => d.submitted + d.draft)
+  const dailyData = chartData.map(d => ({ date: d.date, count: d.submitted + d.draft }))
 
-  // Weighted Moving Average (recent days have more weight)
-  const weights = [1, 1, 2, 2, 3, 3, 4]
-  const totalWeight = weights.reduce((a, b) => a + b, 0)
-  const wma = values.reduce((sum, val, i) => sum + val * weights[i], 0) / totalWeight
+  // Use enhanced Linear Regression + Moving Average blend
+  const lr = PredictiveEngine.linearForecast(values, 3)
+  const ma = PredictiveEngine.movingAverage(values, 7, 3)
+  const seasonal = PredictiveEngine.detectSeasonality(values)
 
-  // Trend calculation
-  const firstHalf = values.slice(0, 3).reduce((a, b) => a + b, 0) / 3
-  const secondHalf = values.slice(4).reduce((a, b) => a + b, 0) / 3
-  const trend = secondHalf - firstHalf
+  // Blend forecasts
+  const predictions = lr.predictions.map((v, i) => {
+    const lrWeight = lr.r2 > 0.5 ? 0.6 : 0.3
+    return Math.round(v * lrWeight + (ma[i] || v) * (1 - lrWeight))
+  })
 
-  // Standard deviation for confidence
-  const mean = values.reduce((a, b) => a + b, 0) / values.length
-  const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length
-  const stdDev = Math.sqrt(variance)
+  // Confidence based on R²
+  const baseConfidence = Math.round(Math.max(30, Math.min(95, lr.r2 * 100)))
 
-  // Confidence based on data consistency
-  const cv = mean > 0 ? stdDev / mean : 1 // Coefficient of variation
-  const baseConfidence = Math.max(40, Math.min(95, Math.round((1 - cv) * 100)))
+  const labels = ['غداً', 'بعد يومين', 'بعد 3 أيام']
 
-  return [
-    { day: 'غداً', predicted: Math.round(wma + trend * 0.5), confidence: baseConfidence },
-    { day: 'بعد يومين', predicted: Math.round(wma + trend * 1), confidence: Math.max(30, baseConfidence - 13) },
-    { day: 'بعد 3 أيام', predicted: Math.round(wma + trend * 1.5), confidence: Math.max(20, baseConfidence - 25) },
-  ]
+  return predictions.map((pred, i) => ({
+    day: labels[i],
+    predicted: Math.max(0, pred),
+    confidence: Math.max(20, baseConfidence - i * 12),
+    trend: lr.trend,
+  }))
 }
 
 // ─── Colors ──────────────────────────────────────────────────

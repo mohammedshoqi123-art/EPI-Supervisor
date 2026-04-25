@@ -383,6 +383,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* ═══ 0. AI BRIEFING — Smart Daily Summary ═══ */}
+        <AIBriefingCard stats={stats || null} govStats={govStats || undefined} chartData={chartData || undefined} />
+
         {/* ═══ 1. ALERTS — What needs action NOW ═══ */}
         <section>
           <div className="flex items-center gap-2 mb-3">

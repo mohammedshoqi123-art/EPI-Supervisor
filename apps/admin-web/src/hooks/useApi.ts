@@ -849,43 +849,58 @@ export function useNotifications() {
   })
 }
 
-// Real-time notification subscription
+// Real-time notification subscription (global singleton — only call from AppLayout)
+let _notifChannel: ReturnType<typeof supabase.channel> | null = null
+let _notifSubscribed = false
+
 export function useNotificationRealtime() {
   const queryClient = useQueryClient()
 
   useEffect(() => {
     if (!isConfigured) return
+    // Prevent double-subscription
+    if (_notifSubscribed) return
 
-    const channel = supabase
-      .channel('notifications-realtime')
+    // Clean up any stale channel
+    if (_notifChannel) {
+      try { supabase.removeChannel(_notifChannel) } catch { /* ignore */ }
+    }
+
+    const channel = supabase.channel('notifications-realtime')
+
+    channel
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-        },
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
         () => {
-          // Invalidate and refetch notifications when a new one arrives
           queryClient.invalidateQueries({ queryKey: ['notifications'] })
           queryClient.invalidateQueries({ queryKey: ['notification-stats'] })
         }
       )
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-        },
+        { event: 'UPDATE', schema: 'public', table: 'notifications' },
         () => {
           queryClient.invalidateQueries({ queryKey: ['notifications'] })
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          _notifSubscribed = true
+          _notifChannel = channel
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[Realtime] Notifications channel error:', status)
+          _notifSubscribed = false
+        }
+      })
 
     return () => {
-      supabase.removeChannel(channel)
+      // Only cleanup on unmount, not on re-render
+      if (_notifChannel === channel) {
+        try { supabase.removeChannel(channel) } catch { /* ignore */ }
+        _notifChannel = null
+        _notifSubscribed = false
+      }
     }
   }, [queryClient])
 }

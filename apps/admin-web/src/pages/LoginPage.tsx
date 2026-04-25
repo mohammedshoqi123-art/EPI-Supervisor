@@ -45,7 +45,30 @@ export default function LoginPage() {
             LOGO & BRANDING — EPI Supervisor
         ═══════════════════════════════════════ */}
         <div className="text-center mb-8">
-          {/* Logo */}
+          {/* Official Partner Logos */}
+          <div className="flex items-center justify-center gap-4 mb-6 p-3 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/10">
+            <img
+              src={`${import.meta.env.BASE_URL}logo-who.jpeg`.replace(/\/+/g, '/')}
+              alt="WHO"
+              className="h-8 object-contain brightness-0 invert opacity-80"
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
+            />
+            <img
+              src={`${import.meta.env.BASE_URL}logo-unicef.jpeg`.replace(/\/+/g, '/')}
+              alt="UNICEF"
+              className="h-8 object-contain brightness-0 invert opacity-80"
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
+            />
+            <div className="w-px h-8 bg-white/20" />
+            <img
+              src={`${import.meta.env.BASE_URL}logo-moh-header.png`.replace(/\/+/g, '/')}
+              alt="وزارة الصحة"
+              className="h-10 object-contain brightness-0 invert opacity-90"
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
+            />
+          </div>
+
+          {/* EPI Logo */}
           <div className="relative inline-block mb-5">
             <div className="w-28 h-28 rounded-3xl bg-white shadow-2xl shadow-blue-500/20 flex items-center justify-center overflow-hidden border border-blue-100/30 mx-auto relative">
               <img

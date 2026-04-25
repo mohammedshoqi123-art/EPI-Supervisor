@@ -59,6 +59,1030 @@ export interface BotAction {
   color?: string
 }
 
+// Alias for widget compatibility
+export type CopilotAction = BotAction
+
+// ─── Anomaly Detection Types ─────────────────────────────────
+
+export interface Anomaly {
+  id: string
+  type: 'drop' | 'spike' | 'zero' | 'stale' | 'pattern' | 'gap'
+  severity: 'critical' | 'warning' | 'info'
+  title: string
+  description: string
+  metric: string
+  currentValue: number
+  expectedValue: number
+  deviation: number
+  suggestion: string
+  timestamp: number
+}
+
+export interface TrendPoint {
+  date: string
+  value: number
+}
+
+export interface SmartReport {
+  id: string
+  title: string
+  summary: string
+  score: number // 0-100
+  anomalies: Anomaly[]
+  insights: string[]
+  recommendations: string[]
+  trend: 'improving' | 'declining' | 'stable'
+  generatedAt: number
+}
+
+// ─── Anomaly Detection Engine ────────────────────────────────
+
+export class AnomalyDetector {
+  /**
+   * Detect anomalies in time series data
+   */
+  static detectTimeSeriesAnomalies(
+    data: TrendPoint[],
+    metricName: string,
+    options?: { threshold?: number; minDataPoints?: number }
+  ): Anomaly[] {
+    const anomalies: Anomaly[] = []
+    const threshold = options?.threshold ?? 2 // standard deviations
+    const minPoints = options?.minDataPoints ?? 5
+
+    if (data.length < minPoints) return anomalies
+
+    const values = data.map(d => d.value)
+    const mean = values.reduce((a, b) => a + b, 0) / values.length
+    const stdDev = Math.sqrt(values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length)
+
+    // Check last 3 points for anomalies
+    const recent = data.slice(-3)
+    for (const point of recent) {
+      const deviation = stdDev > 0 ? Math.abs(point.value - mean) / stdDev : 0
+
+      if (deviation > threshold && point.value < mean) {
+        anomalies.push({
+          id: `drop-${metricName}-${point.date}`,
+          type: 'drop',
+          severity: deviation > 3 ? 'critical' : 'warning',
+          title: `انخفاض مفاجئ في ${metricName}`,
+          description: `القيمة ${point.value} أقل من المتوسط (${mean.toFixed(0)}) بـ ${deviation.toFixed(1)} انحراف معياري`,
+          metric: metricName,
+          currentValue: point.value,
+          expectedValue: mean,
+          deviation,
+          suggestion: 'تحقق من أسباب الانخفاض — هل هناك عطل تقني أم مشكلة ميدانية؟',
+          timestamp: Date.now(),
+        })
+      }
+
+      if (deviation > threshold && point.value > mean * 1.5) {
+        anomalies.push({
+          id: `spike-${metricName}-${point.date}`,
+          type: 'spike',
+          severity: 'info',
+          title: `ارتفاع مفاجئ في ${metricName}`,
+          description: `القيمة ${point.value} أعلى من المتوسط (${mean.toFixed(0)}) بشكل ملحوظ`,
+          metric: metricName,
+          currentValue: point.value,
+          expectedValue: mean,
+          deviation,
+          suggestion: 'تحقق من سبب الارتفاع — هل هناك حملة أو حدث خاص؟',
+          timestamp: Date.now(),
+        })
+      }
+    }
+
+    // Check for zero values in recent data
+    const lastPoint = data[data.length - 1]
+    if (lastPoint && lastPoint.value === 0 && mean > 0) {
+      anomalies.push({
+        id: `zero-${metricName}-${lastPoint.date}`,
+        type: 'zero',
+        severity: 'critical',
+        title: `صفر ${metricName}!`,
+        description: `لا توجد إرساليات اليوم رغم أن المتوسط ${mean.toFixed(0)}`,
+        metric: metricName,
+        currentValue: 0,
+        expectedValue: mean,
+        deviation: Infinity,
+        suggestion: 'تحقق فوراً — هل النظام يعمل؟ هل المستخدمين نشطين؟',
+        timestamp: Date.now(),
+      })
+    }
+
+    // Check for stale data (same value for 3+ days)
+    if (data.length >= 3) {
+      const last3 = data.slice(-3).map(d => d.value)
+      if (last3.every(v => v === last3[0]) && last3[0] > 0) {
+        anomalies.push({
+          id: `stale-${metricName}`,
+          type: 'stale',
+          severity: 'warning',
+          title: `بيانات متكررة — ${metricName}`,
+          description: `نفس القيمة (${last3[0]}) منذ 3 أيام. قد تكون بيانات معلقة.`,
+          metric: metricName,
+          currentValue: last3[0],
+          expectedValue: mean,
+          deviation: 0,
+          suggestion: 'تحقق من عملية المزامنة — هل البيانات تتحدث فعلياً؟',
+          timestamp: Date.now(),
+        })
+      }
+    }
+
+    return anomalies
+  }
+
+  /**
+   * Detect coverage gaps — governorates with zero submissions
+   */
+  static detectCoverageGaps(
+    govStats: { name: string; submissions: number }[]
+  ): Anomaly[] {
+    const anomalies: Anomaly[] = []
+    const zeroGovs = govStats.filter(g => g.submissions === 0)
+
+    if (zeroGovs.length > 0) {
+      anomalies.push({
+        id: `coverage-gap-${zeroGovs.length}`,
+        type: 'gap',
+        severity: zeroGovs.length > 3 ? 'critical' : 'warning',
+        title: `${zeroGovs.length} محافظة بدون تغطية`,
+        description: zeroGovs.map(g => g.name).join('، '),
+        metric: 'coverage',
+        currentValue: govStats.length - zeroGovs.length,
+        expectedValue: govStats.length,
+        deviation: zeroGovs.length,
+        suggestion: 'أرسل فرق متنقلة أو تواصل مع مشرفي هذه المحافظات',
+        timestamp: Date.now(),
+      })
+    }
+
+    return anomalies
+  }
+
+  /**
+   * Detect user activity anomalies
+   */
+  static detectUserAnomalies(
+    totalUsers: number,
+    activeUsers: number,
+    submissionsToday: number
+  ): Anomaly[] {
+    const anomalies: Anomaly[] = []
+
+    if (totalUsers > 0) {
+      const inactiveRatio = (totalUsers - activeUsers) / totalUsers
+      if (inactiveRatio > 0.5) {
+        anomalies.push({
+          id: 'inactive-users-high',
+          type: 'pattern',
+          severity: 'warning',
+          title: 'نسبة مستخدمين غير نشطين مرتفعة',
+          description: `${(inactiveRatio * 100).toFixed(0)}% من المستخدمين غير نشطين (${totalUsers - activeUsers} من ${totalUsers})`,
+          metric: 'users',
+          currentValue: activeUsers,
+          expectedValue: totalUsers * 0.7,
+          deviation: inactiveRatio,
+          suggestion: 'راجع حسابات المستخدمين وأرسل تذكيرات',
+          timestamp: Date.now(),
+        })
+      }
+
+      if (activeUsers > 0 && submissionsToday === 0) {
+        anomalies.push({
+          id: 'no-submissions-active-users',
+          type: 'zero',
+          severity: 'critical',
+          title: 'لا إرساليات مع وجود مستخدمين نشطين',
+          description: `${activeUsers} مستخدم نشط لكن لا توجد إرساليات اليوم`,
+          metric: 'submissions',
+          currentValue: 0,
+          expectedValue: activeUsers * 2,
+          deviation: Infinity,
+          suggestion: 'تواصل مع المستخدمين — هل يواجهون مشكلة تقنية؟',
+          timestamp: Date.now(),
+        })
+      }
+    }
+
+    return anomalies
+  }
+}
+
+// ─── Smart Report Generator ──────────────────────────────────
+
+export class SmartReportGenerator {
+  static generate(
+    stats: {
+      total_submissions: number
+      submissions_today: number
+      submissions_this_week: number
+      approval_rate: number
+      total_users: number
+      active_users: number
+      total_forms: number
+      active_forms: number
+    },
+    govStats?: { name: string; submissions: number }[],
+    chartData?: { date: string; submitted: number; draft: number }[]
+  ): SmartReport {
+    const anomalies: Anomaly[] = []
+    const insights: string[] = []
+    const recommendations: string[] = []
+
+    // 1. Anomaly Detection
+    if (govStats) {
+      anomalies.push(...AnomalyDetector.detectCoverageGaps(govStats))
+    }
+
+    anomalies.push(...AnomalyDetector.detectUserAnomalies(
+      stats.total_users, stats.active_users, stats.submissions_today
+    ))
+
+    if (chartData && chartData.length >= 7) {
+      const submittedTrend = chartData.map(d => ({ date: d.date, value: d.submitted }))
+      anomalies.push(...AnomalyDetector.detectTimeSeriesAnomalies(submittedTrend, 'إرساليات'))
+    }
+
+    // 2. Score Calculation (0-100)
+    let score = 100
+    for (const a of anomalies) {
+      if (a.severity === 'critical') score -= 20
+      else if (a.severity === 'warning') score -= 10
+      else score -= 3
+    }
+    if (stats.approval_rate < 70) score -= 15
+    if (stats.submissions_today === 0) score -= 10
+    score = Math.max(0, Math.min(100, score))
+
+    // 3. Trend Analysis
+    let trend: 'improving' | 'declining' | 'stable' = 'stable'
+    if (chartData && chartData.length >= 14) {
+      const firstWeek = chartData.slice(0, 7).reduce((s, d) => s + d.submitted, 0)
+      const secondWeek = chartData.slice(7, 14).reduce((s, d) => s + d.submitted, 0)
+      if (secondWeek > firstWeek * 1.1) trend = 'improving'
+      else if (secondWeek < firstWeek * 0.9) trend = 'declining'
+    }
+
+    // 4. Insights
+    if (stats.approval_rate >= 85) {
+      insights.push(`✅ معدل الاعتماد ممتاز (${stats.approval_rate.toFixed(0)}%) — جودة عالية في الإدخال`)
+    } else if (stats.approval_rate < 70) {
+      insights.push(`⚠️ معدل الاعتماد منخفض (${stats.approval_rate.toFixed(0)}%) — يحتاج تحسين`)
+    }
+
+    const activeRatio = stats.total_users > 0
+      ? ((stats.active_users / stats.total_users) * 100).toFixed(0)
+      : '0'
+    insights.push(`👥 ${stats.active_users} من ${stats.total_users} مستخدم نشط (${activeRatio}%)`)
+
+    if (stats.submissions_today > 0) {
+      insights.push(`📋 ${stats.submissions_today} إرسالية اليوم من أصل ${stats.submissions_this_week} هذا الأسبوع`)
+    }
+
+    if (govStats && govStats.length > 0) {
+      const topGov = govStats[0]
+      insights.push(`🏆 ${topGov.name} الأكثر نشاطاً بـ ${topGov.submissions} إرسالية`)
+    }
+
+    if (trend === 'improving') {
+      insights.push('📈 الاتجاه العام متحسن مقارنة بالأسبوع الماضي')
+    } else if (trend === 'declining') {
+      insights.push('📉 الاتجاه العام في تراجع مقارنة بالأسبوع الماضي')
+    }
+
+    // 5. Recommendations
+    if (stats.submissions_today < 5 && stats.active_users > 5) {
+      recommendations.push('أرسل تذكير للمستخدمين النشطين لزيادة الإدخال')
+    }
+    if (stats.approval_rate < 70) {
+      recommendations.push('راجع أسباب الرفض وعقد جلسة تدريب للمدخلين')
+    }
+    const criticalAnomalies = anomalies.filter(a => a.severity === 'critical')
+    if (criticalAnomalies.length > 0) {
+      recommendations.push(`عالج ${criticalAnomalies.length} مشكلة حرجة فوراً`)
+    }
+    if (govStats) {
+      const zeroGovs = govStats.filter(g => g.submissions === 0)
+      if (zeroGovs.length > 0) {
+        recommendations.push(`تواصل مع مشرفي ${zeroGovs.length} محافظة بدون إرساليات`)
+      }
+    }
+    if (recommendations.length === 0) {
+      recommendations.push('حافظ على المستوى الحالي — الأداء جيد 👍')
+    }
+
+    // 6. Summary
+    const emoji = score >= 80 ? '🟢' : score >= 60 ? '🟡' : '🔴'
+    const status = score >= 80 ? 'ممتاز' : score >= 60 ? 'متوسط' : 'يحتاج تحسين'
+    const summary = `${emoji} تقييم النظام: ${score}/100 — ${status}\n${trend === 'improving' ? '📈 تحسن' : trend === 'declining' ? '📉 تراجع' : '➡️ مستقر'}`
+
+    return {
+      id: `report-${Date.now()}`,
+      title: 'تقرير ذكي — ملخص النظام',
+      summary,
+      score,
+      anomalies,
+      insights,
+      recommendations,
+      trend,
+      generatedAt: Date.now(),
+    }
+  }
+}
+
+// ─── Feedback Tracker ────────────────────────────────────────
+
+export class FeedbackTracker {
+  private static STORAGE_KEY = 'epi-copilot-feedback'
+
+  static record(messageId: string, feedback: 'up' | 'down', intent?: string): void {
+    try {
+      const stored = JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '[]')
+      stored.push({
+        messageId,
+        feedback,
+        intent,
+        timestamp: Date.now(),
+      })
+      // Keep last 500 entries
+      if (stored.length > 500) stored.splice(0, stored.length - 500)
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(stored))
+    } catch { /* ignore */ }
+  }
+
+  static getStats(): { total: number; positive: number; negative: number; byIntent: Record<string, { up: number; down: number }> } {
+    try {
+      const stored = JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '[]')
+      const byIntent: Record<string, { up: number; down: number }> = {}
+      let positive = 0
+      let negative = 0
+
+      for (const entry of stored) {
+        if (entry.feedback === 'up') positive++
+        else negative++
+
+        if (entry.intent) {
+          if (!byIntent[entry.intent]) byIntent[entry.intent] = { up: 0, down: 0 }
+          const key = entry.feedback as 'up' | 'down'
+          byIntent[entry.intent][key]++
+        }
+      }
+
+      return { total: stored.length, positive, negative, byIntent }
+    } catch {
+      return { total: 0, positive: 0, negative: 0, byIntent: {} }
+    }
+  }
+
+  static getWeakIntents(): string[] {
+    const stats = this.getStats()
+    return Object.entries(stats.byIntent)
+      .filter(([_, s]) => s.down > s.up && s.down >= 3)
+      .map(([intent]) => intent)
+  }
+}
+
+// ─── Predictive Analytics Engine ─────────────────────────────
+
+export class PredictiveEngine {
+  /**
+   * Simple Linear Regression forecast
+   * Predicts next N values based on historical trend
+   */
+  static linearForecast(data: number[], periods: number = 7): {
+    predictions: number[]
+    slope: number
+    intercept: number
+    r2: number
+    trend: 'rising' | 'falling' | 'flat'
+  } {
+    const n = data.length
+    if (n < 3) return { predictions: [], slope: 0, intercept: 0, r2: 0, trend: 'flat' }
+
+    // Calculate means
+    const xMean = (n - 1) / 2
+    const yMean = data.reduce((a, b) => a + b, 0) / n
+
+    // Calculate slope and intercept
+    let num = 0, den = 0
+    for (let i = 0; i < n; i++) {
+      num += (i - xMean) * (data[i] - yMean)
+      den += (i - xMean) ** 2
+    }
+    const slope = den !== 0 ? num / den : 0
+    const intercept = yMean - slope * xMean
+
+    // R-squared
+    const ssRes = data.reduce((sum, y, i) => sum + (y - (slope * i + intercept)) ** 2, 0)
+    const ssTot = data.reduce((sum, y) => sum + (y - yMean) ** 2, 0)
+    const r2 = ssTot !== 0 ? 1 - ssRes / ssTot : 0
+
+    // Predictions
+    const predictions: number[] = []
+    for (let i = n; i < n + periods; i++) {
+      predictions.push(Math.max(0, Math.round(slope * i + intercept)))
+    }
+
+    // Trend determination
+    const trend = slope > 0.5 ? 'rising' : slope < -0.5 ? 'falling' : 'flat'
+
+    return { predictions, slope, intercept, r2: Math.max(0, r2), trend }
+  }
+
+  /**
+   * Moving Average forecast
+   */
+  static movingAverage(data: number[], windowSize: number = 7, periods: number = 7): number[] {
+    if (data.length < windowSize) return []
+
+    const predictions: number[] = []
+    let window = data.slice(-windowSize)
+
+    for (let i = 0; i < periods; i++) {
+      const avg = window.reduce((a, b) => a + b, 0) / window.length
+      predictions.push(Math.max(0, Math.round(avg)))
+      window = [...window.slice(1), avg]
+    }
+
+    return predictions
+  }
+
+  /**
+   * Seasonal decomposition (weekly pattern)
+   */
+  static detectSeasonality(data: number[]): {
+    hasSeasonality: boolean
+    period: number
+    strength: number
+    pattern: number[]
+  } {
+    if (data.length < 14) return { hasSeasonality: false, period: 0, strength: 0, pattern: [] }
+
+    // Check for weekly pattern (7-day)
+    const period = 7
+    const numCycles = Math.floor(data.length / period)
+    if (numCycles < 2) return { hasSeasonality: false, period: 0, strength: 0, pattern: [] }
+
+    // Calculate average for each day of the week
+    const pattern: number[] = Array(period).fill(0)
+    const counts: number[] = Array(period).fill(0)
+
+    for (let i = 0; i < data.length; i++) {
+      const dayIndex = i % period
+      pattern[dayIndex] += data[i]
+      counts[dayIndex]++
+    }
+
+    for (let i = 0; i < period; i++) {
+      pattern[i] = counts[i] > 0 ? pattern[i] / counts[i] : 0
+    }
+
+    // Calculate seasonality strength
+    const patternMean = pattern.reduce((a, b) => a + b, 0) / period
+    const patternVariance = pattern.reduce((sum, v) => sum + (v - patternMean) ** 2, 0) / period
+    const totalVariance = data.reduce((sum, v) => sum + (v - (data.reduce((a, b) => a + b, 0) / data.length)) ** 2, 0) / data.length
+    const strength = totalVariance > 0 ? Math.min(1, patternVariance / totalVariance) : 0
+
+    return {
+      hasSeasonality: strength > 0.3,
+      period,
+      strength,
+      pattern: pattern.map(v => Math.round(v)),
+    }
+  }
+
+  /**
+   * Generate comprehensive forecast report
+   */
+  static generateForecast(
+    dailyData: { date: string; count: number }[],
+    metricName: string = 'إرساليات'
+  ): {
+    forecast: number[]
+    confidence: 'high' | 'medium' | 'low'
+    trend: string
+    seasonality: string
+    summary: string
+  } {
+    const values = dailyData.map(d => d.count)
+
+    const lr = this.linearForecast(values, 7)
+    const ma = this.movingAverage(values, 7, 7)
+    const seasonal = this.detectSeasonality(values)
+
+    // Blend forecasts (weighted average)
+    const forecast = lr.predictions.map((v, i) => {
+      const lrWeight = lr.r2 > 0.5 ? 0.6 : 0.3
+      const maWeight = 1 - lrWeight
+      return Math.round(v * lrWeight + (ma[i] || v) * maWeight)
+    })
+
+    // Confidence based on R² and data quality
+    const confidence = lr.r2 > 0.7 ? 'high' : lr.r2 > 0.4 ? 'medium' : 'low'
+
+    // Trend description
+    const trendDesc = lr.trend === 'rising'
+      ? `📈 اتجاه صاعد — زيادة بـ ${Math.abs(lr.slope).toFixed(1)} ${metricName}/يوم`
+      : lr.trend === 'falling'
+        ? `📉 اتجاه هابط — انخفاض بـ ${Math.abs(lr.slope).toFixed(1)} ${metricName}/يوم`
+        : `➡️ اتجاه مستقر`
+
+    // Seasonality description
+    const seasonDesc = seasonal.hasSeasonality
+      ? `🔄 نمط أسبوعي مكتشف (قوة ${(seasonal.strength * 100).toFixed(0)}%)`
+      : ''
+
+    // Summary
+    const nextWeekTotal = forecast.reduce((a, b) => a + b, 0)
+    const thisWeekTotal = values.slice(-7).reduce((a, b) => a + b, 0)
+    const changePercent = thisWeekTotal > 0 ? ((nextWeekTotal - thisWeekTotal) / thisWeekTotal * 100).toFixed(0) : '0'
+
+    const summary = [
+      `🔮 توقعات ${metricName} — الأسبوع القادم:`,
+      `📊 المتوقع: ${nextWeekTotal} إرسالية (${changePercent > '0' ? '+' : ''}${changePercent}% مقارنة بهذا الأسبوع)`,
+      trendDesc,
+      seasonDesc,
+      `🎯 الثقة: ${confidence === 'high' ? 'عالية' : confidence === 'medium' ? 'متوسطة' : 'منخفضة'}`,
+    ].filter(Boolean).join('\n')
+
+    return { forecast, confidence, trend: trendDesc, seasonality: seasonDesc, summary }
+  }
+}
+
+// ─── NL-to-SQL Engine ────────────────────────────────────────
+
+export class NLToSQLEngine {
+  /**
+   * Convert natural language question to Supabase query params
+   * Returns structured query info (not raw SQL for security)
+   */
+  static parseQuestion(question: string): {
+    table: string
+    filters: Record<string, unknown>
+    select: string
+    orderBy?: string
+    limit?: number
+    description: string
+  } | null {
+    const normalized = normalizeArabic(question)
+    const tokens = tokenizeArabic(normalized)
+
+    // Detect table
+    let table = 'form_submissions'
+    let select = '*'
+    let orderBy = 'created_at'
+    let limit = 100
+    const filters: Record<string, unknown> = {}
+    let description = ''
+
+    // Submissions queries
+    if (tokens.some(t => ['ارسالي', 'ارسال', 'تقديم', 'استمار'].some(k => normalizeArabic(k).includes(t)))) {
+      table = 'form_submissions'
+      select = 'id, status, created_at, governorate_id, form_id, submitted_by'
+      description = 'الإرساليات'
+    }
+    // Governorate queries
+    else if (tokens.some(t => ['محافظ', 'منطق', 'جغراف'].some(k => normalizeArabic(k).includes(t)))) {
+      table = 'governorates'
+      select = 'id, name_ar, is_active'
+      description = 'المحافظات'
+    }
+    // User queries
+    else if (tokens.some(t => ['مستخدم', 'فريق', 'موظف', 'حساب'].some(k => normalizeArabic(k).includes(t)))) {
+      table = 'profiles'
+      select = 'id, full_name, role, is_active, governorate_id'
+      description = 'المستخدمين'
+    }
+    // Shortage queries
+    else if (tokens.some(t => ['نقص', 'نواقص', 'مستلزم', 'تجهز'].some(k => normalizeArabic(k).includes(t)))) {
+      table = 'supply_shortages'
+      select = 'id, item_name, severity, is_resolved, governorate_id'
+      description = 'النواقص'
+    }
+    // Form queries
+    else if (tokens.some(t => ['استمار', 'نموذج', 'قالب'].some(k => normalizeArabic(k).includes(t)))) {
+      table = 'forms'
+      select = 'id, title_ar, is_active, campaign_type'
+      description = 'النماذج'
+    }
+
+    // Time filters
+    if (normalized.includes('اليوم')) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      filters.created_at = `gte:${today.toISOString()}`
+      description += ' — اليوم'
+    } else if (normalized.includes('امس') || normalized.includes('أمس')) {
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      yesterday.setHours(0, 0, 0, 0)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      filters.created_at = `gte:${yesterday.toISOString()}:lt:${today.toISOString()}`
+      description += ' — أمس'
+    } else if (normalized.includes('اسبوع') || normalized.includes('أسبوع')) {
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      filters.created_at = `gte:${weekAgo.toISOString()}`
+      description += ' — هذا الأسبوع'
+    } else if (normalized.includes('شهر')) {
+      const monthAgo = new Date()
+      monthAgo.setMonth(monthAgo.getMonth() - 1)
+      filters.created_at = `gte:${monthAgo.toISOString()}`
+      description += ' — هذا الشهر'
+    }
+
+    // Status filters
+    if (normalized.includes('مسود')) {
+      filters.status = 'draft'
+      description += ' — مسودات'
+    } else if (normalized.includes('مرسل') || normalized.includes('مقدم')) {
+      filters.status = 'submitted'
+      description += ' — مرسلة'
+    }
+
+    // Active/inactive filters
+    if (normalized.includes('نشط')) {
+      filters.is_active = true
+      description += ' — نشطين'
+    } else if (normalized.includes('غير نشط') || normalized.includes('خامل')) {
+      filters.is_active = false
+      description += ' — غير نشطين'
+    }
+
+    // Severity filters
+    if (normalized.includes('حرج')) {
+      filters.severity = 'critical'
+      description += ' — حرج'
+    }
+
+    // Count query
+    if (tokens.some(t => ['كم', 'عدد', 'اجمالي'].some(k => normalizeArabic(k).includes(t)))) {
+      select = 'id'
+      description = `عدد ${description}`
+    }
+
+    // Sort
+    if (normalized.includes('احدث') || normalized.includes('جديد')) {
+      orderBy = 'created_at'
+    } else if (normalized.includes('اقدم') || normalized.includes('قديم')) {
+      orderBy = 'created_at:asc'
+    }
+
+    return { table, filters, select, orderBy, limit, description }
+  }
+
+  /**
+   * Execute parsed query against Supabase
+   */
+  static async executeQuery(parsed: ReturnType<typeof NLToSQLEngine.parseQuestion>): Promise<{
+    data: unknown[]
+    count: number
+    description: string
+  }> {
+    if (!parsed) return { data: [], count: 0, description: '' }
+
+    // Import supabase dynamically to avoid circular deps
+    const { supabase } = await import('@/lib/supabase')
+
+    let query = supabase.from(parsed.table).select(parsed.select, { count: 'exact' })
+
+    // Apply filters
+    for (const [key, value] of Object.entries(parsed.filters)) {
+      if (typeof value === 'string' && value.startsWith('gte:')) {
+        const parts = value.split(':')
+        query = query.gte(key, parts[1])
+        if (parts[2]?.startsWith('lt:')) {
+          query = query.lt(key, parts[2].replace('lt:', ''))
+        }
+      } else {
+        query = query.eq(key, value)
+      }
+    }
+
+    // Soft delete
+    if (parsed.table !== 'governorates' && parsed.table !== 'forms') {
+      query = query.is('deleted_at', null)
+    }
+
+    // Order
+    const [orderCol, orderDir] = (parsed.orderBy || 'created_at').split(':')
+    query = query.order(orderCol, { ascending: orderDir === 'asc' })
+
+    // Limit
+    query = query.limit(parsed.limit || 100)
+
+    const { data, count, error } = await query
+
+    if (error) {
+      console.error('[NL-to-SQL] Query error:', error)
+      return { data: [], count: 0, description: parsed.description }
+    }
+
+    return { data: data || [], count: count || 0, description: parsed.description }
+  }
+}
+
+// ─── Smart Notification Generator ─────────────────────────────
+
+export class SmartNotificationEngine {
+  /**
+   * Generate smart notifications based on system state
+   */
+  static generate(
+    stats: {
+      total_submissions: number
+      submissions_today: number
+      active_users: number
+      total_users: number
+      approval_rate: number
+    },
+    govStats?: { name: string; submissions: number }[]
+  ): Array<{
+    type: 'info' | 'warning' | 'error' | 'success'
+    title: string
+    body: string
+    category: string
+    priority: number
+    action?: string
+    actionUrl?: string
+  }> {
+    const notifications: Array<{
+      type: 'info' | 'warning' | 'error' | 'success'
+      title: string
+      body: string
+      category: string
+      priority: number
+      action?: string
+      actionUrl?: string
+    }> = []
+
+    // Zero submissions today with active users
+    if (stats.submissions_today === 0 && stats.active_users > 0) {
+      notifications.push({
+        type: 'warning',
+        title: 'لا إرساليات اليوم',
+        body: `${stats.active_users} مستخدم نشط لكن لا توجد إرساليات اليوم. قد تكون هناك مشكلة تقنية.`,
+        category: 'submission',
+        priority: 1,
+        action: 'إرسال تذكير',
+        actionUrl: '/notifications',
+      })
+    }
+
+    // Low approval rate
+    if (stats.approval_rate < 60 && stats.total_submissions > 20) {
+      notifications.push({
+        type: 'error',
+        title: 'معدل اعتماد منخفض',
+        body: `معدل الاعتماد ${stats.approval_rate.toFixed(0)}% فقط — أقل من 60%. يحتاج مراجعة.`,
+        category: 'submission',
+        priority: 1,
+        action: 'مراجعة الإرساليات',
+        actionUrl: '/submissions',
+      })
+    }
+
+    // High inactive ratio
+    if (stats.total_users > 0) {
+      const inactiveRatio = (stats.total_users - stats.active_users) / stats.total_users
+      if (inactiveRatio > 0.5) {
+        notifications.push({
+          type: 'warning',
+          title: 'نسبة غير نشطين مرتفعة',
+          body: `${(inactiveRatio * 100).toFixed(0)}% من المستخدمين غير نشطين. راجع الحسابات.`,
+          category: 'user',
+          priority: 2,
+          action: 'إدارة المستخدمين',
+          actionUrl: '/users',
+        })
+      }
+    }
+
+    // Governorates with zero coverage
+    if (govStats) {
+      const zeroGovs = govStats.filter(g => g.submissions === 0)
+      if (zeroGovs.length > 0) {
+        notifications.push({
+          type: 'error',
+          title: `${zeroGovs.length} محافظة بدون تغطية`,
+          body: zeroGovs.slice(0, 3).map(g => g.name).join('، ') + (zeroGovs.length > 3 ? '...' : ''),
+          category: 'location',
+          priority: 1,
+          action: 'عرض المحافظات',
+          actionUrl: '/governorates',
+        })
+      }
+    }
+
+    // Good performance notification
+    if (stats.approval_rate >= 90 && stats.submissions_today > 10) {
+      notifications.push({
+        type: 'success',
+        title: 'أداء ممتاز اليوم! 🎉',
+        body: `${stats.submissions_today} إرسالية بمعدل اعتماد ${stats.approval_rate.toFixed(0)}%. استمر!`,
+        category: 'submission',
+        priority: 3,
+      })
+    }
+
+    return notifications.sort((a, b) => a.priority - b.priority)
+  }
+}
+
+// ─── Role-Based Insights ─────────────────────────────────────
+
+// ─── AI Form Helper ──────────────────────────────────────────
+
+export class AIFormHelper {
+  /**
+   * Suggest field values based on user's submission history
+   */
+  static async getSuggestions(
+    formId: string,
+    userId: string
+  ): Promise<Record<string, unknown>> {
+    try {
+      const { supabase } = await import('@/lib/supabase')
+
+      // Get user's last 10 submissions for this form
+      const { data } = await supabase
+        .from('form_submissions')
+        .select('data, governorate_id, district_id, gps_lat, gps_lng')
+        .eq('form_id', formId)
+        .eq('submitted_by', userId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      if (!data || data.length === 0) return {}
+
+      const suggestions: Record<string, unknown> = {}
+
+      // For each field, find most common value
+      const allKeys = new Set<string>()
+      data.forEach(d => {
+        if (d.data && typeof d.data === 'object') {
+          Object.keys(d.data).forEach(k => allKeys.add(k))
+        }
+      })
+
+      for (const key of allKeys) {
+        const values = data
+          .map(d => (d.data as Record<string, unknown>)?.[key])
+          .filter(v => v !== undefined && v !== null && v !== '')
+
+        if (values.length === 0) continue
+
+        // Most common value
+        const freq: Record<string, number> = {}
+        values.forEach(v => {
+          const k = String(v)
+          freq[k] = (freq[k] || 0) + 1
+        })
+        const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1])
+        if (sorted.length > 0 && sorted[0][1] >= 2) {
+          suggestions[key] = sorted[0][0]
+        }
+      }
+
+      // Suggest governorate/district from last submission
+      const lastSubmission = data[0]
+      if (lastSubmission.governorate_id) {
+        suggestions._governorate_id = lastSubmission.governorate_id
+      }
+      if (lastSubmission.district_id) {
+        suggestions._district_id = lastSubmission.district_id
+      }
+      if (lastSubmission.gps_lat && lastSubmission.gps_lng) {
+        suggestions._gps = { lat: lastSubmission.gps_lat, lng: lastSubmission.gps_lng }
+      }
+
+      return suggestions
+    } catch {
+      return {}
+    }
+  }
+
+  /**
+   * Validate form data and suggest corrections
+   */
+  static validateField(key: string, value: unknown, fieldType: string): {
+    valid: boolean
+    suggestion?: string
+    warning?: string
+  } {
+    if (value === null || value === undefined || value === '') {
+      return { valid: true } // Empty is valid (required check is separate)
+    }
+
+    switch (fieldType) {
+      case 'phone':
+        const phoneStr = String(value)
+        if (!/^\+?[\d\s-]{7,15}$/.test(phoneStr)) {
+          return { valid: false, suggestion: 'صيغة الجوال: +967XXXXXXXX' }
+        }
+        break
+
+      case 'number':
+        if (isNaN(Number(value))) {
+          return { valid: false, suggestion: 'يجب أن يكون رقماً' }
+        }
+        if (Number(value) < 0) {
+          return { valid: false, warning: 'القيمة سالبة — تأكد من الصحة' }
+        }
+        break
+
+      case 'email':
+        if (!String(value).includes('@')) {
+          return { valid: false, suggestion: 'صيغة البريد: example@domain.com' }
+        }
+        break
+
+      case 'gps':
+        if (typeof value === 'object' && value !== null) {
+          const gps = value as { lat?: number; lng?: number }
+          if (gps.lat && (gps.lat < -90 || gps.lat > 90)) {
+            return { valid: false, suggestion: 'خط العرض يجب أن يكون بين -90 و 90' }
+          }
+          if (gps.lng && (gps.lng < -180 || gps.lng > 180)) {
+            return { valid: false, suggestion: 'خط الطول يجب أن يكون بين -180 و 180' }
+          }
+        }
+        break
+    }
+
+    return { valid: true }
+  }
+}
+
+export class RoleInsights {
+  /**
+   * Generate insights tailored to user role
+   */
+  static generateForRole(
+    role: string,
+    stats: {
+      total_submissions: number
+      submissions_today: number
+      total_users: number
+      active_users: number
+      approval_rate: number
+    }
+  ): string[] {
+    const insights: string[] = []
+
+    switch (role) {
+      case 'admin':
+        insights.push(
+          `👑 نظرة إدارية: النظام يخدم ${stats.total_users} مستخدم (${stats.active_users} نشط)`,
+          `📊 معدل الاعتماد العام: ${stats.approval_rate.toFixed(0)}%`,
+          stats.approval_rate < 70
+            ? `⚠️ معدل الاعتماد منخفض — مراجعة عمليات الموافقة مطلوبة`
+            : `✅ جودة الإدخال مقبولة`,
+        )
+        break
+
+      case 'central':
+        insights.push(
+          `🏛️ نظرة مركزية: ${stats.submissions_today} إرسالية اليوم من أصل ${stats.total_submissions}`,
+          `📈 الإنتاجية: ${(stats.submissions_today / Math.max(1, stats.active_users)).toFixed(1)} إرسالية/مستخدم نشط`,
+        )
+        break
+
+      case 'governorate':
+        insights.push(
+          `🗺️ نظرة المحافظة: ${stats.submissions_today} إرسالية اليوم`,
+          stats.submissions_today === 0
+            ? `⚠️ لا توجد إرساليات اليوم — تحقق من الفريق الميداني`
+            : `✅ الفريق يعمل`,
+        )
+        break
+
+      case 'district':
+        insights.push(
+          `📋 نظرة المديرية: ${stats.submissions_today} إرسالية اليوم`,
+        )
+        break
+
+      case 'data_entry':
+        insights.push(
+          `✏️ أنت أرسلت ${stats.submissions_today} إرسالية اليوم`,
+          stats.submissions_today === 0
+            ? `💡 ابدأ بإدخال البيانات من صفحة النماذج`
+            : `👍 أحسنت! استمر في الإدخال`,
+        )
+        break
+    }
+
+    return insights
+  }
+}
+
 export interface ModelChoice {
   provider: 'groq' | 'huggingface' | 'gemini' | 'zai' | 'openrouter'
   model: string
@@ -537,6 +1561,169 @@ export class EPIBotEngine {
     this.memory = new ConversationMemory()
   }
 
+  // ── Multi-turn: Resolve follow-up questions ──
+  resolveFollowUp(text: string, userId: string, sessionId: string): string | null {
+    const normalized = normalizeArabic(text)
+    const tokens = tokenizeArabic(normalized)
+    const ctx = this.memory.getContext(userId, sessionId)
+    const history = ctx.history.filter(t => t.role === 'user').slice(-5)
+
+    // 1. Pronoun/reference patterns
+    const followUpPatterns = [
+      // "والأمس؟" / "واليوم؟" / "والأسبوع؟"
+      { regex: /^و\s*(ال|هذا\s*)?(امس|اليوم|اسبوع|شهر|عام)/i, resolve: (match: RegExpMatchArray) => {
+        const lastTopic = history[history.length - 1]?.intent || 'query_submissions'
+        const timeMap: Record<string, string> = { 'امس': 'أمس', 'اليوم': 'اليوم', 'اسبوع': 'هذا الأسبوع', 'شهر': 'هذا الشهر', 'عام': 'هذا العام' }
+        const timeWord = Object.entries(timeMap).find(([k]) => normalizeArabic(match[0]).includes(k))
+        const time = timeWord ? timeWord[1] : ''
+        if (lastTopic.includes('submission') || lastTopic.includes('إرسالي')) return `كم إرسالية ${time}؟`
+        if (lastTopic.includes('governorate') || lastTopic.includes('محافظ')) return `أداء المحافظات ${time}`
+        if (lastTopic.includes('user') || lastTopic.includes('مستخدم')) return `نشاط المستخدمين ${time}`
+        return `إحصائيات ${time}`
+      }},
+      // "وكم عددهم؟" / "كم باقي؟"
+      { regex: /^و?\s*كم\s*(عددهم|باقي|البقي|المتبقي|الاجمالي)?/i, resolve: () => {
+        const lastEntity = ctx.lastEntities
+        if (lastEntity?.governorate) return `كم عدد الإرساليات في ${lastEntity.governorate}؟`
+        return 'كم العدد الإجمالي؟'
+      }},
+      // "أيهم أفضل؟" / "والأضعف؟"
+      { regex: /^(ايهم|و\s*ال|ما\s*ال)?(افضل|اسوأ|اقوى|اضعف|اعلى|ادنى)/i, resolve: () => {
+        const lastTopic = history[history.length - 1]?.intent || 'query_governorates'
+        if (lastTopic.includes('governorate')) return 'أي المحافظات الأفضل أداءً؟'
+        if (lastTopic.includes('user')) return 'أي المستخدمين الأكثر نشاطاً؟'
+        return 'أيهم الأفضل؟'
+      }},
+      // "اعطني تفاصيل" / "تفاصيل أكثر"
+      { regex: /^(اعطني|اكثر|مزيد|تفاصيل|شرح|توضيح)/i, resolve: () => {
+        const lastBotText = ctx.history.filter(t => t.role === 'bot').slice(-1)[0]?.text || ''
+        if (lastBotText.includes('إرسالي')) return 'أعطني تفاصيل الإرساليات'
+        if (lastBotText.includes('محافظ')) return 'أعطني تفاصيل المحافظات'
+        if (lastBotText.includes('مستخدم')) return 'أعطني تفاصيل المستخدمين'
+        return 'أعطني تفاصيل أكثر'
+      }},
+      // "هل فيه مشاكل؟" / "وش المشاكل؟"
+      { regex: /^(هل\s*فيه|وش|ما\s*هي|اين)\s*(مشاكل|مشكل|نواقص|نقص|تأخر|شذوذ)/i, resolve: () => 'أي مشاكل تحتاج انتباهي؟' },
+      // Very short follow-ups like "تمام", "طيب", "ok" after a query
+      { regex: /^(تمام|طيب|اوك|ok|حلو|ممتاز|شكر)/i, resolve: () => null },
+    ]
+
+    for (const pattern of followUpPatterns) {
+      const match = normalized.match(pattern.regex)
+      if (match) {
+        const resolved = pattern.resolve(match)
+        if (resolved) return resolved
+      }
+    }
+
+    // 2. Short questions without clear intent — inherit last topic
+    if (tokens.length <= 3 && history.length > 0) {
+      const lastIntent = history[history.length - 1]?.intent
+      if (lastIntent && lastIntent !== 'unknown') {
+        // Check if current text is a question word
+        const questionWords = ['كم', 'متى', 'اين', 'وين', 'كيف', 'لماذا', 'ليش', 'هل', 'ما']
+        const hasQuestion = tokens.some(t => questionWords.some(qw => normalizeArabic(qw).includes(t)))
+        if (hasQuestion) {
+          // Extend with last topic context
+          const topicMap: Record<string, string> = {
+            'query_submissions': 'إرساليات',
+            'query_governorates': 'محافظات',
+            'query_users': 'مستخدمين',
+            'query_coverage': 'تغطية',
+            'query_vaccination': 'تطعيمات',
+          }
+          const topic = topicMap[lastIntent] || ''
+          if (topic) return `${tokens.join(' ')} ${topic}`
+        }
+      }
+    }
+
+    return null
+  }
+
+  // ── Track topic entities in memory ──
+  private trackTopicEntities(context: ConversationContext, intent: IntentResult): void {
+    if (intent.entities.governorate) {
+      context.metadata.lastGovernorate = intent.entities.governorate
+    }
+    if (intent.intent.includes('submission')) {
+      context.metadata.lastTopic = 'submissions'
+    } else if (intent.intent.includes('governorate')) {
+      context.metadata.lastTopic = 'governorates'
+    } else if (intent.intent.includes('user')) {
+      context.metadata.lastTopic = 'users'
+    }
+  }
+
+  // ── Get contextual quick actions based on intent + history ──
+  getContextualActions(intent: string, entities: Record<string, string>, context?: ConversationContext): CopilotAction[] {
+    const actions: CopilotAction[] = []
+    const history = context?.history?.filter(t => t.role === 'user').slice(-3) || []
+    const lastIntents = history.map(t => t.intent).filter(Boolean)
+
+    switch (intent) {
+      case 'query_submissions':
+      case 'query_coverage':
+        actions.push(
+          { id: 'nav-subs', label: '📋 عرض الإرساليات', type: 'navigate', payload: '/submissions' },
+          { id: 'nav-map', label: '🗺️ الخريطة', type: 'navigate', payload: '/map' },
+        )
+        if (lastIntents.includes('query_governorates')) {
+          actions.push({ id: 'compare-gov', label: '📊 مقارنة المحافظات', type: 'query', payload: 'قارن أداء المحافظات هذا الأسبوع' })
+        }
+        break
+      case 'query_governorates':
+        actions.push(
+          { id: 'nav-govs', label: '🏛️ المحافظات', type: 'navigate', payload: '/governorates' },
+          { id: 'nav-map', label: '🗺️ الخريطة', type: 'navigate', payload: '/map' },
+        )
+        if (entities.governorate) {
+          actions.push({ id: 'gov-detail', label: `📄 تفاصيل ${entities.governorate}`, type: 'query', payload: `أعطني تفاصيل ${entities.governorate}` })
+        }
+        break
+      case 'query_users':
+        actions.push(
+          { id: 'nav-users', label: '👥 إدارة المستخدمين', type: 'navigate', payload: '/users' },
+          { id: 'inactive', label: '😴 غير النشطين', type: 'query', payload: 'المستخدمين غير النشطين' },
+        )
+        break
+      case 'query_child_vaccines':
+      case 'child_age_response':
+        actions.push(
+          { id: 'nav-bot', label: '💉 مستشار التحصين', type: 'navigate', payload: '/bot' },
+        )
+        break
+      case 'create_report':
+        actions.push(
+          { id: 'nav-reports', label: '📊 صفحة التقارير', type: 'navigate', payload: '/reports' },
+          { id: 'daily', label: '📅 تقرير يومي', type: 'query', payload: 'لخص لي وضع اليوم' },
+          { id: 'weekly', label: '📈 مقارنة أسبوعية', type: 'query', payload: 'قارن هذا الأسبوع بالسابق' },
+        )
+        break
+      case 'trend_analysis':
+      case 'comparison':
+      case 'forecasting':
+        actions.push(
+          { id: 'nav-insights', label: '🧠 التحليلات', type: 'navigate', payload: '/insights' },
+          { id: 'nav-reports', label: '📊 التقارير', type: 'navigate', payload: '/reports' },
+        )
+        break
+      case 'how_to':
+      case 'guide':
+        actions.push(
+          { id: 'nav-settings', label: '⚙️ الإعدادات', type: 'navigate', payload: '/settings' },
+          { id: 'nav-forms', label: '📝 النماذج', type: 'navigate', payload: '/forms' },
+        )
+        break
+      default:
+        actions.push(
+          { id: 'nav-dashboard', label: '📊 لوحة التحكم', type: 'navigate', payload: '/dashboard' },
+        )
+    }
+
+    return actions
+  }
+
   // ── Search local knowledge chunks (vector-like keyword matching) ──
   searchLocalKnowledge(query: string): KnowledgeChunk[] {
     const normalized = normalizeArabic(query)
@@ -587,14 +1774,21 @@ export class EPIBotEngine {
   // ── Core: Process Message ──
 
   processMessage(text: string, context?: ConversationContext): BotResponse {
-    let intent = this.classifyIntent(text)
-    const sentiment = this.analyzeSentiment(text)
-    const suggestions = this.getSmartSuggestions(context || this.getDefaultContext())
-    const actions = this.buildActions(intent.intent, intent.entities)
-
-    // ── Context-aware: if last intent asked about child age, and current message has age ──
     const userId = context?.userId || 'anonymous'
     const sessionId = context?.sessionId || this.defaultSessionId
+
+    // ── Multi-turn: Resolve follow-up questions ──
+    let resolvedText = text
+    const followUp = this.resolveFollowUp(text, userId, sessionId)
+    if (followUp) {
+      resolvedText = followUp
+    }
+
+    let intent = this.classifyIntent(resolvedText)
+    const sentiment = this.analyzeSentiment(text) // analyze original text for sentiment
+    const suggestions = this.getSmartSuggestions(context || this.getDefaultContext())
+
+    // ── Context-aware: if last intent asked about child age, and current message has age ──
     const recentIntents = this.memory.getRecentIntents(userId, sessionId, 3)
     const lastBotIntent = recentIntents[recentIntents.length - 1]
 
@@ -616,6 +1810,12 @@ export class EPIBotEngine {
         confidence: 0.9,
       }
     }
+
+    // Track topic entities for future context
+    this.trackTopicEntities(context || this.getDefaultContext(), intent)
+
+    // Build contextual actions (richer than static buildActions)
+    const actions = this.getContextualActions(intent.intent, intent.entities, context)
 
     // ── Search local knowledge chunks first ──
     const localChunks = this.searchLocalKnowledge(text)

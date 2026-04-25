@@ -12,8 +12,10 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
-import { epiBotEngine, type BotResponse, type ConversationContext } from '@/lib/epi-bot-engine'
+import { epiBotEngine, type BotResponse, type ConversationContext, NLToSQLEngine, PredictiveEngine } from '@/lib/epi-bot-engine'
 import { queryAI, type AIMessage } from '@/lib/ai-providers'
+import { supabase } from '@/lib/supabase'
+import { parseExportRequest, executeExport } from '@/lib/ai-export-engine'
 import { useVoiceInput } from '@/hooks/useVoiceInput'
 
 interface BotMessage {
@@ -32,10 +34,10 @@ const WELCOME_SUGGESTIONS = [
   'وش الآثار الجانبية؟',
   'هل مجاني؟',
   'هل يسبب أوتيزم؟',
-  'الأشراف الداعم',
-  'إدارة المستوى الوسيط',
-  'مؤشرات الأداء',
-  'جدول التحصين',
+  'صدر الإرساليات كإكسل',
+  'PDF للمستخدمين',
+  'تنبؤ الأسبوع القادم',
+  'كم إرسالية اليوم؟',
 ]
 
 export default function BotChatPage() {
@@ -127,6 +129,114 @@ export default function BotChatPage() {
       }
 
       const localResponse = epiBotEngine.processMessage(msgText, context)
+
+      // ── Export Request Detection ──
+      const exportKeywords = ['صدر', 'تصدير', 'تنزيل', 'اكسل', 'إكسل', 'pdf', 'بي دي اف', 'csv']
+      const isExportRequest = exportKeywords.some(k => msgText.includes(k)) &&
+        (msgText.includes('إرسالي') || msgText.includes('مستخدم') || msgText.includes('محافظ') ||
+         msgText.includes('نقص') || msgText.includes('نواقص') || msgText.includes('استمار') ||
+         msgText.includes('نموذج') || msgText.includes('ملخص') || msgText.includes('تقرير'))
+
+      if (isExportRequest) {
+        const exportReq = parseExportRequest(msgText)
+        if (exportReq) {
+          const loadingMsg: BotMessage = {
+            id: `bot-loading-${Date.now()}`,
+            role: 'bot',
+            text: `⏳ جاري تجهيز ${exportReq.title} بصيغة ${exportReq.format.toUpperCase()}...`,
+            timestamp: new Date(),
+            source: 'local',
+            intent: 'export',
+          }
+          setMessages(prev => [...prev, loadingMsg])
+
+          const result = await executeExport(exportReq)
+          const exportMsg: BotMessage = {
+            id: `bot-${Date.now()}`,
+            role: 'bot',
+            text: result.success
+              ? `${result.message}\n\n📄 الملف: ${exportReq.title}_${new Date().toISOString().slice(0, 10)}.${exportReq.format === 'excel' ? 'xlsx' : exportReq.format === 'csv' ? 'csv' : 'pdf'}\n📊 عدد السجلات: ${result.recordCount}`
+              : result.message,
+            timestamp: new Date(),
+            suggestions: result.success
+              ? ['تصدير بيانات أخرى', 'تصدير كـ PDF', 'تصدير كـ Excel']
+              : ['جرّب نوع آخر', 'غير الفلتر'],
+            source: 'local',
+            intent: 'export',
+          }
+          // Remove loading message and add result
+          setMessages(prev => [...prev.filter(m => m.id !== loadingMsg.id), exportMsg])
+          setIsLoading(false)
+          return
+        }
+      }
+
+      // ── NL-to-SQL: Try direct data query ──
+      if (localResponse.intent === 'unknown' || msgText.includes('كم') || msgText.includes('عدد')) {
+        const parsed = NLToSQLEngine.parseQuestion(msgText)
+        if (parsed) {
+          try {
+            const result = await NLToSQLEngine.executeQuery(parsed)
+            if (result.data.length > 0) {
+              let nlResponse = `🔍 ${result.description} (${result.count} نتيجة)\n\n`
+              result.data.slice(0, 5).forEach((row: any) => {
+                if (row.full_name) nlResponse += `• ${row.full_name} — ${row.role || ''}\n`
+                else if (row.name_ar) nlResponse += `• ${row.name_ar}\n`
+                else if (row.item_name) nlResponse += `• ${row.item_name} — ${row.severity || ''}\n`
+                else if (row.status) nlResponse += `• ${row.status === 'submitted' ? '✅ مرسلة' : '📝 مسودة'}\n`
+              })
+              if (result.count > 5) nlResponse += `\n... و ${result.count - 5} أخرى`
+
+              const botMsg: BotMessage = {
+                id: `bot-${Date.now()}`,
+                role: 'bot',
+                text: nlResponse,
+                timestamp: new Date(),
+                suggestions: ['عرض المزيد', 'تصدير النتائج', 'فلترة حسب التاريخ'],
+                source: 'local',
+                intent: 'nl_query',
+              }
+              setMessages(prev => [...prev, botMsg])
+              setIsLoading(false)
+              return
+            }
+          } catch { /* fall through to normal flow */ }
+        }
+      }
+
+      // ── Forecast: Handle prediction requests ──
+      if (localResponse.intent === 'forecasting' || msgText.includes('تنبؤ') || msgText.includes('توقع')) {
+        try {
+          const now = new Date()
+          const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+          const { data } = await supabase.from('form_submissions').select('created_at').gte('created_at', thirtyDaysAgo).is('deleted_at', null).limit(10000)
+
+          if (data && data.length >= 7) {
+            const dailyCounts: Record<string, number> = {}
+            for (let i = 29; i >= 0; i--) {
+              const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+              dailyCounts[d.toISOString().split('T')[0]] = 0
+            }
+            data.forEach(s => { const day = s.created_at.split('T')[0]; if (dailyCounts[day] !== undefined) dailyCounts[day]++ })
+
+            const dailyData = Object.entries(dailyCounts).map(([date, count]) => ({ date, count }))
+            const forecast = PredictiveEngine.generateForecast(dailyData)
+
+            const botMsg: BotMessage = {
+              id: `bot-${Date.now()}`,
+              role: 'bot',
+              text: forecast.summary,
+              timestamp: new Date(),
+              suggestions: ['تحليل الاتجاه', 'مقارنة بالشهر الماضي', 'أي المحافظات متأثرة؟'],
+              source: 'local',
+              intent: 'forecasting',
+            }
+            setMessages(prev => [...prev, botMsg])
+            setIsLoading(false)
+            return
+          }
+        } catch { /* fall through */ }
+      }
 
       if (useAI) {
         try {

@@ -87,7 +87,7 @@ export function parseExportRequest(text: string): ExportRequest | null {
     { pattern: /استمار|نموذج|قالب/, source: 'forms', title: 'تقرير النماذج' },
     { pattern: /تدقيق|سجل|audit/, source: 'audit_logs', title: 'تقرير سجل التدقيق' },
     { pattern: /اشعار|اشعارات|تنبيه/, source: 'notifications', title: 'تقرير الإشعارات' },
-    { pattern: /لوحه|تحكم|dashboard|احصائي/, source: 'dashboard', title: 'تقرير لوحة التحكم' },
+    { pattern: /لوحه|تحكم|dashboard|احصائي|ملخص/, source: 'dashboard', title: 'تقرير لوحة التحكم' },
   ]
 
   for (const sp of sourcePatterns) {
@@ -95,6 +95,15 @@ export function parseExportRequest(text: string): ExportRequest | null {
       source = sp.source
       title = sp.title
       break
+    }
+  }
+
+  // Fallback: if export keywords present but no source detected, default to submissions
+  if (!source) {
+    const hasExportKeyword = /تصدير|تنزيل|صدر|حفظ|اكسل|pdf|بي دي اف|csv|تقرير/i.test(normalized)
+    if (hasExportKeyword) {
+      source = 'submissions'
+      title = 'تقرير الإرساليات'
     }
   }
 

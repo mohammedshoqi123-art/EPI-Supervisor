@@ -15,8 +15,65 @@ import { cn } from '@/lib/utils'
 import { epiBotEngine, type BotResponse, type ConversationContext, NLToSQLEngine, PredictiveEngine } from '@/lib/epi-bot-engine'
 import { queryAI, type AIMessage } from '@/lib/ai-providers'
 import { supabase } from '@/lib/supabase'
+import { isConfigured } from '@/lib/supabase'
 import { parseExportRequest, executeExport } from '@/lib/ai-export-engine'
 import { useVoiceInput } from '@/hooks/useVoiceInput'
+
+// ─── Real Data Fetchers ──────────────────────────────────────
+async function fetchRealStats(): Promise<string> {
+  try {
+    if (!isConfigured) return '⚠️ Supabase غير مُعدّ'
+    const [subsRes, usersRes, formsRes, todayRes, weekRes] = await Promise.allSettled([
+      supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('is_active', true),
+      supabase.from('forms').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('is_active', true),
+      supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+      supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+    ])
+    const g = (r: PromiseSettledResult<any>) => r.status === 'fulfilled' ? r.value.count || 0 : 0
+    return `📊 **حالة النظام:**
+• إجمالي الإرساليات: ${g(subsRes)}
+• إرساليات اليوم: ${g(todayRes)}
+• إرساليات هذا الأسبوع: ${g(weekRes)}
+• المستخدمين النشطين: ${g(usersRes)}
+• الاستمارات النشطة: ${g(formsRes)}`
+  } catch { return '⚠️ تعذر جلب البيانات.' }
+}
+
+async function fetchRealGovernorates(): Promise<string> {
+  try {
+    if (!isConfigured) return '⚠️ Supabase غير مُعدّ'
+    const { data } = await supabase
+      .from('form_submissions')
+      .select('governorate_id, governorates(name_ar)')
+      .is('deleted_at', null)
+      .not('governorate_id', 'is', null)
+      .limit(5000)
+    if (!data || data.length === 0) return 'لا توجد بيانات محافظات.'
+    const counts: Record<string, number> = {}
+    for (const row of data) {
+      const name = (row.governorates as any)?.name_ar || 'غير معروف'
+      counts[name] = (counts[name] || 0) + 1
+    }
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10)
+    return `🗺️ **ترتيب المحافظات:**\n${sorted.map(([n, c], i) => `${i + 1}. ${n}: ${c} إرسالية`).join('\n')}`
+  } catch { return '⚠️ تعذر جلب بيانات المحافظات.' }
+}
+
+async function fetchRealUsers(): Promise<string> {
+  try {
+    if (!isConfigured) return '⚠️ Supabase غير مُعدّ'
+    const { data } = await supabase.from('profiles').select('role, is_active').is('deleted_at', null)
+    if (!data) return 'لا توجد بيانات مستخدمين.'
+    const roles: Record<string, number> = {}
+    let active = 0
+    for (const u of data) { roles[u.role] = (roles[u.role] || 0) + 1; if (u.is_active) active++ }
+    const rn: Record<string, string> = { admin: 'مدير', central: 'مركزي', governorate: 'محافظة', district: 'مديرية', data_entry: 'إدخال بيانات' }
+    return `👥 **المستخدمين:**
+• الإجمالي: ${data.length} | النشطين: ${active} | غير النشطين: ${data.length - active}
+${Object.entries(roles).map(([r, c]) => `• ${rn[r] || r}: ${c}`).join('\n')}`
+  } catch { return '⚠️ تعذر جلب بيانات المستخدمين.' }
+}
 
 interface BotMessage {
   id: string
@@ -131,11 +188,14 @@ export default function BotChatPage() {
       const localResponse = epiBotEngine.processMessage(msgText, context)
 
       // ── Export Request Detection ──
-      const exportKeywords = ['صدر', 'تصدير', 'تنزيل', 'اكسل', 'إكسل', 'pdf', 'بي دي اف', 'csv']
+      const exportKeywords = ['صدر', 'تصدير', 'تنزيل', 'حفظ', 'اكسل', 'إكسل', 'excel', 'pdf', 'بي دي اف', 'csv']
       const isExportRequest = exportKeywords.some(k => msgText.includes(k)) &&
-        (msgText.includes('إرسالي') || msgText.includes('مستخدم') || msgText.includes('محافظ') ||
+        (msgText.includes('إرسالي') || msgText.includes('ارسالي') || msgText.includes('ارسال') ||
+         msgText.includes('مستخدم') || msgText.includes('محافظ') ||
          msgText.includes('نقص') || msgText.includes('نواقص') || msgText.includes('استمار') ||
-         msgText.includes('نموذج') || msgText.includes('ملخص') || msgText.includes('تقرير'))
+         msgText.includes('نموذج') || msgText.includes('ملخص') || msgText.includes('تقرير') ||
+         msgText.includes('اشعار') || msgText.includes('اشعارات') || msgText.includes('بيانات') ||
+         msgText.includes('كل'))
 
       if (isExportRequest) {
         const exportReq = parseExportRequest(msgText)
@@ -236,6 +296,57 @@ export default function BotChatPage() {
             return
           }
         } catch { /* fall through */ }
+      }
+
+      // ── Real Data Fetching for data-related intents ──
+      const intent = localResponse.intent
+      if (['query_submissions', 'query_coverage', 'query_analytics'].includes(intent) ||
+          msgText.includes('إرسالي') || msgText.includes('ارسالي') || msgText.includes('حالة') || msgText.includes('كم')) {
+        const stats = await fetchRealStats()
+        const botMsg: BotMessage = {
+          id: `bot-${Date.now()}`,
+          role: 'bot',
+          text: stats,
+          timestamp: new Date(),
+          suggestions: ['أي المحافظات الأعلى؟', 'المستخدمين غير النشطين', 'تنبؤ الأسبوع القادم'],
+          source: 'local',
+          intent,
+        }
+        setMessages(prev => [...prev, botMsg])
+        setIsLoading(false)
+        return
+      }
+
+      if (['query_governorates'].includes(intent) || msgText.includes('محافظ') || msgText.includes('خريط')) {
+        const govData = await fetchRealGovernorates()
+        const botMsg: BotMessage = {
+          id: `bot-${Date.now()}`,
+          role: 'bot',
+          text: govData,
+          timestamp: new Date(),
+          suggestions: ['أي المحافظة الأضعف؟', 'مقارنة بالأسبوع الماضي', 'عرض الخريطة'],
+          source: 'local',
+          intent,
+        }
+        setMessages(prev => [...prev, botMsg])
+        setIsLoading(false)
+        return
+      }
+
+      if (['query_users', 'inactive_users'].includes(intent) || msgText.includes('مستخدم') || msgText.includes('فريق') || msgText.includes('نشط')) {
+        const userData = await fetchRealUsers()
+        const botMsg: BotMessage = {
+          id: `bot-${Date.now()}`,
+          role: 'bot',
+          text: userData,
+          timestamp: new Date(),
+          suggestions: ['المستخدمين غير النشطين', 'توزيع الصلاحيات', 'إحصائيات الإرساليات'],
+          source: 'local',
+          intent,
+        }
+        setMessages(prev => [...prev, botMsg])
+        setIsLoading(false)
+        return
       }
 
       if (useAI) {

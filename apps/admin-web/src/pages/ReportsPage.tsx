@@ -53,6 +53,12 @@ import {
   generateUsersReport as generateUsersPDFReport,
   generateShortagesReport,
 } from '@/lib/pdf-export'
+import {
+  generateCentralReport,
+  generateGovernorateDetailReport,
+  generateFormAnalysisReport,
+  generateDistrictReport,
+} from '@/lib/professional-reports'
 
 // ═══════════════════════════════════════════════════════════════
 // Constants & Helpers
@@ -851,8 +857,61 @@ export default function ReportsPage() {
       })
     }
 
+
+  // ═══ Professional Report Handlers ═══
+  const handleCentralReport = () => exportReport('central-report', async () => {
+    await generateCentralReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignType: campaign !== 'all' ? campaign : undefined })
+  })
+
+  const handleGovDetailReport = (govId: string) => exportReport('gov-detail-' + govId, async () => {
+    await generateGovernorateDetailReport(govId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })
+  })
+
+  const handleFormAnalysisReport = (formId: string) => exportReport('form-analysis-' + formId, async () => {
+    await generateFormAnalysisReport(formId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })
+  })
+
+
+    // ═══════════════════════════════════════
+    // PROFESSIONAL REPORTS — تقارير احترافية
+    // ═══════════════════════════════════════
+
+    // P1. التقرير المركزي الشامل
+    if (canExportAll(userRole)) {
+      cards.push({
+        icon: Shield, title: '🏛️ التقرير المركزي الشامل', subtitle: 'تقرير احترافي شامل — جميع المحافظات، المستخدمين، النماذج، النواقص، التغطية',
+        color: 'text-white', gradient: 'bg-gradient-to-r from-blue-700 to-indigo-800',
+        onClick: handleCentralReport, loading: exportingReport === 'central-report',
+        badge: 'احترافي',
+      })
+    }
+
+    // P2. تقارير المحافظات التفصيلية
+    if (canExportAll(userRole) && governorates) {
+      governorates.forEach((gov: any) => {
+        cards.push({
+          icon: MapPin, title: `🏛️ تقرير محافظة ${gov.name_ar}`, subtitle: `تقرير تفصيلي — المديريات، المستخدمين، الإرساليات، النواقص`,
+          color: 'text-blue-600', gradient: 'bg-gradient-to-r from-blue-500 to-blue-600',
+          onClick: () => handleGovDetailReport(gov.id), loading: exportingReport === 'gov-detail-' + gov.id,
+          badge: 'محافظة',
+        })
+      })
+    }
+
+    // P3. تقارير تحليل النماذج التفصيلية
+    if (forms) {
+      forms.forEach((form: any) => {
+        cards.push({
+          icon: FileText, title: `📊 تحليل: ${form.title_ar}`, subtitle: 'تقرير تفصيلي — تحليل كل حقل، التغطية حسب المحافظة، التوقيت، الإرساليات',
+          color: 'text-emerald-600', gradient: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
+          onClick: () => handleFormAnalysisReport(form.id), loading: exportingReport === 'form-analysis-' + form.id,
+          badge: 'تحليل نموذج',
+        })
+      })
+    }
+
     return cards
-  }, [userRole, stats, govStats, chartData, roleDistribution, exportingReport, dateFrom, dateTo, selectedGovFilter])
+  }, [userRole, stats, govStats, chartData, roleDistribution, exportingReport, dateFrom, dateTo, selectedGovFilter, campaign])
 
   // ═══ Charts data ═══
   const govChartData = useMemo(() => {

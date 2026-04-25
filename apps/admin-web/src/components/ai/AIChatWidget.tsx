@@ -649,9 +649,10 @@ export function AIChatWidget() {
       if (isExportRequest) {
         const exportReq = parseExportRequest(text)
         if (exportReq) {
+          const exportMsgId = `a-export-${Date.now()}`
           responseText = `⏳ جاري تجهيز ${exportReq.title} بصيغة ${exportReq.format === 'excel' ? 'Excel' : exportReq.format === 'csv' ? 'CSV' : 'PDF'}...`
           setMessages(prev => [...prev, {
-            id: `a-${Date.now()}`,
+            id: exportMsgId,
             role: 'assistant',
             content: responseText,
             timestamp: new Date(),
@@ -664,17 +665,26 @@ export function AIChatWidget() {
           if (result.success) {
             responseText += `\n\n📄 الملف: ${exportReq.title}_${new Date().toISOString().slice(0, 10)}.${exportReq.format === 'excel' ? 'xlsx' : exportReq.format === 'csv' ? 'csv' : 'pdf'}`
             responseText += `\n📊 عدد السجلات: ${result.recordCount}`
+          } else {
+            responseText += `\n\n💡 نصيحة: تأكد من وجود بيانات مطابقة للفلتر المطلوب.`
           }
           actions = [
             { id: 'export-another', label: '📥 تصدير آخر', type: 'query', payload: 'أريد تصدير بيانات أخرى', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
           ]
 
-          // Update streaming message
+          // Update the export message with result
           setMessages(prev => prev.map(m =>
-            m.id === `a-${Date.now()}` ? { ...m, content: responseText, isStreaming: false, actions } : m
+            m.id === exportMsgId ? { ...m, content: responseText, isStreaming: false, actions } : m
           ))
           setIsLoading(false)
           return
+        } else {
+          // Export keywords detected but parseExportRequest returned null
+          responseText = `🤔 فهمت إنك تريد تصدير، بس ما حددت إيش بالضبط.\n\nجرّب:\n• "صدر الإرساليات اليوم كإكسل"\n• "PDF للمستخدمين"\n• "تصدير المحافظات كإكسل"\n• "تقرير النواقص PDF"`
+          actions = [
+            { id: 'export-subs', label: '📥 إرساليات Excel', type: 'query', payload: 'صدر الإرساليات اليوم كإكسل', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+            { id: 'export-users', label: '📥 مستخدمين PDF', type: 'query', payload: 'PDF للمستخدمين', color: 'bg-rose-50 text-rose-700 border-rose-200' },
+          ]
         }
       }
 

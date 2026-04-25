@@ -17,7 +17,9 @@ import { queryAI, type AIMessage } from '@/lib/ai-providers'
 import { supabase } from '@/lib/supabase'
 import { isConfigured } from '@/lib/supabase'
 import { parseExportRequest, executeExport } from '@/lib/ai-export-engine'
+import { buildSmartReport, REPORT_CATALOG } from '@/lib/smart-report-builder'
 import { useVoiceInput } from '@/hooks/useVoiceInput'
+import { useConversationHistory } from '@/hooks/useConversationHistory'
 
 // ─── Real Data Fetchers ──────────────────────────────────────
 async function fetchRealStats(): Promise<string> {
@@ -88,17 +90,31 @@ interface BotMessage {
 
 const WELCOME_SUGGESTIONS = [
   'وش تطعيمات طفلي؟',
-  'وش الآثار الجانبية؟',
-  'هل مجاني؟',
-  'هل يسبب أوتيزم؟',
-  'صدر الإرساليات كإكسل',
-  'PDF للمستخدمين',
-  'تنبؤ الأسبوع القادم',
   'كم إرسالية اليوم؟',
+  'صدر الإرساليات كإكسل',
+  'تقرير يومي شامل',
+  'تنبؤ الأسبوع القادم',
+  'أي المحافظات الأعلى؟',
+  'المستخدمين غير النشطين',
+  'هل يسبب أوتيزم؟',
 ]
 
 export default function BotChatPage() {
-  const [messages, setMessages] = useState<BotMessage[]>([])
+  const { messages: storedMessages, setMessages: setStoredMessages, clearHistory } = useConversationHistory()
+  const [messages, setMessages] = useState<BotMessage[]>(() => {
+    // Convert stored messages to BotMessage format
+    if (storedMessages.length > 0) {
+      return storedMessages.map(m => ({
+        id: m.id,
+        role: m.role,
+        text: m.text,
+        timestamp: new Date(m.timestamp),
+        intent: m.intent,
+        source: m.source as 'local' | 'ai' | 'hybrid' | undefined,
+      }))
+    }
+    return []
+  })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [useAI, setUseAI] = useState(true)
@@ -107,6 +123,20 @@ export default function BotChatPage() {
   const [showSearch, setShowSearch] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Sync messages to localStorage whenever they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      setStoredMessages(messages.map(m => ({
+        id: m.id,
+        role: m.role,
+        text: m.text,
+        timestamp: m.timestamp.getTime(),
+        intent: m.intent,
+        source: m.source,
+      })))
+    }
+  }, [messages, setStoredMessages])
 
   // Voice input
   const voice = useVoiceInput('ar-SA')
@@ -200,8 +230,9 @@ export default function BotChatPage() {
       if (isExportRequest) {
         const exportReq = parseExportRequest(msgText)
         if (exportReq) {
+          const loadingId = `bot-loading-${Date.now()}`
           const loadingMsg: BotMessage = {
-            id: `bot-loading-${Date.now()}`,
+            id: loadingId,
             role: 'bot',
             text: `⏳ جاري تجهيز ${exportReq.title} بصيغة ${exportReq.format.toUpperCase()}...`,
             timestamp: new Date(),
@@ -216,19 +247,79 @@ export default function BotChatPage() {
             role: 'bot',
             text: result.success
               ? `${result.message}\n\n📄 الملف: ${exportReq.title}_${new Date().toISOString().slice(0, 10)}.${exportReq.format === 'excel' ? 'xlsx' : exportReq.format === 'csv' ? 'csv' : 'pdf'}\n📊 عدد السجلات: ${result.recordCount}`
-              : result.message,
+              : `${result.message}\n\n💡 تأكد من وجود بيانات مطابقة للفلتر.`,
             timestamp: new Date(),
             suggestions: result.success
               ? ['تصدير بيانات أخرى', 'تصدير كـ PDF', 'تصدير كـ Excel']
-              : ['جرّب نوع آخر', 'غير الفلتر'],
+              : ['جرّب نوع آخر', 'غير الفلتر', 'كم إرسالية اليوم؟'],
             source: 'local',
             intent: 'export',
           }
           // Remove loading message and add result
-          setMessages(prev => [...prev.filter(m => m.id !== loadingMsg.id), exportMsg])
+          setMessages(prev => [...prev.filter(m => m.id !== loadingId), exportMsg])
+          setIsLoading(false)
+          return
+        } else {
+          // Export keywords detected but couldn't parse — guide the user
+          const guideMsg: BotMessage = {
+            id: `bot-${Date.now()}`,
+            role: 'bot',
+            text: `🤔 فهمت إنك تريد تصدير، بس ما حددت إيش بالضبط.\n\nجرّب:\n• "صدر الإرساليات اليوم كإكسل"\n• "PDF للمستخدمين"\n• "تصدير المحافظات كإكسل"`,
+            timestamp: new Date(),
+            suggestions: ['📥 إرساليات Excel', '📥 مستخدمين PDF', '📥 محافظات Excel'],
+            source: 'local',
+            intent: 'export',
+          }
+          setMessages(prev => [...prev, guideMsg])
           setIsLoading(false)
           return
         }
+      }
+
+      // ── Smart Report Detection ──
+      const reportKeywords = ['تقرير يومي', 'تقرير اسبوع', 'تقرير أسبوع', 'مقارنة المحافظ', 'تحليل اسبوع', 'ملخص يوم']
+      const isReportRequest = reportKeywords.some(k => msgText.includes(k)) ||
+        (msgText.includes('تقرير') && (msgText.includes('شامل') || msgText.includes('كامل') || msgText.includes('ذكي')))
+
+      if (isReportRequest) {
+        let reportType: 'daily_summary' | 'weekly_analysis' | 'governorate_comparison' = 'daily_summary'
+        let reportName = 'تقرير يومي'
+
+        if (msgText.includes('اسبوع') || msgText.includes('أسبوع')) {
+          reportType = 'weekly_analysis'
+          reportName = 'تحليل أسبوعي'
+        } else if (msgText.includes('محافظ') || msgText.includes('مقارنة')) {
+          reportType = 'governorate_comparison'
+          reportName = 'مقارنة المحافظات'
+        }
+
+        const loadingMsg: BotMessage = {
+          id: `bot-report-${Date.now()}`,
+          role: 'bot',
+          text: `📊 جاري إنشاء ${reportName}...`,
+          timestamp: new Date(),
+          source: 'local',
+          intent: 'create_report',
+        }
+        setMessages(prev => [...prev, loadingMsg])
+
+        const result = await buildSmartReport(reportType)
+        const reportMsg: BotMessage = {
+          id: `bot-${Date.now()}`,
+          role: 'bot',
+          text: result.success
+            ? `${result.message}\n\n📄 تم إنشاء التقرير وفتحه في نافذة طباعة\n📊 عدد السجلات: ${result.recordCount}`
+            : result.message,
+          timestamp: new Date(),
+          suggestions: result.success
+            ? ['تقرير أسبوعي', 'مقارنة المحافظات', 'تصدير كإكسل']
+            : ['جرّب تقرير آخر', 'كم إرسالية اليوم؟'],
+          source: 'local',
+          intent: 'create_report',
+        }
+        setMessages(prev => [...prev.filter(m => !m.id.startsWith('bot-report-')), reportMsg])
+        setIsLoading(false)
+        return
       }
 
       // ── NL-to-SQL: Try direct data query ──
@@ -356,15 +447,39 @@ export default function BotChatPage() {
             content: m.text,
           }))
 
-          const systemPrompt = `أنت "مستشار التحصين الصحي الموسع" — مساعد ذكي متخصص في برنامج التحصين 🇾🇪
-تعليمات:
-- أجب باللغة العربية دائماً
-- كن دقيقاً طبياً واستند للإرشادات الرسمية
-- استخدم نبرة ودودة ومهنية
-- إذا كان السؤال طارئاً (تشنجات، صعوبة تنفس) حث على طلب المساعدة الطبية فوراً
-- استخدم الإيموجي بشكل مناسب
+          const systemPrompt = `أنت "مستشار التحصين الصحي الموسع" — مساعد ذكي متخصص في برنامج التحصين EPI في اليمن 🇾🇪
 
-معلومات مرجعية:
+**دورك:**
+- مساعد المشرفين والميدانيين في فهم البيانات واتخاذ قرارات
+- تقديم معلومات طبية دقيقة عن التطعيمات
+- تحليل الإحصائيات وتقديم توصيات عملية
+
+**تعليمات:**
+- أجب باللغة العربية دائماً (يمكنك استخدام المصطلحات الطبية بالإنجليزي مع الترجمة)
+- كن مختصراً ومباشراً — لا تتجاوز 5-8 أسطر إلا إذا طُلب تفصيل
+- استخدم الإيموجي بشكل مناسب (💉📊⚠️✅)
+- إذا كان السؤال طارئاً (تشنجات، صعوبة تنفس، حساسية شديدة) حث على طلب المساعدة الطبية فوراً 🚨
+- إذا لم تعرف الجواب، قل "ما عندي معلومات كافية عن هذا الموضوع" بدل التخمين
+
+**اللقاحات الأساسية:**
+BCG (السل)، HepB (الكبد B)، OPV/IPV (شلل الأطفال)، Pentavalent (الخماسي)، MR (الحصبة الألمانية)، PCV (الرئة)، Rota (الإسهال)
+
+**الجدول:**
+- الولادة: BCG + HepB + OPV0
+- 6 أسابيع: Pentavalent1 + OPV1 + PCV1 + Rota1
+- 10 أسابيع: Pentavalent2 + OPV2 + PCV2 + Rota2
+- 14 أسبوع: Pentavalent3 + OPV3 + PCV3 + Rota3
+- 9 أشهر: MR1 + HepB booster
+- 18 شهر: MR2 + DPT booster
+
+**معلومات النظام المتاحة:**
+- إحصائيات الإرساليات (يومي/أسبوعي/شهري)
+- ترتيب المحافظات حسب الأداء
+- حالة المستخدمين (نشط/غير نشط)
+- النواقص والمستلزمات
+- التقارير والتحليلات
+
+**البيانات المرفقة:**
 ${localResponse.text.substring(0, 500)}`
 
           const aiResponse = await queryAI(msgText, aiHistory, { systemPrompt })
@@ -467,6 +582,7 @@ ${localResponse.text.substring(0, 500)}`
   }
 
   const handleClear = () => {
+    clearHistory()
     setMessages([])
     setTimeout(() => {
       setMessages([{

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users, FileStack, TrendingUp, TrendingDown,
@@ -22,6 +22,7 @@ import {
 import { formatNumber, formatRelativeTime, cn } from '@/lib/utils'
 import { useCampaign } from '@/lib/campaign-context'
 import { AIBriefingCard } from '@/components/ai/AIBriefingCard'
+import { useSmartAlerts } from '@/hooks/useSmartAlerts'
 import { isConfigured, supabase } from '@/lib/supabase'
 import { STATUS_LABELS, STATUS_COLORS, type SubmissionStatus } from '@/types/database'
 import {
@@ -179,6 +180,7 @@ export default function DashboardPage() {
   const { data: formsResult } = useForms({ pageSize: 100 })
   const { data: users } = useUsers()
   const { data: shortages } = useShortages(campaign)
+  const { alerts: smartAlerts, criticalCount: smartCritical, warningCount: smartWarning } = useSmartAlerts()
 
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -385,6 +387,66 @@ export default function DashboardPage() {
 
         {/* ═══ 0. AI BRIEFING — Smart Daily Summary ═══ */}
         <AIBriefingCard stats={stats || null} govStats={govStats || undefined} chartData={chartData || undefined} />
+
+        {/* ═══ 0.5 SMART ALERTS — Proactive Anomaly Detection ═══ */}
+        {smartAlerts.length > 0 && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="p-1 rounded-md bg-violet-100">
+                <Zap className="w-3.5 h-3.5 text-violet-600" />
+              </div>
+              <h2 className="text-sm font-heading font-bold">تنبيهات ذكية</h2>
+              {smartCritical > 0 && (
+                <Badge variant="destructive" className="text-[9px] px-1.5 py-0 animate-pulse">
+                  {smartCritical} حرج
+                </Badge>
+              )}
+              {smartWarning > 0 && (
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 text-amber-600 border-amber-300">
+                  {smartWarning} تنبيه
+                </Badge>
+              )}
+            </div>
+            <div className="space-y-2">
+              {smartAlerts.slice(0, 4).map(alert => (
+                <div
+                  key={alert.id}
+                  className={cn(
+                    'flex items-start gap-3 p-3 rounded-xl border transition-all',
+                    alert.severity === 'critical' ? 'bg-red-50/80 border-red-200' :
+                    alert.severity === 'warning' ? 'bg-amber-50/80 border-amber-200' :
+                    'bg-blue-50/80 border-blue-200'
+                  )}
+                >
+                  <div className={cn(
+                    'p-1.5 rounded-lg shrink-0 mt-0.5',
+                    alert.severity === 'critical' ? 'bg-red-100' :
+                    alert.severity === 'warning' ? 'bg-amber-100' : 'bg-blue-100'
+                  )}>
+                    {alert.severity === 'critical' ? <AlertCircle className="w-3.5 h-3.5 text-red-600" /> :
+                     alert.severity === 'warning' ? <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> :
+                     <AlertCircle className="w-3.5 h-3.5 text-blue-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold">{alert.title}</span>
+                      {alert.severity === 'critical' && (
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{alert.description}</p>
+                    <p className="text-[10px] text-primary mt-1 flex items-center gap-1">
+                      <Target className="w-3 h-3" /> {alert.suggestion}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ═══ 1. ALERTS — What needs action NOW ═══ */}
         <section>

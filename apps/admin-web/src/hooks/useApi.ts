@@ -419,6 +419,38 @@ export function useDeleteUser() {
   })
 }
 
+export function useUpdateUserProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, full_name, email, phone }: {
+      userId: string; full_name: string; email: string; phone?: string
+    }) => {
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: { action: 'update_profile', user_id: userId, full_name, email, phone },
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+  })
+}
+
+export function useResetUserPassword() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, newPassword }: {
+      userId: string; newPassword: string
+    }) => {
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: { action: 'reset_password', user_id: userId, new_password: newPassword },
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+  })
+}
+
 // ==================== FORMS ====================
 
 export function useForms(filters?: { search?: string; page?: number; pageSize?: number; campaignType?: string }) {

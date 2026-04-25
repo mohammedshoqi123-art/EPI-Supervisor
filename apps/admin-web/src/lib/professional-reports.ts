@@ -787,7 +787,7 @@ export async function generateFormAnalysisReport(
         ${buildSectionTitle('🔤', 'تحليل الحقول', `${fieldStats.length} حقل`)}
         ${buildTable(
           ['#', 'الحقل', 'النوع', 'مُملأ', 'فارغ', 'نسبة التعبئة'],
-          fieldStats.map((f, i) => [
+          fieldStats.map((f: any, i: number) => [
             `${i+1}`,
             `<strong>${escapeHtml(f.label)}</strong>`,
             f.type || '—',
@@ -796,7 +796,7 @@ export async function generateFormAnalysisReport(
             `<span class="num" style="color:${f.rate >= 80 ? BRAND.success : f.rate >= 50 ? BRAND.warning : BRAND.accent}">${f.rate}%</span>`,
           ])
         )}
-        ${fieldStats.map(f => buildProgress(f.label, f.filled, totalSubs, f.rate >= 80 ? BRAND.success : f.rate >= 50 ? BRAND.warning : BRAND.accent)).join('')}
+        ${fieldStats.map((f: any) => buildProgress(f.label, f.filled, totalSubs, f.rate >= 80 ? BRAND.success : f.rate >= 50 ? BRAND.warning : BRAND.accent)).join('')}
       ` : ''}
 
       <!-- ═══ Sections Analysis ═══ -->
@@ -1326,7 +1326,7 @@ export async function generateCoverageGapReport(): Promise<void> {
           <div class="gap-card" style="border-right: 4px solid ${BRAND.warning}">
             <div class="gap-header">
               <strong>🟡 ${escapeHtml(g.name)}</strong>
-              <span>${g.coverageDistricts}/${g.totalDistricts} مديرية (${g.coverageRate}%)</span>
+              <span>${g.coveredDistricts}/${g.totalDistricts} مديرية (${g.coverageRate}%)</span>
             </div>
             <div class="coverage-bar">
               <div class="coverage-fill" style="width:${g.coverageRate}%;background:${g.coverageRate >= 60 ? BRAND.success : BRAND.warning}"></div>
@@ -1741,13 +1741,13 @@ export async function generateDataQualityReport(): Promise<void> {
         ${buildSectionTitle('🔤', `تحليل حقول: ${f.name}`)}
         ${buildTable(
           ['الحقل', 'النسبة', 'مُملأ/الإجمالي'],
-          f.fieldCompleteness.sort((a, b) => a.rate - b.rate).map(fc => [
+          f.fieldCompleteness.sort((a: any, b: any) => a.rate - b.rate).map((fc: any) => [
             escapeHtml(fc.label),
             `<span style="color:${getQualityColor(fc.rate)};font-weight:700">${fc.rate}%</span>`,
             `<span class="num">${fc.filled}/${fc.total}</span>`,
           ])
         )}
-        ${f.fieldCompleteness.map(fc => buildProgress(fc.label, fc.filled, fc.total, getQualityColor(fc.rate))).join('')}
+        ${f.fieldCompleteness.map((fc: any) => buildProgress(fc.label, fc.filled, fc.total, getQualityColor(fc.rate))).join('')}
       `).join('')}
 
       ${buildFooter()}

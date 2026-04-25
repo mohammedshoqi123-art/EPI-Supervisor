@@ -3,7 +3,7 @@ import {
   Search, Filter, CheckCircle2, XCircle, Clock, Eye, MessageSquare,
   ChevronLeft, ChevronRight, MapPin, Calendar, User, FileText, Download,
   AlertTriangle, RefreshCw, Trash2, Send, MoreVertical, FileStack,
-  ArrowUpDown, Loader2, X
+  ArrowUpDown, Loader2, X, Edit, Check
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -370,10 +370,48 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
   submission: FormSubmission; open: boolean; onOpenChange: (v: boolean) => void; onDeleted: () => void
 }) {
   const [reviewNotes, setReviewNotes] = useState('')
+  const [editMode, setEditMode] = useState(false)
+  const [editData, setEditData] = useState(JSON.stringify(submission.data, null, 2))
+  const [editNotes, setEditNotes] = useState(submission.notes || '')
+  const [saving, setSaving] = useState(false)
   const updateStatus = useUpdateSubmissionStatus()
   const { toast } = useToast()
   const { data: authData } = useAuth()
-  const canDelete = authData?.profile?.role === 'admin'
+  const userRole = authData?.profile?.role
+  const canDelete = userRole === 'admin'
+  const canEdit = userRole === 'admin' || userRole === 'central'
+
+  const handleSaveEdit = async () => {
+    setSaving(true)
+    try {
+      let parsedData: Record<string, unknown>
+      try {
+        parsedData = JSON.parse(editData)
+      } catch {
+        toast({ title: 'خطأ في البيانات', description: 'JSON غير صالح — تحقق من التنسيق', variant: 'destructive' })
+        setSaving(false)
+        return
+      }
+
+      const { error } = await supabase
+        .from('form_submissions')
+        .update({
+          data: parsedData,
+          notes: editNotes || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', submission.id)
+
+      if (error) throw error
+      toast({ title: 'تم الحفظ', description: 'تم تحديث بيانات الإرسالية', variant: 'success' })
+      setEditMode(false)
+      onOpenChange(false)
+    } catch (e: any) {
+      toast({ title: 'فشل الحفظ', description: e.message, variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const handleStatusChange = (newStatus: SubmissionStatus) => {
     updateStatus.mutate(
@@ -414,10 +452,22 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-0">
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" /> تفاصيل الإرسالية
+          <DialogTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" />
+              {editMode ? 'تعديل الإرسالية' : 'تفاصيل الإرسالية'}
+            </div>
+            {canEdit && !editMode && (
+              <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => {
+                setEditData(JSON.stringify(submission.data, null, 2))
+                setEditNotes(submission.notes || '')
+                setEditMode(true)
+              }}>
+                <Edit className="w-3 h-3" /> تعديل
+              </Button>
+            )}
           </DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto px-6 space-y-4 pb-2">
@@ -457,27 +507,63 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
             </div>
           )}
 
-          <div>
-            <p className="text-xs font-medium mb-2">البيانات ({dataFields.length} حقل)</p>
-            {dataFields.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">لا توجد بيانات</p>
-            ) : (
-              <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                {dataFields.map((field) => (
-                  <div key={field.key} className="flex items-start gap-2 text-xs py-1.5 border-b last:border-0">
-                    <span className="font-medium text-muted-foreground min-w-[80px] shrink-0">{field.key}</span>
-                    <span className={cn(
-                      'font-mono break-all',
-                      field.isBoolean && (field.boolVal ? 'text-emerald-600' : 'text-red-600'),
-                      field.isNumber && 'text-blue-600'
-                    )}>
-                      {field.isBoolean ? (field.boolVal ? 'نعم ✓' : 'لا ✗') : field.value}
-                    </span>
-                  </div>
-                ))}
+          {editMode ? (
+            /* ─── Edit Mode ─── */
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs font-medium">الملاحظات</Label>
+                <Input
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="ملاحظات الإرسالية..."
+                  className="h-8 text-xs mt-1"
+                />
               </div>
-            )}
-          </div>
+              <div>
+                <Label className="text-xs font-medium">البيانات (JSON)</Label>
+                <textarea
+                  value={editData}
+                  onChange={(e) => setEditData(e.target.value)}
+                  className="w-full h-48 mt-1 p-3 text-xs font-mono border rounded-lg bg-muted/30 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  dir="ltr"
+                  spellCheck={false}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">تعديل JSON مباشرة — كن حذراً عند التعديل</p>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button size="sm" className="flex-1 gap-1.5" onClick={handleSaveEdit} disabled={saving}>
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  حفظ التعديلات
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setEditMode(false)}>إلغاء</Button>
+              </div>
+            </div>
+          ) : (
+            /* ─── View Mode ─── */
+            <>
+              <div>
+                <p className="text-xs font-medium mb-2">البيانات ({dataFields.length} حقل)</p>
+                {dataFields.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">لا توجد بيانات</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {dataFields.map((field) => (
+                      <div key={field.key} className="flex items-start gap-2 text-xs py-1.5 border-b last:border-0">
+                        <span className="font-medium text-muted-foreground min-w-[80px] shrink-0">{field.key}</span>
+                        <span className={cn(
+                          'font-mono break-all',
+                          field.isBoolean && (field.boolVal ? 'text-emerald-600' : 'text-red-600'),
+                          field.isNumber && 'text-blue-600'
+                        )}>
+                          {field.isBoolean ? (field.boolVal ? 'نعم ✓' : 'لا ✗') : field.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="space-y-3 pt-3 border-t">
             <Label className="text-xs">تغيير الحالة</Label>

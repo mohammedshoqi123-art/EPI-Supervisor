@@ -748,7 +748,9 @@ export function useChatMessages(room = 'general') {
       return data
     },
     enabled: isConfigured,
-    refetchInterval: isConfigured ? 15000 : false,
+    // No polling — ChatPage uses Realtime subscription for live updates
+    refetchInterval: false,
+    staleTime: 30000,
   })
 }
 

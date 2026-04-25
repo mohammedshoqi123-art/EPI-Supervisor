@@ -20,11 +20,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Header } from '@/components/layout/header'
-import { useForms, useFormSubmissionCounts, useCreateForm, useUpdateForm, useDeleteForm, useSubmissions } from '@/hooks/useApi'
+import { useForms, useFormSubmissionCounts, useCreateForm, useUpdateForm, useDeleteForm, useSubmissions, useAuth, useGovernorates } from '@/hooks/useApi'
 import { useCampaign } from '@/lib/campaign-context'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { supabase } from '@/lib/supabase'
+import { isConfigured } from '@/lib/supabase'
+import { STATUS_LABELS, STATUS_COLORS, type SubmissionStatus, type FormSubmission } from '@/types/database'
 import type { Form } from '@/types/database'
 import {
   FIELD_TYPE_LABELS, generateId, parseFormSchema,
@@ -50,6 +52,10 @@ export default function FormsPage() {
   const [deleteForm, setDeleteForm] = useState<Form | null>(null)
   const [dataForm, setDataForm] = useState<Form | null>(null)
   const { campaign, labelAr, isFiltered } = useCampaign()
+  const { data: authData } = useAuth()
+  const userRole = authData?.profile?.role
+  const canManageForms = userRole === 'admin'
+  const canDeleteData = userRole === 'admin'
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300)
@@ -88,10 +94,12 @@ export default function FormsPage() {
               </Button>
             )}
           </div>
-          <Button className="gap-2 h-10 px-5 font-medium" onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" />
-            نموذج جديد
-          </Button>
+          {canManageForms && (
+            <Button className="gap-2 h-10 px-5 font-medium" onClick={() => setShowCreate(true)}>
+              <Plus className="w-4 h-4" />
+              نموذج جديد
+            </Button>
+          )}
         </div>
 
         {/* Forms Grid */}
@@ -107,11 +115,28 @@ export default function FormsPage() {
               <FileText className="w-10 h-10 text-muted-foreground/30" />
             </div>
             <h3 className="text-lg font-bold mb-1">{debouncedSearch ? 'لا توجد نتائج' : 'لا توجد نماذج بعد'}</h3>
-            <p className="text-sm text-muted-foreground mb-5 max-w-sm mx-auto">
-              {debouncedSearch ? 'جرّب البحث بكلمات مختلفة' : 'ابدأ بإنشاء نموذج جديد لجمع البيانات من الميدان'}
+            <p className="text-sm text-muted-foreground mb-2 max-w-sm mx-auto">
+              {debouncedSearch
+                ? 'جرّب البحث بكلمات مختلفة'
+                : isFiltered
+                  ? `لا توجد نماذج مربوطة بحملة "${labelAr}". جرّب تغيير الفلتر أو إنشاء نموذج جديد.`
+                  : 'ابدأ بإنشاء نموذج جديد لجمع البيانات من الميدان'
+              }
             </p>
-            {!debouncedSearch && (
-              <Button className="gap-2 h-10 px-6" onClick={() => setShowCreate(true)}>
+            {!isConfigured && (
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg max-w-sm mx-auto">
+                <p className="text-xs text-amber-700">⚠️ Supabase غير مُعدّ — تحقق من متغيرات البيئة</p>
+              </div>
+            )}
+            {isFiltered && !debouncedSearch && (
+              <Button variant="outline" className="gap-2 mt-3" onClick={() => {
+                /* Reset campaign to all */
+              }}>
+                عرض جميع النماذج
+              </Button>
+            )}
+            {!debouncedSearch && canManageForms && (
+              <Button className="gap-2 h-10 px-6 mt-3" onClick={() => setShowCreate(true)}>
                 <Plus className="w-4 h-4" /> إنشاء نموذج
               </Button>
             )}
@@ -791,11 +816,20 @@ function FormDataDialog({ open, onOpenChange, form }: {
   const [statusFilter, setStatusFilter] = useState('all')
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [editSubmission, setEditSubmission] = useState<FormSubmission | null>(null)
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState(false)
+  const [deleteSubTarget, setDeleteSubTarget] = useState<string | null>(null)
+  const [govFilter, setGovFilter] = useState('all')
   const { toast } = useToast()
+  const { data: authData } = useAuth()
+  const canEdit = authData?.profile?.role === 'admin' || authData?.profile?.role === 'central'
+  const canDelete = authData?.profile?.role === 'admin'
+  const { data: governorates } = useGovernorates()
 
   const { data, isLoading, refetch } = useSubmissions({
     formId: form.id,
     status: statusFilter !== 'all' ? statusFilter as any : undefined,
+    governorateId: govFilter !== 'all' ? govFilter : undefined,
     page, pageSize: 20,
   })
 
@@ -817,11 +851,13 @@ function FormDataDialog({ open, onOpenChange, form }: {
         return
       }
 
-      // Convert to CSV
-      const headers = ['id', 'status', 'created_at', 'submitted_at', 'data']
+      // Convert to CSV with enriched data
+      const headers = ['id', 'status', 'governorate_id', 'district_id', 'created_at', 'submitted_at', 'gps_lat', 'gps_lng', 'notes', 'data']
       const rows = allData.map(row =>
         headers.map(h => {
-          const val = h === 'data' ? JSON.stringify(row[h] || {}) : (row[h] || '')
+          let val = row[h]
+          if (h === 'data') val = JSON.stringify(val || {})
+          else if (val === null || val === undefined) val = ''
           return `"${String(val).replace(/"/g, '""')}"`
         }).join(',')
       )
@@ -901,22 +937,48 @@ function FormDataDialog({ open, onOpenChange, form }: {
   }
 
   const handleDeleteSubmission = async (id: string) => {
+    setDeleteSubTarget(id)
+  }
+
+  const confirmDeleteSubmission = async () => {
+    if (!deleteSubTarget) return
     try {
-      const { error } = await supabase.from('form_submissions').delete().eq('id', id)
+      const { error } = await supabase.from('form_submissions').update({ deleted_at: new Date().toISOString() }).eq('id', deleteSubTarget)
       if (error) throw error
       toast({ title: 'تم الحذف', description: 'تم حذف الإرسالية' })
       refetch()
     } catch (e: any) {
       toast({ title: 'خطأ', description: e.message, variant: 'destructive' })
+    } finally {
+      setDeleteSubTarget(null)
     }
   }
 
   const handleDeleteAll = async () => {
-    if (!confirm('هل أنت متأكد من حذف جميع البيانات؟ هذا الإجراء لا يمكن التراجع عنه.')) return
+    setDeleteAllConfirm(true)
+  }
+
+  const confirmDeleteAll = async () => {
     try {
-      const { error } = await supabase.from('form_submissions').delete().eq('form_id', form.id)
+      const { error } = await supabase.from('form_submissions').update({ deleted_at: new Date().toISOString() }).eq('form_id', form.id).is('deleted_at', null)
       if (error) throw error
       toast({ title: 'تم الحذف', description: 'تم حذف جميع البيانات' })
+      refetch()
+    } catch (e: any) {
+      toast({ title: 'خطأ', description: e.message, variant: 'destructive' })
+    } finally {
+      setDeleteAllConfirm(false)
+    }
+  }
+
+  const handleStatusChange = async (id: string, newStatus: SubmissionStatus) => {
+    try {
+      const { error } = await supabase
+        .from('form_submissions')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+      toast({ title: newStatus === 'submitted' ? 'تم الإرسال' : 'تم إرجاعها لمسودة', variant: 'success' })
       refetch()
     } catch (e: any) {
       toast({ title: 'خطأ', description: e.message, variant: 'destructive' })
@@ -948,22 +1010,33 @@ function FormDataDialog({ open, onOpenChange, form }: {
 
           <TabsContent value="data" className="flex-1 overflow-hidden flex flex-col mt-4">
             {/* Filters */}
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
               <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(1) }}>
-                <SelectTrigger className="w-40"><SelectValue placeholder="الحالة" /></SelectTrigger>
+                <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="الحالة" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
+                  <SelectItem value="all">كل الحالات</SelectItem>
                   <SelectItem value="submitted">مُرسل</SelectItem>
                   <SelectItem value="draft">مسودة</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5" /> تحديث
+              <Select value={govFilter} onValueChange={v => { setGovFilter(v); setPage(1) }}>
+                <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="المحافظة" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل المحافظات</SelectItem>
+                  {governorates?.map(g => (
+                    <SelectItem key={g.id} value={g.id}>{g.name_ar}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={() => refetch()} className="h-8 gap-1.5 text-xs">
+                <RefreshCw className="w-3 h-3" /> تحديث
               </Button>
               <div className="flex-1" />
-              <Button variant="destructive" size="sm" onClick={handleDeleteAll} className="gap-1.5">
-                <Trash2 className="w-3.5 h-3.5" /> حذف الكل
-              </Button>
+              {canDelete && totalCount > 0 && (
+                <Button variant="destructive" size="sm" onClick={handleDeleteAll} className="h-8 gap-1.5 text-xs">
+                  <Trash2 className="w-3 h-3" /> حذف الكل
+                </Button>
+              )}
             </div>
 
             {/* Table */}
@@ -986,36 +1059,57 @@ function FormDataDialog({ open, onOpenChange, form }: {
                       <TableHead>الحالة</TableHead>
                       <TableHead>التاريخ</TableHead>
                       <TableHead>المُرسل</TableHead>
-                      <TableHead className="w-20">إجراءات</TableHead>
+                      <TableHead>المحافظة</TableHead>
+                      {(canEdit || canDelete) && <TableHead className="w-28">إجراءات</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {submissions.map((sub, i) => (
-                      <TableRow key={sub.id}>
+                      <TableRow key={sub.id} className="hover:bg-muted/30">
                         <TableCell className="text-muted-foreground text-xs">
                           {(page - 1) * 20 + i + 1}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={sub.status === 'submitted' ? 'default' : 'secondary'} className="text-xs">
-                            {sub.status === 'submitted' ? 'مُرسل' : 'مسودة'}
+                          <Badge className={cn('text-xs', STATUS_COLORS[sub.status as SubmissionStatus] || 'bg-gray-100 text-gray-700')}>
+                            {STATUS_LABELS[sub.status as SubmissionStatus] || sub.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs" dir="ltr">
                           {new Date(sub.created_at).toLocaleString('ar-SA')}
                         </TableCell>
                         <TableCell className="text-xs">
-                          {sub.profiles?.full_name || 'غير معروف'}
+                          <div>
+                            <p className="font-medium">{sub.profiles?.full_name || 'غير معروف'}</p>
+                            <p className="text-[10px] text-muted-foreground">{sub.profiles?.email}</p>
+                          </div>
                         </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-destructive h-7 w-7"
-                            onClick={() => handleDeleteSubmission(sub.id)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                        <TableCell className="text-xs">
+                          {sub.governorates?.name_ar || '—'}
                         </TableCell>
+                        {(canEdit || canDelete) && (
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {canEdit && sub.status === 'draft' && (
+                                <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-emerald-600"
+                                  onClick={() => handleStatusChange(sub.id, 'submitted')} title="إرسال">
+                                  <Check className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                              {canEdit && sub.status === 'submitted' && (
+                                <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-amber-600"
+                                  onClick={() => handleStatusChange(sub.id, 'draft')} title="إرجاع لمسودة">
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                              {canDelete && (
+                                <Button variant="ghost" size="icon-sm" className="text-destructive h-7 w-7"
+                                  onClick={() => handleDeleteSubmission(sub.id)} title="حذف">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1080,6 +1174,44 @@ function FormDataDialog({ open, onOpenChange, form }: {
           </TabsContent>
         </Tabs>
       </DialogContent>
+
+      {/* Delete Submission Confirmation */}
+      <Dialog open={!!deleteSubTarget} onOpenChange={() => setDeleteSubTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" /> تأكيد الحذف
+            </DialogTitle>
+            <DialogDescription>هل أنت متأكد من حذف هذه الإرسالية؟ لا يمكن التراجع.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteSubTarget(null)}>إلغاء</Button>
+            <Button variant="destructive" size="sm" onClick={confirmDeleteSubmission} className="gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" /> حذف
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Confirmation */}
+      <Dialog open={deleteAllConfirm} onOpenChange={setDeleteAllConfirm}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" /> تأكيد حذف الكل
+            </DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من حذف جميع بيانات هذا النموذج ({totalCount} إرسالية)؟ لا يمكن التراجع.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteAllConfirm(false)}>إلغاء</Button>
+            <Button variant="destructive" size="sm" onClick={confirmDeleteAll} className="gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" /> حذف {totalCount} إرسالية
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

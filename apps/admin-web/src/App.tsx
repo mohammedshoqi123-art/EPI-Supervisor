@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppLayout } from '@/components/layout/app-layout'
 import { ProtectedRoute } from '@/components/layout/protected-route'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import LoginPage from '@/pages/LoginPage'
 
 // Lazy load pages for better performance
@@ -23,6 +24,7 @@ const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
 const ReferencesPage = lazy(() => import('@/pages/ReferencesPage'))
 const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
 const ShortagesPage = lazy(() => import('@/pages/ShortagesPage'))
+const ScheduledReportsPage = lazy(() => import('@/pages/ScheduledReportsPage'))
 
 function PageLoader() {
   return (
@@ -39,6 +41,7 @@ function PageLoader() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <TooltipProvider>
       <Routes>
         {/* Public route — Login */}
@@ -69,6 +72,7 @@ export default function App() {
             <Route path="shortages" element={<Suspense fallback={<PageLoader />}><ShortagesPage /></Suspense>} />
             <Route path="insights" element={<Suspense fallback={<PageLoader />}><AIInsightsPage /></Suspense>} />
             <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
+            <Route path="scheduled-reports" element={<Suspense fallback={<PageLoader />}><ScheduledReportsPage /></Suspense>} />
             <Route path="governorates" element={<Suspense fallback={<PageLoader />}><GovernoratesPage /></Suspense>} />
           </Route>
         </Route>
@@ -95,5 +99,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </TooltipProvider>
+    </ErrorBoundary>
   )
 }

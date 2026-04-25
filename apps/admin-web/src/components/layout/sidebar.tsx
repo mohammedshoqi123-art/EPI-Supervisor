@@ -8,7 +8,7 @@ import {
   AlertTriangle, Bell, Moon, Sun, Menu, X, Sparkles, Layout, Clock,
   Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
   FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare,
-  FileSpreadsheet, PackageX
+  FileSpreadsheet, PackageX, Calendar
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -52,6 +52,7 @@ const navItems: NavItem[] = [
   // ─── التحليلات والتقارير (إدارة وما فوق) ───
   { icon: BarChart3, label: 'التحليلات', href: '/insights', separator: true, roles: ['admin', 'central', 'governorate', 'district'] },
   { icon: FileSpreadsheet, label: 'التقارير والبيانات', href: '/reports', roles: ['admin', 'central', 'governorate', 'district'] },
+  { icon: Calendar, label: 'التقارير المجدولة', href: '/scheduled-reports', roles: ['admin', 'central', 'governorate', 'district'] },
   { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
   // ─── التواصل (جميع الأدوار) ───
   { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat', separator: true },

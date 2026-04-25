@@ -517,6 +517,7 @@ export function AIChatWidget() {
   const [isLoading, setIsLoading] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [pinned, setPinned] = useState(false)
+  const [quickStats, setQuickStats] = useState<{ today: number; total: number; users: number } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
@@ -563,8 +564,30 @@ export function AIChatWidget() {
 
   // Focus input on open
   useEffect(() => {
-    if (isOpen) setTimeout(() => inputRef.current?.focus(), 100)
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 100)
+      // Fetch quick stats on first open
+      if (!quickStats) {
+        fetchQuickStats()
+      }
+    }
   }, [isOpen])
+
+  // Fetch quick stats for header bar
+  const fetchQuickStats = async () => {
+    try {
+      const [todayRes, totalRes, usersRes] = await Promise.allSettled([
+        supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+        supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('is_active', true),
+      ])
+      setQuickStats({
+        today: todayRes.status === 'fulfilled' ? todayRes.value.count || 0 : 0,
+        total: totalRes.status === 'fulfilled' ? totalRes.value.count || 0 : 0,
+        users: usersRes.status === 'fulfilled' ? usersRes.value.count || 0 : 0,
+      })
+    } catch { /* ignore */ }
+  }
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -930,6 +953,29 @@ export function AIChatWidget() {
             </Button>
           </div>
         </CardHeader>
+
+        {/* Quick Stats Bar */}
+        {quickStats && (
+          <div className="flex items-center justify-around px-3 py-1.5 bg-muted/30 border-b text-[10px]">
+            <div className="flex items-center gap-1">
+              <span className="text-emerald-500">📊</span>
+              <span className="text-muted-foreground">اليوم:</span>
+              <span className="font-bold tabular-nums">{quickStats.today}</span>
+            </div>
+            <div className="w-px h-3 bg-border" />
+            <div className="flex items-center gap-1">
+              <span className="text-blue-500">📋</span>
+              <span className="text-muted-foreground">الإجمالي:</span>
+              <span className="font-bold tabular-nums">{quickStats.total}</span>
+            </div>
+            <div className="w-px h-3 bg-border" />
+            <div className="flex items-center gap-1">
+              <span className="text-purple-500">👥</span>
+              <span className="text-muted-foreground">نشطين:</span>
+              <span className="font-bold tabular-nums">{quickStats.users}</span>
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <ScrollArea className="flex-1 px-3 py-2" ref={scrollRef}>

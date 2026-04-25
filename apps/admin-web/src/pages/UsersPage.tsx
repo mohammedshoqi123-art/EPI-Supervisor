@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Header } from '@/components/layout/header'
-import { useUsers, useCreateUser, useUpdateUserRole, useToggleUserActive, useDeleteUser, useGovernorates, useDistricts, useAuth } from '@/hooks/useApi'
+import { useUsers, useCreateUser, useUpdateUserRole, useToggleUserActive, useDeleteUser, useUpdateUserProfile, useResetUserPassword, useGovernorates, useDistricts, useAuth } from '@/hooks/useApi'
 import { ROLE_LABELS, ROLE_COLORS, type UserRole, type UserProfile } from '@/types/database'
 import { formatRelativeTime, getInitials, cn } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
@@ -333,72 +333,183 @@ function CreateUserDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 }
 
 function EditUserDialog({ user, open, onOpenChange }: { user: UserProfile; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const [activeTab, setActiveTab] = useState<'profile' | 'role' | 'password'>('profile')
+  const [fullName, setFullName] = useState(user.full_name)
+  const [email, setEmail] = useState(user.email)
+  const [phone, setPhone] = useState(user.phone || '')
   const [role, setRole] = useState<UserRole>(user.role)
   const [govId, setGovId] = useState(user.governorate_id || '')
   const [districtId, setDistrictId] = useState(user.district_id || '')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+
   const updateRole = useUpdateUserRole()
+  const updateProfile = useUpdateUserProfile()
+  const resetPassword = useResetUserPassword()
   const { data: governorates } = useGovernorates()
   const { data: districts } = useDistricts(govId)
   const { toast } = useToast()
 
-  const handleSave = () => {
-    updateRole.mutate({ userId: user.id, role, governorate_id: govId, district_id: districtId }, {
-      onSuccess: () => {
-        toast({ title: 'تم تحديث المستخدم', variant: 'success' })
-        onOpenChange(false)
-      },
-      onError: () => toast({ title: 'فشل التحديث', variant: 'destructive' }),
-    })
+  const validatePassword = (pwd: string): string => {
+    if (pwd.length < 8) return '8 أحرف على الأقل'
+    if (!/[A-Z]/.test(pwd)) return 'يحتاج حرف كبير'
+    if (!/[a-z]/.test(pwd)) return 'يحتاج حرف صغير'
+    if (!/[0-9]/.test(pwd)) return 'يحتاج رقم'
+    return ''
   }
+
+  const handleSaveProfile = () => {
+    if (!fullName.trim()) { toast({ title: 'الاسم مطلوب', variant: 'destructive' }); return }
+    updateProfile.mutate(
+      { userId: user.id, full_name: fullName.trim(), email: email.trim(), phone: phone.trim() || undefined },
+      {
+        onSuccess: () => { toast({ title: 'تم تحديث الملف الشخصي', variant: 'success' }); onOpenChange(false) },
+        onError: () => toast({ title: 'فشل التحديث', variant: 'destructive' }),
+      }
+    )
+  }
+
+  const handleSaveRole = () => {
+    updateRole.mutate(
+      { userId: user.id, role, governorate_id: govId, district_id: districtId },
+      {
+        onSuccess: () => { toast({ title: 'تم تحديث الدور', variant: 'success' }); onOpenChange(false) },
+        onError: () => toast({ title: 'فشل التحديث', variant: 'destructive' }),
+      }
+    )
+  }
+
+  const handleResetPassword = () => {
+    const err = validatePassword(newPassword)
+    if (err) { setPasswordError(err); return }
+    if (newPassword !== confirmPassword) { setPasswordError('كلمتا المرور غير متطابقتين'); return }
+    setPasswordError('')
+    resetPassword.mutate(
+      { userId: user.id, newPassword },
+      {
+        onSuccess: () => { toast({ title: 'تم تغيير كلمة المرور بنجاح', variant: 'success' }); setNewPassword(''); setConfirmPassword(''); onOpenChange(false) },
+        onError: () => toast({ title: 'فشل تغيير كلمة المرور', variant: 'destructive' }),
+      }
+    )
+  }
+
+  const isLoading = updateRole.isPending || updateProfile.isPending || resetPassword.isPending
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>تعديل: {user.full_name}</DialogTitle>
+          <DialogTitle>تعديل المستخدم: {user.full_name}</DialogTitle>
+          <DialogDescription>{user.email} — {ROLE_LABELS[user.role]}</DialogDescription>
         </DialogHeader>
+
+        {/* Tabs */}
+        <div className="flex gap-1 p-1 bg-muted rounded-lg">
+          <button onClick={() => setActiveTab('profile')} className={cn('flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all', activeTab === 'profile' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>الملف الشخصي</button>
+          <button onClick={() => setActiveTab('role')} className={cn('flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all', activeTab === 'role' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>الدور والصلاحية</button>
+          <button onClick={() => setActiveTab('password')} className={cn('flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all', activeTab === 'password' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>كلمة المرور</button>
+        </div>
+
         <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label>الدور</Label>
-            <Select value={role} onValueChange={(v) => { setRole(v as UserRole); setGovId(''); setDistrictId('') }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(ROLE_LABELS).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {role !== 'admin' && role !== 'central' && (
-            <div className="space-y-2">
-              <Label>المحافظة</Label>
-              <Select value={govId} onValueChange={(v) => { setGovId(v === 'none' ? '' : v); setDistrictId('') }}>
-                <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">بدون</SelectItem>
-                  {governorates?.map((g) => <SelectItem key={g.id} value={g.id}>{g.name_ar}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Profile Tab */}
+          {activeTab === 'profile' && (
+            <>
+              <div className="space-y-2">
+                <Label>الاسم الكامل</Label>
+                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="الاسم الكامل" />
+              </div>
+              <div className="space-y-2">
+                <Label>البريد الإلكتروني</Label>
+                <Input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" />
+              </div>
+              <div className="space-y-2">
+                <Label>رقم الجوال</Label>
+                <Input dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+967XXXXXXXX" />
+              </div>
+            </>
           )}
-          {(role === 'district' || role === 'data_entry') && govId && (
-            <div className="space-y-2">
-              <Label>المديرية</Label>
-              <Select value={districtId} onValueChange={(v) => setDistrictId(v === 'none' ? '' : v)}>
-                <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">بدون</SelectItem>
-                  {districts?.map((d) => <SelectItem key={d.id} value={d.id}>{d.name_ar}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+
+          {/* Role Tab */}
+          {activeTab === 'role' && (
+            <>
+              <div className="space-y-2">
+                <Label>الدور</Label>
+                <Select value={role} onValueChange={(v) => { setRole(v as UserRole); setGovId(''); setDistrictId('') }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ROLE_LABELS).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {role !== 'admin' && role !== 'central' && (
+                <div className="space-y-2">
+                  <Label>المحافظة</Label>
+                  <Select value={govId} onValueChange={(v) => { setGovId(v === 'none' ? '' : v); setDistrictId('') }}>
+                    <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون</SelectItem>
+                      {governorates?.map((g) => <SelectItem key={g.id} value={g.id}>{g.name_ar}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {(role === 'district' || role === 'data_entry') && govId && (
+                <div className="space-y-2">
+                  <Label>المديرية</Label>
+                  <Select value={districtId} onValueChange={(v) => setDistrictId(v === 'none' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون</SelectItem>
+                      {districts?.map((d) => <SelectItem key={d.id} value={d.id}>{d.name_ar}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Password Tab */}
+          {activeTab === 'password' && (
+            <>
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                ⚠️ تغيير كلمة المرور سيؤثر فوراً على المستخدم. تأكد من إبلاغه بالكلمة الجديدة.
+              </div>
+              <div className="space-y-2">
+                <Label>كلمة المرور الجديدة</Label>
+                <Input type="password" dir="ltr" value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setPasswordError(validatePassword(e.target.value)) }} placeholder="8 أحرف على الأقل" className={passwordError ? 'border-red-400' : ''} />
+                {passwordError && <p className="text-xs text-red-500">{passwordError}</p>}
+                {newPassword && !passwordError && <p className="text-xs text-emerald-500">✓ كلمة المرور قوية</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>تأكيد كلمة المرور</Label>
+                <Input type="password" dir="ltr" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="أعد إدخال كلمة المرور" className={confirmPassword && newPassword !== confirmPassword ? 'border-red-400' : ''} />
+                {confirmPassword && newPassword !== confirmPassword && <p className="text-xs text-red-500">كلمتا المرور غير متطابقتين</p>}
+              </div>
+              <p className="text-[10px] text-muted-foreground">8 أحرف على الأقل — حرف كبير + حرف صغير + رقم</p>
+            </>
           )}
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleSave} disabled={updateRole.isPending}>
-            {updateRole.isPending ? 'جاري الحفظ...' : 'حفظ'}
-          </Button>
+          {activeTab === 'profile' && (
+            <Button onClick={handleSaveProfile} disabled={isLoading}>
+              {updateProfile.isPending ? 'جاري الحفظ...' : 'حفظ الملف الشخصي'}
+            </Button>
+          )}
+          {activeTab === 'role' && (
+            <Button onClick={handleSaveRole} disabled={isLoading}>
+              {updateRole.isPending ? 'جاري الحفظ...' : 'حفظ الدور'}
+            </Button>
+          )}
+          {activeTab === 'password' && (
+            <Button onClick={handleResetPassword} disabled={isLoading || !newPassword || !confirmPassword} variant="destructive">
+              {resetPassword.isPending ? 'جاري التغيير...' : 'تغيير كلمة المرور'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

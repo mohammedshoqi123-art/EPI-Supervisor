@@ -130,6 +130,57 @@ serve(async (req) => {
         return jsonResponse({ success: true, message: 'User deleted' }, 200, origin)
       }
 
+
+      case 'update_profile': {
+        const { user_id, full_name, email, phone } = body
+        if (!user_id) {
+          return jsonResponse({ error: 'user_id is required' }, 400, origin)
+        }
+
+        const profileUpdates: Record<string, unknown> = {
+          updated_at: new Date().toISOString(),
+        }
+        if (full_name !== undefined) profileUpdates.full_name = full_name
+        if (email !== undefined) profileUpdates.email = email
+        if (phone !== undefined) profileUpdates.phone = phone
+
+        const { error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .update(profileUpdates)
+          .eq('id', user_id)
+
+        if (profileError) {
+          return jsonResponse({ error: profileError.message }, 400, origin)
+        }
+
+        // Also update auth email if changed
+        if (email !== undefined) {
+          await supabaseAdmin.auth.admin.updateUserById(user_id, { email })
+        }
+
+        return jsonResponse({ success: true, message: 'Profile updated' }, 200, origin)
+      }
+
+      case 'reset_password': {
+        const { user_id, new_password } = body
+        if (!user_id || !new_password) {
+          return jsonResponse({ error: 'user_id and new_password are required' }, 400, origin)
+        }
+        if (new_password.length < 8) {
+          return jsonResponse({ error: 'Password must be at least 8 characters' }, 400, origin)
+        }
+
+        const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
+          password: new_password,
+        })
+
+        if (pwError) {
+          return jsonResponse({ error: pwError.message }, 400, origin)
+        }
+
+        return jsonResponse({ success: true, message: 'Password reset' }, 200, origin)
+      }
+
       default:
         return jsonResponse({ error: `Unknown action: ${action}` }, 400, origin)
     }

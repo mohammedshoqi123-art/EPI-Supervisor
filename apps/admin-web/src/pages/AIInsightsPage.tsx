@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Sparkles, Brain, TrendingUp, AlertTriangle, Target, Lightbulb,
   BarChart3, Shield, Zap, RefreshCw, ChevronRight, Star, Activity,
-  FileText, MapPin, Clock, Users, CheckCircle2, ArrowUpRight, ArrowDownRight
+  FileText, MapPin, Clock, Users, CheckCircle2, ArrowUpRight, ArrowDownRight,
+  Loader2
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,14 +14,16 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
 import { useDashboardStats, useGovernorateStats, useSubmissionsChart, useShortages } from '@/hooks/useApi'
 import { cn, formatNumber } from '@/lib/utils'
+import { generateAIInsights } from '@/lib/ai-providers'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   AreaChart, Area, Cell
 } from 'recharts'
 
-// AI-Generated Insights Engine
-function generateInsights(stats: any, govStats: any, shortages: any) {
+// ─── Rule-based Insights (fast, offline) ─────────────────────
+
+function generateQuickInsights(stats: any, govStats: any, shortages: any) {
   const insights: Array<{
     type: 'critical' | 'warning' | 'success' | 'info'
     title: string
@@ -32,68 +35,62 @@ function generateInsights(stats: any, govStats: any, shortages: any) {
 
   if (!stats) return insights
 
-  // Critical: High rejection rate
   if (stats.approval_rate < 70 && stats.total_submissions > 20) {
     insights.push({
       type: 'critical',
       title: 'معدل رفض مرتفع',
-      description: `معدل الاعتماد ${stats.approval_rate.toFixed(1)}% فقط — أقل من المعدل المقبول (70%). قد يشير إلى مشاكل في جودة الإدخال.`,
+      description: `معدل الاعتماد ${stats.approval_rate.toFixed(1)}% فقط — أقل من المقبول (70%).`,
       action: 'مراجعة أسباب الرفض وتدريب المدخلين',
       icon: AlertTriangle,
       priority: 1,
     })
   }
 
-  // Warning: Low submission rate
   if (stats.submissions_today < 5 && stats.total_users > 10) {
     insights.push({
       type: 'warning',
       title: 'معدل إدخال منخفض اليوم',
-      description: `تم إدخال ${stats.submissions_today} إرسالية فقط اليوم مع وجود ${stats.active_users} مستخدم نشط.`,
-      action: 'إرسال تذكير للمستخدمين غير النشطين',
+      description: `${stats.submissions_today} إرسالية فقط مع ${stats.active_users} مستخدم نشط.`,
+      action: 'إرسال تذكير للمستخدمين',
       icon: Clock,
       priority: 2,
     })
   }
 
-  // Warning: Inactive users
   const inactiveRatio = stats.total_users > 0 ? ((stats.total_users - stats.active_users) / stats.total_users) * 100 : 0
   if (inactiveRatio > 30) {
     insights.push({
       type: 'warning',
       title: 'نسبة مستخدمين غير نشطين مرتفعة',
-      description: `${inactiveRatio.toFixed(0)}% من المستخدمين غير نشطين. قد يحتاجون دعم أو تدريب.`,
-      action: 'مراجعة حسابات المستخدمين غير النشطين',
+      description: `${inactiveRatio.toFixed(0)}% من المستخدمين غير نشطين.`,
+      action: 'مراجعة حسابات المستخدمين',
       icon: Users,
       priority: 2,
     })
   }
 
-  // Success: High approval rate
   if (stats.approval_rate >= 85) {
     insights.push({
       type: 'success',
       title: 'معدل اعتماد ممتاز',
-      description: `معدل الاعتماد ${stats.approval_rate.toFixed(1)}% — يشير إلى جودة عالية في الإدخال الميداني.`,
-      action: 'الحفاظ على المستوى الحالي والتكويد',
+      description: `معدل الاعتماد ${stats.approval_rate.toFixed(1)}% — جودة عالية.`,
+      action: 'الحفاظ على المستوى والتكويد',
       icon: CheckCircle2,
       priority: 3,
     })
   }
 
-  // Success: Good submission volume
   if (stats.submissions_this_week > 100) {
     insights.push({
       type: 'success',
-      title: 'نشاط ميداني قوي هذا الأسبوع',
-      description: `${formatNumber(stats.submissions_this_week)} إرسالية هذا الأسبوع — أداء متميز.`,
+      title: 'نشاط ميداني قوي',
+      description: `${formatNumber(stats.submissions_this_week)} إرسالية هذا الأسبوع.`,
       action: 'تحليل الأنماط وتطبيق أفضل الممارسات',
       icon: TrendingUp,
       priority: 3,
     })
   }
 
-  // Info: Top performing governorate
   if (govStats && govStats.length > 0) {
     const top = govStats[0]
     const bottom = govStats[govStats.length - 1]
@@ -101,7 +98,7 @@ function generateInsights(stats: any, govStats: any, shortages: any) {
       insights.push({
         type: 'info',
         title: `${top.name} الأكثر نشاطاً`,
-        description: `${top.name} أرسلت ${top.submissions} إرسالية. ${bottom.name} في آخر القائمة بـ ${bottom.submissions}.`,
+        description: `${top.submissions} إرسالية. ${bottom.name} في آخر القائمة بـ ${bottom.submissions}.`,
         action: 'دراسة أسباب التفاوت بين المحافظات',
         icon: MapPin,
         priority: 3,
@@ -109,22 +106,11 @@ function generateInsights(stats: any, govStats: any, shortages: any) {
     }
   }
 
-  // Info: Form coverage
-  if (stats.active_forms < stats.total_forms) {
-    insights.push({
-      type: 'info',
-      title: 'نماذج غير نشطة',
-      description: `${stats.total_forms - stats.active_forms} نموذج معطل من أصل ${stats.total_forms}. قد تحتاج مراجعة.`,
-      action: 'مراجعة النماذج المعطلة',
-      icon: FileText,
-      priority: 3,
-    })
-  }
-
   return insights.sort((a, b) => a.priority - b.priority)
 }
 
-// Performance score calculation
+// ─── Performance Score ───────────────────────────────────────
+
 function calculateHealthScore(stats: any): number {
   if (!stats) return 0
   let score = 50
@@ -134,22 +120,41 @@ function calculateHealthScore(stats: any): number {
   return Math.max(0, Math.min(100, Math.round(score)))
 }
 
-// AI Predictions
+// ─── Smart Predictions (Weighted Moving Average) ─────────────
+
 function generatePredictions(chartData: any[]) {
   if (!chartData || chartData.length < 7) return []
+
   const last7 = chartData.slice(-7)
-  const avg = last7.reduce((s, d) => s + d.submitted + d.draft, 0) / 7
-  const trend = last7.length >= 2
-    ? ((last7[last7.length - 1].submitted + last7[last7.length - 1].draft) -
-       (last7[0].submitted + last7[0].draft)) / 7
-    : 0
+  const values = last7.map(d => d.submitted + d.draft)
+
+  // Weighted Moving Average (recent days have more weight)
+  const weights = [1, 1, 2, 2, 3, 3, 4]
+  const totalWeight = weights.reduce((a, b) => a + b, 0)
+  const wma = values.reduce((sum, val, i) => sum + val * weights[i], 0) / totalWeight
+
+  // Trend calculation
+  const firstHalf = values.slice(0, 3).reduce((a, b) => a + b, 0) / 3
+  const secondHalf = values.slice(4).reduce((a, b) => a + b, 0) / 3
+  const trend = secondHalf - firstHalf
+
+  // Standard deviation for confidence
+  const mean = values.reduce((a, b) => a + b, 0) / values.length
+  const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length
+  const stdDev = Math.sqrt(variance)
+
+  // Confidence based on data consistency
+  const cv = mean > 0 ? stdDev / mean : 1 // Coefficient of variation
+  const baseConfidence = Math.max(40, Math.min(95, Math.round((1 - cv) * 100)))
 
   return [
-    { day: 'غداً', predicted: Math.round(avg + trend), confidence: 85 },
-    { day: 'بعد يومين', predicted: Math.round(avg + trend * 2), confidence: 72 },
-    { day: 'بعد 3 أيام', predicted: Math.round(avg + trend * 3), confidence: 60 },
+    { day: 'غداً', predicted: Math.round(wma + trend * 0.5), confidence: baseConfidence },
+    { day: 'بعد يومين', predicted: Math.round(wma + trend * 1), confidence: Math.max(30, baseConfidence - 13) },
+    { day: 'بعد 3 أيام', predicted: Math.round(wma + trend * 1.5), confidence: Math.max(20, baseConfidence - 25) },
   ]
 }
+
+// ─── Colors ──────────────────────────────────────────────────
 
 const INSIGHT_COLORS = {
   critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: 'text-red-600', badge: 'bg-red-100 text-red-700' },
@@ -158,18 +163,47 @@ const INSIGHT_COLORS = {
   info: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: 'text-blue-600', badge: 'bg-blue-100 text-blue-700' },
 }
 
+// ─── Main Component ──────────────────────────────────────────
+
 export default function AIInsightsPage() {
   const { data: stats, isLoading: statsLoading, refetch } = useDashboardStats()
   const { data: govStats } = useGovernorateStats()
   const { data: chartData } = useSubmissionsChart()
   const { data: shortages } = useShortages()
 
-  const insights = generateInsights(stats, govStats, shortages)
+  const quickInsights = generateQuickInsights(stats, govStats, shortages)
   const healthScore = calculateHealthScore(stats)
   const predictions = generatePredictions(chartData || [])
 
-  const criticalCount = insights.filter(i => i.type === 'critical').length
-  const warningCount = insights.filter(i => i.type === 'warning').length
+  // AI Analysis state
+  const [aiAnalysis, setAiAnalysis] = useState<string>('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  const criticalCount = quickInsights.filter(i => i.type === 'critical').length
+  const warningCount = quickInsights.filter(i => i.type === 'warning').length
+
+  // Fetch AI analysis
+  const fetchAIAnalysis = async () => {
+    if (!stats) return
+    setAiLoading(true)
+    setAiError(null)
+    try {
+      const analysis = await generateAIInsights(stats, govStats)
+      setAiAnalysis(analysis)
+    } catch (err) {
+      setAiError('فشل في تحليل البيانات. حاول مرة أخرى.')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  // Auto-fetch on load
+  useEffect(() => {
+    if (stats && !aiAnalysis && !aiLoading) {
+      fetchAIAnalysis()
+    }
+  }, [stats])
 
   // Radar chart data
   const radarData = stats ? [
@@ -184,8 +218,8 @@ export default function AIInsightsPage() {
     <div className="page-enter">
       <Header
         title="الرؤى الذكية"
-        subtitle="تحليلات مدعومة بالذكاء الاصطناعي — MiMo AI"
-        onRefresh={() => refetch()}
+        subtitle="تحليلات مدعومة بالذكاء الاصطناعي"
+        onRefresh={() => { refetch(); fetchAIAnalysis() }}
       />
 
       <div className="p-6 space-y-6">
@@ -248,11 +282,11 @@ export default function AIInsightsPage() {
                   <p className="text-xs text-amber-700 mt-1">تحذير</p>
                 </div>
                 <div className="text-center p-3 rounded-xl bg-emerald-50">
-                  <p className="text-3xl font-heading font-bold text-emerald-600">{insights.filter(i => i.type === 'success').length}</p>
+                  <p className="text-3xl font-heading font-bold text-emerald-600">{quickInsights.filter(i => i.type === 'success').length}</p>
                   <p className="text-xs text-emerald-700 mt-1">نجاح</p>
                 </div>
                 <div className="text-center p-3 rounded-xl bg-blue-50">
-                  <p className="text-3xl font-heading font-bold text-blue-600">{insights.filter(i => i.type === 'info').length}</p>
+                  <p className="text-3xl font-heading font-bold text-blue-600">{quickInsights.filter(i => i.type === 'info').length}</p>
                   <p className="text-xs text-blue-700 mt-1">معلومة</p>
                 </div>
               </div>
@@ -261,7 +295,7 @@ export default function AIInsightsPage() {
               {predictions.length > 0 && (
                 <div className="mt-4 pt-4 border-t">
                   <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                    <Zap className="w-3 h-3" /> تنبؤات AI للإرساليات
+                    <Zap className="w-3 h-3" /> تنبؤات ذكية للإرساليات
                   </p>
                   <div className="flex gap-3">
                     {predictions.map((p, i) => (
@@ -330,24 +364,62 @@ export default function AIInsightsPage() {
           </Card>
         </div>
 
-        {/* Insights List */}
+        {/* AI Analysis (Real AI) */}
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="text-base font-heading flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              تحليل AI العميق
+              <Badge variant="outline" className="mr-auto text-[10px]">مدعوم بالذكاء الاصطناعي</Badge>
+            </CardTitle>
+            <CardDescription>تحليل شامل مدعوم بنماذج اللغة الكبيرة</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {aiLoading ? (
+              <div className="flex items-center gap-3 py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">جاري التحليل بالذكاء الاصطناعي...</p>
+              </div>
+            ) : aiError ? (
+              <div className="text-center py-6">
+                <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">{aiError}</p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={fetchAIAnalysis}>
+                  <RefreshCw className="w-3 h-3 mr-1" /> إعادة المحاولة
+                </Button>
+              </div>
+            ) : aiAnalysis ? (
+              <div className="prose prose-sm max-w-none text-right" dir="rtl">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">{aiAnalysis}</div>
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <Button onClick={fetchAIAnalysis} className="gap-2">
+                  <Sparkles className="w-4 h-4" /> تحليل بالذكاء الاصطناعي
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Quick Insights (Rule-based) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-heading flex items-center gap-2">
               <Lightbulb className="w-5 h-5 text-amber-500" />
-              الرؤى والتوصيات
-              <Badge variant="outline" className="mr-auto">{insights.length}</Badge>
+              تنبيهات سريعة
+              <Badge variant="outline" className="mr-auto">{quickInsights.length}</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {insights.length === 0 ? (
+            {quickInsights.length === 0 ? (
               <div className="text-center py-8">
                 <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
                 <p className="font-medium">كل شيء يبدو جيداً! 🎉</p>
                 <p className="text-sm text-muted-foreground">لا توجد مشاكل تحتاج اهتمامك</p>
               </div>
             ) : (
-              insights.map((insight, i) => {
+              quickInsights.map((insight, i) => {
                 const colors = INSIGHT_COLORS[insight.type]
                 const Icon = insight.icon
                 return (

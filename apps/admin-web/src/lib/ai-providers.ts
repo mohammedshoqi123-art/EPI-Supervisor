@@ -1,8 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
-// Multi-Provider AI Service — EPI Supervisor
+// AI Service — EPI Supervisor (Secure, Edge Function Only)
 // ═══════════════════════════════════════════════════════════════
+// All AI calls go through Supabase Edge Function (ai-chat-v3).
+// No API keys are exposed on the client side.
 
-import { epiBotEngine, type ModelChoice } from './epi-bot-engine'
+import { supabase } from '@/lib/supabase'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -22,319 +24,60 @@ export interface AIResponse {
   error?: string
 }
 
-export interface ProviderConfig {
-  provider: AIProvider
-  baseUrl: string
-  apiKey: string
-  models: ProviderModel[]
-  maxTokens: number
-  enabled: boolean
-}
+// ─── Edge Function Call ──────────────────────────────────────
 
-export interface ProviderModel {
-  id: string
-  label: string
-  maxTokens: number
-  speed: 'fast' | 'medium' | 'slow'
-  cost: 'free' | 'low' | 'medium' | 'high'
-  capabilities: ('chat' | 'analysis' | 'code' | 'rag')[]
-}
-
-// ─── Provider Configurations ─────────────────────────────────
-
-const GROQ_CONFIG: ProviderConfig = {
-  provider: 'groq',
-  baseUrl: 'https://api.groq.com/openai/v1',
-  apiKey: import.meta.env.VITE_GROQ_KEY || '',
-  models: [
-    { id: 'llama3-8b-8192', label: 'Llama 3 8B (Fast)', maxTokens: 8192, speed: 'fast', cost: 'free', capabilities: ['chat'] },
-    { id: 'llama3-70b-8192', label: 'Llama 3 70B', maxTokens: 8192, speed: 'medium', cost: 'free', capabilities: ['chat', 'analysis'] },
-    { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B', maxTokens: 32768, speed: 'medium', cost: 'free', capabilities: ['chat', 'analysis', 'code'] },
-  ],
-  maxTokens: 4096,
-  enabled: true,
-}
-
-const HUGGINGFACE_CONFIG: ProviderConfig = {
-  provider: 'huggingface',
-  baseUrl: 'https://api-inference.huggingface.co/models',
-  apiKey: '', // Set via Supabase edge function
-  models: [
-    { id: 'meta-llama/Meta-Llama-3-8B-Instruct', label: 'Llama 3 8B (HF)', maxTokens: 4096, speed: 'medium', cost: 'free', capabilities: ['chat'] },
-  ],
-  maxTokens: 2048,
-  enabled: true,
-}
-
-const GEMINI_CONFIG: ProviderConfig = {
-  provider: 'gemini',
-  baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-  apiKey: import.meta.env.VITE_MIMO_KEY || '',
-  models: [
-    { id: 'gemini-pro', label: 'Gemini Pro', maxTokens: 8192, speed: 'medium', cost: 'low', capabilities: ['chat', 'analysis'] },
-  ],
-  maxTokens: 4096,
-  enabled: true,
-}
-
-const MIMO_CONFIG: ProviderConfig = {
-  provider: 'gemini' as AIProvider, // Reuse gemini slot for MiMo
-  baseUrl: 'https://api.xiaomimimo.com/v1',
-  apiKey: import.meta.env.VITE_MIMO_KEY || '',
-  models: [
-    { id: 'mimo-v2-pro', label: 'MiMo v2 Pro', maxTokens: 8192, speed: 'fast', cost: 'low', capabilities: ['chat', 'analysis', 'code'] },
-  ],
-  maxTokens: 4096,
-  enabled: !!(import.meta.env.VITE_MIMO_KEY),
-}
-
-const ZAI_CONFIG: ProviderConfig = {
-  provider: 'zai',
-  baseUrl: 'https://api.zai.chat/v1', // Placeholder URL
-  apiKey: import.meta.env.VITE_ZAI_KEY || '',
-  models: [
-    { id: 'default', label: 'Z AI Default', maxTokens: 8192, speed: 'medium', cost: 'medium', capabilities: ['chat', 'analysis', 'rag'] },
-  ],
-  maxTokens: 4096,
-  enabled: !!(import.meta.env.VITE_ZAI_KEY),
-}
-
-const OPENROUTER_CONFIG: ProviderConfig = {
-  provider: 'openrouter',
-  baseUrl: 'https://openrouter.ai/api/v1',
-  apiKey: import.meta.env.VITE_OPENROUTER_KEY || '',
-  models: [
-    { id: 'gpt-4o', label: 'GPT-4o', maxTokens: 16384, speed: 'slow', cost: 'high', capabilities: ['chat', 'analysis', 'code', 'rag'] },
-    { id: 'gpt-4o-mini', label: 'GPT-4o Mini', maxTokens: 16384, speed: 'fast', cost: 'medium', capabilities: ['chat', 'analysis'] },
-    { id: 'claude-3.5-sonnet', label: 'Claude 3.5 Sonnet', maxTokens: 16384, speed: 'medium', cost: 'high', capabilities: ['chat', 'analysis', 'code', 'rag'] },
-  ],
-  maxTokens: 4096,
-  enabled: !!(import.meta.env.VITE_OPENROUTER_KEY),
-}
-
-const ALL_CONFIGS: ProviderConfig[] = [
-  GROQ_CONFIG,
-  HUGGINGFACE_CONFIG,
-  GEMINI_CONFIG,
-  MIMO_CONFIG,
-  ZAI_CONFIG,
-  OPENROUTER_CONFIG,
-]
-
-// ─── Supabase Edge Function Fallback ─────────────────────────
-
-async function callSupabaseEdgeFunction(
+async function callEdgeFunction(
   message: string,
-  history: AIMessage[],
-  template?: string,
+  history: AIMessage[] = [],
+  options?: {
+    template?: string
+    systemPrompt?: string
+    stream?: boolean
+  },
 ): Promise<AIResponse> {
-  const { supabase } = await import('@/lib/supabase')
   const startTime = Date.now()
 
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('Not authenticated')
+  if (!session) {
+    return {
+      text: '⚠️ يرجى تسجيل الدخول أولاً.',
+      provider: 'groq',
+      model: 'none',
+      latencyMs: 0,
+      error: 'Not authenticated',
+    }
+  }
 
   const { data, error } = await supabase.functions.invoke('ai-chat-v3', {
     body: {
       message,
       history: history.filter(m => m.role !== 'system').slice(-10),
-      template: template || undefined,
-      stream: false,
+      template: options?.template || undefined,
+      system_prompt: options?.systemPrompt || undefined,
+      stream: options?.stream || false,
     },
   })
 
-  if (error) throw error
+  if (error) {
+    return {
+      text: '⚠️ عذراً، حدث خطأ في الاتصال بالذكاء الاصطناعي.',
+      provider: 'groq',
+      model: 'none',
+      latencyMs: Date.now() - startTime,
+      error: error.message,
+    }
+  }
 
   const text = data?.reply || data?.text || 'عذراً، لم أتمكن من المعالجة.'
-  const provider = data?.source || 'groq'
+  const provider = (data?.source || 'groq') as AIProvider
 
   return {
     text,
-    provider: provider as AIProvider,
+    provider,
     model: data?.model || 'unknown',
     latencyMs: Date.now() - startTime,
     tokensUsed: data?.tokensUsed,
   }
-}
-
-// ─── Direct Provider Calls ───────────────────────────────────
-
-async function callGroqDirect(
-  messages: AIMessage[],
-  model: string = 'llama3-8b-8192',
-  apiKey: string,
-): Promise<AIResponse> {
-  const startTime = Date.now()
-
-  const response = await fetch(`${GROQ_CONFIG.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: GROQ_CONFIG.maxTokens,
-      temperature: 0.7,
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`Groq API error: ${response.status} - ${err}`)
-  }
-
-  const data = await response.json()
-  return {
-    text: data.choices?.[0]?.message?.content || '',
-    provider: 'groq',
-    model,
-    latencyMs: Date.now() - startTime,
-    tokensUsed: data.usage?.total_tokens,
-  }
-}
-
-async function callOpenRouterDirect(
-  messages: AIMessage[],
-  model: string = 'gpt-4o-mini',
-  apiKey: string,
-): Promise<AIResponse> {
-  const startTime = Date.now()
-
-  const response = await fetch(`${OPENROUTER_CONFIG.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': window.location.origin,
-      'X-Title': 'EPI-Supervisor',
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: OPENROUTER_CONFIG.maxTokens,
-      temperature: 0.7,
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`OpenRouter API error: ${response.status} - ${err}`)
-  }
-
-  const data = await response.json()
-  return {
-    text: data.choices?.[0]?.message?.content || '',
-    provider: 'openrouter',
-    model,
-    latencyMs: Date.now() - startTime,
-    tokensUsed: data.usage?.total_tokens,
-  }
-}
-
-async function callMiMoDirect(
-  messages: AIMessage[],
-  model: string = 'mimo-v2-pro',
-  apiKey: string,
-): Promise<AIResponse> {
-  const startTime = Date.now()
-
-  const response = await fetch(`${MIMO_CONFIG.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: MIMO_CONFIG.maxTokens,
-      temperature: 0.7,
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`MiMo API error: ${response.status} - ${err}`)
-  }
-
-  const data = await response.json()
-  return {
-    text: data.choices?.[0]?.message?.content || '',
-    provider: 'gemini',
-    model,
-    latencyMs: Date.now() - startTime,
-    tokensUsed: data.usage?.total_tokens,
-  }
-}
-
-async function callZAIDirect(
-  messages: AIMessage[],
-  model: string = 'default',
-  apiKey: string,
-): Promise<AIResponse> {
-  const startTime = Date.now()
-
-  // Z AI uses an OpenAI-compatible API
-  const response = await fetch(`${ZAI_CONFIG.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: ZAI_CONFIG.maxTokens,
-      temperature: 0.7,
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`Z AI API error: ${response.status} - ${err}`)
-  }
-
-  const data = await response.json()
-  return {
-    text: data.choices?.[0]?.message?.content || '',
-    provider: 'zai',
-    model,
-    latencyMs: Date.now() - startTime,
-    tokensUsed: data.usage?.total_tokens,
-  }
-}
-
-// ─── Auto Model Selection & Fallback Chain ───────────────────
-
-export function selectModel(query: string): ModelChoice {
-  return epiBotEngine.selectBestModel(query)
-}
-
-function getFallbackChain(modelChoice: ModelChoice): { provider: AIProvider; model: string }[] {
-  const chain: { provider: AIProvider; model: string }[] = []
-
-  // Primary choice
-  chain.push({ provider: modelChoice.provider, model: modelChoice.model })
-
-  // Build fallback based on provider availability
-  if (modelChoice.provider !== 'groq') {
-    chain.push({ provider: 'groq', model: 'llama3-8b-8192' })
-  }
-  if (ZAI_CONFIG.enabled && modelChoice.provider !== 'zai') {
-    chain.push({ provider: 'zai', model: 'default' })
-  }
-  if (OPENROUTER_CONFIG.enabled && modelChoice.provider !== 'openrouter') {
-    chain.push({ provider: 'openrouter', model: 'gpt-4o-mini' })
-  }
-  if (MIMO_CONFIG.enabled && modelChoice.provider !== 'gemini') {
-    chain.push({ provider: 'gemini', model: 'mimo-v2-pro' })
-  }
-  // Supabase edge function as ultimate fallback
-  chain.push({ provider: 'groq', model: 'edge-function' })
-
-  return chain
 }
 
 // ─── Main AI Service Function ────────────────────────────────
@@ -348,117 +91,125 @@ export async function queryAI(
     systemPrompt?: string
   },
 ): Promise<AIResponse> {
-  const systemMessage: AIMessage = {
-    role: 'system',
-    content: options?.systemPrompt || `أنت مساعد ذكي متخصص في برنامج التوسع في التطعيم (EPI) في العراق. تجيب باللغة العربية وتساعد في تحليل البيانات الصحية والتطعيمية وإدارة النواقص والتقارير. كن مختصراً ومفيداً.`,
-  }
-
-  const messages: AIMessage[] = [systemMessage, ...history.slice(-10), { role: 'user', content: message }]
-
-  // If a specific provider is preferred and available, try it first
-  if (options?.preferProvider) {
-    try {
-      return await callProvider(options.preferProvider, messages, selectModel(message).model)
-    } catch {
-      // Fall through to auto selection
-    }
-  }
-
-  // Auto model selection
-  const modelChoice = selectModel(message)
-  const chain = getFallbackChain(modelChoice)
-
-  let lastError: Error | null = null
-
-  for (const { provider, model } of chain) {
-    try {
-      // Edge function fallback
-      if (model === 'edge-function') {
-        return await callSupabaseEdgeFunction(message, history, options?.template)
-      }
-
-      return await callProvider(provider, messages, model)
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err))
-      continue
-    }
-  }
-
-  return {
-    text: '⚠️ عذراً، لم أتمكن من الاتصال بأي خدمة ذكاء اصطناعي. يرجى المحاولة لاحقاً.',
-    provider: 'groq',
-    model: 'none',
-    latencyMs: 0,
-    error: lastError?.message,
-  }
+  return callEdgeFunction(message, history, {
+    template: options?.template,
+    systemPrompt: options?.systemPrompt,
+  })
 }
 
-async function callProvider(
-  provider: AIProvider,
-  messages: AIMessage[],
-  model: string,
+// ─── Streaming AI (for real-time responses) ──────────────────
+
+export async function queryAIStream(
+  message: string,
+  history: AIMessage[] = [],
+  onChunk: (text: string) => void,
+  options?: {
+    systemPrompt?: string
+  },
 ): Promise<AIResponse> {
-  switch (provider) {
-    case 'groq': {
-      // Try direct call first if key available, otherwise use edge function
-      if (GROQ_CONFIG.apiKey) {
-        return await callGroqDirect(messages, model, GROQ_CONFIG.apiKey)
-      }
-      // Fallback to Supabase edge function for Groq
-      return await callSupabaseEdgeFunction(
-        messages[messages.length - 1].content,
-        messages.filter(m => m.role !== 'system'),
-      )
-    }
+  const startTime = Date.now()
 
-    case 'zai': {
-      if (!ZAI_CONFIG.enabled || !ZAI_CONFIG.apiKey) {
-        throw new Error('Z AI provider not configured')
-      }
-      return await callZAIDirect(messages, model, ZAI_CONFIG.apiKey)
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
+    return {
+      text: '⚠️ يرجى تسجيل الدخول أولاً.',
+      provider: 'groq',
+      model: 'none',
+      latencyMs: 0,
+      error: 'Not authenticated',
     }
+  }
 
-    case 'openrouter': {
-      if (!OPENROUTER_CONFIG.enabled || !OPENROUTER_CONFIG.apiKey) {
-        throw new Error('OpenRouter provider not configured')
-      }
-      return await callOpenRouterDirect(messages, model, OPENROUTER_CONFIG.apiKey)
-    }
+  try {
+    const { data } = await supabase.functions.invoke('ai-chat-v3', {
+      body: {
+        message,
+        history: history.filter(m => m.role !== 'system').slice(-10),
+        system_prompt: options?.systemPrompt,
+        stream: true,
+      },
+    })
 
-    case 'gemini': {
-      // Try MiMo direct first if key available
-      if (MIMO_CONFIG.apiKey) {
-        return await callMiMoDirect(messages, model, MIMO_CONFIG.apiKey)
-      }
-      // Fallback to Supabase edge function
-      return await callSupabaseEdgeFunction(
-        messages[messages.length - 1].content,
-        messages.filter(m => m.role !== 'system'),
-      )
-    }
-    case 'huggingface': {
-      return await callSupabaseEdgeFunction(
-        messages[messages.length - 1].content,
-        messages.filter(m => m.role !== 'system'),
-      )
-    }
+    const text = data?.reply || data?.text || ''
+    onChunk(text)
 
-    default:
-      throw new Error(`Unknown provider: ${provider}`)
+    return {
+      text,
+      provider: (data?.source || 'groq') as AIProvider,
+      model: data?.model || 'unknown',
+      latencyMs: Date.now() - startTime,
+      tokensUsed: data?.tokensUsed,
+    }
+  } catch (err) {
+    return {
+      text: '⚠️ عذراً، حدث خطأ في الاتصال.',
+      provider: 'groq',
+      model: 'none',
+      latencyMs: Date.now() - startTime,
+      error: err instanceof Error ? err.message : String(err),
+    }
   }
 }
 
-// ─── Provider Status ─────────────────────────────────────────
+// ─── AI Insights (Real AI-powered analysis) ──────────────────
 
-export function getProviderStatus(): { provider: AIProvider; enabled: boolean; models: number }[] {
-  return ALL_CONFIGS.map(c => ({
-    provider: c.provider,
-    enabled: c.enabled,
-    models: c.models.length,
-  }))
+export async function generateAIInsights(stats: {
+  total_submissions: number
+  submissions_today: number
+  submissions_this_week: number
+  approval_rate: number
+  total_users: number
+  active_users: number
+  total_forms: number
+  active_forms: number
+}, govStats?: { name: string; submissions: number }[]): Promise<string> {
+  const statsText = `
+إحصائيات النظام:
+- إجمالي الإرساليات: ${stats.total_submissions}
+- إرساليات اليوم: ${stats.submissions_today}
+- إرساليات هذا الأسبوع: ${stats.submissions_this_week}
+- معدل الاعتماد: ${stats.approval_rate.toFixed(1)}%
+- إجمالي المستخدمين: ${stats.total_users}
+- المستخدمين النشطين: ${stats.active_users}
+- إجمالي الاستمارات: ${stats.total_forms}
+- الاستمارات النشطة: ${stats.active_forms}
+${govStats ? `\nأداء المحافظات:\n${govStats.map(g => `- ${g.name}: ${g.submissions} إرسالية`).join('\n')}` : ''}
+`
+
+  const systemPrompt = `أنت محلل بيانات صحية خبير في برنامج التوسع في التطعيم (EPI).
+حلل البيانات التالية وقدّم:
+1. تقييم الوضع الحالي (جيد/متوسط/ضعيف)
+2. المشاكل المحتملة والأسباب
+3. 3-5 توصيات عملية وقابلة للتنفيذ
+4. تنبؤ قصير المدى (الأسبوع القادم)
+
+كن مختصراً ومباشراً. استخدم الإيموجي بشكل مناسب. أجب بالعربية.`
+
+  const response = await callEdgeFunction(statsText, [], { systemPrompt })
+  return response.text
 }
 
-export function isProviderAvailable(provider: AIProvider): boolean {
-  const config = ALL_CONFIGS.find(c => c.provider === provider)
-  return config?.enabled ?? false
+// ─── Provider Status (via Edge Function) ─────────────────────
+
+export async function getProviderStatus(): Promise<{ provider: string; enabled: boolean }[]> {
+  try {
+    const { data } = await supabase.functions.invoke('ai-chat-v3', {
+      body: { mode: 'model_status' },
+    })
+
+    if (data?.availableKeys) {
+      return Object.entries(data.availableKeys).map(([provider, enabled]) => ({
+        provider,
+        enabled: !!enabled,
+      }))
+    }
+  } catch {
+    // Fall through
+  }
+
+  return [
+    { provider: 'groq', enabled: true },
+    { provider: 'mimo', enabled: false },
+    { provider: 'huggingface', enabled: false },
+  ]
 }

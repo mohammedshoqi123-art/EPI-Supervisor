@@ -581,7 +581,7 @@ export function useSubmissions(filters?: {
 
       let query = supabase
         .from('form_submissions')
-        .select('*, forms(title_ar, campaign_type), profiles(full_name, email), governorates(name_ar), districts(name_ar)', { count: 'exact' })
+        .select('*, forms(title_ar, campaign_type), profiles:submitted_by(full_name, email), governorates(name_ar), districts(name_ar)', { count: 'exact' })
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range((page - 1) * pageSize, page * pageSize - 1)
@@ -715,7 +715,7 @@ export function useShortages(campaignType?: string) {
     queryFn: async () => {
       let query = supabase
         .from('supply_shortages')
-        .select('*, governorates(name_ar), districts(name_ar), profiles(full_name), form_submissions(form_id, forms(title_ar))')
+        .select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name), form_submissions(form_id, forms(title_ar))')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
 

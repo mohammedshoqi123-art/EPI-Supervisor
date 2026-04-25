@@ -83,7 +83,7 @@ export default function SubmissionsPage() {
   const exportAll = async () => {
     let exportQuery = supabase
       .from('form_submissions')
-      .select('*, forms(title_ar), profiles(full_name, email), governorates(name_ar)')
+      .select('*, forms(title_ar), profiles:submitted_by(full_name, email), governorates(name_ar)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(10000)

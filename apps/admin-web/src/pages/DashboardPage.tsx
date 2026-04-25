@@ -272,7 +272,7 @@ export default function DashboardPage() {
       const today = new Date().toISOString().split('T')[0]
       const { data } = await supabase
         .from('form_submissions')
-        .select('*, forms(title_ar), profiles(full_name, email), governorates(name_ar)')
+        .select('*, forms(title_ar), profiles:submitted_by(full_name, email), governorates(name_ar)')
         .gte('created_at', `${today}T00:00:00`)
         .lte('created_at', `${today}T23:59:59`)
         .order('created_at', { ascending: false })

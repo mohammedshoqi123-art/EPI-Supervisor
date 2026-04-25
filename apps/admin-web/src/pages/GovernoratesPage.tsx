@@ -27,7 +27,7 @@ import {
 import { formatNumber, formatDate, formatRelativeTime, cn } from '@/lib/utils'
 import { useCampaign } from '@/lib/campaign-context'
 
-// ─── Yemen governorates simplified SVG map paths ───
+// ─── Yemen governorates simplified SVG map paths (15 active only) ───
 const YEMEN_MAP_GOVS: Record<string, { path: string; labelX: number; labelY: number }> = {
   'صنعاء': { path: 'M220,180 L260,170 L280,185 L270,210 L240,215 L220,200Z', labelX: 250, labelY: 193 },
   'عدن': { path: 'M340,340 L370,330 L390,345 L380,365 L350,370 L335,355Z', labelX: 362, labelY: 350 },
@@ -40,17 +40,10 @@ const YEMEN_MAP_GOVS: Record<string, { path: string; labelX: number; labelY: num
   'مأرب': { path: 'M310,195 L350,185 L365,210 L355,240 L320,245 L305,220Z', labelX: 335, labelY: 215 },
   'الجوف': { path: 'M260,120 L310,110 L330,135 L320,165 L275,170 L255,145Z', labelX: 293, labelY: 140 },
   'صعدة': { path: 'M220,80 L265,70 L280,95 L270,125 L230,130 L215,105Z', labelX: 248, labelY: 100 },
-  'لحج': { path: 'M295,320 L330,310 L345,335 L335,360 L300,365 L285,340Z', labelX: 318, labelY: 338 },
-  'أبين': { path: 'M345,300 L380,290 L395,315 L385,340 L350,345 L335,320Z', labelX: 365, labelY: 318 },
-  'شبوة': { path: 'M380,240 L420,230 L440,260 L425,295 L390,300 L370,270Z', labelX: 405, labelY: 265 },
-  'المهرة': { path: 'M440,220 L490,200 L520,235 L505,280 L460,290 L435,255Z', labelX: 475, labelY: 248 },
-  'حضرموت': { path: 'M380,160 L440,140 L470,180 L460,235 L410,250 L370,210Z', labelX: 420, labelY: 195 },
   'المحويت': { path: 'M195,175 L225,168 L235,185 L225,205 L198,208 L190,190Z', labelX: 213, labelY: 188 },
   'ريمة': { path: 'M200,210 L230,203 L240,222 L230,242 L205,246 L195,228Z', labelX: 218, labelY: 226 },
   'عمران': { path: 'M225,145 L260,138 L272,158 L262,180 L232,185 L220,165Z', labelX: 246, labelY: 162 },
   'الضالع': { path: 'M280,300 L305,293 L315,312 L305,332 L283,336 L273,318Z', labelX: 294, labelY: 315 },
-  'سقطرى': { path: 'M420,380 L480,370 L500,395 L485,415 L430,420 L410,400Z', labelX: 455, labelY: 395 },
-  'أرخبيل سقطرى': { path: 'M420,380 L480,370 L500,395 L485,415 L430,420 L410,400Z', labelX: 455, labelY: 395 },
 }
 
 // ─── Performance color helpers ───

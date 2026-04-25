@@ -15,7 +15,7 @@ import { Header } from '@/components/layout/header'
 import { useDashboardStats, useGovernorateStats, useSubmissionsChart, useShortages } from '@/hooks/useApi'
 import { cn, formatNumber } from '@/lib/utils'
 import { generateAIInsights } from '@/lib/ai-providers'
-import { PredictiveEngine, AnomalyDetector, SmartReportGenerator } from '@/lib/epi-bot-engine'
+import { PredictiveEngine } from '@/lib/epi-bot-engine'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,

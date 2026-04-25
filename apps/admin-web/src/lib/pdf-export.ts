@@ -148,30 +148,11 @@ function buildCoverPage(options: ReportOptions): string {
   const now = new Date()
   const dateStr = formatDateArabic(now)
   const timeStr = now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin + (import.meta.env?.BASE_URL || '/') : ''
 
   return `
     <div class="cover-page">
       <div class="cover-gradient">
         <div class="cover-content">
-          <!-- Official Logos -->
-          <div class="cover-logos">
-            <div class="cover-logo-item">
-              <img src="${baseUrl}logo-who.jpeg" alt="WHO" class="cover-logo-img" onerror="this.style.display='none'" />
-              <span>منظمة الصحة العالمية</span>
-            </div>
-            <div class="cover-logo-item">
-              <img src="${baseUrl}logo-unicef.jpeg" alt="UNICEF" class="cover-logo-img" onerror="this.style.display='none'" />
-              <span>يونيسيف</span>
-            </div>
-            <div class="cover-logo-item main">
-              <img src="${baseUrl}logo-moh-header.png" alt="وزارة الصحة" class="cover-logo-img cover-moh" onerror="this.style.display='none'" />
-            </div>
-            <div class="cover-logo-item">
-              <img src="${baseUrl}logo-epi-header.png" alt="EPI" class="cover-logo-img cover-epi" onerror="this.style.display='none'" />
-            </div>
-          </div>
-
           <div class="cover-logo">
             <div class="logo-circle">EPI</div>
           </div>
@@ -192,7 +173,7 @@ function buildCoverPage(options: ReportOptions): string {
 
           <div class="cover-footer">
             <span>${options.generatedBy || 'EPI Supervisor Admin Panel'}</span>
-            <span>وزارة الصحة العامة والسكان — الجمهورية اليمنية</span>
+            <span>v3.0.0</span>
           </div>
         </div>
       </div>
@@ -273,44 +254,6 @@ export function generatePDFReport(options: ReportOptions): void {
       opacity: 0.8;
       margin-bottom: 50px;
       line-height: 1.8;
-    }
-    .cover-logos {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 20px;
-      margin-bottom: 30px;
-      padding: 16px 24px;
-      background: rgba(255,255,255,0.15);
-      border-radius: 16px;
-      backdrop-filter: blur(10px);
-    }
-    .cover-logo-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-    }
-    .cover-logo-item span {
-      font-size: 9px;
-      opacity: 0.8;
-    }
-    .cover-logo-item.main {
-      padding: 0 16px;
-      border-left: 1px solid rgba(255,255,255,0.3);
-      border-right: 1px solid rgba(255,255,255,0.3);
-    }
-    .cover-logo-img {
-      height: 48px;
-      width: auto;
-      object-fit: contain;
-      filter: brightness(0) invert(1);
-    }
-    .cover-moh {
-      height: 58px;
-    }
-    .cover-epi {
-      height: 52px;
     }
     .cover-report-card {
       background: white;

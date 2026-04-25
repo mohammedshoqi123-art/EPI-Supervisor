@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import { generateAIInsights } from '@/lib/ai-providers'
-import { SmartReportGenerator, AnomalyDetector, type SmartReport, type Anomaly } from '@/lib/epi-bot-engine'
+import { SmartReportGenerator, type SmartReport, type Anomaly } from '@/lib/epi-bot-engine'
 
 interface BriefingProps {
   stats: {

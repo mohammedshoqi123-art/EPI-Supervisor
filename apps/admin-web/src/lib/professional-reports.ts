@@ -38,36 +38,16 @@ function escapeHtml(text: string): string {
   return div.innerHTML
 }
 
-// ─── Professional Header (with official logos) ───
+// ─── Professional Header ───
 function buildHeader(title: string, subtitle: string, period?: string): string {
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin + (import.meta.env?.BASE_URL || '/') : ''
   return `
     <div class="report-header">
-      <!-- Logos Bar -->
-      <div class="logos-bar">
-        <div class="logo-item">
-          <img src="${baseUrl}logo-who.jpeg" alt="WHO" class="logo-img" onerror="this.style.display='none'" />
-          <span class="logo-label">منظمة الصحة العالمية</span>
-        </div>
-        <div class="logo-item">
-          <img src="${baseUrl}logo-unicef.jpeg" alt="UNICEF" class="logo-img" onerror="this.style.display='none'" />
-          <span class="logo-label">يونيسيف</span>
-        </div>
-        <div class="logo-item main-logo">
-          <img src="${baseUrl}logo-moh-header.png" alt="وزارة الصحة" class="logo-img logo-moh" onerror="this.style.display='none'" />
-        </div>
-        <div class="logo-item">
-          <img src="${baseUrl}logo-epi-header.png" alt="EPI" class="logo-img logo-epi" onerror="this.style.display='none'" />
-        </div>
-      </div>
-
-      <!-- Title Bar -->
       <div class="header-top">
         <div class="header-brand">
           <div class="brand-icon">💉</div>
           <div>
-            <div class="brand-title">برنامج التحصين الصحي الموسع — EPI</div>
-            <div class="brand-sub">وزارة الصحة العامة والسكان — الجمهورية اليمنية</div>
+            <div class="brand-title">برنامج التحصين الصحي الموسع</div>
+            <div class="brand-sub">وزارة الصحة العامة والسكان</div>
           </div>
         </div>
         <div class="header-meta">
@@ -84,19 +64,13 @@ function buildHeader(title: string, subtitle: string, period?: string): string {
   `
 }
 
-// ─── Professional Footer (with logos) ───
+// ─── Professional Footer ───
 function buildFooter(): string {
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin + (import.meta.env?.BASE_URL || '/') : ''
   return `
     <div class="report-footer">
-      <div class="footer-logos">
-        <img src="${baseUrl}logo-who.jpeg" alt="WHO" class="footer-logo" onerror="this.style.display='none'" />
-        <img src="${baseUrl}logo-unicef.jpeg" alt="UNICEF" class="footer-logo" onerror="this.style.display='none'" />
-        <img src="${baseUrl}logo-epi-64.png" alt="EPI" class="footer-logo" onerror="this.style.display='none'" />
-      </div>
       <div class="footer-line"></div>
       <div class="footer-content">
-        <span>منصة مشرف EPI — وزارة الصحة العامة والسكان</span>
+        <span>منصة مشرف EPI — تقرير تلقائي</span>
         <span>سري — للاستخدام الداخلي فقط</span>
         <span class="page-number"></span>
       </div>
@@ -179,46 +153,6 @@ function getStyles(): string {
         line-height: 1.6;
       }
       
-      /* ─── Logos Bar ─── */
-      .logos-bar {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 24px;
-        padding: 12px 16px;
-        background: white;
-        border: 2px solid ${BRAND.primary};
-        border-radius: 8px;
-        margin-bottom: 10px;
-      }
-      .logo-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-      }
-      .logo-img {
-        height: 50px;
-        width: auto;
-        object-fit: contain;
-      }
-      .logo-moh {
-        height: 60px;
-      }
-      .logo-epi {
-        height: 55px;
-      }
-      .logo-label {
-        font-size: 8px;
-        color: ${BRAND.textMuted};
-        font-weight: 600;
-      }
-      .main-logo {
-        padding: 0 12px;
-        border-left: 1px solid ${BRAND.border};
-        border-right: 1px solid ${BRAND.border};
-      }
-
       /* ─── Header ─── */
       .report-header {
         margin-bottom: 20px;
@@ -392,20 +326,6 @@ function getStyles(): string {
         left: 0;
         right: 0;
         padding: 8px 0;
-      }
-      .footer-logos {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 16px;
-        padding: 6px 0;
-        margin-bottom: 4px;
-      }
-      .footer-logo {
-        height: 22px;
-        width: auto;
-        object-fit: contain;
-        opacity: 0.6;
       }
       .footer-line {
         height: 2px;

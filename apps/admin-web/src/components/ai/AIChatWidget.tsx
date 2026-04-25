@@ -1,9 +1,12 @@
+// ═══════════════════════════════════════════════════════════════
+// EPI Copilot — AI Chat Widget (Local-First, No API Required)
+// ═══════════════════════════════════════════════════════════════
+
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  Send, Sparkles, Bot, User, Loader2, Copy, Check, X, Maximize2, Minimize2,
-  BarChart3, AlertTriangle, MapPin, TrendingUp, Users, FileText, Shield,
-  Zap, ArrowRight, ThumbsUp, ThumbsDown, RefreshCw, Pin, ChevronRight,
-  Database, Navigation, Play, Lightbulb, Target, Activity
+  Send, Sparkles, Bot, User, Copy, Check, X, Maximize2, Minimize2,
+  Zap, ArrowRight, ThumbsUp, ThumbsDown, RefreshCw, Pin,
+  Navigation, Database, Play, Brain, MessageSquare
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,16 +14,13 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Progress } from '@/components/ui/progress'
 import { supabase } from '@/lib/supabase'
 import { cn, formatNumber } from '@/lib/utils'
 import { useNavigate } from 'react-router-dom'
 import { useDashboardStats, useGovernorateStats } from '@/hooks/useApi'
 import { epiBotEngine } from '@/lib/epi-bot-engine'
 
-// ═══════════════════════════════════════════════════════════
-// TYPES
-// ═══════════════════════════════════════════════════════════
+// ─── Types ───────────────────────────────────────────────────
 
 interface Message {
   id: string
@@ -30,23 +30,21 @@ interface Message {
   isStreaming?: boolean
   source?: string
   intent?: string
-  data?: any
-  feedback?: 'up' | 'down' | null
   actions?: CopilotAction[]
   chart?: ChartData
+  feedback?: 'up' | 'down' | null
 }
 
 interface CopilotAction {
   id: string
   label: string
-  icon: string
-  type: 'navigate' | 'query' | 'command'
+  type: 'navigate' | 'query'
   payload: string
   color?: string
 }
 
 interface ChartData {
-  type: 'bar' | 'pie' | 'line' | 'progress'
+  type: 'bar' | 'pie' | 'progress'
   title: string
   items: { label: string; value: number; color?: string }[]
 }
@@ -56,38 +54,24 @@ interface QuickCommand {
   label: string
   icon: string
   command: string
-  category: 'query' | 'report' | 'action'
+  category: 'query' | 'report'
   color: string
 }
 
-// ═══════════════════════════════════════════════════════════
-// QUICK COMMANDS — قوامر سريعة
-// ═══════════════════════════════════════════════════════════
+// ─── Quick Commands ──────────────────────────────────────────
 
 const QUICK_COMMANDS: QuickCommand[] = [
-  // ─── استعلامات عامة ───
   { id: 'subs', label: 'حالة الإرساليات', icon: '📊', command: 'ما حالة الإرساليات اليوم؟', category: 'query', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
-  { id: 'short', label: 'النواقص الحرجة', icon: '⚠️', command: 'أين النواقص الحرجة؟', category: 'query', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
   { id: 'govs', label: 'ترتيب المحافظات', icon: '🗺️', command: 'أي المحافظات الأكثر إرسالاً؟', category: 'query', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
   { id: 'users', label: 'فريق العمل', icon: '👥', command: 'كم مستخدم نشط لدينا؟', category: 'query', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
-  { id: 'coverage', label: 'تغطية التطعيم', icon: '💉', command: 'ما تغطية التطعيم حالياً؟', category: 'query', color: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100' },
   { id: 'quality', label: 'جودة الإدخال', icon: '✅', command: 'حلل جودة الإدخال ونسبة الرفض', category: 'query', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
-  // ─── تحليل النماذج ───
-  { id: 'forms', label: 'تعريفات النماذج', icon: '📋', command: 'أعرض لي تعريفات جميع النماذج وحقولها', category: 'query', color: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100' },
-  { id: 'field-analysis', label: 'تحليل حقول النماذج', icon: '🔍', command: 'حلل بيانات حقول النماذج — أي الحقول أكثر تعبأً وأيها فارغ', category: 'query', color: 'bg-lime-50 text-lime-700 border-lime-200 hover:bg-lime-100' },
-  { id: 'compare', label: 'مقارنة الفترات', icon: '📈', command: 'قارن أداء هذا الأسبوع بالأسبوع الماضي', category: 'query', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' },
-  { id: 'top-users', label: 'أكثر المُرسلين', icon: '🏆', command: 'مَن أكثر المستخدمين إرسالاً هذا الشهر؟', category: 'query', color: 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' },
-  // ─── تقارير ───
-  { id: 'daily', label: 'تقرير يومي', icon: '📅', command: 'أنشئ تقريراً يومياً شاملاً', category: 'report', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-  { id: 'weekly', label: 'تقرير أسبوعي', icon: '📊', command: 'أنشئ تقريراً أسبوعياً مفصلاً مع مقارنة', category: 'report', color: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100' },
-  { id: 'gov-report', label: 'تقرير المحافظات', icon: '🗺️', command: 'أنشئ تقرير مقارنة شامل لكل المحافظات', category: 'report', color: 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100' },
-  { id: 'campaign-report', label: 'تقرير الحملات', icon: '💉', command: 'قارن أداء حملة شلل الأطفال بالنشاط الإيصالي التكاملي', category: 'report', color: 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100' },
-  { id: 'alerts-report', label: 'تقرير التنبيهات', icon: '🚨', command: 'أعطيني تقرير شامل عن كل التنبيهات الحرجة', category: 'report', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
+  { id: 'vaccines', label: 'تطعيمات طفلي', icon: '💉', command: 'وش تطعيمات طفلي؟', category: 'query', color: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100' },
+  { id: 'daily', label: 'تقرير يومي', icon: '📅', command: 'لخص لي وضع اليوم', category: 'report', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
+  { id: 'compare', label: 'مقارنة أسبوعية', icon: '📈', command: 'قارن هذا الأسبوع بالسابق', category: 'report', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' },
+  { id: 'alerts', label: 'تنبيهات', icon: '🚨', command: 'أي مشاكل تحتاج انتباهي؟', category: 'report', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
 ]
 
-// ═══════════════════════════════════════════════════════════
-// INLINE CHART COMPONENT
-// ═══════════════════════════════════════════════════════════
+// ─── Inline Chart ────────────────────────────────────────────
 
 function InlineChart({ data }: { data: ChartData }) {
   if (data.type === 'bar' || data.type === 'progress') {
@@ -134,86 +118,148 @@ function InlineChart({ data }: { data: ChartData }) {
   return null
 }
 
-// ═══════════════════════════════════════════════════════════
-// ACTION BUTTONS
-// ═══════════════════════════════════════════════════════════
+// ─── Action Buttons ──────────────────────────────────────────
 
 function ActionButtons({ actions, onAction }: { actions: CopilotAction[]; onAction: (a: CopilotAction) => void }) {
-  const iconMap: Record<string, any> = {
-    navigate: Navigation, query: Database, command: Play,
-  }
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
-      {actions.map(action => {
-        const Icon = iconMap[action.type] || ArrowRight
-        return (
-          <button
-            key={action.id}
-            onClick={() => onAction(action)}
-            className={cn(
-              'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all hover:shadow-sm active:scale-95',
-              action.color || 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
-            )}
-          >
-            <Icon className="w-3 h-3" />
-            {action.label}
-          </button>
-        )
-      })}
+      {actions.map(action => (
+        <button
+          key={action.id}
+          onClick={() => onAction(action)}
+          className={cn(
+            'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all hover:shadow-sm active:scale-95',
+            action.color || 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
+          )}
+        >
+          {action.type === 'navigate' ? <Navigation className="w-3 h-3" /> : <Database className="w-3 h-3" />}
+          {action.label}
+        </button>
+      ))}
     </div>
   )
 }
 
-// ═══════════════════════════════════════════════════════════
-// PROACTIVE INSIGHTS (تُعرض تلقائياً)
-// ═══════════════════════════════════════════════════════════
+// ─── Local Data Helpers ──────────────────────────────────────
 
-function useProactiveInsights() {
-  const { data: stats } = useDashboardStats()
+async function fetchLocalStats(): Promise<string> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return 'يجب تسجيل الدخول أولاً.'
 
-  return useCallback(() => {
-    const insights: { text: string; severity: 'critical' | 'warning' | 'info' }[] = []
-    if (!stats) return insights
+    // Fetch counts
+    const [subsRes, usersRes, formsRes, todayRes] = await Promise.allSettled([
+      supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('is_active', true),
+      supabase.from('forms').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('is_active', true),
+      supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+    ])
 
-    if (stats.approval_rate < 70 && stats.total_submissions > 20) {
-      insights.push({ text: `⚠️ معدل الاعتماد ${stats.approval_rate.toFixed(1)}% — أقل من 70%`, severity: 'warning' })
-    }
-    if (stats.submissions_today === 0 && stats.active_users > 0) {
-      insights.push({ text: `📭 لا توجد إرساليات اليوم مع ${stats.active_users} مستخدم نشط`, severity: 'warning' })
-    }
-    return insights
-  }, [stats])
-}
+    const subs = subsRes.status === 'fulfilled' ? subsRes.value.count || 0 : 0
+    const users = usersRes.status === 'fulfilled' ? usersRes.value.count || 0 : 0
+    const forms = formsRes.status === 'fulfilled' ? formsRes.value.count || 0 : 0
+    const today = todayRes.status === 'fulfilled' ? todayRes.value.count || 0 : 0
 
-// ═══════════════════════════════════════════════════════════
-// SMART SUGGESTIONS (تستنتج من آخر رسالة)
-// ═══════════════════════════════════════════════════════════
-
-function getContextualSuggestions(lastIntent?: string, lastData?: any): string[] {
-  switch (lastIntent) {
-    case 'query_submissions':
-      return ['حلل أسباب الرفض', 'قارن بالأسبوع الماضي', 'أي المحافظات لها أعلى رفض؟', 'أعرض تفاصيل آخر إرساليات']
-    case 'query_governorates':
-      return ['حلل السبب في الأضعف', 'قارن بآخر شهر', 'اعرض تفاصيل كل محافظة', 'أنشئ تقرير المحافظات']
-    case 'query_users':
-      return ['المستخدمين غير النشطين', 'توزيع الصلاحيات', 'آخر تسجيل دخول', 'مَن أكثر المُرسلين؟']
-    case 'query_health':
-    case 'query_coverage':
-      return ['حلل التغطية حسب المحافظة', 'اطلع على حقول النماذج', 'أين النواقص؟']
-    case 'get_form_schemas':
-      return ['حلل بيانات الحقول', 'أي الحقول فارغة؟', 'أعرض إحصائيات كل حقل']
-    case 'compare_periods':
-      return ['حلل أسباب التغيير', 'أعطني توصيات', 'قارن بالشهر الماضي']
-    case 'get_critical_alerts':
-      return ['أرسل تنبيهات للمستخدمين', 'حلل النواقص حسب المحافظة', 'أنشئ خطة פעולה']
-    default:
-      return ['📋 عرض النماذج وحقولها', '📊 مقارنة الفترات', '🚨 التنبيهات الحرجة', '📈 تقرير أسبوعي']
+    return `📊 **حالة النظام:**
+• إجمالي الإرساليات: ${subs}
+• إرساليات اليوم: ${today}
+• المستخدمين النشطين: ${users}
+• الاستمارات النشطة: ${forms}`
+  } catch {
+    return '⚠️ تعذر جلب البيانات.'
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ═══════════════════════════════════════════════════════════
+async function fetchGovernorateStats(): Promise<{ text: string; chart?: ChartData }> {
+  try {
+    const { data } = await supabase
+      .from('form_submissions')
+      .select('governorate_id, governorates(name_ar)')
+      .is('deleted_at', null)
+      .not('governorate_id', 'is', null)
+      .limit(5000)
+
+    if (!data || data.length === 0) return { text: 'لا توجد بيانات محافظات.' }
+
+    const counts: Record<string, number> = {}
+    for (const row of data) {
+      const name = (row.governorates as any)?.name_ar || 'غير معروف'
+      counts[name] = (counts[name] || 0) + 1
+    }
+
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    const lines = sorted.map(([name, count], i) => `${i + 1}. ${name}: ${count} إرسالية`)
+
+    const chart: ChartData = {
+      type: 'bar',
+      title: 'ترتيب المحافظات',
+      items: sorted.slice(0, 6).map(([name, count]) => ({
+        label: name,
+        value: count,
+        color: count > 50 ? 'bg-emerald-500' : count > 20 ? 'bg-blue-500' : 'bg-amber-500',
+      })),
+    }
+
+    return { text: `🗺️ **ترتيب المحافظات:**\n${lines.join('\n')}`, chart }
+  } catch {
+    return { text: '⚠️ تعذر جلب بيانات المحافظات.' }
+  }
+}
+
+async function fetchUserStats(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('role, is_active')
+      .is('deleted_at', null)
+
+    if (!data) return 'لا توجد بيانات مستخدمين.'
+
+    const roles: Record<string, number> = {}
+    let active = 0
+    for (const u of data) {
+      roles[u.role] = (roles[u.role] || 0) + 1
+      if (u.is_active) active++
+    }
+
+    const roleNames: Record<string, string> = {
+      admin: 'مدير', central: 'مركزي', governorate: 'محافظة', district: 'مديرية', data_entry: 'إدخال بيانات'
+    }
+
+    const lines = Object.entries(roles).map(([role, count]) => `• ${roleNames[role] || role}: ${count}`)
+
+    return `👥 **المستخدمين:**
+• الإجمالي: ${data.length}
+• النشطين: ${active}
+• غير النشطين: ${data.length - active}
+
+${lines.join('\n')}`
+  } catch {
+    return '⚠️ تعذر جلب بيانات المستخدمين.'
+  }
+}
+
+// ─── Build Contextual Actions ────────────────────────────────
+
+function buildActions(intent: string): CopilotAction[] {
+  switch (intent) {
+    case 'query_submissions':
+      return [{ id: 'nav-subs', label: 'عرض الإرساليات', type: 'navigate', payload: '/submissions', color: 'bg-blue-50 text-blue-700 border-blue-200' }]
+    case 'query_governorates':
+      return [{ id: 'nav-govs', label: 'خريطة المحافظات', type: 'navigate', payload: '/governorates', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }]
+    case 'query_users':
+      return [{ id: 'nav-users', label: 'إدارة المستخدمين', type: 'navigate', payload: '/users', color: 'bg-purple-50 text-purple-700 border-purple-200' }]
+    case 'query_child_vaccines':
+    case 'query_vaccination':
+      return [{ id: 'nav-bot', label: 'مستشار التحصين', type: 'navigate', payload: '/bot', color: 'bg-teal-50 text-teal-700 border-teal-200' }]
+    case 'create_report':
+      return [{ id: 'nav-reports', label: 'صفحة التقارير', type: 'navigate', payload: '/reports', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' }]
+    default:
+      return []
+  }
+}
+
+// ─── Main Component ──────────────────────────────────────────
 
 export function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false)
@@ -226,7 +272,6 @@ export function AIChatWidget() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
-  const getInsights = useProactiveInsights()
 
   // Auto-scroll
   useEffect(() => {
@@ -237,280 +282,117 @@ export function AIChatWidget() {
 
   // Focus input on open
   useEffect(() => {
-    if (isOpen) inputRef.current?.focus()
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 100)
   }, [isOpen])
 
-  // Proactive greeting with insights
+  // Greeting on first open
   useEffect(() => {
     if (isOpen && messages.length === 0) {
-      const insights = getInsights()
-      const greeting: Message = {
+      setMessages([{
         id: 'greeting',
         role: 'assistant',
-        content: insights.length > 0
-          ? `أهلاً! 👋 لاحظت ${insights.length} نقاط تحتاج اهتمامك:`
-          : 'أهلاً! 👋 أنا مساعدك الذكي. كيف أساعدك اليوم؟',
+        content: 'أهلاً! 👋 أنا مساعدك الذكي. اسألني أي شيء عن النظام أو التطعيمات!',
         timestamp: new Date(),
-        actions: [
-          { id: 'nav-insights', label: 'الرؤى الذكية', icon: 'brain', type: 'navigate', payload: '/insights', color: 'bg-purple-50 text-purple-700 border-purple-200' },
-          { id: 'nav-dashboard', label: 'لوحة التحكم', icon: 'dashboard', type: 'navigate', payload: '/dashboard', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-        ],
-      }
-      setMessages([greeting])
+        source: 'local',
+      }])
     }
   }, [isOpen])
 
-  // ═══ SEND MESSAGE ═══
-  const sendMessage = async (text: string, template?: string) => {
-    if (!text.trim() && !template) return
+  // ─── Process Message Locally ───────────────────────────
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return
+
     const userMsg: Message = {
-      id: Date.now().toString(),
+      id: `u-${Date.now()}`,
       role: 'user',
-      content: template ? QUICK_COMMANDS.find(c => c.id === template)?.label || text : text,
+      content: text,
       timestamp: new Date(),
     }
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setIsLoading(true)
 
-    const assistantMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      isStreaming: true,
-    }
-    setMessages(prev => [...prev, assistantMsg])
-
     try {
-      // ── Tier 1: Local EPI-Bot Engine (fast, offline-capable) ──
-      if (!template) {
-        const context = {
-          userId: 'current',
-          sessionId: 'main',
-          history: [],
-          metadata: {},
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        }
-        const localResult = epiBotEngine.processMessage(text, context)
-
-        // If local bot found knowledge or is confident, use its response directly
-        if (localResult.source === 'local') {
-          // Simulate streaming for local response
-          let current = ''
-          const chars = localResult.text.split('')
-          for (let i = 0; i < chars.length; i++) {
-            current += chars[i]
-            setMessages(prev => prev.map(m =>
-              m.id === assistantMsg.id ? { ...m, content: current } : m
-            ))
-            if (i % 3 === 0) await new Promise(r => setTimeout(r, 6))
-          }
-
-          const actions = buildActions(localResult.intent, undefined)
-          setMessages(prev => prev.map(m =>
-            m.id === assistantMsg.id
-              ? { ...m, isStreaming: false, source: 'epi-bot-local', intent: localResult.intent, actions }
-              : m
-          ))
-
-          if (localResult.suggestions.length > 0) {
-            const suggestMsg: Message = {
-              id: (Date.now() + 2).toString(),
-              role: 'assistant',
-              content: '',
-              timestamp: new Date(),
-              isStreaming: false,
-              source: 'suggestions',
-              actions: localResult.suggestions.slice(0, 4).map((s, i) => ({
-                id: `suggest-${i}`,
-                label: s,
-                icon: 'sparkle',
-                type: 'query' as const,
-                payload: s,
-                color: 'bg-muted text-muted-foreground border-border hover:bg-accent',
-              })),
-            }
-            setMessages(prev => [...prev, suggestMsg])
-          }
-          setIsLoading(false)
-          return // ✅ Done locally — no API call needed
-        }
+      // ── Local EPI-Bot Engine ──
+      const context = {
+        userId: 'copilot-user',
+        sessionId: 'copilot',
+        history: [],
+        metadata: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       }
 
-      // ── Tier 2: Supabase Edge Function (full AI with RAG) ──
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
+      const localResult = epiBotEngine.processMessage(text, context)
 
-      const history = messages.filter(m => m.id !== 'greeting').slice(-10).map(m => ({
-        role: m.role,
-        content: m.content,
-      }))
+      // Check if we need to fetch real data
+      let responseText = localResult.text
+      let chart: ChartData | undefined
+      let actions = buildActions(localResult.intent)
 
-      const { data, error } = await supabase.functions.invoke('ai-chat-v3', {
-        body: {
-          message: text || '',
-          template: template || undefined,
-          history,
-          stream: false,
-          mode: template ? undefined : undefined,
-        },
-      })
-
-      if (error) throw error
-
-      const reply = data?.reply || data?.text || 'عذراً، لم أتمكن من المعالجة.'
-      const source = data?.source || 'ai'
-      const intent = data?.intent
-      const dbData = data?.data
+      // For data-heavy intents, fetch real data from Supabase
+      if (localResult.intent === 'query_submissions' || text.includes('إرسالي') || text.includes('حالة')) {
+        const stats = await fetchLocalStats()
+        responseText = stats
+      } else if (localResult.intent === 'query_governorates' || text.includes('محافظ')) {
+        const result = await fetchGovernorateStats()
+        responseText = result.text
+        chart = result.chart
+      } else if (localResult.intent === 'query_users' || text.includes('مستخدم') || text.includes('فريق')) {
+        responseText = await fetchUserStats()
+      } else if (localResult.intent === 'create_report' || text.includes('تقرير') || text.includes('ملخص') || text.includes('لخص')) {
+        const stats = await fetchLocalStats()
+        responseText = `📋 **تقرير سريع:**\n\n${stats}\n\n💡 افتح صفحة التقارير (/reports) لتقارير مفصلة.`
+        actions = [{ id: 'nav-reports', label: 'صفحة التقارير', type: 'navigate', payload: '/reports', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' }]
+      } else if (localResult.intent === 'unknown') {
+        // Try to be helpful with a generic response
+        responseText = `🤔 ما فهمت بالضبط. جرّب:\n\n• "كم إرسالية اليوم؟" — إحصائيات\n• "ترتيب المحافظات" — بيانات جغرافية\n• "كم مستخدم نشط؟" — فريق العمل\n• "وش تطعيمات طفلي؟" — جدول التطعيم`
+      }
 
       // Simulate streaming
+      const assistantMsg: Message = {
+        id: `a-${Date.now()}`,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        isStreaming: true,
+        source: 'local',
+        intent: localResult.intent,
+      }
+      setMessages(prev => [...prev, assistantMsg])
+
       let current = ''
-      const chars = reply.split('')
-      for (let i = 0; i < chars.length; i++) {
-        current += chars[i]
+      for (let i = 0; i < responseText.length; i++) {
+        current += responseText[i]
         setMessages(prev => prev.map(m =>
           m.id === assistantMsg.id ? { ...m, content: current } : m
         ))
-        if (i % 4 === 0) await new Promise(r => setTimeout(r, 8))
+        if (i % 3 === 0) await new Promise(r => setTimeout(r, 5))
       }
 
-      // Build contextual actions based on intent
-      const actions = buildActions(intent, dbData)
-
-      // Build inline chart if data supports it
-      const chart = buildChart(intent, dbData)
-
-      // Build smart suggestions for next question
-      const suggestions = getContextualSuggestions(intent, dbData)
-
+      // Finalize message
       setMessages(prev => prev.map(m =>
         m.id === assistantMsg.id
-          ? { ...m, isStreaming: false, source, intent, data: dbData, actions, chart }
+          ? { ...m, isStreaming: false, chart, actions }
           : m
       ))
 
-      // Add suggestion chips as a follow-up assistant message
-      if (suggestions.length > 0) {
-        const suggestMsg: Message = {
-          id: (Date.now() + 2).toString(),
-          role: 'assistant',
-          content: '',
-          timestamp: new Date(),
-          actions: suggestions.map((s, i) => ({
-            id: `suggest-${i}`,
-            label: s,
-            icon: 'sparkle',
-            type: 'query' as const,
-            payload: s,
-            color: 'bg-muted text-muted-foreground border-border hover:bg-accent',
-          })),
-        }
-        setMessages(prev => [...prev, suggestMsg])
-      }
-    } catch (err: any) {
-      setMessages(prev => prev.map(m =>
-        m.id === assistantMsg.id
-          ? { ...m, content: '⚠️ حدث خطأ في الاتصال. تأكد من إعدادات AI.', isStreaming: false }
-          : m
-      ))
+    } catch (err) {
+      setMessages(prev => [...prev, {
+        id: `err-${Date.now()}`,
+        role: 'assistant',
+        content: '⚠️ حدث خطأ. حاول مرة أخرى.',
+        timestamp: new Date(),
+        source: 'local',
+      }])
     } finally {
       setIsLoading(false)
     }
   }
 
-  // ═══ BUILD CONTEXTUAL ACTIONS ═══
-  function buildActions(intent?: string, data?: any): CopilotAction[] {
-    if (!intent) return []
-    const actions: CopilotAction[] = []
+  // ─── Handlers ──────────────────────────────────────────
 
-    switch (intent) {
-      case 'query_submissions':
-        actions.push(
-          { id: 'nav-subs', label: 'عرض الإرساليات', icon: 'navigate', type: 'navigate', payload: '/submissions', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-        )
-        break
-      case 'query_governorates':
-        actions.push(
-          { id: 'nav-govs', label: 'خريطة المحافظات', icon: 'navigate', type: 'navigate', payload: '/governorates', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-        )
-        break
-      case 'query_users':
-        actions.push(
-          { id: 'nav-users', label: 'إدارة المستخدمين', icon: 'navigate', type: 'navigate', payload: '/users', color: 'bg-purple-50 text-purple-700 border-purple-200' },
-        )
-        break
-      case 'get_form_schemas':
-      case 'aggregate_form_data':
-      case 'get_form_field_values':
-        actions.push(
-          { id: 'nav-forms', label: 'إدارة النماذج', icon: 'navigate', type: 'navigate', payload: '/forms', color: 'bg-teal-50 text-teal-700 border-teal-200' },
-        )
-        break
-      case 'get_critical_alerts':
-      case 'get_shortages':
-        actions.push(
-          { id: 'nav-shortages', label: 'صفحة النواقص', icon: 'navigate', type: 'navigate', payload: '/shortages', color: 'bg-red-50 text-red-700 border-red-200' },
-        )
-        break
-      case 'compare_periods':
-      case 'get_submission_trend':
-        actions.push(
-          { id: 'nav-insights', label: 'الرؤى الذكية', icon: 'navigate', type: 'navigate', payload: '/insights', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
-        )
-        break
-    }
-    return actions
-  }
-
-  // ═══ BUILD INLINE CHART ═══
-  function buildChart(intent?: string, data?: any): ChartData | undefined {
-    if (!data) return undefined
-
-    if (intent === 'query_submissions' && data.byStatus) {
-      return {
-        type: 'pie',
-        title: 'توزيع الإرساليات حسب الحالة',
-        items: [
-          { label: 'معتمدة', value: data.byStatus.approved || 0, color: 'bg-emerald-500' },
-          { label: 'مرفوضة', value: data.byStatus.rejected || 0, color: 'bg-red-500' },
-          { label: 'مسودات', value: data.byStatus.draft || 0, color: 'bg-gray-400' },
-        ].filter(i => i.value > 0),
-      }
-    }
-
-    if (intent === 'query_governorates' && Array.isArray(data)) {
-      return {
-        type: 'bar',
-        title: 'أعلى المحافظات إرسالاً',
-        items: data.slice(0, 6).map((g: any) => ({
-          label: g.name,
-          value: g.submissions || 0,
-          color: g.submissions > 20 ? 'bg-emerald-500' : g.submissions > 10 ? 'bg-blue-500' : 'bg-amber-500',
-        })),
-      }
-    }
-
-    if (intent === 'query_users' && data.byRole) {
-      const roleNames: Record<string, string> = {
-        admin: 'مدير', central: 'مركزي', governorate: 'محافظة', district: 'مديرية', data_entry: 'إدخال',
-      }
-      return {
-        type: 'pie',
-        title: 'توزيع المستخدمين حسب الدور',
-        items: Object.entries(data.byRole).map(([role, count], i) => ({
-          label: roleNames[role] || role,
-          value: count as number,
-          color: ['bg-purple-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-gray-500'][i],
-        })),
-      }
-    }
-
-    return undefined
-  }
-
-  // ═══ HANDLE ACTION ═══
   const handleAction = (action: CopilotAction) => {
     if (action.type === 'navigate') {
       navigate(action.payload)
@@ -520,50 +402,30 @@ export function AIChatWidget() {
     }
   }
 
-  // ═══ HANDLE FEEDBACK ═══
-  const handleFeedback = (msgId: string, feedback: 'up' | 'down') => {
-    setMessages(prev => prev.map(m =>
-      m.id === msgId ? { ...m, feedback: m.feedback === feedback ? null : feedback } : m
-    ))
-    // Log feedback to Supabase (fire and forget)
-    supabase.from('ai_feedback').insert({
-      message_id: msgId,
-      feedback,
-      created_at: new Date().toISOString(),
-    }).then(() => {})
-  }
-
-  // ═══ COPY ═══
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
   }
 
-  // ═══ CLEAR ═══
-  const handleClear = () => {
-    setMessages([])
-    setTimeout(() => {
-      const insights = getInsights()
-      const greeting: Message = {
-        id: 'greeting',
-        role: 'assistant',
-        content: insights.length > 0
-          ? `أهلاً! 👋 ${insights.length} نقاط تحتاج اهتمامك:`
-          : 'أهلاً! 👋 كيف أساعدك اليوم؟',
-        timestamp: new Date(),
-        actions: [
-          { id: 'nav-insights', label: 'الرؤى الذكية', icon: 'brain', type: 'navigate', payload: '/insights' },
-          { id: 'nav-dashboard', label: 'لوحة التحكم', icon: 'dashboard', type: 'navigate', payload: '/dashboard' },
-        ],
-      }
-      setMessages([greeting])
-    }, 100)
+  const handleFeedback = (msgId: string, feedback: 'up' | 'down') => {
+    setMessages(prev => prev.map(m =>
+      m.id === msgId ? { ...m, feedback: m.feedback === feedback ? null : feedback } : m
+    ))
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // RENDER: Floating Button
-  // ═══════════════════════════════════════════════════════════
+  const handleClear = () => {
+    setMessages([{
+      id: 'greeting-new',
+      role: 'assistant',
+      content: '🔄 تم المسح! كيف أساعدك؟',
+      timestamp: new Date(),
+      source: 'local',
+    }])
+  }
+
+  // ─── Render: Floating Button ───────────────────────────
+
   if (!isOpen) {
     return (
       <div className="fixed bottom-6 left-6 z-50">
@@ -578,16 +440,15 @@ export function AIChatWidget() {
     )
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // RENDER: Copilot Panel
-  // ═══════════════════════════════════════════════════════════
+  // ─── Render: Copilot Panel ─────────────────────────────
+
   return (
     <div className={cn(
       'fixed bottom-6 left-6 z-50 transition-all duration-300',
       isExpanded ? 'w-[640px] h-[85vh]' : 'w-[440px] h-[600px]'
     )}>
       <Card className="h-full flex flex-col shadow-2xl border-primary/20 overflow-hidden">
-        {/* ═══ HEADER ═══ */}
+        {/* Header */}
         <CardHeader className="flex flex-row items-center justify-between py-3 px-4 bg-gradient-to-l from-primary/5 via-purple-50/50 to-transparent border-b">
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -599,8 +460,8 @@ export function AIChatWidget() {
             <div>
               <CardTitle className="text-sm font-heading">EPI Copilot</CardTitle>
               <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <Zap className="w-3 h-3 text-amber-500" />
-                مدعوم بالذكاء الاصطناعي
+                <Zap className="w-3 h-3 text-emerald-500" />
+                يعمل محلياً — بدون إنترنت
               </p>
             </div>
           </div>
@@ -620,12 +481,11 @@ export function AIChatWidget() {
           </div>
         </CardHeader>
 
-        {/* ═══ MESSAGES ═══ */}
+        {/* Messages */}
         <ScrollArea className="flex-1 px-3 py-2" ref={scrollRef}>
           <div className="space-y-3">
             {messages.map((msg) => (
               <div key={msg.id}>
-                {/* ═══ USER MESSAGE ═══ */}
                 {msg.role === 'user' ? (
                   <div className="flex gap-2.5 justify-end">
                     <div className="max-w-[80%] rounded-2xl rounded-br-md px-3.5 py-2.5 text-sm leading-relaxed bg-primary text-primary-foreground">
@@ -638,7 +498,6 @@ export function AIChatWidget() {
                     </Avatar>
                   </div>
                 ) : (
-                  /* ═══ ASSISTANT MESSAGE ═══ */
                   <div className="flex gap-2.5">
                     <Avatar className="w-7 h-7 shrink-0 mt-0.5">
                       <AvatarFallback className="bg-gradient-to-br from-purple-100 to-primary/10 text-purple-700 text-[10px]">
@@ -646,7 +505,6 @@ export function AIChatWidget() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="max-w-[85%]">
-                      {/* Content bubble */}
                       {(msg.content || msg.isStreaming) && (
                         <div className="rounded-2xl rounded-bl-md px-3.5 py-2.5 text-sm leading-relaxed bg-muted/80">
                           {msg.content ? (
@@ -659,43 +517,29 @@ export function AIChatWidget() {
                             </div>
                           ) : null}
 
-                          {/* Inline chart */}
                           {msg.chart && <InlineChart data={msg.chart} />}
 
-                          {/* Toolbar (copy + feedback) */}
-                          {msg.content && !msg.isStreaming && msg.id !== 'greeting' && (
+                          {msg.content && !msg.isStreaming && msg.id !== 'greeting' && msg.id !== 'greeting-new' && (
                             <div className="mt-2 flex items-center gap-1">
-                              <button
-                                onClick={() => handleCopy(msg.id, msg.content)}
-                                className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                              >
+                              <button onClick={() => handleCopy(msg.id, msg.content)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
                                 {copiedId === msg.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                                 {copiedId === msg.id ? 'تم' : 'نسخ'}
                               </button>
                               <span className="text-muted-foreground/30 mx-1">|</span>
-                              <button
-                                onClick={() => handleFeedback(msg.id, 'up')}
-                                className={cn('p-0.5 rounded transition-colors', msg.feedback === 'up' ? 'text-emerald-600' : 'text-muted-foreground hover:text-emerald-600')}
-                              >
+                              <button onClick={() => handleFeedback(msg.id, 'up')} className={cn('p-0.5 rounded transition-colors', msg.feedback === 'up' ? 'text-emerald-600' : 'text-muted-foreground hover:text-emerald-600')}>
                                 <ThumbsUp className="w-3 h-3" />
                               </button>
-                              <button
-                                onClick={() => handleFeedback(msg.id, 'down')}
-                                className={cn('p-0.5 rounded transition-colors', msg.feedback === 'down' ? 'text-red-600' : 'text-muted-foreground hover:text-red-600')}
-                              >
+                              <button onClick={() => handleFeedback(msg.id, 'down')} className={cn('p-0.5 rounded transition-colors', msg.feedback === 'down' ? 'text-red-600' : 'text-muted-foreground hover:text-red-600')}>
                                 <ThumbsDown className="w-3 h-3" />
                               </button>
-                              {msg.source && (
-                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 ml-auto">
-                                  {msg.source === 'epi-bot-local' ? '🧠 EPI-Bot' : msg.source === 'function_call' ? '🗃️ DB' : msg.source === 'groq' ? '⚡ AI' : msg.source === 'mimo' ? '🤖 MiMo' : msg.source}
-                                </Badge>
-                              )}
+                              <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 ml-auto">
+                                🧠 محلي
+                              </Badge>
                             </div>
                           )}
                         </div>
                       )}
 
-                      {/* Action buttons */}
                       {msg.actions && msg.actions.length > 0 && (
                         <ActionButtons actions={msg.actions} onAction={handleAction} />
                       )}
@@ -704,32 +548,14 @@ export function AIChatWidget() {
                 )}
               </div>
             ))}
-
-            {/* Loading indicator */}
-            {isLoading && messages[messages.length - 1]?.content === '' && (
-              <div className="flex gap-2.5">
-                <Avatar className="w-7 h-7">
-                  <AvatarFallback className="bg-gradient-to-br from-purple-100 to-primary/10 text-purple-700 text-[10px]">
-                    <Bot className="w-3.5 h-3.5" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="bg-muted/80 rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </ScrollArea>
 
-        {/* ═══ QUICK COMMANDS (show when empty or first message) ═══ */}
+        {/* Quick Commands */}
         {messages.length <= 1 && (
           <div className="px-3 pb-1">
             <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-              {QUICK_COMMANDS.filter(c => c.category === 'query').map(cmd => (
+              {QUICK_COMMANDS.map(cmd => (
                 <button
                   key={cmd.id}
                   onClick={() => sendMessage(cmd.command)}
@@ -743,32 +569,17 @@ export function AIChatWidget() {
                 </button>
               ))}
             </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide mt-1">
-              {QUICK_COMMANDS.filter(c => c.category === 'report').map(cmd => (
-                <button
-                  key={cmd.id}
-                  onClick={() => sendMessage('', cmd.id)}
-                  className={cn(
-                    'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium whitespace-nowrap transition-all hover:shadow-sm active:scale-95 shrink-0',
-                    cmd.color
-                  )}
-                >
-                  <span>{cmd.icon}</span>
-                  {cmd.label}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
-        {/* ═══ INPUT ═══ */}
+        {/* Input */}
         <div className="p-3 border-t bg-background">
           <form onSubmit={(e) => { e.preventDefault(); sendMessage(input) }} className="flex gap-2">
             <Input
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="اسأل Copilot... (مثال: كم إرسالية اليوم؟)"
+              placeholder="اسألني... (مثال: كم إرسالية اليوم؟)"
               disabled={isLoading}
               className="flex-1 h-10 rounded-xl bg-muted/50 border-0 text-sm"
               dir="rtl"
@@ -779,9 +590,16 @@ export function AIChatWidget() {
               disabled={isLoading || !input.trim()}
               className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 hover:shadow-lg"
             >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
             </Button>
           </form>
+          <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
+            🧠 يعمل محلياً • بيانات حية من قاعدة البيانات
+          </p>
         </div>
       </Card>
     </div>

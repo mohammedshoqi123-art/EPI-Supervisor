@@ -303,37 +303,22 @@ export function useGovernorateStats(campaignType?: string) {
 
       if (!governorates) return []
 
-      // Fetch only last 30 days of submissions for stats
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-
-      let query = supabase
-        .from('form_submissions')
-        .select('governorate_id')
-        .not('governorate_id', 'is', null)
-        .is('deleted_at', null)
-        .gte('created_at', thirtyDaysAgo)
-
-      // Apply campaign filter
+      // ✅ Efficient: use count queries per governorate instead of fetching 20K rows
       const formIds = await getCampaignFormIds(campaignType)
-      if (formIds && formIds.length > 0) {
-        query = query.in('form_id', formIds)
-      }
 
-      const { data: submissions } = await query.limit(20000)
+      const stats = await Promise.all(governorates.map(async (gov) => {
+        let q = supabase
+          .from('form_submissions')
+          .select('id', { count: 'exact', head: true })
+          .eq('governorate_id', gov.id)
+          .not('governorate_id', 'is', null)
+          .is('deleted_at', null)
+          .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
 
-      // Count by governorate
-      const counts = new Map<string, number>()
-      for (const s of submissions || []) {
-        const govId = s.governorate_id
-        if (govId) {
-          counts.set(govId, (counts.get(govId) || 0) + 1)
-        }
-      }
+        if (formIds && formIds.length > 0) q = q.in('form_id', formIds)
 
-      // Build result for all governorates (including those with 0 submissions)
-      const stats = governorates.map(gov => ({
-        name: gov.name_ar,
-        submissions: counts.get(gov.id) || 0,
+        const { count } = await q
+        return { name: gov.name_ar, submissions: count || 0 }
       }))
 
       return stats.sort((a, b) => b.submissions - a.submissions)
@@ -472,33 +457,35 @@ export function useFormSubmissionCounts(campaignType?: string) {
   return useQuery({
     queryKey: ['form-submission-counts', campaignType],
     queryFn: async () => {
-      let query = supabase
-        .from('form_submissions')
-        .select('form_id, status')
-        .is('deleted_at', null)
-
-      // Apply campaign filter
+      // ✅ Efficient: use count queries per form instead of fetching all rows
       const formIds = await getCampaignFormIds(campaignType)
-      if (formIds && formIds.length > 0) {
-        query = query.in('form_id', formIds)
-      }
 
-      const { data, error } = await query
-      if (error) throw error
+      // Get forms list
+      let formsQuery = supabase.from('forms').select('id').is('deleted_at', null).eq('is_active', true)
+      if (formIds && formIds.length > 0) formsQuery = formsQuery.in('id', formIds)
+      const { data: forms } = await formsQuery
+      if (!forms) return {}
 
       const counts: Record<string, { total: number; submitted: number; draft: number }> = {}
-      for (const row of data || []) {
-        if (!counts[row.form_id]) {
-          counts[row.form_id] = { total: 0, submitted: 0, draft: 0 }
+
+      // For each form, use count queries (much faster than fetching all rows)
+      await Promise.all(forms.map(async (f) => {
+        const [totalRes, submittedRes, draftRes] = await Promise.allSettled([
+          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).eq('form_id', f.id).is('deleted_at', null),
+          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).eq('form_id', f.id).eq('status', 'submitted').is('deleted_at', null),
+          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).eq('form_id', f.id).eq('status', 'draft').is('deleted_at', null),
+        ])
+        counts[f.id] = {
+          total: totalRes.status === 'fulfilled' ? totalRes.value.count || 0 : 0,
+          submitted: submittedRes.status === 'fulfilled' ? submittedRes.value.count || 0 : 0,
+          draft: draftRes.status === 'fulfilled' ? draftRes.value.count || 0 : 0,
         }
-        counts[row.form_id].total++
-        if (row.status === 'submitted') counts[row.form_id].submitted++
-        else if (row.status === 'draft') counts[row.form_id].draft++
-      }
+      }))
+
       return counts
     },
     enabled: isConfigured,
-    staleTime: 30000,
+    staleTime: 60000,
   })
 }
 

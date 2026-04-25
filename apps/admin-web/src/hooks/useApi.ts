@@ -293,7 +293,7 @@ export function useGovernorateStats(campaignType?: string) {
   return useQuery({
     queryKey: ['governorate-stats', campaignType],
     queryFn: async () => {
-      // Get all governorates
+      // Get all active governorates (not deleted)
       const { data: governorates } = await supabase
         .from('governorates')
         .select('id, name_ar')
@@ -679,7 +679,7 @@ export function useGovernorates() {
     enabled: isConfigured,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    staleTime: 60000,
+    staleTime: 0, // Always fetch fresh — governorates don't change often but deletions must reflect immediately
   })
 }
 

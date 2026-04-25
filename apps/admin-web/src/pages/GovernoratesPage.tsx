@@ -154,7 +154,7 @@ export default function GovernoratesPage() {
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   // ── Data fetching ──
-  const { data: governorates, isLoading: govLoading } = useGovernorates()
+  const { data: governorates, isLoading: govLoading, refetch: refetchGovs } = useGovernorates()
   const { data: districts } = useDistricts(selectedGovForDistricts || undefined)
   const { data: stats } = useDashboardStats(campaign)
   const { data: govStats } = useGovernorateStats(campaign)
@@ -334,6 +334,7 @@ export default function GovernoratesPage() {
         <Header
           title="المحافظات والمديريات"
           subtitle={`${enrichedGovs.length} محافظة — ${formatNumber(totalSubmissions)} إرسالية`}
+          onRefresh={() => refetchGovs()}
         />
 
         <div className="p-6 space-y-6">

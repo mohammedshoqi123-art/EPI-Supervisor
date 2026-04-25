@@ -1,27 +1,24 @@
 -- ═══════════════════════════════════════════════════════════
 -- 026: Cleanup Governorates — Keep only 15 active ones
--- This permanently removes unwanted governorates and prevents
--- them from coming back on future migrations.
+-- ⚠️ MUST match the same 15 governorates in 024!
+-- The 15 governorates are:
+--   أبين, البيضاء, الجوف, الحديدة, الضالع, المكلا, المهرة,
+--   تعز, حجة, سقطرى, سيئون, شبوة, عدن, لحج, مأرب
 -- ═══════════════════════════════════════════════════════════
 
 BEGIN;
 
 -- Step 1: Soft-delete governorates NOT in the 15 active list
--- This sets deleted_at and is_active=false for the 7 unwanted ones
+-- Uses codes to match — same codes as migration 024
 UPDATE governorates
 SET deleted_at = now(), is_active = false, updated_at = now()
-WHERE name_ar IN (
-  'لحج',        -- LA
-  'أبين',       -- AB
-  'شبوة',       -- SH
-  'المهرة',     -- MR
-  'حضرموت',     -- HD
-  'سقطرى',      -- SU
-  'أرخبيل سقطرى' -- SU2
+WHERE code NOT IN (
+  'ABYAN','ALBAYD','JOF','ALHUDA','ALDHAL','ALMUKA','ALMAHA',
+  'TAIZZ','HAJ','SOCOTR','SAYUN','SHABWA','ADEN','LAHJ','MARIB'
 )
 AND deleted_at IS NULL;
 
--- Step 2: Soft-delete districts belonging to those governorates
+-- Step 2: Soft-delete districts belonging to deleted governorates
 UPDATE districts
 SET deleted_at = now(), is_active = false, updated_at = now()
 WHERE governorate_id IN (
@@ -29,28 +26,12 @@ WHERE governorate_id IN (
 )
 AND deleted_at IS NULL;
 
--- Step 3: Re-activate the 15 wanted governorates (in case they were accidentally deactivated)
+-- Step 3: Ensure the 15 wanted governorates are active
 UPDATE governorates
 SET is_active = true, deleted_at = NULL, updated_at = now()
-WHERE name_ar IN (
-  'صنعاء',      -- SA
-  'عدن',        -- AD
-  'تعز',        -- TA
-  'الحديدة',    -- HU
-  'إب',         -- IB
-  'ذمار',       -- DH
-  'حجة',        -- HA
-  'البيضاء',    -- BA
-  'مأرب',       -- MA
-  'الجوف',      -- JA
-  'صعدة',       -- SD
-  'المحويت',    -- MW
-  'ريمة',       -- RA
-  'عمران',      -- AM
-  'الضالع'      -- DA
+WHERE code IN (
+  'ABYAN','ALBAYD','JOF','ALHUDA','ALDHAL','ALMUKA','ALMAHA',
+  'TAIZZ','HAJ','SOCOTR','SAYUN','SHABWA','ADEN','LAHJ','MARIB'
 );
 
 COMMIT;
-
--- Verification: Should return 15
--- SELECT name_ar, name_en, is_active, deleted_at FROM governorates WHERE deleted_at IS NULL ORDER BY name_ar;

@@ -17,7 +17,8 @@ import { Button } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import {
   useDashboardStats, useSubmissionsChart, useGovernorateStats,
-  useNotifications, useSubmissions, useForms, useUsers, useShortages
+  useNotifications, useSubmissions, useForms, useUsers, useShortages,
+  useDashboardRealtime
 } from '@/hooks/useApi'
 import { formatNumber, formatRelativeTime, cn } from '@/lib/utils'
 import { useCampaign } from '@/lib/campaign-context'
@@ -181,6 +182,9 @@ export default function DashboardPage() {
   const { data: users } = useUsers()
   const { data: shortages } = useShortages(campaign)
   const { alerts: smartAlerts, criticalCount: smartCritical, warningCount: smartWarning } = useSmartAlerts()
+
+  // Real-time updates — dashboard auto-refreshes when data changes
+  useDashboardRealtime()
 
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [isOnline, setIsOnline] = useState(navigator.onLine)

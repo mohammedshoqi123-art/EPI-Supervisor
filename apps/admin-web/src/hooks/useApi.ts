@@ -233,12 +233,64 @@ export function useDashboardStats(campaignType?: string) {
         unread_notifications: 0,
       }
     },
-    refetchInterval: isConfigured ? 60000 : false, // ← reduced from 30s to 60s
+    refetchInterval: isConfigured ? 120000 : false, // ← 2 min fallback (real-time handles instant updates)
     enabled: isConfigured,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     staleTime: 30000, // ← increased from 15s to 30s
   })
+}
+
+// ─── Real-time Dashboard Updates ─────────────────────────────
+// Subscribes to form_submissions changes and invalidates dashboard queries
+let _dashChannel: ReturnType<typeof supabase.channel> | null = null
+let _dashSubscribed = false
+
+export function useDashboardRealtime() {
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (!isConfigured || _dashSubscribed) return
+
+    if (_dashChannel) {
+      try { supabase.removeChannel(_dashChannel) } catch { /* ignore */ }
+    }
+
+    const channel = supabase.channel('dashboard-realtime')
+
+    channel
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'form_submissions' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['submissions-chart'] })
+        queryClient.invalidateQueries({ queryKey: ['governorate-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['submissions'] })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supply_shortages' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['shortages'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['users'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          _dashSubscribed = true
+          _dashChannel = channel
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[Realtime] Dashboard channel error:', status)
+          _dashSubscribed = false
+        }
+      })
+
+    return () => {
+      if (_dashChannel === channel) {
+        try { supabase.removeChannel(channel) } catch { /* ignore */ }
+        _dashChannel = null
+        _dashSubscribed = false
+      }
+    }
+  }, [queryClient])
 }
 
 export function useSubmissionsChart(campaignType?: string) {

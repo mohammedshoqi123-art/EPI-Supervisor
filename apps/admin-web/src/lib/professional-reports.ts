@@ -964,3 +964,1120 @@ function printReport(html: string, filename: string) {
   }, 500)
 }
 
+
+
+// ═══════════════════════════════════════════════════════════════
+// REPORT 5: تقرير أداء المشرفين
+// ═══════════════════════════════════════════════════════════════
+
+export async function generateSupervisorReport(options?: {
+  dateFrom?: string; dateTo?: string; governorateId?: string
+}): Promise<void> {
+  const [usersRes, subsRes, govsRes] = await Promise.allSettled([
+    supabase.from('profiles').select('*, governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('created_at', { ascending: false }),
+    supabase.from('form_submissions').select('*, forms(title_ar), governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('created_at', { ascending: false }).limit(20000),
+    supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
+  ])
+
+  const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
+  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
+
+  const fieldRoles = ['data_entry', 'district', 'governorate']
+  const fieldUsers = users.filter(u => fieldRoles.includes(u.role) && u.is_active)
+
+  // Enrich each supervisor
+  const supervisors = fieldUsers.map(u => {
+    const userSubs = subs.filter(s => s.submitted_by === u.id)
+    const submitted = userSubs.filter(s => s.status === 'submitted').length
+    const draft = userSubs.filter(s => s.status === 'draft').length
+    const withGps = userSubs.filter(s => s.gps_lat).length
+    const withPhotos = userSubs.filter(s => s.photos?.length > 0).length
+    const lastSub = userSubs.length > 0 ? userSubs[0].created_at : null
+    const lastLogin = u.last_login
+    const daysSinceLastSub = lastSub ? Math.floor((Date.now() - new Date(lastSub).getTime()) / 86400000) : 999
+    const daysSinceLastLogin = lastLogin ? Math.floor((Date.now() - new Date(lastLogin).getTime()) / 86400000) : 999
+
+    // Performance score
+    let score = 0
+    if (userSubs.length > 0) score += 30
+    if (submitted > 0) score += 25
+    if (withGps > 0) score += 15
+    if (withPhotos > 0) score += 15
+    if (daysSinceLastSub <= 3) score += 15
+    else if (daysSinceLastSub <= 7) score += 10
+    else if (daysSinceLastSub <= 14) score += 5
+
+    return {
+      ...u,
+      totalSubs: userSubs.length,
+      submitted,
+      draft,
+      withGps,
+      withPhotos,
+      lastSub,
+      lastLogin,
+      daysSinceLastSub,
+      daysSinceLastLogin,
+      gpsRate: userSubs.length > 0 ? Math.round((withGps / userSubs.length) * 100) : 0,
+      photoRate: userSubs.length > 0 ? Math.round((withPhotos / userSubs.length) * 100) : 0,
+      score,
+    }
+  }).sort((a, b) => b.score - a.score)
+
+  const activeCount = supervisors.filter(s => s.daysSinceLastSub <= 7).length
+  const inactiveCount = supervisors.filter(s => s.daysSinceLastSub > 14).length
+  const avgScore = supervisors.length > 0 ? Math.round(supervisors.reduce((s, x) => s + x.score, 0) / supervisors.length) : 0
+
+  const roleLabels: Record<string, string> = { data_entry: 'إدخال بيانات', district: 'مديرية', governorate: 'محافظة' }
+  const roleIcons: Record<string, string> = { data_entry: '⚪', district: '🟢', governorate: '🔵' }
+  const roleColors: Record<string, string> = { data_entry: '#757575', district: BRAND.success, governorate: BRAND.info }
+
+  function getScoreColor(score: number): string {
+    if (score >= 70) return BRAND.success
+    if (score >= 40) return BRAND.warning
+    return BRAND.accent
+  }
+  function getScoreLabel(score: number): string {
+    if (score >= 80) return 'ممتاز'
+    if (score >= 60) return 'جيد'
+    if (score >= 40) return 'متوسط'
+    if (score >= 20) return 'ضعيف'
+    return 'غير نشط'
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>تقرير أداء المشرفين — EPI Supervisor</title>
+      ${getStyles()}
+      <style>
+        .score-badge {
+          display: inline-block;
+          padding: 3px 10px;
+          border-radius: 12px;
+          font-size: 10px;
+          font-weight: 700;
+          color: white;
+        }
+        .activity-dot {
+          display: inline-block;
+          width: 8px; height: 8px;
+          border-radius: 50%;
+          margin-left: 4px;
+        }
+        .supervisor-card {
+          border: 1px solid ${BRAND.border};
+          border-radius: 8px;
+          padding: 12px;
+          margin: 8px 0;
+          background: white;
+          page-break-inside: avoid;
+        }
+        .supervisor-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+          padding-bottom: 6px;
+          border-bottom: 1px solid ${BRAND.border};
+        }
+        .supervisor-name { font-size: 12px; font-weight: 700; }
+        .supervisor-meta { font-size: 9px; color: ${BRAND.textMuted}; }
+        .supervisor-stats {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 8px;
+          text-align: center;
+        }
+        .stat-box {
+          background: ${BRAND.bgLight};
+          border-radius: 6px;
+          padding: 6px;
+        }
+        .stat-value { font-size: 16px; font-weight: 800; }
+        .stat-label { font-size: 8px; color: ${BRAND.textMuted}; }
+      </style>
+    </head>
+    <body>
+      ${buildHeader(
+        'تقرير أداء المشرفين الميدانيين',
+        'تقييم شامل لكل مشرف — الإرساليات، النشاط، جودة البيانات، التغطية',
+      )}
+
+      ${buildSectionTitle('📊', 'ملخص الأداء')}
+      <div class="kpi-grid">
+        ${buildKPI('إجمالي المشرفين', supervisors.length, '👥', BRAND.primary)}
+        ${buildKPI('نشط (آخر 7 أيام)', activeCount, '🟢', BRAND.success, `${supervisors.length > 0 ? Math.round((activeCount/supervisors.length)*100) : 0}%`)}
+        ${buildKPI('غير نشط (+14 يوم)', inactiveCount, '🔴', BRAND.accent, `${supervisors.length > 0 ? Math.round((inactiveCount/supervisors.length)*100) : 0}%`)}
+        ${buildKPI('متوسط الأداء', `${avgScore}/100`, '📊', avgScore >= 60 ? BRAND.success : BRAND.warning)}
+      </div>
+
+      ${buildSectionTitle('🏆', 'ترتيب المشرفين حسب الأداء', `${supervisors.length} مشرف`)}
+      ${buildTable(
+        ['#', 'المشرف', 'الدور', 'المحافظة/المديرية', 'الإرساليات', 'مرسلة', 'GPS', 'النشاط', 'التقييم'],
+        supervisors.map((s, i) => [
+          `${i+1}`,
+          `<strong>${escapeHtml(s.full_name)}</strong>`,
+          `${roleIcons[s.role] || '👤'} ${roleLabels[s.role] || s.role}`,
+          escapeHtml(s.governorates?.name_ar || s.districts?.name_ar || '—'),
+          `<span class="num">${s.totalSubs}</span>`,
+          `<span class="num">${s.submitted}</span>`,
+          `<span class="num">${s.gpsRate}%</span>`,
+          s.daysSinceLastSub <= 3 ? '<span class="activity-dot" style="background:#4CAF50"></span> نشط'
+            : s.daysSinceLastSub <= 7 ? '<span class="activity-dot" style="background:#FF9800"></span> متوسط'
+            : s.daysSinceLastSub <= 14 ? '<span class="activity-dot" style="background:#F44336"></span> ضعيف'
+            : '<span class="activity-dot" style="background:#9E9E9E"></span> متوقف',
+          `<span class="score-badge" style="background:${getScoreColor(s.score)}">${s.score} — ${getScoreLabel(s.score)}</span>`,
+        ])
+      )}
+
+      <!-- ═══ Top Performers ═══ -->
+      ${supervisors.filter(s => s.score >= 60).length > 0 ? `
+        ${buildSectionTitle('⭐', 'المشرفون المتميزون', `${supervisors.filter(s => s.score >= 60).length} متميز`)}
+        ${supervisors.filter(s => s.score >= 60).slice(0, 10).map(s => `
+          <div class="supervisor-card">
+            <div class="supervisor-header">
+              <div>
+                <div class="supervisor-name">${roleIcons[s.role]} ${escapeHtml(s.full_name)}</div>
+                <div class="supervisor-meta">${roleLabels[s.role]} — ${escapeHtml(s.governorates?.name_ar || s.districts?.name_ar || '—')}</div>
+              </div>
+              <span class="score-badge" style="background:${getScoreColor(s.score)}">${s.score} ${getScoreLabel(s.score)}</span>
+            </div>
+            <div class="supervisor-stats">
+              <div class="stat-box">
+                <div class="stat-value" style="color:${BRAND.primary}">${s.totalSubs}</div>
+                <div class="stat-label">إجمالي</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value" style="color:${BRAND.success}">${s.submitted}</div>
+                <div class="stat-label">مرسلة</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value" style="color:${BRAND.info}">${s.gpsRate}%</div>
+                <div class="stat-label">GPS</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value" style="color:#7B1FA2">${s.photoRate}%</div>
+                <div class="stat-label">صور</div>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      ` : ''}
+
+      <!-- ═══ Inactive Supervisors ═══ -->
+      ${supervisors.filter(s => s.daysSinceLastSub > 14).length > 0 ? `
+        ${buildSectionTitle('🚨', 'مشرفون غير نشطين — يحتاجون متابعة', `${supervisors.filter(s => s.daysSinceLastSub > 14).length} غير نشط`)}
+        <div class="alert-box alert-danger">
+          يوجد <strong>${supervisors.filter(s => s.daysSinceLastSub > 14).length}</strong> مشرف لم يرسل أي بيانات منذ أكثر من 14 يوم. يرجى متابعتهم.
+        </div>
+        ${buildTable(
+          ['#', 'المشرف', 'الدور', 'المحافظة', 'آخر إرسالية', 'منذ يوم'],
+          supervisors.filter(s => s.daysSinceLastSub > 14).map((s, i) => [
+            `${i+1}`,
+            `<strong>${escapeHtml(s.full_name)}</strong>`,
+            roleLabels[s.role] || s.role,
+            escapeHtml(s.governorates?.name_ar || s.districts?.name_ar || '—'),
+            s.lastSub ? new Date(s.lastSub).toLocaleDateString('ar-SA') : 'لم يرسل أبداً',
+            `<span style="color:${BRAND.accent};font-weight:700">${s.daysSinceLastSub} يوم</span>`,
+          ])
+        )}
+      ` : ''}
+
+      ${buildFooter()}
+    </body>
+    </html>
+  `
+  printReport(html, 'تقرير_أداء_المشرفين')
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// REPORT 6: تقرير الفجوة التغطية
+// ═══════════════════════════════════════════════════════════════
+
+export async function generateCoverageGapReport(): Promise<void> {
+  const [govsRes, distsRes, subsRes, usersRes] = await Promise.allSettled([
+    supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null).order('name_ar'),
+    supabase.from('districts').select('*, governorates(name_ar)').eq('is_active', true).is('deleted_at', null),
+    supabase.from('form_submissions').select('governorate_id, district_id, created_at').is('deleted_at', null),
+    supabase.from('profiles').select('governorate_id, district_id, role, is_active').is('deleted_at', null),
+  ])
+
+  const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
+  const dists = distsRes.status === 'fulfilled' ? distsRes.value.data || [] : []
+  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
+
+  // Governorate coverage
+  const govCoverage = govs.map(g => {
+    const govSubs = subs.filter(s => s.governorate_id === g.id)
+    const govDists = dists.filter(d => d.governorate_id === g.id)
+    const distsWithData = govDists.filter(d => subs.some(s => s.district_id === d.id))
+    const govUsers = users.filter(u => u.governorate_id === g.id && u.is_active)
+    const lastSub = govSubs.length > 0
+      ? govSubs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at
+      : null
+    const daysSinceLast = lastSub ? Math.floor((Date.now() - new Date(lastSub).getTime()) / 86400000) : 999
+
+    return {
+      name: g.name_ar,
+      id: g.id,
+      totalDistricts: govDists.length,
+      coveredDistricts: distsWithData.length,
+      gapDistricts: govDists.length - distsWithData.length,
+      submissions: govSubs.length,
+      users: govUsers.length,
+      lastSub,
+      daysSinceLast,
+      coverageRate: govDists.length > 0 ? Math.round((distsWithData.length / govDists.length) * 100) : 0,
+    }
+  })
+
+  const fullyCovered = govCoverage.filter(g => g.coverageRate === 100)
+  const partiallyCovered = govCoverage.filter(g => g.coverageRate > 0 && g.coverageRate < 100)
+  const zeroCoverage = govCoverage.filter(g => g.coverageRate === 0)
+
+  // District gaps
+  const distGaps = dists.filter(d => !subs.some(s => s.district_id === d.id))
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>تقرير الفجوة التغطية — EPI Supervisor</title>
+      ${getStyles()}
+      <style>
+        .gap-card {
+          border: 1px solid ${BRAND.border};
+          border-radius: 8px;
+          padding: 10px 14px;
+          margin: 6px 0;
+          page-break-inside: avoid;
+        }
+        .gap-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 6px;
+        }
+        .coverage-bar {
+          height: 10px;
+          background: #E0E0E0;
+          border-radius: 5px;
+          overflow: hidden;
+          margin: 4px 0;
+        }
+        .coverage-fill {
+          height: 100%;
+          border-radius: 5px;
+        }
+      </style>
+    </head>
+    <body>
+      ${buildHeader(
+        'تقرير الفجوة في التغطية',
+        'تحليل شامل للمناطق المغطاة وغير المغطاة — أين نحن وأين يجب أن نكون',
+      )}
+
+      ${buildSectionTitle('📊', 'نظرة عامة على التغطية')}
+      <div class="kpi-grid">
+        ${buildKPI('المحافظات', govs.length, '🏛️', BRAND.primary)}
+        ${buildKPI('مغطاة بالكامل', fullyCovered.length, '✅', BRAND.success)}
+        ${buildKPI('غطاء جزئي', partiallyCovered.length, '⚠️', BRAND.warning)}
+        ${buildKPI('بدون تغطية', zeroCoverage.length, '🔴', BRAND.accent)}
+        ${buildKPI('المديريات', dists.length, '🏘️', BRAND.info)}
+        ${buildKPI('مديريات بلا بيانات', distGaps.length, '🚨', BRAND.accent)}
+        ${buildKPI('نسبة التغطية', `${govs.length > 0 ? Math.round(((govs.length - zeroCoverage.length) / govs.length) * 100) : 0}%`, '📈', BRAND.primary)}
+        ${buildKPI('المستخدمين', users.filter(u => u.is_active).length, '👥', '#7B1FA2')}
+      </div>
+
+      <!-- ═══ Zero Coverage Governorates ═══ -->
+      ${zeroCoverage.length > 0 ? `
+        ${buildSectionTitle('🚨', 'محافظات بدون أي تغطية', `${zeroCoverage.length} محافظة`)}
+        <div class="alert-box alert-danger">
+          <strong>تنبيه:</strong> يوجد ${zeroCoverage.length} محافظة لم تسجل أي إرسالية. هذه المناطق تحتاج تدخل فوري.
+        </div>
+        ${zeroCoverage.map(g => `
+          <div class="gap-card" style="border-right: 4px solid ${BRAND.accent}">
+            <div class="gap-header">
+              <strong>🔴 ${escapeHtml(g.name)}</strong>
+              <span style="color:${BRAND.accent};font-weight:700">${g.totalDistricts} مديرية — 0 إرسالية</span>
+            </div>
+            <div style="font-size:10px;color:${BRAND.textMuted}">
+              ${g.users > 0 ? `${g.users} مستخدم مسجل` : 'لا يوجد مستخدمين'}
+              ${g.lastSub ? ` — آخر نشاط: ${new Date(g.lastSub).toLocaleDateString('ar-SA')}` : ' — لم يسبق العمل هنا'}
+            </div>
+          </div>
+        `).join('')}
+      ` : `
+        <div class="alert-box alert-success">✅ جميع المحافظات لها تغطية على الأقل جزئية</div>
+      `}
+
+      <!-- ═══ Partial Coverage ═══ -->
+      ${partiallyCovered.length > 0 ? `
+        <div class="page-break"></div>
+        ${buildSectionTitle('⚠️', 'محافظات بتغطية جزئية', `${partiallyCovered.length} محافظة`)}
+        ${partiallyCovered.map(g => `
+          <div class="gap-card" style="border-right: 4px solid ${BRAND.warning}">
+            <div class="gap-header">
+              <strong>🟡 ${escapeHtml(g.name)}</strong>
+              <span>${g.coverageDistricts}/${g.totalDistricts} مديرية (${g.coverageRate}%)</span>
+            </div>
+            <div class="coverage-bar">
+              <div class="coverage-fill" style="width:${g.coverageRate}%;background:${g.coverageRate >= 60 ? BRAND.success : BRAND.warning}"></div>
+            </div>
+            <div style="font-size:9px;color:${BRAND.textMuted};margin-top:4px">
+              ${g.submissions} إرسالية — ${g.users} مستخدم — مديريات بلا بيانات: ${g.gapDistricts}
+            </div>
+          </div>
+        `).join('')}
+      ` : ''}
+
+      <!-- ═══ All Governorates Summary ═══ -->
+      ${buildSectionTitle('📋', 'جدول التغطية الشامل')}
+      ${buildTable(
+        ['#', 'المحافظة', 'المديريات', 'مغطاة', 'فجوة', 'الإرساليات', 'المستخدمين', 'نسبة التغطية'],
+        govCoverage.map((g, i) => [
+          `${i+1}`,
+          `<strong>${escapeHtml(g.name)}</strong>`,
+          `<span class="num">${g.totalDistricts}</span>`,
+          `<span class="num">${g.coveredDistricts}</span>`,
+          `<span class="num" style="color:${g.gapDistricts > 0 ? BRAND.accent : BRAND.success}">${g.gapDistricts}</span>`,
+          `<span class="num">${g.submissions}</span>`,
+          `<span class="num">${g.users}</span>`,
+          `<span class="num" style="color:${g.coverageRate >= 80 ? BRAND.success : g.coverageRate >= 40 ? BRAND.warning : BRAND.accent}">${g.coverageRate}%</span>`,
+        ])
+      )}
+
+      ${govCoverage.map(g => buildProgress(g.name, g.coveredDistricts, g.totalDistricts, g.coverageRate >= 80 ? BRAND.success : g.coverageRate >= 40 ? BRAND.warning : BRAND.accent)).join('')}
+
+      <!-- ═══ Districts Without Data ═══ -->
+      ${distGaps.length > 0 ? `
+        <div class="page-break"></div>
+        ${buildSectionTitle('🏘️', 'مديريات بدون أي بيانات', `${distGaps.length} مديرية`)}
+        ${buildTable(
+          ['#', 'المديرية', 'المحافظة'],
+          distGaps.map((d, i) => [
+            `${i+1}`,
+            escapeHtml(d.name_ar),
+            escapeHtml(d.governorates?.name_ar || '—'),
+          ])
+        )}
+      ` : ''}
+
+      ${buildFooter()}
+    </body>
+    </html>
+  `
+  printReport(html, 'تقرير_الفجوة_التغطية')
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// REPORT 7: تقرير مقارنة الحملات
+// ═══════════════════════════════════════════════════════════════
+
+export async function generateCampaignComparisonReport(): Promise<void> {
+  const [subsRes, formsRes, govsRes] = await Promise.allSettled([
+    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar)').is('deleted_at', null).limit(20000),
+    supabase.from('forms').select('*').eq('is_active', true).is('deleted_at', null),
+    supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
+  ])
+
+  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const forms = formsRes.status === 'fulfilled' ? formsRes.value.data || [] : []
+  const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
+
+  const campaigns = [
+    { id: 'polio_campaign', label: 'حملة شلل الأطفال', icon: '💉', color: '#1565C0' },
+    { id: 'integrated_activity', label: 'النشاط الإيصالي التكاملي', icon: '🏥', color: '#2E7D32' },
+  ]
+
+  const campaignStats = campaigns.map(c => {
+    const cForms = forms.filter(f => f.campaign_type === c.id)
+    const cFormIds = cForms.map(f => f.id)
+    const cSubs = subs.filter(s => cFormIds.includes(s.form_id))
+    const submitted = cSubs.filter(s => s.status === 'submitted').length
+    const draft = cSubs.filter(s => s.status === 'draft').length
+    const withGps = cSubs.filter(s => s.gps_lat).length
+    const withPhotos = cSubs.filter(s => s.photos?.length > 0).length
+    const govsWithData = new Set(cSubs.map(s => s.governorate_id).filter(Boolean))
+
+    // Per governorate
+    const govBreakdown = govs.map(g => ({
+      name: g.name_ar,
+      submissions: cSubs.filter(s => s.governorate_id === g.id).length,
+      submitted: cSubs.filter(s => s.governorate_id === g.id && s.status === 'submitted').length,
+    }))
+
+    return {
+      ...c,
+      forms: cForms.length,
+      totalSubs: cSubs.length,
+      submitted,
+      draft,
+      withGps,
+      withPhotos,
+      govsWithData: govsWithData.size,
+      gpsRate: cSubs.length > 0 ? Math.round((withGps / cSubs.length) * 100) : 0,
+      photoRate: cSubs.length > 0 ? Math.round((withPhotos / cSubs.length) * 100) : 0,
+      submitRate: cSubs.length > 0 ? Math.round((submitted / cSubs.length) * 100) : 0,
+      govBreakdown,
+    }
+  })
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>تقرير مقارنة الحملات — EPI Supervisor</title>
+      ${getStyles()}
+      <style>
+        .campaign-card {
+          border: 1px solid ${BRAND.border};
+          border-radius: 10px;
+          padding: 16px;
+          margin: 10px 0;
+          page-break-inside: avoid;
+        }
+        .campaign-header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+          padding-bottom: 8px;
+          border-bottom: 2px solid;
+        }
+        .campaign-icon { font-size: 28px; }
+        .campaign-name { font-size: 15px; font-weight: 800; }
+        .vs-divider {
+          text-align: center;
+          font-size: 18px;
+          font-weight: 900;
+          color: ${BRAND.textMuted};
+          margin: 14px 0;
+          position: relative;
+        }
+        .vs-divider::before, .vs-divider::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          width: 35%;
+          height: 2px;
+          background: ${BRAND.border};
+        }
+        .vs-divider::before { right: 0; }
+        .vs-divider::after { left: 0; }
+      </style>
+    </head>
+    <body>
+      ${buildHeader(
+        'تقرير مقارنة الحملات',
+        'مقارنة شاملة بين حملة شلل الأطفال والنشاط الإيصالي التكاملي',
+      )}
+
+      ${campaignStats.map((c, i) => `
+        ${i === 1 ? '<div class="vs-divider">VS</div>' : ''}
+        <div class="campaign-card">
+          <div class="campaign-header" style="border-color: ${c.color}">
+            <span class="campaign-icon">${c.icon}</span>
+            <div>
+              <div class="campaign-name" style="color: ${c.color}">${escapeHtml(c.label)}</div>
+              <div style="font-size:10px;color:${BRAND.textMuted}">${c.forms} نماذج نشطة</div>
+            </div>
+          </div>
+          <div class="kpi-grid">
+            ${buildKPI('الإرساليات', c.totalSubs, '📋', c.color)}
+            ${buildKPI('مرسلة', c.submitted, '✅', BRAND.success, `${c.submitRate}%`)}
+            ${buildKPI('مسودة', c.draft, '📝', BRAND.warning)}
+            ${buildKPI('GPS', `${c.gpsRate}%`, '📍', BRAND.info)}
+            ${buildKPI('صور', `${c.photoRate}%`, '📷', '#00897B')}
+            ${buildKPI('محافظات', `${c.govsWithData}/${govs.length}`, '🏛️', c.color)}
+          </div>
+          ${buildTable(
+            ['#', 'المحافظة', 'الإرساليات', 'مرسلة', 'معدل الإرسال'],
+            c.govBreakdown.sort((a, b) => b.submissions - a.submissions).map((g, j) => [
+              `${j+1}`,
+              escapeHtml(g.name),
+              `<span class="num">${g.submissions}</span>`,
+              `<span class="num">${g.submitted}</span>`,
+              `<span class="num">${g.submissions > 0 ? Math.round((g.submitted/g.submissions)*100) : 0}%</span>`,
+            ])
+          )}
+        </div>
+      `).join('')}
+
+      ${buildFooter()}
+    </body>
+    </html>
+  `
+  printReport(html, 'تقرير_مقارنة_الحملات')
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// REPORT 8: تقرير النشاط اليومي
+// ═══════════════════════════════════════════════════════════════
+
+export async function generateDailyActivityReport(): Promise<void> {
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+  const yesterdayStr = new Date(today.getTime() - 86400000).toISOString().split('T')[0]
+
+  const [subsRes, usersRes, notifsRes] = await Promise.allSettled([
+    supabase.from('form_submissions').select('*, forms(title_ar), profiles:submitted_by(full_name, role), governorates(name_ar)').gte('created_at', `${todayStr}T00:00:00`).is('deleted_at', null).order('created_at', { ascending: false }),
+    supabase.from('profiles').select('*').is('deleted_at', null),
+    supabase.from('notifications').select('*').gte('created_at', `${todayStr}T00:00:00`).order('created_at', { ascending: false }),
+  ])
+
+  const todaySubs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
+  const todayNotifs = notifsRes.status === 'fulfilled' ? notifsRes.value.data || [] : []
+
+  // Yesterday subs for comparison
+  const [yesterdayRes] = await Promise.allSettled([
+    supabase.from('form_submissions').select('id', { count: 'exact', head: true }).gte('created_at', `${yesterdayStr}T00:00:00`).lt('created_at', `${todayStr}T00:00:00`).is('deleted_at', null),
+  ])
+  const yesterdayCount = yesterdayRes.status === 'fulfilled' ? yesterdayRes.value.count || 0 : 0
+
+  const submittedToday = todaySubs.filter(s => s.status === 'submitted').length
+  const draftToday = todaySubs.filter(s => s.status === 'draft').length
+  const activeUsersToday = new Set(todaySubs.map(s => s.submitted_by)).size
+  const totalActiveUsers = users.filter(u => u.is_active).length
+
+  // Hourly breakdown
+  const hourlyData = Array.from({ length: 24 }, (_, i) => ({
+    hour: `${i.toString().padStart(2, '0')}:00`,
+    count: todaySubs.filter(s => new Date(s.created_at).getHours() === i).length,
+  }))
+
+  const diff = todaySubs.length - yesterdayCount
+  const diffPct = yesterdayCount > 0 ? Math.round((diff / yesterdayCount) * 100) : (todaySubs.length > 0 ? 100 : 0)
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>تقرير النشاط اليومي — ${formatDateArabic(today)}</title>
+      ${getStyles()}
+    </head>
+    <body>
+      ${buildHeader(
+        'تقرير النشاط اليومي',
+        `نشاط اليوم — ${formatDateArabic(today)}`,
+      )}
+
+      ${buildSectionTitle('📊', 'مؤشرات اليوم')}
+      <div class="kpi-grid">
+        ${buildKPI('إرساليات اليوم', todaySubs.length, '📋', BRAND.primary, `أمس: ${yesterdayCount} (${diff >= 0 ? '+' : ''}${diffPct}%)`)}
+        ${buildKPI('مرسلة', submittedToday, '✅', BRAND.success)}
+        ${buildKPI('مسودة', draftToday, '📝', BRAND.warning)}
+        ${buildKPI('مشرفين نشطين', activeUsersToday, '👥', '#7B1FA2', `من ${totalActiveUsers}`)}
+        ${buildKPI('إشعارات', todayNotifs.length, '🔔', BRAND.info)}
+        ${buildKPI('مقارنة بأمس', `${diff >= 0 ? '📈' : '📉'} ${Math.abs(diffPct)}%`, diff >= 0 ? '📈' : '📉', diff >= 0 ? BRAND.success : BRAND.accent)}
+      </div>
+
+      ${buildSectionTitle('⏰', 'النشاط بالساعة')}
+      ${buildTable(
+        ['الساعة', 'عدد الإرساليات', 'النشاط'],
+        hourlyData.filter(h => h.count > 0).map(h => [
+          `<strong>${h.hour}</strong>`,
+          `<span class="num">${h.count}</span>`,
+          '█'.repeat(Math.min(h.count, 20)),
+        ])
+      )}
+
+      ${todaySubs.length > 0 ? `
+        ${buildSectionTitle('📋', 'إرساليات اليوم', `${todaySubs.length} إرسالية`)}
+        ${buildTable(
+          ['#', 'الوقت', 'النموذج', 'المُرسل', 'المحافظة', 'الحالة'],
+          todaySubs.slice(0, 30).map((s, i) => [
+            `${i+1}`,
+            new Date(s.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+            escapeHtml(s.forms?.title_ar || '—'),
+            escapeHtml(s.profiles?.full_name || '—'),
+            escapeHtml(s.governorates?.name_ar || '—'),
+            `<span class="status-badge ${s.status === 'submitted' ? 'status-ready' : 'status-partial'}">${s.status === 'submitted' ? 'مرسلة' : 'مسودة'}</span>`,
+          ])
+        )}
+      ` : `
+        <div class="alert-box alert-warning">⚠️ لا توجد إرساليات اليوم حتى الآن</div>
+      `}
+
+      ${activeUsersToday < totalActiveUsers ? `
+        ${buildSectionTitle('🚨', 'مشرفين لم يرسلوا اليوم')}
+        <div class="alert-box alert-danger">
+          ${totalActiveUsers - activeUsersToday} من ${totalActiveUsers} مشرف لم يرسلوا أي بيانات اليوم.
+        </div>
+      ` : `
+        <div class="alert-box alert-success">✅ جميع المشرفين نشطين اليوم — أداء ممتاز!</div>
+      `}
+
+      ${buildFooter()}
+    </body>
+    </html>
+  `
+  printReport(html, `تقرير_النشاط_اليومي_${todayStr}`)
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// REPORT 9: تقرير جودة البيانات
+// ═══════════════════════════════════════════════════════════════
+
+export async function generateDataQualityReport(): Promise<void> {
+  const [subsRes, formsRes] = await Promise.allSettled([
+    supabase.from('form_submissions').select('*, forms(title_ar, schema), governorates(name_ar)').is('deleted_at', null).limit(20000),
+    supabase.from('forms').select('*').eq('is_active', true).is('deleted_at', null),
+  ])
+
+  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const forms = formsRes.status === 'fulfilled' ? formsRes.value.data || [] : []
+
+  const totalSubs = subs.length
+  const withGps = subs.filter(s => s.gps_lat).length
+  const withoutGps = totalSubs - withGps
+  const withPhotos = subs.filter(s => s.photos?.length > 0).length
+  const withoutPhotos = totalSubs - withPhotos
+  const withNotes = subs.filter(s => s.notes && s.notes.trim()).length
+  const withGov = subs.filter(s => s.governorate_id).length
+  const withoutGov = totalSubs - withGov
+
+  // Per-form quality
+  const formQuality = forms.map(f => {
+    const fSubs = subs.filter(s => s.form_id === f.id)
+    const fWithGps = fSubs.filter(s => s.gps_lat).length
+    const fWithPhotos = fSubs.filter(s => s.photos?.length > 0).length
+    const fWithGov = fSubs.filter(s => s.governorate_id).length
+
+    // Field completeness from schema
+    let schema: any = {}
+    try { schema = typeof f.schema === 'string' ? JSON.parse(f.schema) : f.schema } catch {}
+    const fields = (schema?.sections || []).flatMap((s: any) => s.fields || [])
+
+    const fieldCompleteness = fields.map((field: any) => {
+      const fieldName = field.name || field.id || field.label_ar
+      const filled = fSubs.filter(s => {
+        const val = s.data?.[fieldName]
+        return val !== undefined && val !== null && val !== '' && val !== 0
+      }).length
+      return {
+        label: field.label_ar || fieldName,
+        type: field.type,
+        filled,
+        total: fSubs.length,
+        rate: fSubs.length > 0 ? Math.round((filled / fSubs.length) * 100) : 0,
+      }
+    })
+
+    return {
+      name: f.title_ar,
+      total: fSubs.length,
+      gpsRate: fSubs.length > 0 ? Math.round((fWithGps / fSubs.length) * 100) : 0,
+      photoRate: fSubs.length > 0 ? Math.round((fWithPhotos / fSubs.length) * 100) : 0,
+      govRate: fSubs.length > 0 ? Math.round((fWithGov / fSubs.length) * 100) : 0,
+      fieldCompleteness,
+      overallQuality: fSubs.length > 0 ? Math.round(((fWithGps + fWithPhotos + fWithGov) / (fSubs.length * 3)) * 100) : 0,
+    }
+  })
+
+  function getQualityColor(rate: number): string {
+    if (rate >= 80) return BRAND.success
+    if (rate >= 50) return BRAND.warning
+    return BRAND.accent
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>تقرير جودة البيانات — EPI Supervisor</title>
+      ${getStyles()}
+    </head>
+    <body>
+      ${buildHeader(
+        'تقرير جودة البيانات',
+        'تحليل شامل لاكتمال وجودة البيانات المدخلة',
+      )}
+
+      ${buildSectionTitle('📊', 'مؤشرات جودة البيانات')}
+      <div class="kpi-grid">
+        ${buildKPI('إجمالي الإرساليات', totalSubs, '📋', BRAND.primary)}
+        ${buildKPI('مع GPS', `${Math.round((withGps/totalSubs)*100)}%`, '📍', getQualityColor(Math.round((withGps/totalSubs)*100)), `${withGps}/${totalSubs}`)}
+        ${buildKPI('مع صور', `${Math.round((withPhotos/totalSubs)*100)}%`, '📷', getQualityColor(Math.round((withPhotos/totalSubs)*100)), `${withPhotos}/${totalSubs}`)}
+        ${buildKPI('مع محافظة', `${Math.round((withGov/totalSubs)*100)}%`, '🏛️', getQualityColor(Math.round((withGov/totalSubs)*100)), `${withGov}/${totalSubs}`)}
+        ${buildKPI('بلا GPS', withoutGps, '⚠️', BRAND.accent)}
+        ${buildKPI('بلا صور', withoutPhotos, '⚠️', BRAND.accent)}
+        ${buildKPI('بلا محافظة', withoutGov, '⚠️', BRAND.accent)}
+        ${buildKPI('ملاحظات مكتوبة', withNotes, '📝', BRAND.info)}
+      </div>
+
+      ${withoutGps > 0 ? `<div class="alert-box alert-warning">⚠️ ${withoutGps} إرسالية (${Math.round((withoutGps/totalSubs)*100)}%) بلا بيانات GPS — يؤثر على دقة التقارير الجغرافية</div>` : ''}
+      ${withoutGov > 0 ? `<div class="alert-box alert-danger">🚨 ${withoutGov} إرسالية (${Math.round((withoutGov/totalSubs)*100)}%) بلا محافظة — يجب إصلاحها</div>` : ''}
+
+      ${buildSectionTitle('📝', 'جودة البيانات حسب النموذج')}
+      ${buildTable(
+        ['#', 'النموذج', 'الإرساليات', 'GPS', 'صور', 'محافظة', 'الجودة الإجمالية'],
+        formQuality.map((f, i) => [
+          `${i+1}`,
+          `<strong>${escapeHtml(f.name)}</strong>`,
+          `<span class="num">${f.total}</span>`,
+          `<span class="num" style="color:${getQualityColor(f.gpsRate)}">${f.gpsRate}%</span>`,
+          `<span class="num" style="color:${getQualityColor(f.photoRate)}">${f.photoRate}%</span>`,
+          `<span class="num" style="color:${getQualityColor(f.govRate)}">${f.govRate}%</span>`,
+          `<span class="score-badge" style="background:${getQualityColor(f.overallQuality)}">${f.overallQuality}%</span>`,
+        ])
+      )}
+
+      ${formQuality.filter(f => f.fieldCompleteness.length > 0).map(f => `
+        ${buildSectionTitle('🔤', `تحليل حقول: ${f.name}`)}
+        ${buildTable(
+          ['الحقل', 'النسبة', 'مُملأ/الإجمالي'],
+          f.fieldCompleteness.sort((a, b) => a.rate - b.rate).map(fc => [
+            escapeHtml(fc.label),
+            `<span style="color:${getQualityColor(fc.rate)};font-weight:700">${fc.rate}%</span>`,
+            `<span class="num">${fc.filled}/${fc.total}</span>`,
+          ])
+        )}
+        ${f.fieldCompleteness.map(fc => buildProgress(fc.label, fc.filled, fc.total, getQualityColor(fc.rate))).join('')}
+      `).join('')}
+
+      ${buildFooter()}
+    </body>
+    </html>
+  `
+  printReport(html, 'تقرير_جودة_البيانات')
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// REPORT 10: تقرير النواقص التفصيلي
+// ═══════════════════════════════════════════════════════════════
+
+export async function generateShortagesDetailedReport(): Promise<void> {
+  const [shortagesRes, govsRes] = await Promise.allSettled([
+    supabase.from('supply_shortages').select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name)').is('deleted_at', null).order('created_at', { ascending: false }),
+    supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
+  ])
+
+  const shortages = shortagesRes.status === 'fulfilled' ? shortagesRes.value.data || [] : []
+  const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
+
+  const unresolved = shortages.filter(s => !s.is_resolved)
+  const resolved = shortages.filter(s => s.is_resolved)
+  const critical = unresolved.filter(s => s.severity === 'critical')
+  const high = unresolved.filter(s => s.severity === 'high')
+  const medium = unresolved.filter(s => s.severity === 'medium')
+  const low = unresolved.filter(s => s.severity === 'low')
+
+  // By governorate
+  const govShortages = govs.map(g => {
+    const gShortages = shortages.filter(s => s.governorate_id === g.id)
+    const gUnresolved = gShortages.filter(s => !s.is_resolved)
+    return {
+      name: g.name_ar,
+      total: gShortages.length,
+      unresolved: gUnresolved.length,
+      critical: gUnresolved.filter(s => s.severity === 'critical').length,
+      high: gUnresolved.filter(s => s.severity === 'high').length,
+    }
+  }).filter(g => g.total > 0).sort((a, b) => b.unresolved - a.unresolved)
+
+  // By category
+  const categories: Record<string, number> = {}
+  unresolved.forEach(s => {
+    const cat = s.item_category || 'أخرى'
+    categories[cat] = (categories[cat] || 0) + 1
+  })
+
+  const severityLabels: Record<string, string> = { critical: '🔴 حرج', high: '🟠 عالي', medium: '🟡 متوسط', low: '🟢 منخفض' }
+  const severityColors: Record<string, string> = { critical: BRAND.accent, high: '#E65100', medium: BRAND.warning, low: BRAND.success }
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>تقرير النواقص والاحتياجات — EPI Supervisor</title>
+      ${getStyles()}
+    </head>
+    <body>
+      ${buildHeader(
+        'تقرير النواقص والاحتياجات',
+        'تحليل تفصيلي لنواقص اللقاحات والمعدات والتجهيزات',
+      )}
+
+      ${buildSectionTitle('📊', 'ملخص النواقص')}
+      <div class="kpi-grid">
+        ${buildKPI('إجمالي النواقص', shortages.length, '📦', BRAND.primary)}
+        ${buildKPI('غير محلولة', unresolved.length, '⚠️', BRAND.accent)}
+        ${buildKPI('محلولة', resolved.length, '✅', BRAND.success)}
+        ${buildKPI('حرجة', critical.length, '🚨', BRAND.accent)}
+        ${buildKPI('عالية', high.length, '🟠', '#E65100')}
+        ${buildKPI('متوسطة', medium.length, '🟡', BRAND.warning)}
+        ${buildKPI('منخفضة', low.length, '🟢', BRAND.success)}
+        ${buildKPI('معدل الحل', `${shortages.length > 0 ? Math.round((resolved.length/shortages.length)*100) : 0}%`, '📈', BRAND.info)}
+      </div>
+
+      ${critical.length > 0 ? `
+        <div class="alert-box alert-danger">
+          🚨 <strong>تنبيه عاجل:</strong> يوجد ${critical.length} نقص حرج يحتاج تدخل فوري!
+        </div>
+      ` : ''}
+
+      ${unresolved.length > 0 ? `
+        ${buildSectionTitle('⚠️', 'النواقص غير المحلولة', `${unresolved.length} نقص`)}
+        ${buildTable(
+          ['#', 'النقص', 'الفئة', 'المحافظة', 'الخطورة', 'الكمية', 'المُبلّغ', 'التاريخ'],
+          unresolved.map((s, i) => [
+            `${i+1}`,
+            `<strong>${escapeHtml(s.item_name)}</strong>`,
+            escapeHtml(s.item_category || '—'),
+            escapeHtml(s.governorates?.name_ar || '—'),
+            `<span style="color:${severityColors[s.severity] || BRAND.textMuted};font-weight:700">${severityLabels[s.severity] || s.severity}</span>`,
+            `<span class="num">${s.quantity_needed || '—'}</span>`,
+            escapeHtml(s.profiles?.full_name || '—'),
+            new Date(s.created_at).toLocaleDateString('ar-SA'),
+          ])
+        )}
+      ` : `
+        <div class="alert-box alert-success">✅ لا توجد نواقص معلقة</div>
+      `}
+
+      ${govShortages.length > 0 ? `
+        ${buildSectionTitle('🏛️', 'النواقص حسب المحافظة')}
+        ${buildTable(
+          ['#', 'المحافظة', 'الإجمالي', 'غير محلولة', 'حرجة', 'عالية'],
+          govShortages.map((g, i) => [
+            `${i+1}`,
+            `<strong>${escapeHtml(g.name)}</strong>`,
+            `<span class="num">${g.total}</span>`,
+            `<span class="num" style="color:${g.unresolved > 0 ? BRAND.accent : BRAND.success}">${g.unresolved}</span>`,
+            `<span class="num" style="color:${BRAND.accent}">${g.critical}</span>`,
+            `<span class="num" style="color:#E65100">${g.high}</span>`,
+          ])
+        )}
+      ` : ''}
+
+      ${Object.keys(categories).length > 0 ? `
+        ${buildSectionTitle('📂', 'النواقص حسب الفئة')}
+        ${buildTable(
+          ['الفئة', 'العدد'],
+          Object.entries(categories).sort((a, b) => b[1] - a[1]).map(([cat, count]) => [
+            escapeHtml(cat),
+            `<span class="num">${count}</span>`,
+          ])
+        )}
+      ` : ''}
+
+      ${resolved.length > 0 ? `
+        <div class="page-break"></div>
+        ${buildSectionTitle('✅', 'النواقص المحلولة', `${resolved.length} نقص`)}
+        ${buildTable(
+          ['#', 'النقص', 'المحافظة', 'تاريخ الحل'],
+          resolved.slice(0, 20).map((s, i) => [
+            `${i+1}`,
+            escapeHtml(s.item_name),
+            escapeHtml(s.governorates?.name_ar || '—'),
+            s.resolved_at ? new Date(s.resolved_at).toLocaleDateString('ar-SA') : '—',
+          ])
+        )}
+      ` : ''}
+
+      ${buildFooter()}
+    </body>
+    </html>
+  `
+  printReport(html, 'تقرير_النواقص_التفصيلي')
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// REPORT 11: التقرير الأسبوعي
+// ═══════════════════════════════════════════════════════════════
+
+export async function generateWeeklyReport(): Promise<void> {
+  const now = new Date()
+  const weekStart = new Date(now.getTime() - 7 * 86400000)
+  const prevWeekStart = new Date(now.getTime() - 14 * 86400000)
+
+  const [thisWeekRes, lastWeekRes, usersRes, govsRes] = await Promise.allSettled([
+    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar)').gte('created_at', weekStart.toISOString()).is('deleted_at', null),
+    supabase.from('form_submissions').select('id', { count: 'exact', head: true }).gte('created_at', prevWeekStart.toISOString()).lt('created_at', weekStart.toISOString()).is('deleted_at', null),
+    supabase.from('profiles').select('*').is('deleted_at', null),
+    supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
+  ])
+
+  const thisWeek = thisWeekRes.status === 'fulfilled' ? thisWeekRes.value.data || [] : []
+  const lastWeekCount = lastWeekRes.status === 'fulfilled' ? lastWeekRes.value.count || 0 : 0
+  const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
+  const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
+
+  const submitted = thisWeek.filter(s => s.status === 'submitted').length
+  const draft = thisWeek.filter(s => s.status === 'draft').length
+  const activeUsers = new Set(thisWeek.map(s => s.submitted_by)).size
+  const govsWithData = new Set(thisWeek.map(s => s.governorate_id).filter(Boolean)).size
+
+  const diff = thisWeek.length - lastWeekCount
+  const diffPct = lastWeekCount > 0 ? Math.round((diff / lastWeekCount) * 100) : 0
+
+  // Daily breakdown
+  const dailyData = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart.getTime() + i * 86400000)
+    const dayStr = d.toISOString().split('T')[0]
+    const dayName = d.toLocaleDateString('ar-SA', { weekday: 'long' })
+    const daySubs = thisWeek.filter(s => s.created_at.startsWith(dayStr))
+    return { day: dayName, date: dayStr, count: daySubs.length, submitted: daySubs.filter(s => s.status === 'submitted').length }
+  })
+
+  // Top governorates this week
+  const govWeekly = govs.map(g => ({
+    name: g.name_ar,
+    count: thisWeek.filter(s => s.governorate_id === g.id).length,
+  })).sort((a, b) => b.count - a.count).filter(g => g.count > 0)
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="RTL">
+    <head>
+      <meta charset="UTF-8">
+      <title>التقرير الأسبوعي — EPI Supervisor</title>
+      ${getStyles()}
+    </head>
+    <body>
+      ${buildHeader(
+        'التقرير الأسبوعي',
+        `ملخص الأسبوع — ${formatDateArabic(weekStart)} إلى ${formatDateArabic(now)}`,
+      )}
+
+      ${buildSectionTitle('📊', 'مؤشرات الأسبوع')}
+      <div class="kpi-grid">
+        ${buildKPI('إرساليات الأسبوع', thisWeek.length, '📋', BRAND.primary, `${diff >= 0 ? '+' : ''}${diffPct}% vs الأسبوع السابق`)}
+        ${buildKPI('مرسلة', submitted, '✅', BRAND.success, `${thisWeek.length > 0 ? Math.round((submitted/thisWeek.length)*100) : 0}%`)}
+        ${buildKPI('مسودة', draft, '📝', BRAND.warning)}
+        ${buildKPI('مشرفين نشطين', activeUsers, '👥', '#7B1FA2', `من ${users.filter(u => u.is_active).length}`)}
+        ${buildKPI('محافظات نشطة', govsWithData, '🏛️', BRAND.info, `من ${govs.length}`)}
+        ${buildKPI('متوسط يومي', Math.round(thisWeek.length / 7), '📊', BRAND.primary)}
+      </div>
+
+      ${buildSectionTitle('📅', 'النشاط اليومي')}
+      ${buildTable(
+        ['اليوم', 'التاريخ', 'الإرساليات', 'مرسلة'],
+        dailyData.map(d => [
+          d.day,
+          d.date,
+          `<span class="num">${d.count}</span>`,
+          `<span class="num">${d.submitted}</span>`,
+        ])
+      )}
+
+      ${govWeekly.length > 0 ? `
+        ${buildSectionTitle('🏛️', 'أداء المحافظات هذا الأسبوع')}
+        ${govWeekly.map(g => buildProgress(g.name, g.count, Math.max(...govWeekly.map(x => x.count), 1), BRAND.primary)).join('')}
+      ` : ''}
+
+      ${diff < 0 ? `
+        <div class="alert-box alert-warning">
+          ⚠️ انخفاض الإرساليات بنسبة ${Math.abs(diffPct)}% مقارنة بالأسبوع السابق. يجب متابعة المشرفين.
+        </div>
+      ` : diff > 0 ? `
+        <div class="alert-box alert-success">
+          ✅ زيادة الإرساليات بنسبة ${diffPct}% مقارنة بالأسبوع السابق. أداء ممتاز!
+        </div>
+      ` : ''}
+
+      ${buildFooter()}
+    </body>
+    </html>
+  `
+  printReport(html, 'التقرير_الأسبوعي')
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// REPORT 12: تقرير المستخدمين الشامل
+// ═══════════════════════════════════════════════════════════════
+
+export async function generateUserActivityReport(): Promise<void> {
+  const [usersRes, subsRes] = await Promise.allSettled([
+    supabase.from('profiles').select('*, governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('last_login', { ascending: false }),
+    supabase.from('form_submissions').select('submitted_by, created_at').is('deleted_at', null),
+  ])
+
+  const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
+  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+
+  const roleLabels: Record<string, string> = { admin: '🔴 مدير النظام', central: '🟣 مركزي', governorate: '🔵 محافظة', district: '🟢 مديرية', data_entry: '⚪ إدخال بيانات' }
+
+  const enrichedUsers = users.map(u => {
+    const userSubs = subs.filter(s => s.submitted_by === u.id)
+    const lastSub = userSubs.length > 0 ? userSubs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at : null
+    const daysSinceLogin = u.last_login ? Math.floor((Date.now() - new Date(u.last_login).getTime()) / 86400000) : 999
+    return { ...u, totalSubs: userSubs.length, lastSub, daysSinceLogin }
+  })
+
+  const active = enrichedUsers.filter(u => u.is_active && u.daysSinceLogin <= 7)
+  const dormant = enrichedUsers.filter(u => u.is_active && u.daysSinceLogin > 30)
+  const neverLoggedIn = enrichedUsers.filter(u => !u.last_login)
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>تقرير نشاط المستخدمين — EPI Supervisor</title>
+      ${getStyles()}
+    </head>
+    <body>
+      ${buildHeader(
+        'تقرير نشاط المستخدمين',
+        'تحليل شامل لنشاط ودخول المستخدمين',
+      )}
+
+      ${buildSectionTitle('📊', 'ملخص المستخدمين')}
+      <div class="kpi-grid">
+        ${buildKPI('إجمالي المستخدمين', users.length, '👥', BRAND.primary)}
+        ${buildKPI('نشطين', active.length, '🟢', BRAND.success)}
+        ${buildKPI('خاملين (+30 يوم)', dormant.length, '🟡', BRAND.warning)}
+        ${buildKPI('لم يدخلوا أبداً', neverLoggedIn.length, '🔴', BRAND.accent)}
+      </div>
+
+      ${buildSectionTitle('👥', 'قائمة المستخدمين', `${users.length} مستخدم`)}
+      ${buildTable(
+        ['#', 'الاسم', 'البريد', 'الدور', 'المحافظة/المديرية', 'الإرساليات', 'آخر دخول', 'الحالة'],
+        enrichedUsers.map((u, i) => [
+          `${i+1}`,
+          `<strong>${escapeHtml(u.full_name)}</strong>`,
+          escapeHtml(u.email),
+          roleLabels[u.role] || u.role,
+          escapeHtml(u.governorates?.name_ar || u.districts?.name_ar || '—'),
+          `<span class="num">${u.totalSubs}</span>`,
+          u.last_login ? new Date(u.last_login).toLocaleDateString('ar-SA') : 'لم يدخل',
+          u.is_active
+            ? (u.daysSinceLogin <= 7 ? '🟢 نشط' : u.daysSinceLogin <= 30 ? '🟡 خامل' : '🔴 متوقف')
+            : '⚫ معطل',
+        ])
+      )}
+
+      ${neverLoggedIn.length > 0 ? `
+        ${buildSectionTitle('🚨', 'مستخدمون لم يدخلوا أبداً')}
+        <div class="alert-box alert-warning">
+          ${neverLoggedIn.length} مستخدم لم يسجل دخول أبداً. تحقق إذا كانوا بحاجة لحسابات.
+        </div>
+      ` : ''}
+
+      ${buildFooter()}
+    </body>
+    </html>
+  `
+  printReport(html, 'تقرير_نشاط_المستخدمين')
+}
+

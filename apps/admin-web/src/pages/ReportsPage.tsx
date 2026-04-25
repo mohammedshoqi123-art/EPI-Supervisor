@@ -58,6 +58,14 @@ import {
   generateGovernorateDetailReport,
   generateFormAnalysisReport,
   generateDistrictReport,
+  generateSupervisorReport,
+  generateCoverageGapReport,
+  generateCampaignComparisonReport,
+  generateDailyActivityReport,
+  generateDataQualityReport,
+  generateShortagesDetailedReport,
+  generateWeeklyReport,
+  generateUserActivityReport,
 } from '@/lib/professional-reports'
 
 // ═══════════════════════════════════════════════════════════════
@@ -909,6 +917,112 @@ export default function ReportsPage() {
         })
       })
     }
+
+
+  const handleSupervisorReport = () => exportReport('supervisor-report', async () => {
+    await generateSupervisorReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })
+  })
+  const handleCoverageGapReport = () => exportReport('coverage-gap', async () => {
+    await generateCoverageGapReport()
+  })
+  const handleCampaignComparisonReport = () => exportReport('campaign-comparison', async () => {
+    await generateCampaignComparisonReport()
+  })
+  const handleDailyActivityReport = () => exportReport('daily-activity', async () => {
+    await generateDailyActivityReport()
+  })
+  const handleDataQualityReport = () => exportReport('data-quality', async () => {
+    await generateDataQualityReport()
+  })
+  const handleShortagesDetailedReport = () => exportReport('shortages-detailed', async () => {
+    await generateShortagesDetailedReport()
+  })
+  const handleWeeklyReport = () => exportReport('weekly-report', async () => {
+    await generateWeeklyReport()
+  })
+  const handleUserActivityReport = () => exportReport('user-activity', async () => {
+    await generateUserActivityReport()
+  })
+
+
+    // ═══════════════════════════════════════
+    // تقارير إضافية احترافية
+    // ═══════════════════════════════════════
+
+    // P4. تقرير أداء المشرفين
+    if (canExportAll(userRole)) {
+      cards.push({
+        icon: Users, title: '👥 تقرير أداء المشرفين', subtitle: 'تقييم شامل — كل مشرف وكم أرسل، التقييم، النشاط، جودة البيانات',
+        color: 'text-white', gradient: 'bg-gradient-to-r from-violet-600 to-purple-700',
+        onClick: handleSupervisorReport, loading: exportingReport === 'supervisor-report',
+        badge: 'مشرفين',
+      })
+    }
+
+    // P5. تقرير الفجوة التغطية
+    if (canExportAll(userRole)) {
+      cards.push({
+        icon: AlertTriangle, title: '🎯 تقرير الفجوة التغطية', subtitle: 'أين البيانات ناقصة — محافظات ومديريات بدون تغطية',
+        color: 'text-white', gradient: 'bg-gradient-to-r from-red-600 to-rose-700',
+        onClick: handleCoverageGapReport, loading: exportingReport === 'coverage-gap',
+        badge: 'فجوة',
+      })
+    }
+
+    // P6. تقرير مقارنة الحملات
+    if (canExportAll(userRole)) {
+      cards.push({
+        icon: Target, title: '⚖️ تقرير مقارنة الحملات', subtitle: 'شلل أطفال vs الإيصالي التكاملي — مقارنة شاملة',
+        color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700',
+        onClick: handleCampaignComparisonReport, loading: exportingReport === 'campaign-comparison',
+        badge: 'مقارنة',
+      })
+    }
+
+    // P7. تقرير النشاط اليومي
+    cards.push({
+      icon: Clock, title: '📅 تقرير النشاط اليومي', subtitle: 'نشاط اليوم — إرساليات، دخول، مقارنة بأمس',
+      color: 'text-white', gradient: 'bg-gradient-to-r from-cyan-600 to-teal-700',
+      onClick: handleDailyActivityReport, loading: exportingReport === 'daily-activity',
+      badge: 'يومي',
+    })
+
+    // P8. تقرير جودة البيانات
+    if (canExportAll(userRole)) {
+      cards.push({
+        icon: Sparkles, title: '✨ تقرير جودة البيانات', subtitle: 'تحليل اكتمال البيانات — GPS، صور، حقول فارغة',
+        color: 'text-white', gradient: 'bg-gradient-to-r from-amber-500 to-orange-600',
+        onClick: handleDataQualityReport, loading: exportingReport === 'data-quality',
+        badge: 'جودة',
+      })
+    }
+
+    // P9. تقرير النواقص التفصيلي
+    cards.push({
+      icon: PackageX, title: '📦 تقرير النواقص التفصيلي', subtitle: 'تحليل شامل — حرج/عالي/متوسط، حسب المحافظة والفئة',
+      color: 'text-white', gradient: 'bg-gradient-to-r from-red-500 to-pink-600',
+      onClick: handleShortagesDetailedReport, loading: exportingReport === 'shortages-detailed',
+      badge: 'نواقص',
+    })
+
+    // P10. التقرير الأسبوعي
+    cards.push({
+      icon: Activity, title: '📊 التقرير الأسبوعي', subtitle: 'ملخص الأسبوع — مقارنة بالسابق، نشاط يومي، أداء المحافظات',
+      color: 'text-white', gradient: 'bg-gradient-to-r from-emerald-600 to-green-700',
+      onClick: handleWeeklyReport, loading: exportingReport === 'weekly-report',
+      badge: 'أسبوعي',
+    })
+
+    // P11. تقرير نشاط المستخدمين
+    if (canExportAll(userRole)) {
+      cards.push({
+        icon: Users, title: '🔐 تقرير نشاط المستخدمين', subtitle: 'دخول، نشاط، مستخدمين خاملين — من دخل ومتى',
+        color: 'text-white', gradient: 'bg-gradient-to-r from-slate-600 to-gray-700',
+        onClick: handleUserActivityReport, loading: exportingReport === 'user-activity',
+        badge: 'نشاط',
+      })
+    }
+
 
     return cards
   }, [userRole, stats, govStats, chartData, roleDistribution, exportingReport, dateFrom, dateTo, selectedGovFilter, campaign])

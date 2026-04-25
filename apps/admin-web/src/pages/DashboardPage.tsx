@@ -7,7 +7,7 @@ import {
   FileSearch, MapPin, PackageX,
   ChevronLeft, Timer, Send, BarChart3,
   AlertCircle, UserX, MapPinOff, Eye, Download,
-  Target, Flame, Award, Zap, FileText, Globe
+  Target, Flame, Award, Zap, FileText, Globe, Calendar
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -513,6 +513,66 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {/* ═══ 1.5 QUICK ACTIONS — Common tasks ═══ */}
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="p-1 rounded-md bg-emerald-100">
+              <Zap className="w-3.5 h-3.5 text-emerald-600" />
+            </div>
+            <h2 className="text-sm font-heading font-bold">إجراءات سريعة</h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button
+              onClick={() => navigate('/submissions')}
+              className="flex items-center gap-2.5 p-3 rounded-xl border bg-card hover:bg-muted/30 transition-all text-right group"
+            >
+              <div className="p-2 rounded-lg bg-blue-50 group-hover:bg-blue-100 transition-colors">
+                <FileSearch className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium">مراجعة الإرساليات</p>
+                <p className="text-[10px] text-muted-foreground">{stats?.draft_submissions || 0} مسودة</p>
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('/shortages')}
+              className="flex items-center gap-2.5 p-3 rounded-xl border bg-card hover:bg-muted/30 transition-all text-right group"
+            >
+              <div className="p-2 rounded-lg bg-red-50 group-hover:bg-red-100 transition-colors">
+                <PackageX className="w-4 h-4 text-red-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium">النواقص</p>
+                <p className="text-[10px] text-muted-foreground">{unresolvedShortages} مفتوحة</p>
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('/reports')}
+              className="flex items-center gap-2.5 p-3 rounded-xl border bg-card hover:bg-muted/30 transition-all text-right group"
+            >
+              <div className="p-2 rounded-lg bg-violet-50 group-hover:bg-violet-100 transition-colors">
+                <BarChart3 className="w-4 h-4 text-violet-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium">التقارير</p>
+                <p className="text-[10px] text-muted-foreground">إنشاء وتصدير</p>
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('/scheduled-reports')}
+              className="flex items-center gap-2.5 p-3 rounded-xl border bg-card hover:bg-muted/30 transition-all text-right group"
+            >
+              <div className="p-2 rounded-lg bg-amber-50 group-hover:bg-amber-100 transition-colors">
+                <Calendar className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium">التقارير المجدولة</p>
+                <p className="text-[10px] text-muted-foreground">أتمتة التقارير</p>
+              </div>
+            </button>
+          </div>
+        </section>
+
         {/* ═══ 2. TODAY'S PULSE — Quick numbers ═══ */}
         <section>
           <div className="flex items-center gap-2 mb-3">
@@ -815,6 +875,7 @@ export default function DashboardPage() {
               <CardTitle className="text-sm font-heading flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-primary" />
                 آخر الإرساليات
+                <LiveDot />
               </CardTitle>
               <Button variant="ghost" size="sm" className="text-xs h-7 gap-1" onClick={() => navigate('/submissions')}>
                 الكل <ChevronLeft className="w-3 h-3" />

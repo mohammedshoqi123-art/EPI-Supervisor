@@ -3,7 +3,7 @@ import {
   Search, Filter, CheckCircle2, XCircle, Clock, Eye, MessageSquare,
   ChevronLeft, ChevronRight, MapPin, Calendar, User, FileText, Download,
   AlertTriangle, RefreshCw, Trash2, Send, MoreVertical, FileStack,
-  ArrowUpDown, Loader2, X, Edit, Check
+  ArrowUpDown, Loader2, X, Edit, Check, CheckSquare, Square
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,13 +11,14 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Header } from '@/components/layout/header'
-import { useSubmissions, useUpdateSubmissionStatus, useForms, useGovernorates, useAuth, getCampaignFormIds } from '@/hooks/useApi'
+import { useSubmissions, useUpdateSubmissionStatus, useBulkUpdateSubmissionStatus, useForms, useGovernorates, useAuth, getCampaignFormIds } from '@/hooks/useApi'
 import { supabase } from '@/lib/supabase'
 import { STATUS_LABELS, STATUS_COLORS, type SubmissionStatus, type FormSubmission } from '@/types/database'
 import { formatDateTime, formatRelativeTime, cn } from '@/lib/utils'
@@ -25,15 +26,23 @@ import { useToast } from '@/hooks/useToast'
 import { useCampaign } from '@/lib/campaign-context'
 
 function convertToCSV(data: Record<string, unknown>[], headers: string[]): string {
+  const sanitizeCSV = (val: string): string => {
+    // Prevent CSV injection: escape formula-triggering characters
+    if (/^[=+\-@\t\r]/.test(val)) {
+      val = "'" + val
+    }
+    if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes("'")) {
+      return `"${val.replace(/"/g, '""')}"`
+    }
+    return val
+  }
+
   const headerRow = headers.join(',')
   const rows = data.map((row) =>
     headers.map((h) => {
       const val = row[h]
       const str = val === null || val === undefined ? '' : String(val)
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`
-      }
-      return str
+      return sanitizeCSV(str)
     }).join(',')
   )
   return [headerRow, ...rows].join('\n')
@@ -57,11 +66,15 @@ export default function SubmissionsPage() {
   const [page, setPage] = useState(1)
   const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FormSubmission | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const { campaign, labelAr, isFiltered } = useCampaign()
   const { toast } = useToast()
   const { data: authData } = useAuth()
   const userRole = authData?.profile?.role
   const canDelete = userRole === 'admin'
+  const canBulkAction = ['admin', 'central'].includes(userRole || '')
+
+  const bulkUpdate = useBulkUpdateSubmissionStatus()
 
   const { data, isLoading, isError, error, refetch } = useSubmissions({
     status: statusFilter !== 'all' ? (statusFilter as SubmissionStatus) : undefined,
@@ -144,6 +157,40 @@ export default function SubmissionsPage() {
     setGovFilter('all')
     setSearch('')
     setPage(1)
+  }
+
+  // ─── Bulk Selection ──────────────────────────────────────
+  const toggleSelectAll = () => {
+    if (selectedIds.size === submissions.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(submissions.map(s => s.id)))
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
+  const handleBulkAction = async (action: 'submitted' | 'draft') => {
+    if (selectedIds.size === 0) return
+    const label = action === 'submitted' ? 'موافقة' : 'إعادة لمسودة'
+    if (!confirm(`${label} ${selectedIds.size} إرسالية؟`)) return
+
+    try {
+      await bulkUpdate.mutateAsync({
+        ids: Array.from(selectedIds),
+        status: action as SubmissionStatus,
+        review_notes: `تم ${label} جماعياً`,
+      })
+      toast({ title: `تم ${label} ${selectedIds.size} إرسالية`, variant: 'success' })
+      setSelectedIds(new Set())
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' })
+    }
   }
 
   const hasFilters = statusFilter !== 'all' || formFilter !== 'all' || govFilter !== 'all' || search
@@ -230,6 +277,45 @@ export default function SubmissionsPage() {
           </CardContent>
         </Card>
 
+        {/* ═══ Bulk Action Bar ═══ */}
+        {canBulkAction && selectedIds.size > 0 && (
+          <Card className="border-primary/30 bg-primary/5 shadow-sm">
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-primary" />
+                <span className="text-sm font-medium">{selectedIds.size} مُختار</span>
+              </div>
+              <Separator orientation="vertical" className="h-5" />
+              <Button
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => handleBulkAction('submitted')}
+                disabled={bulkUpdate.isPending}
+              >
+                {bulkUpdate.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                موافقة جماعية
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => handleBulkAction('draft')}
+                disabled={bulkUpdate.isPending}
+              >
+                <Clock className="w-3 h-3" /> إعادة لمسودة
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs mr-auto"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                <X className="w-3 h-3" /> إلغاء
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="border-0 shadow-sm">
           <CardContent className="p-0">
             {isLoading ? (
@@ -252,6 +338,16 @@ export default function SubmissionsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/30">
+                      {canBulkAction && (
+                        <TableHead className="w-8">
+                          <button onClick={toggleSelectAll} className="flex items-center justify-center">
+                            {selectedIds.size === submissions.length && submissions.length > 0
+                              ? <CheckSquare className="w-4 h-4 text-primary" />
+                              : <Square className="w-4 h-4 text-muted-foreground" />
+                            }
+                          </button>
+                        </TableHead>
+                      )}
                       <TableHead className="w-8 text-xs">#</TableHead>
                       <TableHead className="text-xs">النموذج</TableHead>
                       <TableHead className="text-xs">المُرسل</TableHead>
@@ -263,6 +359,16 @@ export default function SubmissionsPage() {
                   <TableBody>
                     {submissions.map((sub, idx) => (
                       <TableRow key={sub.id} className="cursor-pointer hover:bg-muted/20" onClick={() => setSelectedSubmission(sub)}>
+                        {canBulkAction && (
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => toggleSelect(sub.id)} className="flex items-center justify-center">
+                              {selectedIds.has(sub.id)
+                                ? <CheckSquare className="w-4 h-4 text-primary" />
+                                : <Square className="w-4 h-4 text-muted-foreground" />
+                              }
+                            </button>
+                          </TableCell>
+                        )}
                         <TableCell className="text-muted-foreground text-xs">{(page - 1) * 20 + idx + 1}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">

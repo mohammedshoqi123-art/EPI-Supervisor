@@ -293,7 +293,7 @@ export function useGovernorateStats(campaignType?: string) {
   return useQuery({
     queryKey: ['governorate-stats', campaignType],
     queryFn: async () => {
-      // Get all active governorates (not deleted)
+      // Get all active governorates
       const { data: governorates } = await supabase
         .from('governorates')
         .select('id, name_ar')
@@ -303,25 +303,35 @@ export function useGovernorateStats(campaignType?: string) {
 
       if (!governorates) return []
 
-      // ✅ Efficient: use count queries per governorate instead of fetching 20K rows
+      // ✅ Optimized: single query with group-by instead of N queries
       const formIds = await getCampaignFormIds(campaignType)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-      const stats = await Promise.all(governorates.map(async (gov) => {
-        let q = supabase
-          .from('form_submissions')
-          .select('id', { count: 'exact', head: true })
-          .eq('governorate_id', gov.id)
-          .not('governorate_id', 'is', null)
-          .is('deleted_at', null)
-          .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+      // Fetch all recent submissions with governorate_id in one query
+      let query = supabase
+        .from('form_submissions')
+        .select('governorate_id')
+        .not('governorate_id', 'is', null)
+        .is('deleted_at', null)
+        .gte('created_at', thirtyDaysAgo)
+        .limit(50000) // Safety cap
 
-        if (formIds && formIds.length > 0) q = q.in('form_id', formIds)
+      if (formIds && formIds.length > 0) query = query.in('form_id', formIds)
 
-        const { count } = await q
-        return { name: gov.name_ar, submissions: count || 0 }
-      }))
+      const { data: submissions } = await query
 
-      return stats.sort((a, b) => b.submissions - a.submissions)
+      // Count per governorate in memory (single DB roundtrip)
+      const counts: Record<string, number> = {}
+      for (const s of submissions || []) {
+        counts[s.governorate_id] = (counts[s.governorate_id] || 0) + 1
+      }
+
+      return governorates
+        .map(gov => ({
+          name: gov.name_ar,
+          submissions: counts[gov.id] || 0,
+        }))
+        .sort((a, b) => b.submissions - a.submissions)
     },
     enabled: isConfigured,
     staleTime: 60000,
@@ -489,30 +499,37 @@ export function useFormSubmissionCounts(campaignType?: string) {
   return useQuery({
     queryKey: ['form-submission-counts', campaignType],
     queryFn: async () => {
-      // ✅ Efficient: use count queries per form instead of fetching all rows
-      const formIds = await getCampaignFormIds(campaignType)
-
       // Get forms list
+      const formIds = await getCampaignFormIds(campaignType)
       let formsQuery = supabase.from('forms').select('id').is('deleted_at', null).eq('is_active', true)
       if (formIds && formIds.length > 0) formsQuery = formsQuery.in('id', formIds)
       const { data: forms } = await formsQuery
-      if (!forms) return {}
+      if (!forms || forms.length === 0) return {}
 
+      const formIdSet = new Set(forms.map(f => f.id))
+
+      // ✅ Optimized: single query instead of N*3 queries
+      const { data: submissions } = await supabase
+        .from('form_submissions')
+        .select('form_id, status')
+        .in('form_id', forms.map(f => f.id))
+        .is('deleted_at', null)
+        .limit(100000) // Safety cap
+
+      // Count per form+status in memory (single DB roundtrip)
       const counts: Record<string, { total: number; submitted: number; draft: number }> = {}
+      for (const f of forms) {
+        counts[f.id] = { total: 0, submitted: 0, draft: 0 }
+      }
 
-      // For each form, use count queries (much faster than fetching all rows)
-      await Promise.all(forms.map(async (f) => {
-        const [totalRes, submittedRes, draftRes] = await Promise.allSettled([
-          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).eq('form_id', f.id).is('deleted_at', null),
-          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).eq('form_id', f.id).eq('status', 'submitted').is('deleted_at', null),
-          supabase.from('form_submissions').select('id', { count: 'exact', head: true }).eq('form_id', f.id).eq('status', 'draft').is('deleted_at', null),
-        ])
-        counts[f.id] = {
-          total: totalRes.status === 'fulfilled' ? totalRes.value.count || 0 : 0,
-          submitted: submittedRes.status === 'fulfilled' ? submittedRes.value.count || 0 : 0,
-          draft: draftRes.status === 'fulfilled' ? draftRes.value.count || 0 : 0,
-        }
-      }))
+      for (const s of submissions || []) {
+        if (!formIdSet.has(s.form_id)) continue
+        const c = counts[s.form_id]
+        if (!c) continue
+        c.total++
+        if (s.status === 'submitted') c.submitted++
+        else if (s.status === 'draft') c.draft++
+      }
 
       return counts
     },
@@ -653,6 +670,49 @@ export function useUpdateSubmissionStatus() {
         .single()
       if (error) throw error
       return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['submissions'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    },
+  })
+}
+
+export function useBulkUpdateSubmissionStatus() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ ids, status, review_notes }: {
+      ids: string[]; status: SubmissionStatus; review_notes?: string
+    }) => {
+      if (ids.length === 0) throw new Error('لم يتم اختيار أي إرسالية')
+
+      const { data: { session } } = await supabase.auth.getSession()
+
+      // Batch update in chunks of 50
+      const chunks: string[][] = []
+      for (let i = 0; i < ids.length; i += 50) {
+        chunks.push(ids.slice(i, i + 50))
+      }
+
+      let totalUpdated = 0
+      for (const chunk of chunks) {
+        const { data, error } = await supabase
+          .from('form_submissions')
+          .update({
+            status,
+            review_notes,
+            reviewed_by: session?.user.id,
+            reviewed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .in('id', chunk)
+          .select('id')
+
+        if (error) throw error
+        totalUpdated += data?.length || 0
+      }
+
+      return { updated: totalUpdated }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['submissions'] })

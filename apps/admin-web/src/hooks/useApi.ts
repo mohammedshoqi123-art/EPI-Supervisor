@@ -298,6 +298,7 @@ export function useGovernorateStats(campaignType?: string) {
         .from('governorates')
         .select('id, name_ar')
         .eq('is_active', true)
+        .is('deleted_at', null)
         .order('name_ar')
 
       if (!governorates) return []
@@ -651,6 +652,7 @@ export function useGovernorates() {
         .from('governorates')
         .select('*')
         .eq('is_active', true)
+        .is('deleted_at', null)
         .order('name_ar')
       if (error) throw error
       return data
@@ -666,7 +668,7 @@ export function useDistricts(governorateId?: string) {
   return useQuery({
     queryKey: ['districts', governorateId],
     queryFn: async () => {
-      let query = supabase.from('districts').select('*').eq('is_active', true).order('name_ar')
+      let query = supabase.from('districts').select('*').eq('is_active', true).is('deleted_at', null).order('name_ar')
       if (governorateId) query = query.eq('governorate_id', governorateId)
       const { data, error } = await query
       if (error) throw error

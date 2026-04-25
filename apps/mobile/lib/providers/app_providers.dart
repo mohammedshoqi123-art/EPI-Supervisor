@@ -40,9 +40,9 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
   try {
     // ═══ FIX: timeout أطول (30 ثانية) للأجهزة البطيئة ═══
     await manager.init().timeout(
-      const Duration(seconds: 30),
+      const Duration(seconds: 60),
       onTimeout: () {
-        debugPrint('[offlineManagerProvider] Hive init timed out after 30s');
+        debugPrint('[offlineManagerProvider] Hive init timed out after 60s');
         throw TimeoutException('Offline storage initialization timed out');
       },
     );
@@ -486,7 +486,7 @@ final localDraftCountProvider = StreamProvider<int>((ref) async* {
     yield offline.getDraftFormIds().length;
 
     // Poll every 30s to keep draft badge updated
-    yield* Stream.periodic(const Duration(seconds: 30), (_) {
+    yield* Stream.periodic(const Duration(seconds: 60), (_) {
       try {
         return offline.getDraftFormIds().length;
       } catch (_) {

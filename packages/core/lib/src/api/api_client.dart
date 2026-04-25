@@ -207,7 +207,7 @@ class ApiClient {
       // Subsequent calls are usually <5s. 45s gives enough headroom for cold starts.
       final response =
           await _safeClient.functions.invoke(functionName, body: body).timeout(
-                const Duration(seconds: 45),
+                const Duration(seconds: 90),
                 onTimeout: () => throw TimeoutException(
                   'Function $functionName timed out after 45s',
                 ),
@@ -217,7 +217,7 @@ class ApiClient {
       return _parseFunctionResponse(response.data, functionName);
     } on TimeoutException {
       throw NetworkException(
-        'انتهت مهلة الطلب. تحقق من اتصال الإنترنت وحاول مرة أخرى.',
+        'انتهت مهلة الطلب (90 ثانية). قد يكون الخادم بطيء أو الاتصال ضعيف. حاول مرة أخرى.',
       );
     } on FunctionException catch (e) {
       // If 401, try refreshing the token ONCE and retry
@@ -228,7 +228,7 @@ class ApiClient {
           final response = await _safeClient.functions
               .invoke(functionName, body: body)
               .timeout(
-                const Duration(seconds: 45),
+                const Duration(seconds: 90),
                 onTimeout: () => throw TimeoutException(
                   'Function $functionName timed out after 45s (retry)',
                 ),
@@ -236,7 +236,7 @@ class ApiClient {
           return _parseFunctionResponse(response.data, functionName);
         } on TimeoutException {
           throw NetworkException(
-            'انتهت مهلة الطلب بعد إعادة المحاولة. حاول مرة أخرى.',
+            'انتهت مهلة الطلب حتى بعد إعادة المحاولة. تحقق من اتصالك بالإنترنت وأعد المحاولة.',
           );
         } on FunctionException catch (retryError) {
           throw _mapFunctionException(retryError);

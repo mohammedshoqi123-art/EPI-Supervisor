@@ -209,7 +209,7 @@ class AuthRepository {
           .select()
           .eq('id', userId)
           .maybeSingle()
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
 
       if (response != null) {
         _currentState = app_auth.AuthState(
@@ -234,14 +234,14 @@ class AuthRepository {
                 (user.email?.split('@').first ?? 'مستخدم'),
             'role': 'data_entry',
             'is_active': true,
-          }, onConflict: 'id').timeout(const Duration(seconds: 15));
+          }, onConflict: 'id').timeout(const Duration(seconds: 30));
 
           final newResponse = await _client!
               .from('profiles')
               .select()
               .eq('id', userId)
               .maybeSingle()
-              .timeout(const Duration(seconds: 15));
+              .timeout(const Duration(seconds: 30));
 
           if (newResponse != null) {
             _currentState = app_auth.AuthState(
@@ -350,7 +350,7 @@ class AuthRepository {
         .from('profiles')
         .update(updates)
         .eq('id', userId)
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 30));
 
     _currentState = _currentState.copyWith(
       fullName: fullName ?? _currentState.fullName,

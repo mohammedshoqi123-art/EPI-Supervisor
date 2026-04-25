@@ -22,6 +22,7 @@ import { useDashboardStats, useGovernorateStats } from '@/hooks/useApi'
 import { epiBotEngine, FeedbackTracker, NLToSQLEngine, PredictiveEngine } from '@/lib/epi-bot-engine'
 import { useVoiceInput } from '@/hooks/useVoiceInput'
 import { parseExportRequest, executeExport, QUICK_EXPORTS } from '@/lib/ai-export-engine'
+import { buildSmartReport } from '@/lib/smart-report-builder'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -69,8 +70,8 @@ const QUICK_COMMANDS: QuickCommand[] = [
   { id: 'users', label: 'فريق العمل', icon: '👥', command: 'كم مستخدم نشط لدينا؟', category: 'query', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
   { id: 'quality', label: 'جودة الإدخال', icon: '✅', command: 'حلل جودة الإدخال ونسبة الرفض', category: 'query', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
   { id: 'vaccines', label: 'تطعيمات طفلي', icon: '💉', command: 'وش تطعيمات طفلي؟', category: 'query', color: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100' },
-  { id: 'daily', label: 'تقرير يومي', icon: '📅', command: 'لخص لي وضع اليوم', category: 'report', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-  { id: 'compare', label: 'مقارنة أسبوعية', icon: '📈', command: 'قارن هذا الأسبوع بالسابق', category: 'report', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' },
+  { id: 'daily', label: 'تقرير يومي', icon: '📅', command: 'تقرير يومي شامل', category: 'report', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
+  { id: 'compare', label: 'تقرير أسبوعي', icon: '📈', command: 'تقرير أسبوعي', category: 'report', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' },
   { id: 'alerts', label: 'تنبيهات', icon: '🚨', command: 'أي مشاكل تحتاج انتباهي؟', category: 'report', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
   { id: 'forecast', label: 'تنبؤ', icon: '🔮', command: 'تنبؤ الإرساليات الأسبوع القادم', category: 'report', color: 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100' },
   { id: 'inactive', label: 'غير نشطين', icon: '😴', command: 'المستخدمين غير النشطين', category: 'query', color: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100' },
@@ -699,9 +700,45 @@ export function AIChatWidget() {
       } else if (localResult.intent === 'query_users' || text.includes('مستخدم') || text.includes('فريق')) {
         responseText = await fetchUserStats()
       } else if (localResult.intent === 'create_report' || text.includes('تقرير') || text.includes('ملخص') || text.includes('لخص')) {
+        // Smart report detection
+        const isSmartReport = text.includes('يومي') || text.includes('شامل') || text.includes('اسبوع') || text.includes('أسبوع') ||
+          text.includes('محافظ') || text.includes('مقارنة') || text.includes('كامل')
+
+        if (isSmartReport) {
+          let reportType: 'daily_summary' | 'weekly_analysis' | 'governorate_comparison' = 'daily_summary'
+          if (text.includes('اسبوع') || text.includes('أسبوع')) reportType = 'weekly_analysis'
+          else if (text.includes('محافظ') || text.includes('مقارنة')) reportType = 'governorate_comparison'
+
+          responseText = `📊 جاري إنشاء التقرير...`
+          setMessages(prev => [...prev, {
+            id: `a-${Date.now()}`,
+            role: 'assistant',
+            content: responseText,
+            timestamp: new Date(),
+            source: 'local',
+            intent: 'create_report',
+          }])
+
+          const result = await buildSmartReport(reportType)
+          responseText = result.success ? result.message : result.message
+          actions = result.success
+            ? [{ id: 'another-report', label: '📊 تقرير آخر', type: 'query' as const, payload: 'تقرير أسبوعي', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' }]
+            : [{ id: 'nav-reports', label: '📊 صفحة التقارير', type: 'navigate' as const, payload: '/reports', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' }]
+
+          setMessages(prev => prev.map(m =>
+            m.id.startsWith('a-') && m.content === '📊 جاري إنشاء التقرير...'
+              ? { ...m, content: responseText, isStreaming: false, actions } : m
+          ))
+          setIsLoading(false)
+          return
+        }
+
         const stats = await fetchLocalStats()
-        responseText = `📋 **تقرير سريع:**\n\n${stats}\n\n💡 افتح صفحة التقارير (/reports) لتقارير مفصلة.`
-        actions = [{ id: 'nav-reports', label: '📊 صفحة التقارير', type: 'navigate', payload: '/reports', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' }]
+        responseText = `📋 **تقرير سريع:**\n\n${stats}\n\n💡 جرّب:\n• "تقرير يومي شامل" — PDF احترافي\n• "تقرير أسبوعي" — مقارنة\n• "مقارنة المحافظات" — ترتيب`
+        actions = [
+          { id: 'daily-report', label: '📅 تقرير يومي', type: 'query' as const, payload: 'تقرير يومي شامل', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+          { id: 'nav-reports', label: '📊 صفحة التقارير', type: 'navigate' as const, payload: '/reports', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+        ]
       } else if (localResult.intent === 'forecasting' || text.includes('تنبؤ') || text.includes('توقع') || text.includes('القادم')) {
         responseText = await handleForecast()
         actions = [{ id: 'nav-insights', label: '🧠 التحليلات', type: 'navigate', payload: '/insights', color: 'bg-purple-50 text-purple-700 border-purple-200' }]
@@ -724,7 +761,7 @@ export function AIChatWidget() {
         actions.push({ id: 'nav-dash', label: '📊 لوحة التحكم', type: 'navigate', payload: '/dashboard', color: 'bg-blue-50 text-blue-700 border-blue-200' })
       }
 
-      // Simulate streaming
+      // Simulate streaming (chunk-based for speed)
       const assistantMsg: Message = {
         id: `a-${Date.now()}`,
         role: 'assistant',
@@ -736,13 +773,16 @@ export function AIChatWidget() {
       }
       setMessages(prev => [...prev, assistantMsg])
 
+      // Stream in chunks of 3-5 characters for natural feel
+      const chunkSize = 4
+      const delayPerChunk = 8 // ms
       let current = ''
-      for (let i = 0; i < responseText.length; i++) {
-        current += responseText[i]
+      for (let i = 0; i < responseText.length; i += chunkSize) {
+        current += responseText.slice(i, i + chunkSize)
         setMessages(prev => prev.map(m =>
           m.id === assistantMsg.id ? { ...m, content: current } : m
         ))
-        if (i % 3 === 0) await new Promise(r => setTimeout(r, 5))
+        await new Promise(r => setTimeout(r, delayPerChunk))
       }
 
       // Update bot history

@@ -369,6 +369,138 @@ async function generateGovernorateReport(format: 'pdf' | 'excel') {
   }
 }
 
+async function generateShortageReport(format: 'pdf' | 'excel') {
+  const { data: shortages } = await supabase
+    .from('supply_shortages')
+    .select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name)')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+
+  if (!shortages || shortages.length === 0) {
+    return { success: true, message: '✅ لا توجد نواقص مسجلة — ممتاز!', recordCount: 0 }
+  }
+
+  const critical = shortages.filter(s => s.severity === 'critical' && !s.is_resolved)
+  const high = shortages.filter(s => s.severity === 'high' && !s.is_resolved)
+  const resolved = shortages.filter(s => s.is_resolved)
+
+  const severityLabels: Record<string, string> = { critical: '🔴 حرج', high: '🟠 عالي', medium: '🟡 متوسط', low: '🟢 منخفض' }
+
+  if (format === 'pdf') {
+    generatePDFReport({
+      title: 'تقرير النواقص',
+      subtitle: `${shortages.length} نقص | ${critical.length} حرج | ${resolved.length} محلول`,
+      generatedBy: 'EPI Supervisor — التقرير الذكي',
+      sections: [
+        {
+          title: 'ملخص النواقص',
+          type: 'kpi' as const,
+          items: [
+            { label: 'إجمالي النواقص', value: shortages.length, icon: '📦', color: '#3b82f6' },
+            { label: 'حرجة', value: critical.length, icon: '🔴', color: '#ef4444' },
+            { label: 'عالية', value: high.length, icon: '🟠', color: '#f97316' },
+            { label: 'محلولة', value: resolved.length, icon: '✅', color: '#10b981' },
+          ],
+        },
+        {
+          title: 'النواقص المفتوحة',
+          type: 'table' as const,
+          columns: [
+            { key: 'item', label: 'العنصر' },
+            { key: 'severity', label: 'الخطورة' },
+            { key: 'gov', label: 'المحافظة' },
+            { key: 'qty', label: 'المتوفر' },
+            { key: 'reporter', label: 'المُبلِّغ' },
+          ],
+          rows: shortages.filter(s => !s.is_resolved).slice(0, 30).map((s: any) => ({
+            item: s.item_name,
+            severity: severityLabels[s.severity] || s.severity,
+            gov: s.governorates?.name_ar || '—',
+            qty: `${s.quantity_available} ${s.unit}`,
+            reporter: s.profiles?.full_name || '—',
+          })),
+        },
+      ],
+    })
+  }
+
+  return {
+    success: true,
+    message: `✅ تقرير نواقص — ${critical.length} حرج، ${high.length} عالي، ${resolved.length} محلول`,
+    recordCount: shortages.length,
+  }
+}
+
+async function generateUserActivityReport(format: 'pdf' | 'excel') {
+  const { data: users } = await supabase
+    .from('profiles')
+    .select('*, governorates(name_ar)')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+
+  if (!users || users.length === 0) {
+    return { success: true, message: '✅ لا يوجد مستخدمين', recordCount: 0 }
+  }
+
+  const active = users.filter(u => u.is_active)
+  const inactive = users.filter(u => !u.is_active)
+  const roles: Record<string, number> = {}
+  users.forEach(u => { roles[u.role] = (roles[u.role] || 0) + 1 })
+  const roleNames: Record<string, string> = { admin: 'مدير', central: 'مركزي', governorate: 'محافظة', district: 'مديرية', data_entry: 'إدخال بيانات' }
+
+  if (format === 'pdf') {
+    generatePDFReport({
+      title: 'نشاط المستخدمين',
+      subtitle: `${users.length} مستخدم | ${active.length} نشط | ${inactive.length} غير نشط`,
+      generatedBy: 'EPI Supervisor — التقرير الذكي',
+      sections: [
+        {
+          title: 'ملخص المستخدمين',
+          type: 'kpi' as const,
+          items: [
+            { label: 'إجمالي', value: users.length, icon: '👥', color: '#3b82f6' },
+            { label: 'نشطين', value: active.length, icon: '✅', color: '#10b981' },
+            { label: 'غير نشطين', value: inactive.length, icon: '😴', color: '#ef4444' },
+            { label: 'أنواع الأدوار', value: Object.keys(roles).length, icon: '🎭', color: '#8b5cf6' },
+          ],
+        },
+        {
+          title: 'توزيع الأدوار',
+          type: 'table' as const,
+          columns: [
+            { key: 'role', label: 'الدور' },
+            { key: 'count', label: 'العدد' },
+          ],
+          rows: Object.entries(roles).map(([role, count]) => ({
+            role: roleNames[role] || role,
+            count,
+          })),
+        },
+        {
+          title: 'المستخدمين غير النشطين',
+          type: 'table' as const,
+          columns: [
+            { key: 'name', label: 'الاسم' },
+            { key: 'role', label: 'الدور' },
+            { key: 'gov', label: 'المحافظة' },
+          ],
+          rows: inactive.slice(0, 20).map((u: any) => ({
+            name: u.full_name,
+            role: roleNames[u.role] || u.role,
+            gov: u.governorates?.name_ar || '—',
+          })),
+        },
+      ],
+    })
+  }
+
+  return {
+    success: true,
+    message: `✅ تقرير مستخدمين — ${active.length} نشط، ${inactive.length} غير نشط`,
+    recordCount: users.length,
+  }
+}
+
 // ─── Main Builder ────────────────────────────────────────────
 
 export async function buildSmartReport(type: ReportType, format: 'pdf' | 'excel' = 'pdf') {
@@ -379,6 +511,10 @@ export async function buildSmartReport(type: ReportType, format: 'pdf' | 'excel'
       return generateWeeklyReport(format)
     case 'governorate_comparison':
       return generateGovernorateReport(format)
+    case 'shortage_report':
+      return generateShortageReport(format)
+    case 'user_activity':
+      return generateUserActivityReport(format)
     default:
       return {
         success: false,

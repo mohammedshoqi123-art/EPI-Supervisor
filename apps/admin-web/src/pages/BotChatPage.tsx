@@ -277,15 +277,22 @@ export default function BotChatPage() {
       }
 
       // ── Smart Report Detection ──
-      const reportKeywords = ['تقرير يومي', 'تقرير اسبوع', 'تقرير أسبوع', 'مقارنة المحافظ', 'تحليل اسبوع', 'ملخص يوم']
+      const reportKeywords = ['تقرير يومي', 'تقرير اسبوع', 'تقرير أسبوع', 'مقارنة المحافظ', 'تحليل اسبوع',
+        'ملخص يوم', 'نواقص', 'نشاط المستخدم', 'تقرير شامل', 'تقرير كامل', 'تقرير ذكي']
       const isReportRequest = reportKeywords.some(k => msgText.includes(k)) ||
         (msgText.includes('تقرير') && (msgText.includes('شامل') || msgText.includes('كامل') || msgText.includes('ذكي')))
 
       if (isReportRequest) {
-        let reportType: 'daily_summary' | 'weekly_analysis' | 'governorate_comparison' = 'daily_summary'
+        let reportType: 'daily_summary' | 'weekly_analysis' | 'governorate_comparison' | 'shortage_report' | 'user_activity' = 'daily_summary'
         let reportName = 'تقرير يومي'
 
-        if (msgText.includes('اسبوع') || msgText.includes('أسبوع')) {
+        if (msgText.includes('نواقص') || msgText.includes('نقص')) {
+          reportType = 'shortage_report'
+          reportName = 'تقرير النواقص'
+        } else if (msgText.includes('مستخدم') || msgText.includes('فريق') || msgText.includes('نشاط')) {
+          reportType = 'user_activity'
+          reportName = 'نشاط المستخدمين'
+        } else if (msgText.includes('اسبوع') || msgText.includes('أسبوع')) {
           reportType = 'weekly_analysis'
           reportName = 'تحليل أسبوعي'
         } else if (msgText.includes('محافظ') || msgText.includes('مقارنة')) {

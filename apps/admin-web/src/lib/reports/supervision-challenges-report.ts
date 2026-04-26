@@ -18,6 +18,13 @@ import {
 
 // ─── Search keywords for each field ─────────────────────────
 
+
+const TEXT_FIELDS = {
+  challenges: { label: 'التحديات والصعوبات', icon: '⚠️', color: '#E53935', bg: '#FFF5F5', border: '#FFCDD2' },
+  actions: { label: 'الإجراءات المتخذة', icon: '📋', color: '#1565C0', bg: '#E3F2FD', border: '#BBDEFB' },
+  recommendations: { label: 'التوصيات', icon: '💡', color: '#2E7D32', bg: '#E8F5E9', border: '#C8E6C9' },
+}
+
 const SEARCH_KEYWORDS = {
   challenges: [
     'تحدي', 'صعوب', 'مشكل', 'عائق', 'معوق', ' challeng', 'difficult', 'problem', 'obstacle',
@@ -217,7 +224,7 @@ export async function generateSupervisionChallengesReport(options?: {
   // Group by governorate
   const govGroups = new Map<string, typeof withData>()
   withData.forEach(e => {
-    const govName = e.sub.governorates?.name_ar || 'غير محدد'
+    const govName = e.sub.governorates?.[0]?.name_ar || 'غير محدد'
     if (!govGroups.has(govName)) govGroups.set(govName, [])
     govGroups.get(govName)!.push(e)
   })
@@ -225,7 +232,7 @@ export async function generateSupervisionChallengesReport(options?: {
   // Group by district
   const distGroups = new Map<string, typeof withData>()
   withData.forEach(e => {
-    const distName = e.sub.districts?.name_ar || 'غير محدد'
+    const distName = e.sub.districts?.[0]?.name_ar || 'غير محدد'
     if (!distGroups.has(distName)) distGroups.set(distName, [])
     distGroups.get(distName)!.push(e)
   })
@@ -388,16 +395,16 @@ export async function generateSupervisionChallengesReport(options?: {
               <div class="entry-card">
                 <div class="entry-header">
                   <div class="entry-header-right">
-                    <div class="entry-name">${idx + 1}. ${escapeHtml(sub.profiles?.full_name || 'مشرف مجهول')}</div>
+                    <div class="entry-name">${idx + 1}. ${escapeHtml(sub.profiles?.[0]?.full_name || 'مشرف مجهول')}</div>
                     <div class="entry-meta">
-                      <span class="entry-meta-item">📍 ${escapeHtml(sub.districts?.name_ar || '—')}</span>
-                      <span class="entry-meta-item">👥 ${escapeHtml(sub.profiles?.full_name || '—')}</span>
+                      <span class="entry-meta-item">📍 ${escapeHtml(sub.districts?.[0]?.name_ar || '—')}</span>
+                      <span class="entry-meta-item">👥 ${escapeHtml(sub.profiles?.[0]?.full_name || '—')}</span>
                       ${sub.gps_lat && sub.gps_lng
                         ? `<span class="gps-tag">📡 ${sub.gps_lat.toFixed(4)}, ${sub.gps_lng.toFixed(4)}</span>`
                         : '<span class="entry-meta-item" style="color:#FFCDD2">⚠️ بدون GPS</span>'
                       }
                       <span class="entry-meta-item">📅 ${new Date(sub.created_at).toLocaleDateString('ar-SA')}</span>
-                      ${sub.profiles?.phone ? `<span class="entry-meta-item">📱 ${sub.profiles.phone}</span>` : ''}
+                      ${sub.profiles?.[0]?.phone ? `<span class="entry-meta-item">📱 ${sub.profiles.phone}</span>` : ''}
                     </div>
                   </div>
                   <div class="entry-score" style="color:${challengeCount === 3 ? '#C8E6C9' : challengeCount >= 2 ? '#FFECB3' : '#FFCDD2'}">

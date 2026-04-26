@@ -441,18 +441,18 @@ export async function generateSupervisionFormReport(options?: {
             <div class="supervision-card ${cardClass}">
               <div class="card-header">
                 <div>
-                  <div class="card-title">${idx + 1}. ${escapeHtml(sub.profiles?.full_name || 'مشرف مجهول')}</div>
+                  <div class="card-title">${idx + 1}. ${escapeHtml(sub.profiles?.[0]?.full_name || 'مشرف مجهول')}</div>
                   <div class="card-subtitle">${escapeHtml(sub.forms?.title_ar || 'استمارة إشراف')}</div>
                   <div class="card-meta">
-                    <span class="gov-badge">🏛️ ${escapeHtml(sub.governorates?.name_ar || '—')}</span>
-                    <span class="dist-badge">📍 ${escapeHtml(sub.districts?.name_ar || '—')}</span>
-                    <span class="team-badge">👥 ${escapeHtml(sub.profiles?.full_name || '—')}</span>
+                    <span class="gov-badge">🏛️ ${escapeHtml(sub.governorates?.[0]?.name_ar || '—')}</span>
+                    <span class="dist-badge">📍 ${escapeHtml(sub.districts?.[0]?.name_ar || '—')}</span>
+                    <span class="team-badge">👥 ${escapeHtml(sub.profiles?.[0]?.full_name || '—')}</span>
                     ${sub.gps_lat && sub.gps_lng
                       ? `<span class="gps-tag">📡 ${sub.gps_lat.toFixed(4)}, ${sub.gps_lng.toFixed(4)}</span>`
                       : '<span style="color:' + BRAND.accent + ';font-size:9px">⚠️ بدون GPS</span>'
                     }
                     <span class="meta-item"><span class="meta-icon">📅</span> ${new Date(sub.created_at).toLocaleDateString('ar-SA')}</span>
-                    ${sub.profiles?.phone ? `<span class="meta-item"><span class="meta-icon">📱</span> ${sub.profiles.phone}</span>` : ''}
+                    ${sub.profiles?.[0]?.phone ? `<span class="meta-item"><span class="meta-icon">📱</span> ${sub.profiles.phone}</span>` : ''}
                   </div>
                 </div>
                 <div class="card-score" style="color:${getStatusColor(overallScore, 80)};background:${overallScore >= 80 ? '#E8F5E9' : '#FFEBEE'}">

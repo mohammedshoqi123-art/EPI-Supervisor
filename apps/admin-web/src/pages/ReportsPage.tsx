@@ -9,7 +9,7 @@ import {
   Sparkles, Gauge,
   FileDown,
   Info, ScrollText, History, ArrowLeftRight,
-  Search, X
+  Search, X, FileSearch
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'

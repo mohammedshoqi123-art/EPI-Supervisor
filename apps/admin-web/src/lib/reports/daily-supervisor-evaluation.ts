@@ -3,9 +3,10 @@
  *  تقييم أداء المشرفين اليومي — استمارة الإشراف للنشاط الإيصالي التكاملي
  *  Daily Supervisor Evaluation — Integrated EPI Activity Supervision Form
  * ═══════════════════════════════════════════════════════════════
- *  الترتيب: المركزي ← محافظات (كل محافظة مع مديرياتها)
- *  يعرض: الاسم، الصفة، المحافظة، المديرية، التاريخ، عدد الاستمارات
- *  مدير عام / مدير رعاية → "إشراف عام" بدل نشط/غير نشط
+ *  الترتيب: محافظات (كل محافظة ← مشرفي المحافظة ← مديرياتها)
+ *  المركزي يظهر مع محافظته مسجّل "مركزي"
+ *  المركزي بدون محافظة لا يُذكر
+ *  إشراف عام: مدير عام / مدير رعاية / مشرف التحصين بالمحافظة
  * ═══════════════════════════════════════════════════════════════
  */
 
@@ -23,12 +24,12 @@ import {
   printReport,
 } from './shared'
 
-// ─── Role Labels & Icons ────────────────────────────────────
+// ─── Role Labels ────────────────────────────────────────────
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'مدير النظام',
   central: 'مركزي',
-  governorate: 'محافظة',
+  governorate: 'مشرف التحصين',
   district: 'مديرية',
   data_entry: 'إدخال بيانات',
 }
@@ -41,20 +42,18 @@ const ROLE_ICONS: Record<string, string> = {
   data_entry: '⚪',
 }
 
-// ─── Roles considered "إشراف عام" ──────────────────────────
-// These roles show "إشراف عام" instead of active/inactive
-
-const GENERAL_SUPERVISION_KEYWORDS = [
-  'مدير عام',
-  'مدير الرعاية',
-  'مدير عام لمكتب',
-  'نائب مدير',
-  'مساعد مدير',
-]
+// ─── "إشراف عام" check ─────────────────────────────────────
+// مدير عام / مدير رعاية / مشرف التحصين بالمحافظة → إشراف عام
+// المركزي (central) → يظهر كـ "مركزي" مو إشراف عام
 
 function isGeneralSupervisor(name: string, role: string): boolean {
-  if (role === 'admin' || role === 'central') return true
-  return GENERAL_SUPERVISION_KEYWORDS.some(kw => name.includes(kw))
+  // مشرف التحصين بالمحافظة = إشراف عام
+  if (role === 'governorate') return true
+  // مدير النظام = إشراف عام
+  if (role === 'admin') return true
+  // مسؤول مركزي بصفة مدير عام أو مدير رعاية = إشراف عام
+  const keywords = ['مدير عام', 'مدير الرعاية', 'مدير عام لمكتب', 'نائب مدير', 'مساعد مدير']
+  return keywords.some(kw => name.includes(kw))
 }
 
 // ─── Date Helpers ───────────────────────────────────────────
@@ -73,8 +72,8 @@ function getDayName(dateStr: string): string {
 // ═══════════════════════════════════════════════════════════════
 
 export async function generateDailySupervisorEvaluation(options?: {
-  date?: string          // اليوم المطلوب (default: today)
-  governorateId?: string // فلتر محافظة
+  date?: string
+  governorateId?: string
 }): Promise<void> {
   const targetDate = options?.date || getTodayStr()
   const dayStart = `${targetDate}T00:00:00`
@@ -85,26 +84,25 @@ export async function generateDailySupervisorEvaluation(options?: {
   // ── Fetch all data ──
   const [usersRes, subsRes, govsRes, distsRes] = await Promise.allSettled([
     supabase.from('profiles')
-      .select('*, governorates(name_ar), districts(name_ar)')
+      .select('id, full_name, phone, role, governorate_id, district_id, is_active')
       .is('deleted_at', null)
-      .order('governorate_id', { ascending: true })
-      .order('role', { ascending: true }),
+      .order('governorate_id', { ascending: true }),
 
     supabase.from('form_submissions')
-      .select('id, submitted_by, governorate_id, district_id, status, created_at, form_id, forms(title_ar, campaign_type)')
+      .select('id, submitted_by, governorate_id, district_id, status, created_at')
       .is('deleted_at', null)
       .gte('created_at', dayStart)
       .lte('created_at', dayEnd)
       .limit(50000),
 
     supabase.from('governorates')
-      .select('*')
+      .select('id, name_ar')
       .eq('is_active', true)
       .is('deleted_at', null)
       .order('name_ar', { ascending: true }),
 
     supabase.from('districts')
-      .select('*')
+      .select('id, name_ar, governorate_id')
       .eq('is_active', true)
       .is('deleted_at', null)
       .order('name_ar', { ascending: true }),
@@ -115,93 +113,152 @@ export async function generateDailySupervisorEvaluation(options?: {
   const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
   const dists = distsRes.status === 'fulfilled' ? distsRes.value.data || [] : []
 
-  // ── Enrich each user with today's stats ──
-  const enriched = users.map(u => {
-    const userSubs = subs.filter(s => s.submitted_by === u.id)
-    const submitted = userSubs.filter(s => s.status === 'submitted').length
-    const draft = userSubs.filter(s => s.status === 'draft').length
-    const total = userSubs.length
-    const isGenSupervisor = isGeneralSupervisor(u.full_name || '', u.role)
+  // ── Build lookup maps ──
+  const govsMap = new Map<string, { id: string; name_ar: string }>()
+  for (const g of govs) govsMap.set(g.id, g)
 
-    return {
-      ...u,
-      totalToday: total,
-      submittedToday: submitted,
-      draftToday: draft,
-      isGenSupervisor,
-      govName: u.governorates?.name_ar || '—',
-      distName: u.districts?.name_ar || '—',
-    }
-  })
+  const distsMap = new Map<string, { id: string; name_ar: string; governorate_id: string }>()
+  for (const d of dists) distsMap.set(d.id, d)
 
-  // ── Separate: Central vs Field ──
-  const centralUsers = enriched.filter(u => u.role === 'admin' || u.role === 'central')
-  const fieldUsers = enriched.filter(u => ['governorate', 'district', 'data_entry'].includes(u.role))
+  // ── Enrich each user ──
+  const enriched = users
+    .filter(u => u.is_active) // فقط النشطين
+    .map(u => {
+      const userSubs = subs.filter(s => s.submitted_by === u.id)
+      const submitted = userSubs.filter(s => s.status === 'submitted').length
+      const draft = userSubs.filter(s => s.status === 'draft').length
+      const total = userSubs.length
+      const gov = u.governorate_id ? govsMap.get(u.governorate_id) : null
+      const dist = u.district_id ? distsMap.get(u.district_id) : null
+      const isGen = isGeneralSupervisor(u.full_name || '', u.role)
 
-  // ── Filter by governorate if specified ──
+      return {
+        ...u,
+        totalToday: total,
+        submittedToday: submitted,
+        draftToday: draft,
+        isGenSupervisor: isGen,
+        govName: gov?.name_ar || '',
+        govId: u.governorate_id || '',
+        distName: dist?.name_ar || '',
+      }
+    })
+
+  // ── المركزي بدون محافظة → يُستبعد ──
+  // المركزي مع محافظة → يظهر مع محافظته
+  // المركزي بدون → لا يُذكر
+  const centralWithGov = enriched.filter(u => (u.role === 'central' || u.role === 'admin') && u.govId)
+  const centralWithoutGov = enriched.filter(u => (u.role === 'central' || u.role === 'admin') && !u.govId)
+
+  // ── كل المستخدمين اللي يظهرون بالتقرير ──
+  // (الميدانيون + المركزي مع محافظة)
+  const allReportUsers = [
+    ...enriched.filter(u => ['governorate', 'district', 'data_entry'].includes(u.role)),
+    ...centralWithGov,
+  ]
+
+  // ── فلتر محافظة ──
   let filteredGovs = govs
-  let filteredFieldUsers = fieldUsers
+  let filteredUsers = allReportUsers
   if (options?.governorateId && options.governorateId !== 'all') {
     filteredGovs = govs.filter(g => g.id === options.governorateId)
-    filteredFieldUsers = fieldUsers.filter(u => u.governorate_id === options.governorateId)
+    filteredUsers = allReportUsers.filter(u => u.govId === options.governorateId)
   }
 
-  // ── Group field users by governorate ──
+  // ── تجميع حسب المحافظة ──
   const govGroups = new Map<string, {
     gov: typeof govs[0]
-    supervisors: typeof enriched
+    allUsers: typeof enriched
+    govLevelUsers: typeof enriched    // مشرفي المحافظة + المركزي
     districts: Map<string, typeof enriched>
   }>()
 
   for (const gov of filteredGovs) {
-    const govUsers = filteredFieldUsers.filter(u => u.governorate_id === gov.id)
+    const govUsers = filteredUsers.filter(u => u.govId === gov.id)
 
-    // Sub-group by district
+    // مشرفي المحافظة (role=governorate) + المركزي (role=central/admin)
+    const govLevel = govUsers.filter(u => u.role === 'governorate' || u.role === 'central' || u.role === 'admin')
+      .sort((a, b) => {
+        // المركزي أولاً ثم مشرف التحصين
+        const order: Record<string, number> = { central: 0, admin: 0, governorate: 1 }
+        return (order[a.role] ?? 9) - (order[b.role] ?? 9)
+      })
+
+    // المديريات (role=district/data_entry)
     const distMap = new Map<string, typeof enriched>()
-    for (const u of govUsers) {
+    for (const u of govUsers.filter(u => u.role === 'district' || u.role === 'data_entry')) {
       const distKey = u.district_id || '_no_district'
-      const distName = u.distName || 'غير محدد'
       if (!distMap.has(distKey)) distMap.set(distKey, [])
       distMap.get(distKey)!.push(u)
     }
 
     govGroups.set(gov.id, {
       gov,
-      supervisors: govUsers.sort((a, b) => {
-        // Governorate role first, then district, then data_entry
-        const roleOrder: Record<string, number> = { governorate: 0, district: 1, data_entry: 2 }
-        return (roleOrder[a.role] ?? 9) - (roleOrder[b.role] ?? 9)
-      }),
+      allUsers: govUsers,
+      govLevelUsers: govLevel,
       districts: distMap,
     })
   }
 
-  // ── Statistics ──
-  const totalSupervisors = enriched.length
-  const activeToday = enriched.filter(u => u.totalToday > 0).length
-  const inactiveToday = enriched.filter(u => u.totalToday === 0).length
+  // ══════════════════════════════════════════════
+  // حساب الإحصائيات
+  // ══════════════════════════════════════════════
+
+  const totalSupervisors = allReportUsers.length
+  const activeToday = allReportUsers.filter(u => u.totalToday > 0).length
+  const inactiveToday = allReportUsers.filter(u => u.totalToday === 0 && !u.isGenSupervisor).length
+  const generalCount = allReportUsers.filter(u => u.isGenSupervisor).length
   const totalForms = subs.length
   const totalSubmitted = subs.filter(s => s.status === 'submitted').length
   const totalDraft = subs.filter(s => s.status === 'draft').length
 
+  // المحافظات المغطاة (لها مشرف واحد على الأقل)
+  const coveredGovIds = new Set(allReportUsers.map(u => u.govId).filter(Boolean))
+  const coveredGovs = coveredGovIds.size
+  const totalGovs = govs.length
+  const uncoveredGovs = totalGovs - coveredGovs
+
+  // المديريات المغطاة (لها مشرف district/data_entry على الأقل)
+  const allDistrictUsers = allReportUsers.filter(u => u.role === 'district' || u.role === 'data_entry')
+  const coveredDistIds = new Set(allDistrictUsers.map(u => u.district_id).filter(Boolean))
+  const coveredDists = coveredDistIds.size
+  const totalDists = dists.length
+  const uncoveredDists = totalDists - coveredDists
+
   // ── Build HTML ──
 
-  function renderUserRow(u: typeof enriched[0], index: number, isCentral: boolean): string {
-    const statusHtml = u.isGenSupervisor
-      ? '<span class="status-badge status-general">إشراف عام</span>'
-      : u.totalToday > 0
-        ? '<span class="status-badge status-active">✅ نشط</span>'
-        : '<span class="status-badge status-inactive">❌ غير نشط</span>'
+  function renderUserRow(u: typeof enriched[0], index: number): string {
+    // الحالة
+    let statusHtml: string
+    if (u.isGenSupervisor) {
+      statusHtml = '<span class="status-badge status-general">إشراف عام</span>'
+    } else if (u.totalToday > 0) {
+      statusHtml = '<span class="status-badge status-active">✅ نشط</span>'
+    } else {
+      statusHtml = '<span class="status-badge status-inactive">❌ غير نشط</span>'
+    }
+
+    // الصفة
+    let roleLabel: string
+    if (u.role === 'central' || u.role === 'admin') {
+      roleLabel = 'مركزي'
+    } else if (u.role === 'governorate') {
+      roleLabel = 'مشرف التحصين'
+    } else if (u.role === 'district') {
+      roleLabel = 'مديرية'
+    } else {
+      roleLabel = 'إدخال بيانات'
+    }
 
     return `
-      <tr class="${u.totalToday === 0 && !u.isGenSupervisor ? 'row-inactive' : ''} ${u.totalToday > 0 ? 'row-active' : ''}">
+      <tr class="${u.totalToday === 0 && !u.isGenSupervisor ? 'row-inactive' : ''}">
         <td class="num">${index + 1}</td>
         <td>
           <div class="user-name">${ROLE_ICONS[u.role] || '👤'} ${escapeHtml(u.full_name || '—')}</div>
         </td>
-        <td><span class="role-tag role-${u.role}">${ROLE_LABELS[u.role] || u.role}</span></td>
-        ${isCentral ? '' : `<td>${escapeHtml(u.govName)}</td>`}
-        ${isCentral ? '' : `<td>${escapeHtml(u.distName)}</td>`}
+        <td><span class="role-tag role-${u.role}">${roleLabel}</span></td>
+        <td>${escapeHtml(u.govName || '—')}</td>
+        <td>${escapeHtml(u.distName || '—')}</td>
         <td class="num">${u.totalToday}</td>
         <td class="num num-success">${u.submittedToday}</td>
         <td class="num num-warning">${u.draftToday}</td>
@@ -247,9 +304,7 @@ export async function generateDailySupervisorEvaluation(options?: {
           font-size: 11px;
           white-space: nowrap;
         }
-
         .row-inactive { opacity: 0.55; }
-        .row-active { }
 
         .gov-section {
           margin-top: 20px;
@@ -287,20 +342,6 @@ export async function generateDailySupervisorEvaluation(options?: {
           font-weight: 400;
         }
 
-        .central-section {
-          margin-bottom: 24px;
-        }
-        .central-header {
-          background: linear-gradient(135deg, #1A237E, #283593);
-          color: white;
-          padding: 14px 18px;
-          border-radius: 10px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 6px;
-        }
-
         .summary-bar {
           display: flex;
           gap: 8px;
@@ -320,6 +361,8 @@ export async function generateDailySupervisorEvaluation(options?: {
         .chip-inactive { background: #FFEBEE; color: ${BRAND.accent}; }
         .chip-general { background: #E3F2FD; color: #1565C0; }
         .chip-total { background: ${BRAND.bgLight}; color: ${BRAND.textDark}; }
+        .chip-gov { background: #E8EAF6; color: #283593; }
+        .chip-dist { background: #FFF8E1; color: #E65100; }
 
         .day-banner {
           text-align: center;
@@ -346,6 +389,25 @@ export async function generateDailySupervisorEvaluation(options?: {
           color: ${BRAND.textMuted};
           font-size: 11px;
         }
+
+        .coverage-bar {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin: 12px 0;
+        }
+        .coverage-card {
+          border: 1px solid ${BRAND.border};
+          border-radius: 10px;
+          padding: 14px;
+          text-align: center;
+        }
+        .coverage-card.good { border-top: 4px solid ${BRAND.success}; }
+        .coverage-card.warn { border-top: 4px solid ${BRAND.warning}; }
+        .coverage-card.bad { border-top: 4px solid ${BRAND.accent}; }
+        .coverage-value { font-size: 28px; font-weight: 900; }
+        .coverage-label { font-size: 10px; color: ${BRAND.textMuted}; margin-top: 4px; }
+        .coverage-sub { font-size: 9px; color: ${BRAND.textMuted}; }
       </style>
     </head>
     <body>
@@ -367,73 +429,79 @@ export async function generateDailySupervisorEvaluation(options?: {
         ${buildKPI('إجمالي المشرفين', totalSupervisors, '👥', BRAND.primary)}
         ${buildKPI('نشط اليوم', activeToday, '✅', BRAND.success, `${totalSupervisors > 0 ? Math.round((activeToday / totalSupervisors) * 100) : 0}%`)}
         ${buildKPI('غير نشط', inactiveToday, '❌', BRAND.accent, `${totalSupervisors > 0 ? Math.round((inactiveToday / totalSupervisors) * 100) : 0}%`)}
+        ${buildKPI('إشراف عام', generalCount, '🏛️', '#1565C0', `${totalSupervisors > 0 ? Math.round((generalCount / totalSupervisors) * 100) : 0}%`)}
         ${buildKPI('إجمالي الاستمارات', totalForms, '📋', BRAND.info, `مرسلة: ${totalSubmitted} | مسودة: ${totalDraft}`)}
       </div>
+
+      <!-- ═══ تغطية المحافظات والمديريات ═══ -->
+      ${buildSectionTitle('🗺️', 'تغطية الإشراف')}
+      <div class="coverage-bar">
+        <div class="coverage-card ${coveredGovs === totalGovs ? 'good' : coveredGovs > totalGovs * 0.7 ? 'warn' : 'bad'}">
+          <div class="coverage-value" style="color:${coveredGovs === totalGovs ? BRAND.success : coveredGovs > totalGovs * 0.7 ? BRAND.warning : BRAND.accent}">${coveredGovs}/${totalGovs}</div>
+          <div class="coverage-label">محافظات مغطاة بالإشراف</div>
+          <div class="coverage-sub">${totalGovs > 0 ? Math.round((coveredGovs / totalGovs) * 100) : 0}% تغطية | ${uncoveredGovs} محافظة غير مغطاة</div>
+        </div>
+        <div class="coverage-card ${coveredDists === totalDists ? 'good' : coveredDists > totalDists * 0.7 ? 'warn' : 'bad'}">
+          <div class="coverage-value" style="color:${coveredDists === totalDists ? BRAND.success : coveredDists > totalDists * 0.7 ? BRAND.warning : BRAND.accent}">${coveredDists}/${totalDists}</div>
+          <div class="coverage-label">مديريات مغطاة بالإشراف</div>
+          <div class="coverage-sub">${totalDists > 0 ? Math.round((coveredDists / totalDists) * 100) : 0}% تغطية | ${uncoveredDists} مديرية غير مغطاة</div>
+        </div>
+      </div>
+
+      <!-- المديريات غير المغطاة -->
+      ${uncoveredDists > 0 ? `
+        <div style="margin:8px 0;padding:10px 14px;background:#FFEBEE;border-radius:8px;border-right:4px solid ${BRAND.accent};font-size:10px;">
+          <strong>⚠️ مديريات لم يتم تغطيتها ولم ترفع للنظام (${uncoveredDists} مديرية):</strong>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">
+            ${dists
+              .filter(d => !coveredDistIds.has(d.id))
+              .slice(0, 30)
+              .map(d => `<span style="background:white;padding:2px 8px;border-radius:4px;border:1px solid #FFCDD2;">${escapeHtml(d.name_ar)} (${escapeHtml(govsMap.get(d.governorate_id)?.name_ar || '—')})</span>`)
+              .join('')}
+            ${uncoveredDists > 30 ? `<span style="color:${BRAND.textMuted}">... و ${uncoveredDists - 30} مديرية أخرى</span>` : ''}
+          </div>
+        </div>
+      ` : ''}
 
       <div class="summary-bar">
         <span class="summary-chip chip-total">👥 إجمالي: ${totalSupervisors}</span>
         <span class="summary-chip chip-active">✅ نشط: ${activeToday}</span>
         <span class="summary-chip chip-inactive">❌ غير نشط: ${inactiveToday}</span>
-        <span class="summary-chip chip-general">🏛️ إشراف عام: ${enriched.filter(u => u.isGenSupervisor).length}</span>
+        <span class="summary-chip chip-general">🏛️ إشراف عام: ${generalCount}</span>
+        <span class="summary-chip chip-gov">🏛️ محافظات: ${coveredGovs}/${totalGovs}</span>
+        <span class="summary-chip chip-dist">📍 مديريات: ${coveredDists}/${totalDists}</span>
       </div>
 
-      <!-- ═══ SECTION 1: المركزي ═══ -->
-      <div class="central-section">
-        <div class="central-header">
-          <div>
-            <div class="gov-name">🏛️ المركزي — الإدارة</div>
-            <div class="gov-stats">${centralUsers.length} مسؤول</div>
-          </div>
-          <div style="text-align:left;font-size:11px;">
-            استمارات اليوم: <strong>${centralUsers.reduce((s, u) => s + u.totalToday, 0)}</strong>
-          </div>
-        </div>
-
-        ${centralUsers.length > 0 ? `
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>الاسم</th>
-                <th>الصفة</th>
-                <th>استمارات</th>
-                <th>مرسلة</th>
-                <th>مسودة</th>
-                <th>الحالة</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${centralUsers.map((u, i) => renderUserRow(u, i, true)).join('')}
-            </tbody>
-          </table>
-        ` : '<div class="no-data-msg">لا يوجد مسؤولين مركزيين</div>'}
-      </div>
-
-      <!-- ═══ SECTION 2: المحافظات ═══ -->
+      <!-- ═══ المحافظات ═══ -->
       ${[...govGroups.values()].map(group => {
-        const activeInGov = group.supervisors.filter(u => u.totalToday > 0).length
-        const totalInGov = group.supervisors.length
-        const formsInGov = group.supervisors.reduce((s, u) => s + u.totalToday, 0)
+        const activeInGov = group.allUsers.filter(u => u.totalToday > 0).length
+        const totalInGov = group.allUsers.length
+        const formsInGov = group.allUsers.reduce((s, u) => s + u.totalToday, 0)
+        const govDistCount = group.districts.size
+        const coveredGovDists = [...group.districts.values()].filter(users => users.some(u => u.totalToday > 0)).length
 
         return `
           <div class="gov-section">
             <div class="gov-header">
               <div>
                 <div class="gov-name">🏛️ ${escapeHtml(group.gov.name_ar)}</div>
-                <div class="gov-stats">${totalInGov} مشرف | نشط: ${activeInGov} | غير نشط: ${totalInGov - activeInGov}</div>
+                <div class="gov-stats">
+                  ${totalInGov} مشرف | نشط: ${activeInGov} | غير نشط: ${totalInGov - activeInGov} |
+                  مديريات: ${coveredGovDists}/${govDistCount}
+                </div>
               </div>
               <div style="text-align:left;font-size:11px;">
                 استمارات اليوم: <strong>${formsInGov}</strong>
               </div>
             </div>
 
-            ${group.supervisors.length === 0 ? '<div class="no-data-msg">لا يوجد مشرفين في هذه المحافظة</div>' : ''}
+            ${group.allUsers.length === 0 ? '<div class="no-data-msg">لا يوجد مشرفين في هذه المحافظة</div>' : ''}
 
-            <!-- Governorate-level supervisors -->
-            ${group.supervisors.filter(u => u.role === 'governorate').length > 0 ? `
+            <!-- مشرفي المحافظة + المركزي -->
+            ${group.govLevelUsers.length > 0 ? `
               <div class="dist-header">
-                <span>🟢 مشرفي المحافظة</span>
-                <span class="dist-count">${group.supervisors.filter(u => u.role === 'governorate').length} مشرف</span>
+                <span>🏛️ مشرفي المحافظة والمركزي</span>
+                <span class="dist-count">${group.govLevelUsers.length} مشرف</span>
               </div>
               <table class="data-table">
                 <thead>
@@ -450,14 +518,13 @@ export async function generateDailySupervisorEvaluation(options?: {
                   </tr>
                 </thead>
                 <tbody>
-                  ${group.supervisors.filter(u => u.role === 'governorate').map((u, i) => renderUserRow(u, i, false)).join('')}
+                  ${group.govLevelUsers.map((u, i) => renderUserRow(u, i)).join('')}
                 </tbody>
               </table>
             ` : ''}
 
-            <!-- Districts -->
+            <!-- المديريات -->
             ${[...group.districts.entries()]
-              .filter(([_, users]) => users.some(u => u.role === 'district' || u.role === 'data_entry'))
               .sort((a, b) => b[1].length - a[1].length)
               .map(([distKey, distUsers]) => {
                 const distName = distUsers[0]?.distName || 'غير محدد'
@@ -486,7 +553,7 @@ export async function generateDailySupervisorEvaluation(options?: {
                     <tbody>
                       ${distUsers
                         .sort((a, b) => (a.role === 'district' ? 0 : 1) - (b.role === 'district' ? 0 : 1) || b.totalToday - a.totalToday)
-                        .map((u, i) => renderUserRow(u, i, false))
+                        .map((u, i) => renderUserRow(u, i))
                         .join('')}
                     </tbody>
                   </table>

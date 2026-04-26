@@ -173,15 +173,12 @@ export async function generateSupervisionChallengesReport(options?: {
 }): Promise<void> {
   const now = new Date()
 
-  // ── Fetch submissions ──
+  // ── Fetch submissions + profiles separately ──
   let query = supabase
     .from('form_submissions')
     .select(`
-      id, status, data, notes, gps_lat, gps_lng, photos, created_at,
-      forms(id, title_ar, campaign_type),
-      profiles!submitted_by(full_name, phone, role),
-      governorates(id, name_ar),
-      districts(id, name_ar)
+      id, status, data, notes, gps_lat, gps_lng, photos, created_at, submitted_by, governorate_id, district_id,
+      forms(id, title_ar, campaign_type)
     `)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -190,11 +187,39 @@ export async function generateSupervisionChallengesReport(options?: {
   if (options?.dateFrom) query = query.gte('created_at', options.dateFrom)
   if (options?.dateTo) query = query.lte('created_at', options.dateTo + 'T23:59:59')
 
-  const { data: submissions } = await query
+  const [{ data: submissions }, { data: profilesData }, { data: govsData }, { data: distsData }] = await Promise.all([
+    query,
+    supabase.from('profiles').select('id, full_name, phone, role').is('deleted_at', null),
+    supabase.from('governorates').select('id, name_ar').eq('is_active', true).is('deleted_at', null),
+    supabase.from('districts').select('id, name_ar, governorate_id').eq('is_active', true).is('deleted_at', null),
+  ])
 
-  let filteredSubs = submissions || []
+  // Build lookup maps
+  const profilesMap = new Map<string, { full_name: string; phone: string; role: string }>()
+  for (const p of profilesData || []) profilesMap.set(p.id, p)
+
+  const govsMap = new Map<string, { id: string; name_ar: string }>()
+  for (const g of govsData || []) govsMap.set(g.id, g)
+
+  const distsMap = new Map<string, { id: string; name_ar: string; governorate_id: string }>()
+  for (const d of distsData || []) distsMap.set(d.id, d)
+
+  // Attach profiles, governorates, districts to submissions
+  const subsWithJoins = (submissions || []).map(sub => {
+    const profile = sub.submitted_by ? profilesMap.get(sub.submitted_by) : null
+    const gov = sub.governorate_id ? govsMap.get(sub.governorate_id) : null
+    const dist = sub.district_id ? distsMap.get(sub.district_id) : null
+    return {
+      ...sub,
+      profiles: profile ? [profile] : [],
+      governorates: gov ? [gov] : [],
+      districts: dist ? [dist] : [],
+    }
+  })
+
+  let filteredSubs = subsWithJoins
   if (options?.governorateId && options.governorateId !== 'all') {
-    filteredSubs = filteredSubs.filter(s => s.governorates?.[0]?.id || '' === options.governorateId)
+    filteredSubs = filteredSubs.filter(s => s.governorate_id === options.governorateId)
   }
 
   // ── Extract text fields from each submission ──

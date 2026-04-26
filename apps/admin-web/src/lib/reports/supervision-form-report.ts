@@ -186,7 +186,7 @@ export async function generateSupervisionFormReport(options?: {
   // Filter by governorate if specified
   let filteredSubs = submissions || []
   if (options?.governorateId && options.governorateId !== 'all') {
-    filteredSubs = filteredSubs.filter(s => s.governorate_id === options.governorateId)
+    filteredSubs = filteredSubs.filter(s => s.governorates?.[0]?.id || '' === options.governorateId)
   }
 
   // ── Analyze each submission ──
@@ -442,7 +442,7 @@ export async function generateSupervisionFormReport(options?: {
               <div class="card-header">
                 <div>
                   <div class="card-title">${idx + 1}. ${escapeHtml(sub.profiles?.[0]?.full_name || 'مشرف مجهول')}</div>
-                  <div class="card-subtitle">${escapeHtml(sub.forms?.title_ar || 'استمارة إشراف')}</div>
+                  <div class="card-subtitle">${escapeHtml(sub.forms?.[0]?.title_ar || 'استمارة إشراف')}</div>
                   <div class="card-meta">
                     <span class="gov-badge">🏛️ ${escapeHtml(sub.governorates?.[0]?.name_ar || '—')}</span>
                     <span class="dist-badge">📍 ${escapeHtml(sub.districts?.[0]?.name_ar || '—')}</span>

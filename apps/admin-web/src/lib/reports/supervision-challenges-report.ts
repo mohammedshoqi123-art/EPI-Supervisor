@@ -194,7 +194,7 @@ export async function generateSupervisionChallengesReport(options?: {
 
   let filteredSubs = submissions || []
   if (options?.governorateId && options.governorateId !== 'all') {
-    filteredSubs = filteredSubs.filter(s => s.governorate_id === options.governorateId)
+    filteredSubs = filteredSubs.filter(s => s.governorates?.[0]?.id || '' === options.governorateId)
   }
 
   // ── Extract text fields from each submission ──

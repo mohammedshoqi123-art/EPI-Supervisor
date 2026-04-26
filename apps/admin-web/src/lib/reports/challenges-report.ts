@@ -80,7 +80,7 @@ export async function generateChallengesReport(options?: {
   if (options?.dateFrom) filteredSubs = filteredSubs.filter(s => s.created_at >= options.dateFrom!)
   if (options?.dateTo) filteredSubs = filteredSubs.filter(s => s.created_at <= options.dateTo! + 'T23:59:59')
   if (options?.governorateId && options.governorateId !== 'all') {
-    filteredSubs = filteredSubs.filter(s => s.governorate_id === options.governorateId)
+    filteredSubs = filteredSubs.filter(s => s.governorates?.[0]?.id || '' === options.governorateId)
   }
 
   // ══════════════════════════════════════════════════════════
@@ -88,11 +88,11 @@ export async function generateChallengesReport(options?: {
   // ══════════════════════════════════════════════════════════
 
   // 1. Zero-coverage governorates
-  const activeGovIds = new Set(filteredSubs.map(s => s.governorate_id).filter(Boolean))
+  const activeGovIds = new Set(filteredSubs.map(s => s.governorates?.[0]?.id || '').filter(Boolean))
   const zeroGovs = govs.filter(g => !activeGovIds.has(g.id))
 
   // 2. Zero-coverage districts
-  const activeDistIds = new Set(filteredSubs.map(s => s.district_id).filter(Boolean))
+  const activeDistIds = new Set(filteredSubs.map(s => s.districts?.[0]?.id || '').filter(Boolean))
   const zeroDistricts = districts.filter(d => !activeDistIds.has(d.id))
 
   // 3. Inactive supervisors
@@ -102,13 +102,13 @@ export async function generateChallengesReport(options?: {
   const recentSubmitters = new Set(
     filteredSubs
       .filter(s => new Date(s.created_at).getTime() > now.getTime() - 7 * 86400000)
-      .map(s => s.submitted_by)
+      .map(s => s.profiles?.[0]?.full_name || '')
   )
   const inactiveSupervisors = fieldUsers.filter(u => !recentSubmitters.has(u.id))
 
   // 4. Draft-heavy submissions (low completion rate)
   const govStats = govs.map(g => {
-    const gSubs = filteredSubs.filter(s => s.governorate_id === g.id)
+    const gSubs = filteredSubs.filter(s => s.governorates?.[0]?.id || '' === g.id)
     const submitted = gSubs.filter(s => s.status === 'submitted').length
     const draft = gSubs.filter(s => s.status === 'draft').length
     const total = gSubs.length
@@ -146,9 +146,9 @@ export async function generateChallengesReport(options?: {
     if (s.status === 'draft') issues.push('مسودة غير مُرسلة')
     if (issues.length > 0) {
       dataQualityIssues.push({
-        gov: s.governorates?.name_ar || '—',
-        dist: s.districts?.name_ar || '—',
-        team: s.profiles?.full_name || '—',
+        gov: s.governorates?.[0]?.name_ar || '—',
+        dist: s.districts?.[0]?.name_ar || '—',
+        team: s.profiles?.[0]?.full_name || '—',
         issue: issues.join('، '),
         severity: s.status === 'draft' ? 'medium' : 'low',
         gps: s.gps_lat && s.gps_lng ? `${s.gps_lat.toFixed(4)}, ${s.gps_lng.toFixed(4)}` : 'غير متوفر',
@@ -158,10 +158,10 @@ export async function generateChallengesReport(options?: {
 
   // 9. Districts with low coverage
   const distStats = districts.map(d => {
-    const dSubs = filteredSubs.filter(s => s.district_id === d.id)
+    const dSubs = filteredSubs.filter(s => s.districts?.[0]?.id || '' === d.id)
     return {
       dist: d,
-      gov: govs.find(g => g.id === d.governorate_id),
+      gov: govs.find(g => g.id === d.governorates?.[0]?.id || ''),
       total: dSubs.length,
       submitted: dSubs.filter(s => s.status === 'submitted').length,
     }
@@ -305,7 +305,7 @@ export async function generateChallengesReport(options?: {
               <p>المديريات التالية لم تسجل أي إرساليات:</p>
               <div style="margin-top: 8px; max-height: 200px; overflow-y: auto;">
                 ${zeroDistricts.slice(0, 20).map(d => {
-                  const gov = govs.find(g => g.id === d.governorate_id)
+                  const gov = govs.find(g => g.id === d.governorates?.[0]?.id || '')
                   return `<span class="tag tag-dist">${escapeHtml(d.name_ar)}</span> <span class="tag tag-gov">${escapeHtml(gov?.name_ar || '—')}</span>`
                 }).join('<br>')}
                 ${zeroDistricts.length > 20 ? `<p style="color:${BRAND.textMuted};font-size:10px;margin-top:4px;">... و ${zeroDistricts.length - 20} مديرية أخرى</p>` : ''}
@@ -331,11 +331,11 @@ export async function generateChallengesReport(options?: {
                 criticalShortages.map(s => [
                   `<strong>${escapeHtml(s.item_name)}</strong>`,
                   escapeHtml(s.item_category || '—'),
-                  escapeHtml(s.governorates?.name_ar || '—'),
-                  escapeHtml(s.districts?.name_ar || '—'),
+                  escapeHtml(s.governorates?.[0]?.name_ar || '—'),
+                  escapeHtml(s.districts?.[0]?.name_ar || '—'),
                   `${s.quantity_needed || '—'}`,
                   `${s.quantity_available || 0}`,
-                  escapeHtml(s.profiles?.full_name || '—'),
+                  escapeHtml(s.profiles?.[0]?.full_name || '—'),
                 ])
               )}
               <div class="action-box">
@@ -359,7 +359,7 @@ export async function generateChallengesReport(options?: {
                 ['النقص', 'المحافظة', 'المطلوب', 'المتاح', 'الفرق'],
                 highShortages.slice(0, 10).map(s => [
                   escapeHtml(s.item_name),
-                  escapeHtml(s.governorates?.name_ar || '—'),
+                  escapeHtml(s.governorates?.[0]?.name_ar || '—'),
                   `${s.quantity_needed || '—'}`,
                   `${s.quantity_available || 0}`,
                   `<span style="color:${BRAND.accent};font-weight:700">${Math.max(0, (s.quantity_needed || 0) - (s.quantity_available || 0))}</span>`,
@@ -384,7 +384,7 @@ export async function generateChallengesReport(options?: {
               inactiveSupervisors.slice(0, 15).map(u => [
                 `<strong>${escapeHtml(u.full_name)}</strong>`,
                 u.role === 'data_entry' ? 'إدخال بيانات' : u.role === 'district' ? 'مديرية' : 'محافظة',
-                escapeHtml(u.governorates?.name_ar || u.districts?.name_ar || '—'),
+                escapeHtml(u.governorates?.[0]?.name_ar || u.districts?.[0]?.name_ar || '—'),
                 u.phone || '—',
                 u.last_login ? new Date(u.last_login).toLocaleDateString('ar-SA') : 'لم يدخل',
               ])
@@ -479,7 +479,7 @@ export async function generateChallengesReport(options?: {
           ['التاريخ', 'المستخدم', 'الإجراء', 'الجدول', 'IP'],
           auditLogs.slice(0, 15).map(log => [
             new Date(log.created_at).toLocaleDateString('ar-SA'),
-            escapeHtml(log.profiles?.full_name || 'النظام'),
+            escapeHtml(log.profiles?.[0]?.full_name || 'النظام'),
             log.action === 'create' ? '✅ إنشاء' : log.action === 'update' ? '📝 تعديل' : '🗑️ حذف',
             log.table_name === 'form_submissions' ? 'إرساليات' : log.table_name === 'supply_shortages' ? 'نواقص' : log.table_name,
             log.ip_address || '—',

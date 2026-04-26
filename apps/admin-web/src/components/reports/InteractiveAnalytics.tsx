@@ -59,13 +59,13 @@ export interface DrillDownData {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white/95 backdrop-blur-sm border border-gray-200/60 rounded-xl shadow-xl p-3 min-w-[140px]">
-      <p className="text-[11px] font-medium text-gray-500 mb-1.5">{label}</p>
+    <div className="bg-popover/95 backdrop-blur-sm border border-border/60 rounded-xl shadow-xl p-3 min-w-[140px]">
+      <p className="text-[11px] font-medium text-muted-foreground mb-1.5">{label}</p>
       {payload.map((entry: any, i: number) => (
         <div key={i} className="flex items-center justify-between gap-4 text-sm">
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-            <span className="text-gray-600 text-xs">{entry.name}</span>
+            <span className="text-muted-foreground text-xs">{entry.name}</span>
           </div>
           <span className="font-bold tabular-nums text-xs">{entry.value?.toLocaleString('ar-SA')}</span>
         </div>

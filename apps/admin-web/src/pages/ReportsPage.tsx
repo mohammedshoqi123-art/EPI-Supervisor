@@ -1080,7 +1080,7 @@ export default function ReportsPage() {
   // ═══ Professional Report Handlers — with Preview ═══
 
   /** Wrapper: capture HTML from professional reports and show in preview */
-  const captureAndPreview = useCallback(async (
+  const captureAndPreview = async (
     title: string,
     subtitle: string,
     generator: () => Promise<void>
@@ -1096,7 +1096,7 @@ export default function ReportsPage() {
       disableCaptureMode(gen)
       throw e
     }
-  }, [openPreview])
+  }
 
   const handleCentralReport = () => exportReport('central-report', () =>
     captureAndPreview('التقرير المركزي الشامل', 'جميع المحافظات والبيانات',

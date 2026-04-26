@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react'
 import { supabase, isConfigured } from '@/lib/supabase'
 
 // ═══ Campaign Types ═══
@@ -293,6 +293,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     return BUILTIN_CAMPAIGNS
   }, [campaigns])
 
+  // ── Refs for stable callback access (avoids re-creating callbacks) ──
+  const allCampaignsRef = useRef(allCampaigns)
+  const hiddenBuiltinsRef = useRef(hiddenBuiltins)
+  allCampaignsRef.current = allCampaigns
+  hiddenBuiltinsRef.current = hiddenBuiltins
+
   // ── Persist active campaign ──
   useEffect(() => { saveActiveCampaign(campaign) }, [campaign])
 
@@ -302,12 +308,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   // ── If current campaign is deleted or hidden, switch to 'all' ──
   useEffect(() => {
     const visibleIds = allCampaigns
-      .filter(c => !hiddenBuiltins.has(c.id))
+      .filter(c => !hiddenBuiltinsRef.current.has(c.id))
       .map(c => c.id)
     if (campaign !== 'all' && !visibleIds.includes(campaign)) {
       setCampaignState('all')
     }
-  }, [campaign, allCampaigns, hiddenBuiltins])
+  }, [campaign, allCampaigns])
 
   const setCampaign = useCallback((newCampaign: CampaignType) => {
     setCampaignState(newCampaign)
@@ -315,21 +321,18 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
   const isCampaignVisible = useCallback((id: CampaignType) => {
     if (id === 'all') return true
-    const found = allCampaigns.find(c => c.id === id)
+    const found = allCampaignsRef.current.find(c => c.id === id)
     if (!found) return false
-    // Built-in: check hidden set
-    if (found.builtIn) return !hiddenBuiltins.has(id)
-    // Custom: check visible property from Supabase
+    if (found.builtIn) return !hiddenBuiltinsRef.current.has(id)
     return found.visible !== false
-  }, [hiddenBuiltins, allCampaigns])
+  }, [])
 
   const toggleCampaignVisibility = useCallback((id: CampaignType) => {
     if (id === 'all') return
 
-    const found = allCampaigns.find(c => c.id === id)
+    const found = allCampaignsRef.current.find(c => c.id === id)
     if (!found) return
 
-    // Built-in campaign: toggle in hidden set (localStorage only)
     if (found.builtIn) {
       setHiddenBuiltins(prev => {
         const next = new Set(prev)
@@ -340,11 +343,10 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    // Custom campaign: toggle in Supabase + update local state
     const newVisible = !(found.visible !== false)
     setCampaigns(prev => prev.map(c => c.id === id ? { ...c, visible: newVisible } : c))
     toggleVisibilityInSupabase(id, newVisible)
-  }, [allCampaigns])
+  }, [])
 
   const addCampaign = useCallback((data: Omit<CampaignOption, 'id' | 'builtIn' | 'visible'>): CampaignOption => {
     const newCampaign: CampaignOption = {
@@ -368,48 +370,43 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateCampaign = useCallback((id: CampaignType, updates: Partial<Pick<CampaignOption, 'labelAr' | 'labelEn' | 'icon' | 'color' | 'visible'>>) => {
-    // Don't update built-in campaigns
-    const found = allCampaigns.find(c => c.id === id)
+    const found = allCampaignsRef.current.find(c => c.id === id)
     if (found?.builtIn) return
 
-    // Update local state immediately
     setCampaigns(prev => {
       const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c)
       saveCachedCampaigns(updated)
       return updated
     })
 
-    // Persist to Supabase
     updateInSupabase(id, updates)
-  }, [allCampaigns])
+  }, [])
 
   const deleteCampaign = useCallback((id: CampaignType): boolean => {
-    const found = allCampaigns.find(c => c.id === id)
+    const found = allCampaignsRef.current.find(c => c.id === id)
     if (found?.builtIn) return false
 
-    // Update local state immediately
     setCampaigns(prev => {
       const updated = prev.filter(c => c.id !== id)
       saveCachedCampaigns(updated)
       return updated
     })
 
-    // Delete from Supabase
     deleteFromSupabase(id)
 
     return true
-  }, [allCampaigns])
+  }, [])
 
   const getCampaign = useCallback((id: CampaignType): CampaignOption | undefined => {
     if (id === 'all') return ALL_OPTION
-    return allCampaigns.find(c => c.id === id)
-  }, [allCampaigns])
+    return allCampaignsRef.current.find(c => c.id === id)
+  }, [])
 
   const currentOption = useMemo(() => getCampaign(campaign) ?? ALL_OPTION, [getCampaign, campaign])
   const visibleOptions = useMemo(() => [
     ALL_OPTION,
-    ...allCampaigns.filter(c => !hiddenBuiltins.has(c.id) && c.visible !== false),
-  ], [allCampaigns, hiddenBuiltins])
+    ...allCampaigns.filter(c => !hiddenBuiltinsRef.current.has(c.id) && c.visible !== false),
+  ], [allCampaigns])
 
   const value: CampaignContextValue = useMemo(() => ({
     campaign,
@@ -426,7 +423,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     deleteCampaign,
     getCampaign,
     loading,
-  }), [campaign, setCampaign, currentOption, allCampaigns, visibleOptions, isCampaignVisible, toggleCampaignVisibility, addCampaign, updateCampaign, deleteCampaign, getCampaign, loading])
+  }), [campaign, currentOption, allCampaigns, visibleOptions, loading])
 
   return (
     <CampaignContext.Provider value={value}>

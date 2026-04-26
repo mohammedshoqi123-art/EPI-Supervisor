@@ -560,6 +560,33 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {/* ═══ 1.4 REPORTS BANNER — Prominent link to quick reports ═══ */}
+        <button
+          onClick={() => navigate('/reports?tab=quick-reports')}
+          className="w-full group relative overflow-hidden rounded-2xl border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-violet-600 to-purple-700 opacity-90 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 opacity-10" style={{
+            backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px)',
+            backgroundSize: '20px 20px',
+          }} />
+          <div className="relative flex items-center justify-between px-6 py-4 text-white">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-2xl bg-white/20 backdrop-blur-sm group-hover:scale-110 transition-transform">
+                <BarChart3 className="w-6 h-6" />
+              </div>
+              <div className="text-right">
+                <h3 className="text-base font-heading font-bold">📊 التقارير السريعة</h3>
+                <p className="text-xs text-white/80 mt-0.5">30+ تقرير — Excel, PDF, PowerPoint — اضغط للوصول السريع</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/20 backdrop-blur-sm text-sm font-medium group-hover:bg-white/30 transition-colors">
+              <span>فتح التقارير</span>
+              <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </div>
+          </div>
+        </button>
+
         {/* ═══ 1.5 QUICK ACTIONS — Common tasks ═══ */}
         <section>
           <div className="flex items-center gap-2 mb-3">

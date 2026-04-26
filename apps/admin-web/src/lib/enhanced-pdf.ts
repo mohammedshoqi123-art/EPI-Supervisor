@@ -13,6 +13,7 @@ import { supabase } from './supabase'
 // ─── Brand Constants ─────────────────────────────────────────
 
 import { BRAND as _BRAND } from './pdf-brand'
+import { EPI_LOGO_BASE64 } from './epi-logo'
 
 /** @deprecated Import BRAND from '@/lib/pdf-brand' instead */
 export const PDF_BRAND = _BRAND
@@ -76,7 +77,7 @@ function buildHeader(title: string, subtitle?: string): string {
   return `
     <div class="report-header-bar">
       <div class="header-right">
-        <div class="brand-mark">💉 EPI</div>
+        <div class="brand-mark"><img src="${EPI_LOGO_BASE64}" alt="EPI" style="width:36px;height:36px;object-fit:contain;border-radius:6px" /></div>
         <div class="brand-text">
           <div class="brand-title">برنامج التحصين الصحي الموسع</div>
           <div class="brand-sub">وزارة الصحة العامة والسكان — الجمهورية اليمنية</div>
@@ -262,11 +263,11 @@ function buildReportHTML(options: PDFReportOptions): string {
     .brand-mark {
       background: ${PDF_BRAND.primary};
       color: white;
-      padding: 6px 14px;
+      padding: 4px;
       border-radius: 8px;
-      font-weight: 900;
-      font-size: 14px;
-      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .brand-title { font-size: 11px; font-weight: 700; color: ${PDF_BRAND.primary}; }
     .brand-sub { font-size: 9px; color: ${PDF_BRAND.textMuted}; }

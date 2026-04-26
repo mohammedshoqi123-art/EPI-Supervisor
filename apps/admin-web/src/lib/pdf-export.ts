@@ -28,6 +28,7 @@ interface ReportSection {
 }
 
 import { BRAND_TEAL as BRAND } from './pdf-brand'
+import { EPI_LOGO_BASE64 } from './epi-logo'
 
 function formatDateArabic(date: Date): string {
   const months = [
@@ -142,7 +143,7 @@ function buildCoverPage(options: ReportOptions): string {
       <div class="cover-gradient">
         <div class="cover-content">
           <div class="cover-logo">
-            <div class="logo-circle">EPI</div>
+            <div class="logo-circle"><img src="${EPI_LOGO_BASE64}" alt="شعار التحصين" style="width:80px;height:80px;object-fit:contain" /></div>
           </div>
           <h1 class="cover-title">EPI Supervisor's</h1>
           <p class="cover-subtitle">النظام الالكتروني للاشراف على حملات وانشطة برنامج التحصين الصحي الموسع</p>

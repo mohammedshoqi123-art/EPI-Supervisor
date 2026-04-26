@@ -1,0 +1,126 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { supabase, isConfigured } from '@/lib/supabase'
+import type { UserRole } from '@/types/database'
+
+// ==================== USERS ====================
+
+export function useUsers(filters?: { role?: UserRole; search?: string }) {
+  return useQuery({
+    queryKey: ['users', filters],
+    queryFn: async () => {
+      let query = supabase
+        .from('profiles')
+        .select('*, governorates(name_ar), districts(name_ar)')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+
+      if (filters?.role) {
+        query = query.eq('role', filters.role)
+      }
+      if (filters?.search) {
+        query = query.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+      return data
+    },
+    enabled: isConfigured,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    staleTime: 10000,
+  })
+}
+
+export function useCreateUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (userData: {
+      email: string; password: string; full_name: string; role: UserRole
+      governorate_id?: string; district_id?: string
+    }) => {
+      const { data, error } = await supabase.functions.invoke('create-admin', {
+        body: userData,
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+}
+
+export function useUpdateUserRole() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, role, governorate_id, district_id }: {
+      userId: string; role: UserRole; governorate_id?: string; district_id?: string
+    }) => {
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: { action: 'update_role', user_id: userId, role, governorate_id, district_id },
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+}
+
+export function useToggleUserActive() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, isActive }: { userId: string; isActive: boolean }) => {
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: { action: 'toggle_active', user_id: userId, is_active: isActive },
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+}
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: { action: 'delete_user', user_id: userId },
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+}
+
+export function useUpdateUserProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, full_name, email, phone }: {
+      userId: string; full_name: string; email: string; phone?: string
+    }) => {
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: { action: 'update_profile', user_id: userId, full_name, email, phone },
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+  })
+}
+
+export function useResetUserPassword() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, newPassword }: {
+      userId: string; newPassword: string
+    }) => {
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: { action: 'reset_password', user_id: userId, new_password: newPassword },
+      })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+  })
+}

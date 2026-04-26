@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   BarChart3, FileSpreadsheet, Download, Calendar, Filter,
   Users, FileStack, MapPin, AlertTriangle, TrendingUp, TrendingDown,
@@ -7,7 +8,8 @@ import {
   CheckCircle2, Loader2, PieChart as PieChartIcon, Target,
   Sparkles, Gauge,
   FileDown,
-  Info, ScrollText, History, ArrowLeftRight
+  Info, ScrollText, History, ArrowLeftRight,
+  Search, X
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -66,6 +68,9 @@ import {
   generateShortagesDetailedReport,
   generateWeeklyReport,
   generateUserActivityReport,
+  generateChallengesReport,
+  generateSupervisionFormReport,
+  generateSupervisionChallengesReport,
   enableCaptureMode,
   disableCaptureMode,
 } from '@/lib/professional-reports'
@@ -78,6 +83,7 @@ import { ReportPreview, useReportPreview } from '@/components/reports/ReportPrev
 import { ExportProgress, useExportProgress } from '@/components/reports/ExportProgress'
 import { bulkFetchSubmissions, bulkFetchUsers, bulkFetchShortages } from '@/lib/bulk-fetch'
 import { SectionErrorBoundary } from '@/components/ui/section-error-boundary'
+import { generateMonthlyPerformancePPTX, generateWeeklyBulletinPPTX, generateCampaignPerformancePPTX } from '@/lib/pptx-index'
 import { ComparisonReport } from '@/components/reports/ComparisonReport'
 import { AnalyticsFilterBar, DrillDownDialog, ChartCard, FullscreenChart, useSortableData, type DrillDownData, type AnalyticsFilter } from '@/components/reports/InteractiveAnalytics'
 
@@ -94,187 +100,8 @@ function canExportGovernorate(role: UserRole): boolean {
   return ['admin', 'central', 'governorate'].includes(role)
 }
 
-function CustomTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-popover/95 backdrop-blur-sm border border-border/60 rounded-xl shadow-xl p-3 min-w-[140px]">
-      <p className="text-xs font-medium text-muted-foreground mb-2">{label}</p>
-      {payload.map((entry: any, i: number) => (
-        <div key={i} className="flex items-center justify-between gap-4 text-sm">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-            <span className="text-muted-foreground">{entry.name}</span>
-          </div>
-          <span className="font-bold tabular-nums">{entry.value}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Report Card — Professional Design
-// ═══════════════════════════════════════════════════════════════
-
-interface ReportCardProps {
-  icon: React.ElementType
-  title: string
-  subtitle: string
-  value?: string | number
-  trend?: number
-  color: string
-  gradient: string
-  onClick: () => void
-  loading?: boolean
-  badge?: string
-}
-
-function ReportCard({ icon: Icon, title, subtitle, value, trend, color, gradient, onClick, loading, badge }: ReportCardProps) {
-  return (
-    <Card
-      className="group hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 border-0 shadow-lg cursor-pointer relative overflow-hidden"
-      onClick={onClick}
-    >
-      <div className={cn('absolute top-0 left-0 right-0 h-1', gradient)} />
-      <div className={cn('absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-0 group-hover:opacity-10 transition-opacity duration-500', color.replace('text-', 'bg-'))} />
-
-      <CardContent className="p-5 relative">
-        <div className="flex items-start justify-between mb-4">
-          <div className={cn('p-3 rounded-2xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-6', color.replace('text-', 'bg-').replace('600', '50'))}>
-            <Icon className={cn('w-6 h-6', color)} />
-          </div>
-          <div className="flex items-center gap-2">
-            {badge && (
-              <Badge variant="secondary" className="text-[10px] px-2">{badge}</Badge>
-            )}
-            {trend !== undefined && (
-              <span className={cn(
-                'flex items-center gap-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full',
-                trend >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'
-              )}>
-                {trend >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {Math.abs(trend)}%
-              </span>
-            )}
-          </div>
-        </div>
-
-        {value && (
-          <p className="text-3xl font-heading font-bold mb-1 tabular-nums">{value}</p>
-        )}
-        <h3 className="font-bold font-heading text-sm mb-0.5">{title}</h3>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
-
-        <div className="flex items-center gap-1 mt-3 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-          <span>تصدير التقرير</span>
-          <ArrowUpRight className="w-3.5 h-3.5" />
-        </div>
-      </CardContent>
-
-      {loading && (
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        </div>
-      )}
-    </Card>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Form Export Card
-// ═══════════════════════════════════════════════════════════════
-
-function FormExportCard({
-  form, submissionCount, onExport, exporting
-}: {
-  form: Form
-  submissionCount?: { total: number; submitted: number; draft: number }
-  onExport: (form: Form, format: 'xlsx' | 'csv') => void
-  exporting: boolean
-}) {
-  const total = submissionCount?.total || 0
-  const submitted = submissionCount?.submitted || 0
-  const draft = submissionCount?.draft || 0
-  const rate = total > 0 ? Math.round((submitted / total) * 100) : 0
-
-  return (
-    <Card className={cn(
-      'group hover:shadow-lg transition-all duration-200 relative overflow-hidden',
-      !form.is_active && 'opacity-50'
-    )}>
-      <div className={cn('absolute top-0 left-0 right-0 h-1', form.is_active ? 'bg-emerald-500' : 'bg-gray-400')} />
-
-      <CardContent className="p-4 pt-5">
-        <div className="flex items-start gap-3 mb-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100">
-            <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-sm truncate">{form.title_ar}</h3>
-            <p className="text-xs text-muted-foreground truncate">{form.title_en}</p>
-          </div>
-          {form.campaign_type && (
-            <Badge variant="outline" className={cn(
-              'text-[10px] shrink-0',
-              form.campaign_type === 'polio_campaign' ? 'text-blue-600 border-blue-200' : 'text-emerald-600 border-emerald-200'
-            )}>
-              {form.campaign_type === 'polio_campaign' ? '💉' : '🏥'}
-            </Badge>
-          )}
-        </div>
-
-        {/* Mini stats */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="text-center p-2 rounded-lg bg-muted/50">
-            <p className="text-lg font-bold">{total}</p>
-            <p className="text-[10px] text-muted-foreground">إجمالي</p>
-          </div>
-          <div className="text-center p-2 rounded-lg bg-emerald-50">
-            <p className="text-lg font-bold text-emerald-600">{submitted}</p>
-            <p className="text-[10px] text-emerald-700">مرسل</p>
-          </div>
-          <div className="text-center p-2 rounded-lg bg-amber-50">
-            <p className="text-lg font-bold text-amber-600">{draft}</p>
-            <p className="text-[10px] text-amber-700">مسودة</p>
-          </div>
-        </div>
-
-        {/* Progress */}
-        <div className="mb-3">
-          <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-            <span>نسبة الإرسال</span>
-            <span>{rate}%</span>
-          </div>
-          <Progress value={rate} className="h-1.5" />
-        </div>
-
-        {/* Export buttons */}
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 gap-1.5 text-xs hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300"
-            onClick={() => onExport(form, 'xlsx')}
-            disabled={exporting || total === 0}
-          >
-            {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileSpreadsheet className="w-3 h-3" />}
-            Excel
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300"
-            onClick={() => onExport(form, 'csv')}
-            disabled={exporting || total === 0}
-          >
-            {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-            CSV
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+import { ReportCard, FormExportCard, CustomTooltip } from '@/components/reports/ReportCards'
+import type { ReportCardProps } from '@/components/reports/ReportCards'
 
 // ═══════════════════════════════════════════════════════════════
 // Main Reports Page
@@ -302,6 +129,15 @@ export default function ReportsPage() {
 
   // State
   const [activeTab, setActiveTab] = useState('analytics')
+  const [searchParams] = useSearchParams()
+
+  // Auto-navigate to tab from URL query (e.g., ?tab=quick-reports)
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab && ['analytics', 'quick-reports', 'form-exports', 'comparison'].includes(tab)) {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
   const [exportingFormId, setExportingFormId] = useState<string | null>(null)
   const [exportingReport, setExportingReport] = useState<string | null>(null)
   const [formSearch, setFormSearch] = useState('')
@@ -316,6 +152,8 @@ export default function ReportsPage() {
   const [drillDownOpen, setDrillDownOpen] = useState(false)
   const [drillDownData, setDrillDownData] = useState<DrillDownData | null>(null)
   const [fullscreenChart, setFullscreenChart] = useState<string | null>(null)
+  const [reportSearch, setReportSearch] = useState('')
+  const [reportFormat, setReportFormat] = useState<'all' | 'pdf' | 'excel' | 'pptx'>('all')
 
   // Filtered forms
   const filteredForms = useMemo(() => {
@@ -947,7 +785,7 @@ export default function ReportsPage() {
         value: stats ? formatNumber(stats.total_submissions) : undefined,
         trend: stats?.submissions_trend, color: 'text-blue-600', gradient: 'bg-gradient-to-r from-blue-500 to-blue-600',
         onClick: handleExportDashboard, loading: exportingReport === 'dashboard',
-        badge: 'KPIs',
+        badge: 'KPIs', format: 'excel',
       })
     }
 
@@ -957,7 +795,7 @@ export default function ReportsPage() {
       value: stats ? formatNumber(stats.submissions_today) : undefined,
       color: 'text-emerald-600', gradient: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
       onClick: handleExportTimeline, loading: exportingReport === 'timeline',
-      badge: '30 يوم',
+      badge: '30 يوم', format: 'excel',
     })
 
     // 3. Governorate Performance — matches mobile governorate chart
@@ -967,6 +805,7 @@ export default function ReportsPage() {
         value: govStats ? formatNumber(govStats.length) + ' محافظة' : undefined,
         color: 'text-purple-600', gradient: 'bg-gradient-to-r from-purple-500 to-purple-600',
         onClick: handleExportGovernorates, loading: exportingReport === 'governorates',
+        format: 'excel',
       })
     }
 
@@ -976,7 +815,7 @@ export default function ReportsPage() {
       value: stats ? `${stats.approval_rate.toFixed(1)}%` : undefined,
       color: 'text-amber-600', gradient: 'bg-gradient-to-r from-amber-500 to-amber-600',
       onClick: handleExportSubmissions, loading: exportingReport === 'submissions',
-      badge: 'تحليل',
+      badge: 'تحليل', format: 'excel',
     })
 
     // 5. Role Distribution — matches mobile user roles
@@ -986,6 +825,7 @@ export default function ReportsPage() {
         value: roleDistribution ? formatNumber(roleDistribution.reduce((s, r) => s + r.value, 0)) : undefined,
         color: 'text-cyan-600', gradient: 'bg-gradient-to-r from-cyan-500 to-cyan-600',
         onClick: handleExportRoles, loading: exportingReport === 'roles',
+        format: 'excel',
       })
     }
 
@@ -995,7 +835,7 @@ export default function ReportsPage() {
       value: stats ? formatNumber(stats.total_submissions) : undefined,
       color: 'text-indigo-600', gradient: 'bg-gradient-to-r from-indigo-500 to-indigo-600',
       onClick: handleExportSubmissions, loading: exportingReport === 'submissions',
-      badge: 'شامل',
+      badge: 'شامل', format: 'excel',
     })
 
     // 7. Users Report
@@ -1004,6 +844,7 @@ export default function ReportsPage() {
         icon: Users, title: 'تقرير المستخدمين', subtitle: 'قائمة جميع المستخدمين مع أدوارهم ومحافظاتهم',
         color: 'text-rose-600', gradient: 'bg-gradient-to-r from-rose-500 to-rose-600',
         onClick: handleExportUsers, loading: exportingReport === 'users',
+        format: 'excel',
       })
     }
 
@@ -1013,6 +854,7 @@ export default function ReportsPage() {
         icon: PackageX, title: 'تقرير النواقص', subtitle: 'نواقص اللقاحات والمعدات — الخطورة، المحافظة، حالة الحل',
         color: 'text-orange-600', gradient: 'bg-gradient-to-r from-orange-500 to-orange-600',
         onClick: handleExportShortages, loading: exportingReport === 'shortages',
+        format: 'excel',
       })
     }
 
@@ -1022,7 +864,7 @@ export default function ReportsPage() {
         icon: ScrollText, title: 'سجل التدقيق', subtitle: 'جميع العمليات: إنشاء، تعديل، حذف، تسجيل دخول — مع IP والمستخدم',
         color: 'text-slate-600', gradient: 'bg-gradient-to-r from-slate-500 to-slate-600',
         onClick: handleExportAudit, loading: exportingReport === 'audit',
-        badge: 'audit',
+        badge: 'audit', format: 'excel',
       })
     }
 
@@ -1033,7 +875,7 @@ export default function ReportsPage() {
       icon: FileText, title: '📄 PDF — تقرير الإرساليات', subtitle: 'تقرير PDF احترافي للإرساليات مع إحصائيات المحافظات',
       color: 'text-red-600', gradient: 'bg-gradient-to-r from-red-500 to-red-600',
       onClick: handleExportPDF, loading: exportingReport === 'pdf',
-      badge: 'PDF',
+      badge: 'PDF', format: 'pdf',
     })
 
     // 11. PDF — أداء المحافظات
@@ -1042,7 +884,7 @@ export default function ReportsPage() {
         icon: MapPin, title: '📄 PDF — أداء المحافظات', subtitle: 'تقرير PDF مقارن لأداء المحافظات',
         color: 'text-red-600', gradient: 'bg-gradient-to-r from-red-600 to-rose-600',
         onClick: handleExportGovPDF, loading: exportingReport === 'gov-pdf',
-        badge: 'PDF',
+        badge: 'PDF', format: 'pdf',
       })
     }
 
@@ -1052,7 +894,7 @@ export default function ReportsPage() {
         icon: Users, title: '📄 PDF — المستخدمين', subtitle: 'تقرير PDF للمستخدمين والأدوار',
         color: 'text-red-600', gradient: 'bg-gradient-to-r from-rose-500 to-pink-600',
         onClick: handleExportUsersPDF, loading: exportingReport === 'users-pdf',
-        badge: 'PDF',
+        badge: 'PDF', format: 'pdf',
       })
     }
 
@@ -1062,7 +904,7 @@ export default function ReportsPage() {
         icon: PackageX, title: '📄 PDF — النواقص', subtitle: 'تقرير PDF لنواقص الإمدادات',
         color: 'text-red-600', gradient: 'bg-gradient-to-r from-orange-500 to-red-500',
         onClick: handleExportShortagesPDF, loading: exportingReport === 'shortages-pdf',
-        badge: 'PDF',
+        badge: 'PDF', format: 'pdf',
       })
     }
 
@@ -1072,7 +914,7 @@ export default function ReportsPage() {
         icon: FileDown, title: '📄 PDF — التقرير الشامل', subtitle: 'تقرير PDF شامل بكل البيانات والإحصائيات',
         color: 'text-white', gradient: 'bg-gradient-to-r from-red-700 to-red-900',
         onClick: handleExportFullPDF, loading: exportingReport === 'full-pdf',
-        badge: 'PDF شامل',
+        badge: 'PDF شامل', format: 'pdf',
       })
     }
 
@@ -1124,7 +966,7 @@ export default function ReportsPage() {
         icon: Shield, title: '🏛️ التقرير المركزي الشامل', subtitle: 'تقرير احترافي شامل — جميع المحافظات، المستخدمين، النماذج، النواقص، التغطية',
         color: 'text-white', gradient: 'bg-gradient-to-r from-blue-700 to-indigo-800',
         onClick: handleCentralReport, loading: exportingReport === 'central-report',
-        badge: 'احترافي',
+        badge: 'احترافي', format: 'pdf',
       })
     }
 
@@ -1135,7 +977,7 @@ export default function ReportsPage() {
           icon: MapPin, title: `🏛️ تقرير محافظة ${gov.name_ar}`, subtitle: `تقرير تفصيلي — المديريات، المستخدمين، الإرساليات، النواقص`,
           color: 'text-blue-600', gradient: 'bg-gradient-to-r from-blue-500 to-blue-600',
           onClick: () => handleGovDetailReport(gov.id), loading: exportingReport === 'gov-detail-' + gov.id,
-          badge: 'محافظة',
+          badge: 'محافظة', format: 'pdf',
         })
       })
     }
@@ -1147,7 +989,7 @@ export default function ReportsPage() {
           icon: FileText, title: `📊 تحليل: ${form.title_ar}`, subtitle: 'تقرير تفصيلي — تحليل كل حقل، التغطية حسب المحافظة، التوقيت، الإرساليات',
           color: 'text-emerald-600', gradient: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
           onClick: () => handleFormAnalysisReport(form.id), loading: exportingReport === 'form-analysis-' + form.id,
-          badge: 'تحليل نموذج',
+          badge: 'تحليل نموذج', format: 'pdf',
         })
       })
     }
@@ -1186,6 +1028,21 @@ export default function ReportsPage() {
       () => generateUserActivityReport())
   )
 
+  const handleChallengesReport = () => exportReport('challenges', () =>
+    captureAndPreview('تقرير التحديات والصعوبات', 'تحديات، إجراءات، توصيات',
+      () => generateChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }))
+  )
+
+  const handleSupervisionFormReport = () => exportReport('supervision-form', () =>
+    captureAndPreview('تقرير استمارة الإشراف', 'النشاط الإيصالي التكاملي — 8 أقسام × 33 مؤشر',
+      () => generateSupervisionFormReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }))
+  )
+
+  const handleSupervisionChallengesReport = () => exportReport('supervision-challenges', () =>
+    captureAndPreview('تقرير تحديات الإشراف الميداني', 'التحديات — الإجراءات — التوصيات',
+      () => generateSupervisionChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }))
+  )
+
 
     // ═══════════════════════════════════════
     // تقارير إضافية احترافية
@@ -1197,7 +1054,7 @@ export default function ReportsPage() {
         icon: Users, title: '👥 تقرير أداء المشرفين', subtitle: 'تقييم شامل — كل مشرف وكم أرسل، التقييم، النشاط، جودة البيانات',
         color: 'text-white', gradient: 'bg-gradient-to-r from-violet-600 to-purple-700',
         onClick: handleSupervisorReport, loading: exportingReport === 'supervisor-report',
-        badge: 'مشرفين',
+        badge: 'مشرفين', format: 'pdf',
       })
     }
 
@@ -1207,7 +1064,7 @@ export default function ReportsPage() {
         icon: AlertTriangle, title: '🎯 تقرير الفجوة التغطية', subtitle: 'أين البيانات ناقصة — محافظات ومديريات بدون تغطية',
         color: 'text-white', gradient: 'bg-gradient-to-r from-red-600 to-rose-700',
         onClick: handleCoverageGapReport, loading: exportingReport === 'coverage-gap',
-        badge: 'فجوة',
+        badge: 'فجوة', format: 'pdf',
       })
     }
 
@@ -1217,7 +1074,7 @@ export default function ReportsPage() {
         icon: Target, title: '⚖️ تقرير مقارنة الحملات', subtitle: 'شلل أطفال vs الإيصالي التكاملي — مقارنة شاملة',
         color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700',
         onClick: handleCampaignComparisonReport, loading: exportingReport === 'campaign-comparison',
-        badge: 'مقارنة',
+        badge: 'مقارنة', format: 'pdf',
       })
     }
 
@@ -1226,7 +1083,7 @@ export default function ReportsPage() {
       icon: Clock, title: '📅 تقرير النشاط اليومي', subtitle: 'نشاط اليوم — إرساليات، دخول، مقارنة بأمس',
       color: 'text-white', gradient: 'bg-gradient-to-r from-cyan-600 to-teal-700',
       onClick: handleDailyActivityReport, loading: exportingReport === 'daily-activity',
-      badge: 'يومي',
+      badge: 'يومي', format: 'pdf',
     })
 
     // P8. تقرير جودة البيانات
@@ -1235,7 +1092,7 @@ export default function ReportsPage() {
         icon: Sparkles, title: '✨ تقرير جودة البيانات', subtitle: 'تحليل اكتمال البيانات — GPS، صور، حقول فارغة',
         color: 'text-white', gradient: 'bg-gradient-to-r from-amber-500 to-orange-600',
         onClick: handleDataQualityReport, loading: exportingReport === 'data-quality',
-        badge: 'جودة',
+        badge: 'جودة', format: 'pdf',
       })
     }
 
@@ -1244,7 +1101,7 @@ export default function ReportsPage() {
       icon: PackageX, title: '📦 تقرير النواقص التفصيلي', subtitle: 'تحليل شامل — حرج/عالي/متوسط، حسب المحافظة والفئة',
       color: 'text-white', gradient: 'bg-gradient-to-r from-red-500 to-pink-600',
       onClick: handleShortagesDetailedReport, loading: exportingReport === 'shortages-detailed',
-      badge: 'نواقص',
+      badge: 'نواقص', format: 'pdf',
     })
 
     // P10. التقرير الأسبوعي
@@ -1252,7 +1109,7 @@ export default function ReportsPage() {
       icon: Activity, title: '📊 التقرير الأسبوعي', subtitle: 'ملخص الأسبوع — مقارنة بالسابق، نشاط يومي، أداء المحافظات',
       color: 'text-white', gradient: 'bg-gradient-to-r from-emerald-600 to-green-700',
       onClick: handleWeeklyReport, loading: exportingReport === 'weekly-report',
-      badge: 'أسبوعي',
+      badge: 'أسبوعي', format: 'pdf',
     })
 
     // P11. تقرير نشاط المستخدمين
@@ -1261,13 +1118,105 @@ export default function ReportsPage() {
         icon: Users, title: '🔐 تقرير نشاط المستخدمين', subtitle: 'دخول، نشاط، مستخدمين خاملين — من دخل ومتى',
         color: 'text-white', gradient: 'bg-gradient-to-r from-slate-600 to-gray-700',
         onClick: handleUserActivityReport, loading: exportingReport === 'user-activity',
-        badge: 'نشاط',
+        badge: 'نشاط', format: 'pdf',
       })
     }
 
+    // PDF — تقرير التحديات والصعوبات
+    cards.push({
+      icon: AlertTriangle, title: '⚠️ PDF — التحديات والصعوبات', subtitle: 'تقرير شامل — فجوات التغطية، النواقص، المشرفين غير النشطين، جودة البيانات، التوصيات',
+      color: 'text-white', gradient: 'bg-gradient-to-r from-amber-600 to-orange-700',
+      onClick: handleChallengesReport, loading: exportingReport === 'challenges',
+      badge: 'تحديات', format: 'pdf',
+    })
+
+    // PDF — تقرير استمارة الإشراف
+    cards.push({
+      icon: FileSearch, title: '📋 PDF — استمارة الإشراف', subtitle: 'النشاط الإيصالي التكاملي — 8 أقسام إشرافية، 33 مؤشر، تحليل تحديات ميدانية بالمحافظة/المديرية/الفريق',
+      color: 'text-white', gradient: 'bg-gradient-to-r from-teal-600 to-cyan-700',
+      onClick: handleSupervisionFormReport, loading: exportingReport === 'supervision-form',
+      badge: 'إشراف', format: 'pdf',
+    })
+
+    // PDF — تحديات الإشراف الميداني (آخر 3 حقول)
+    cards.push({
+      icon: FileText, title: '📝 PDF — تحديات الإشراف الميداني', subtitle: 'آخر 3 حقول: التحديات والصعوبات، الإجراءات المتخذة، التوصيات — بالمحافظة/المديرية/الفريق/الإحداثيات',
+      color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700',
+      onClick: handleSupervisionChallengesReport, loading: exportingReport === 'supervision-challenges',
+      badge: 'ميداني', format: 'pdf',
+    })
+
+    // ═══════════════════════════════════════
+    // PPTX REPORTS — عروض PowerPoint
+    // ═══════════════════════════════════════
+
+    // PPTX 1. التقرير الشهري
+    if (canExportAll(userRole)) {
+      cards.push({
+        icon: BarChart3, title: '📊 PPTX — التقرير الشهري', subtitle: 'عرض PowerPoint احترافي — KPIs، مقارنة الحملات، تغطية المحافظات، التوصيات',
+        color: 'text-white', gradient: 'bg-gradient-to-r from-orange-500 to-amber-600',
+        onClick: () => exportReport('pptx-monthly', async () => {
+          await generateMonthlyPerformancePPTX()
+          toast({ title: 'تم إنشاء عرض PowerPoint الشهري ✅', variant: 'success' })
+        }),
+        loading: exportingReport === 'pptx-monthly', badge: 'شهري', format: 'pptx',
+      })
+    }
+
+    // PPTX 2. النشرة الأسبوعية
+    cards.push({
+      icon: Activity, title: '📅 PPTX — النشرة الأسبوعية', subtitle: 'عرض PowerPoint — ملخص الأسبوع، النشاط اليومي، ترتيب المحافظات، التنبيهات',
+      color: 'text-white', gradient: 'bg-gradient-to-r from-orange-600 to-red-500',
+      onClick: () => exportReport('pptx-weekly', async () => {
+        await generateWeeklyBulletinPPTX()
+        toast({ title: 'تم إنشاء النشرة الأسبوعية ✅', variant: 'success' })
+      }),
+      loading: exportingReport === 'pptx-weekly', badge: 'أسبوعي', format: 'pptx',
+    })
+
+    // PPTX 3. تقرير أداء الحملات
+    cards.push({
+      icon: Target, title: '💉 PPTX — أداء الحملات', subtitle: 'عرض PowerPoint — شلل أطفال vs الإيصالي، معدل التسريب، التغطية، تأثير النواقص',
+      color: 'text-white', gradient: 'bg-gradient-to-r from-rose-500 to-pink-600',
+      onClick: () => exportReport('pptx-campaign', async () => {
+        await generateCampaignPerformancePPTX()
+        toast({ title: 'تم إنشاء تقرير أداء الحملات ✅', variant: 'success' })
+      }),
+      loading: exportingReport === 'pptx-campaign', badge: 'حملات', format: 'pptx',
+    })
 
     return cards
   }, [userRole, stats, govStats, chartData, roleDistribution, exportingReport, dateFrom, dateTo, selectedGovFilter, campaign])
+
+  // ═══ Filtered Report Cards (search) ═══
+  const filteredReportCards = useMemo(() => {
+    let result = reportCards
+    // Filter by format
+    if (reportFormat !== 'all') {
+      result = result.filter(card => card.format === reportFormat)
+    }
+    // Filter by search
+    if (reportSearch.trim()) {
+      const q = reportSearch.trim().toLowerCase()
+      result = result.filter(card =>
+        card.title.toLowerCase().includes(q) ||
+        card.subtitle.toLowerCase().includes(q) ||
+        (card.badge && card.badge.toLowerCase().includes(q))
+      )
+    }
+    return result
+  }, [reportCards, reportSearch, reportFormat])
+
+  // Format counts
+  const formatCounts = useMemo(() => {
+    const counts = { all: reportCards.length, pdf: 0, excel: 0, pptx: 0 }
+    reportCards.forEach(card => {
+      if (card.format === 'pdf') counts.pdf++
+      else if (card.format === 'excel') counts.excel++
+      else if (card.format === 'pptx') counts.pptx++
+    })
+    return counts
+  }, [reportCards])
 
   // ═══ Charts data ═══
   const govChartData = useMemo(() => {
@@ -1638,26 +1587,87 @@ export default function ReportsPage() {
           {/* TAB 2: Quick Reports                                */}
           {/* ═══════════════════════════════════════════════════ */}
           <TabsContent value="quick-reports" className="mt-0 space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
                 <h2 className="text-lg font-heading font-bold flex items-center gap-2">
                   <Zap className="w-5 h-5 text-amber-500" />
                   التقارير السريعة
                 </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">اضغط على أي تقرير لتصديره فوراً بصيغة Excel</p>
+                <p className="text-xs text-muted-foreground mt-0.5">اختر التصنيف أو ابحث عن تقرير</p>
               </div>
-              <Badge variant="outline" className="text-xs">{reportCards.length} تقرير</Badge>
+              <div className="flex items-center gap-3">
+                <div className="relative w-64">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="بحث في التقارير..."
+                    value={reportSearch}
+                    onChange={e => setReportSearch(e.target.value)}
+                    className="pr-10 h-9 text-sm"
+                  />
+                  {reportSearch && (
+                    <button onClick={() => setReportSearch('')} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <Badge variant="outline" className="text-xs">{filteredReportCards.length} تقرير</Badge>
+              </div>
             </div>
 
-            {reportCards.length === 0 ? (
+            {/* ═══ Format Sub-Tabs ═══ */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {[
+                { key: 'all' as const, label: 'الكل', icon: FileStack, color: 'bg-primary text-primary-foreground' },
+                { key: 'excel' as const, label: 'Excel / CSV', icon: FileSpreadsheet, color: 'bg-emerald-600 text-white' },
+                { key: 'pdf' as const, label: 'PDF', icon: FileText, color: 'bg-red-600 text-white' },
+                { key: 'pptx' as const, label: 'PowerPoint', icon: BarChart3, color: 'bg-orange-600 text-white' },
+              ].map(tab => {
+                const Icon = tab.icon
+                const isActive = reportFormat === tab.key
+                const count = formatCounts[tab.key]
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setReportFormat(tab.key)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border',
+                      isActive
+                        ? `${tab.color} shadow-md scale-105`
+                        : 'bg-card border-border hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{tab.label}</span>
+                    <span className={cn(
+                      'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                      isActive ? 'bg-white/20' : 'bg-muted'
+                    )}>{count}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {filteredReportCards.length === 0 && reportFormat === 'pptx' ? (
+              <div className="text-center py-16">
+                <BarChart3 className="w-16 h-16 mx-auto text-orange-300 mb-4" />
+                <h3 className="text-lg font-medium">تقارير PowerPoint قريباً</h3>
+                <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+                  تقارير العروض التقديمية قيد التطوير. ستتوفر قريباً إمكانية تصدير التقارير بصيغة PPTX.
+                </p>
+                <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-sm">
+                  <Sparkles className="w-4 h-4" />
+                  قيد التطوير
+                </div>
+              </div>
+            ) : filteredReportCards.length === 0 ? (
               <div className="text-center py-16">
                 <Shield className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-medium">لا توجد تقارير متاحة</h3>
-                <p className="text-sm text-muted-foreground">تواصل مع مدير النظام للحصول على صلاحيات</p>
+                <h3 className="text-lg font-medium">{reportSearch ? 'لا توجد نتائج للبحث' : 'لا توجد تقارير متاحة'}</h3>
+                <p className="text-sm text-muted-foreground">{reportSearch ? 'جرّب كلمة مختلفة' : 'تواصل مع مدير النظام للحصول على صلاحيات'}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {reportCards.map((card, i) => (
+                {filteredReportCards.map((card, i) => (
                   <ReportCard key={i} {...card} />
                 ))}
               </div>

@@ -10,7 +10,7 @@ interface Shortcut {
 }
 
 const SHORTCUTS: Shortcut[] = [
-  { keys: ['Ctrl', 'K'], label: 'فتح البحث' },
+  { keys: ['Ctrl', 'K'], label: 'البحث العام' },
   { keys: ['R'], label: 'تحديث الصفحة' },
   { keys: ['?'], label: 'عرض الاختصارات' },
   { keys: ['Esc'], label: 'إغلاق النافذة' },
@@ -52,7 +52,7 @@ export function KeyboardShortcutsHelper() {
       />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-2xl shadow-2xl border p-6 w-[360px] animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-background rounded-2xl shadow-2xl border p-6 w-[360px] animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-primary/10">

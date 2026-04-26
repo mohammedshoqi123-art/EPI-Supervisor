@@ -41,13 +41,9 @@ export function Header({ title, subtitle, onRefresh, onSearch }: HeaderProps) {
     onSearch?.('')
   }, [onSearch])
 
-  // Keyboard shortcut: Ctrl+K to open search
+  // Keyboard shortcut: Escape to close search
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault()
-        setSearchOpen(true)
-      }
       if (e.key === 'Escape' && searchOpen) {
         clearSearch()
       }
@@ -109,7 +105,7 @@ export function Header({ title, subtitle, onRefresh, onSearch }: HeaderProps) {
             size="icon-sm"
             onClick={() => setSearchOpen(true)}
             className="hidden md:flex hover:bg-primary/10 hover:text-primary transition-colors"
-            title="بحث (Ctrl+K)"
+            title="بحث عام (Ctrl+K)"
           >
             <Search className="w-4 h-4" />
           </Button>

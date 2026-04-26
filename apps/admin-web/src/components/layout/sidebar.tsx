@@ -410,7 +410,7 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
               )}
               title="تسجيل الخروج"
             >
-              <LogOut className="w-4.5 h-4.5" />
+              <LogOut className="w-4 h-4" />
               {!collapsed && <span className="text-sm">تسجيل الخروج</span>}
             </Button>
           </div>
@@ -597,7 +597,7 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
               }}
               className="w-full justify-start gap-2.5 px-3 text-blue-100 hover:text-white hover:bg-white/15 transition-all duration-200"
             >
-              <LogOut className="w-4.5 h-4.5" />
+              <LogOut className="w-4 h-4" />
               <span className="text-sm">تسجيل الخروج</span>
             </Button>
           </div>

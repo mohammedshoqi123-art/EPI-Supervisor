@@ -406,9 +406,9 @@ function EditUserDialog({ user, open, onOpenChange }: { user: UserProfile; open:
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 bg-muted rounded-lg">
-          <button onClick={() => setActiveTab('profile')} className={cn('flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all', activeTab === 'profile' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>الملف الشخصي</button>
-          <button onClick={() => setActiveTab('role')} className={cn('flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all', activeTab === 'role' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>الدور والصلاحية</button>
-          <button onClick={() => setActiveTab('password')} className={cn('flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all', activeTab === 'password' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>كلمة المرور</button>
+          <button onClick={() => setActiveTab('profile')} className={cn('flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all', activeTab === 'profile' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>الملف الشخصي</button>
+          <button onClick={() => setActiveTab('role')} className={cn('flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all', activeTab === 'role' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>الدور والصلاحية</button>
+          <button onClick={() => setActiveTab('password')} className={cn('flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all', activeTab === 'password' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground')}>كلمة المرور</button>
         </div>
 
         <div className="space-y-4 py-2">

@@ -2,7 +2,7 @@
 // AI Briefing Card — Dashboard Daily Intelligence
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, memo } from 'react'
 import {
   Sparkles, RefreshCw, Loader2, AlertTriangle, TrendingUp,
   TrendingDown, Clock, ChevronDown, ChevronUp, Lightbulb,
@@ -39,7 +39,7 @@ const QUICK_SUMMARIES = [
   { icon: '📝', label: 'استمارات', getValue: (s: any) => `${s.active_forms} نشطة` },
 ]
 
-export function AIBriefingCard({ stats, govStats, chartData }: BriefingProps) {
+export const AIBriefingCard = memo(function AIBriefingCard({ stats, govStats, chartData }: BriefingProps) {
   const [aiAnalysis, setAiAnalysis] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -273,4 +273,4 @@ export function AIBriefingCard({ stats, govStats, chartData }: BriefingProps) {
       </CardContent>
     </Card>
   )
-}
+})

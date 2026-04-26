@@ -84,15 +84,15 @@ export default function LoginPage() {
         {/* ═══════════════════════════════════════
             LOGIN CARD
         ═══════════════════════════════════════ */}
-        <Card className="shadow-2xl shadow-black/20 border-0 bg-white/95 backdrop-blur-xl overflow-hidden">
+        <Card className="shadow-2xl shadow-black/20 border-0 bg-card/95 backdrop-blur-xl overflow-hidden">
           <div className="h-1" style={{ background: 'linear-gradient(90deg, #06b6d4, #3b82f6, #8b5cf6)' }} />
 
           <CardHeader className="text-center pb-4 pt-6">
-            <CardTitle className="text-xl text-gray-900 flex items-center justify-center gap-2" style={{ fontFamily: 'Cairo, sans-serif' }}>
+            <CardTitle className="text-xl text-foreground flex items-center justify-center gap-2" style={{ fontFamily: 'Cairo, sans-serif' }}>
               <Lock className="w-5 h-5 text-blue-500" />
               تسجيل الدخول
             </CardTitle>
-            <CardDescription className="text-gray-500" style={{ fontFamily: 'Tajawal, sans-serif' }}>
+            <CardDescription className="text-muted-foreground" style={{ fontFamily: 'Tajawal, sans-serif' }}>
               أدخل بيانات حساب المسؤول للوصول إلى لوحة التحكم
             </CardDescription>
           </CardHeader>
@@ -110,7 +110,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700 font-medium text-sm" style={{ fontFamily: 'Tajawal, sans-serif' }}>
+                <Label htmlFor="email" className="text-foreground font-medium text-sm" style={{ fontFamily: 'Tajawal, sans-serif' }}>
                   البريد الإلكتروني
                 </Label>
                 <Input
@@ -121,12 +121,12 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   dir="ltr"
-                  className="text-left h-12 bg-gray-50 border-gray-200 focus:bg-white focus:border-blue-400 focus:ring-blue-200 transition-all rounded-xl"
+                  className="text-left h-12 bg-muted border-input focus:bg-background focus:border-blue-400 focus:ring-blue-200 transition-all rounded-xl"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-700 font-medium text-sm" style={{ fontFamily: 'Tajawal, sans-serif' }}>
+                <Label htmlFor="password" className="text-foreground font-medium text-sm" style={{ fontFamily: 'Tajawal, sans-serif' }}>
                   كلمة المرور
                 </Label>
                 <div className="relative">
@@ -138,12 +138,12 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     dir="ltr"
-                    className="text-left pl-10 h-12 bg-gray-50 border-gray-200 focus:bg-white focus:border-blue-400 focus:ring-blue-200 transition-all rounded-xl"
+                    className="text-left pl-10 h-12 bg-muted border-input focus:bg-background focus:border-blue-400 focus:ring-blue-200 transition-all rounded-xl"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>

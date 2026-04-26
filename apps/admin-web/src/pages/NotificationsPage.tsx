@@ -21,6 +21,7 @@ import { Header } from '@/components/layout/header'
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead, useDeleteNotification, useDeleteAllNotifications, useToggleNotificationRead, useSendNotification, useGovernorates, useNotificationStats, useNotificationTemplates } from '@/hooks/useApi'
 import { formatRelativeTime, formatDateTime, cn } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
+import { useBrowserNotifications } from '@/hooks/useBrowserNotifications'
 import type { Notification } from '@/types/database'
 
 // ═══════════════════════════════════════
@@ -232,6 +233,9 @@ export default function NotificationsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Browser Notifications Permission */}
+        <BrowserNotificationBanner />
 
         {/* ═══ Toolbar ═══ */}
         <div className="space-y-3">
@@ -769,5 +773,46 @@ function NotificationTemplatesDialog({ open, onOpenChange, onUseTemplate }: { op
         <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>إغلاق</Button></DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ═══ Browser Notification Banner ═══
+function BrowserNotificationBanner() {
+  const { permission, requestPermission, isSupported } = useBrowserNotifications()
+  const [dismissed, setDismissed] = useState(false)
+
+  if (!isSupported || permission === 'granted' || dismissed) return null
+
+  if (permission === 'denied') {
+    return (
+      <Card className="border-amber-200 bg-amber-50/50">
+        <CardContent className="p-3 flex items-center gap-3">
+          <Bell className="w-4 h-4 text-amber-600 shrink-0" />
+          <p className="text-xs text-amber-700 flex-1">
+            إشعارات المتصفح معطلة. فعّلها من إعدادات المتصفح لتتلقى تنبيهات فورية.
+          </p>
+          <Button variant="ghost" size="sm" className="h-6 text-[10px] shrink-0" onClick={() => setDismissed(true)}>
+            إخفاء
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/50">
+      <CardContent className="p-3 flex items-center gap-3">
+        <Bell className="w-4 h-4 text-blue-600 shrink-0" />
+        <p className="text-xs text-blue-700 flex-1">
+          فعّل إشعارات المتصفح لتتلقى تنبيهات فورية عن الإرساليات الجديدة والتنبيهات المهمة.
+        </p>
+        <Button size="sm" className="h-7 text-[10px] gap-1 shrink-0" onClick={async () => { await requestPermission() }}>
+          <Bell className="w-3 h-3" /> تفعيل
+        </Button>
+        <Button variant="ghost" size="sm" className="h-6 text-[10px] shrink-0" onClick={() => setDismissed(true)}>
+          لاحقاً
+        </Button>
+      </CardContent>
+    </Card>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users, FileStack, TrendingUp, TrendingDown,
@@ -66,7 +66,7 @@ function LiveDot({ color = 'bg-emerald-500' }: { color?: string }) {
 }
 
 // ═══ Stat Card — Modern with Animated Counter ═══
-function StatCard({ icon: Icon, iconBg, iconColor, label, value, subValue, trend, trendLabel, loading, onClick }: {
+const StatCard = memo(function StatCard({ icon: Icon, iconBg, iconColor, label, value, subValue, trend, trendLabel, loading, onClick }: {
   icon: React.ElementType
   iconBg: string
   iconColor: string
@@ -105,7 +105,7 @@ function StatCard({ icon: Icon, iconBg, iconColor, label, value, subValue, trend
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
           <div className={cn('p-2 rounded-xl', iconBg)}>
-            <Icon className={cn('w-4.5 h-4.5', iconColor)} />
+            <Icon className={cn('w-4 h-4', iconColor)} />
           </div>
           {trend !== undefined && trend !== 0 && (
             <div className={cn(
@@ -140,10 +140,10 @@ function StatCard({ icon: Icon, iconBg, iconColor, label, value, subValue, trend
       </CardContent>
     </Card>
   )
-}
+})
 
 // ═══ Alert Banner ═══
-function AlertBanner({ icon: Icon, color, bg, title, value, subtitle, action, actionLabel, urgent }: {
+const AlertBanner = memo(function AlertBanner({ icon: Icon, color, bg, title, value, subtitle, action, actionLabel, urgent }: {
   icon: React.ElementType
   color: string
   bg: string
@@ -183,7 +183,7 @@ function AlertBanner({ icon: Icon, color, bg, title, value, subtitle, action, ac
       )}
     </div>
   )
-}
+})
 
 // ═══ Main Dashboard ═══
 export default function DashboardPage() {
@@ -214,7 +214,7 @@ export default function DashboardPage() {
     return () => { window.removeEventListener('online', h1); window.removeEventListener('offline', h2) }
   }, [])
 
-  const handleRefresh = () => { refetch(); setLastRefresh(new Date()) }
+  const handleRefresh = useCallback(() => { refetch(); setLastRefresh(new Date()) }, [refetch])
 
   // ─── Computed Data ──────────────────────────────────────
 

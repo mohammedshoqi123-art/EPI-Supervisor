@@ -3,8 +3,7 @@ import {
   Sparkles, Brain, TrendingUp, TrendingDown, AlertTriangle, Target, Lightbulb,
   BarChart3, Shield, Zap, RefreshCw, ChevronRight, Star, Activity,
   FileText, MapPin, Clock, Users, CheckCircle2, ArrowUpRight, ArrowDownRight,
-  Loader2, Syringe, Droplets, Baby, Heart, CircleDot, Gauge, Award,
-  Calendar, Percent, TrendingDown as TrendDown
+  Loader2, Syringe, CircleDot, Gauge, Award, Calendar
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,7 +19,7 @@ import { PredictiveEngine } from '@/lib/epi-bot-engine'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area, Cell, PieChart, Pie, Legend, LineChart, Line
+  AreaChart, Area, Cell, PieChart, Pie, Legend
 } from 'recharts'
 
 // ─── Rule-based Insights (fast, offline) ─────────────────────
@@ -115,10 +114,25 @@ function generateQuickInsights(stats: any, govStats: any, shortages: any) {
 
 function calculateHealthScore(stats: any): number {
   if (!stats) return 0
-  let score = 50
-  score += Math.min(stats.approval_rate * 0.3, 30)
-  score += stats.active_users > 0 ? 10 : -10
-  score += stats.submissions_today > 10 ? 5 : 0
+  let score = 0
+
+  // Approval rate (0-35 points)
+  score += Math.min(stats.approval_rate * 0.35, 35)
+
+  // Active users ratio (0-25 points)
+  const activeRatio = stats.total_users > 0 ? stats.active_users / stats.total_users : 0
+  score += activeRatio * 25
+
+  // Today's activity (0-20 points)
+  if (stats.submissions_today > 0) {
+    score += Math.min(stats.submissions_today * 2, 20)
+  }
+
+  // Weekly activity (0-20 points)
+  if (stats.submissions_this_week > 0) {
+    score += Math.min(stats.submissions_this_week * 0.4, 20)
+  }
+
   return Math.max(0, Math.min(100, Math.round(score)))
 }
 
@@ -165,15 +179,16 @@ const INSIGHT_COLORS = {
 
 // ─── Immunization-Specific Analytics ─────────────────────────
 
-/** Calculate coverage rate by governorate */
-function calculateCoverageByGov(govStats: Array<{ name: string; submissions: number }> | undefined) {
+/** Calculate submission distribution by governorate */
+function calculateSubmissionDistribution(govStats: Array<{ name: string; submissions: number }> | undefined) {
   if (!govStats || govStats.length === 0) return []
   const total = govStats.reduce((sum, g) => sum + g.submissions, 0)
+  const avg = total / govStats.length
   return govStats.map(g => ({
     name: g.name,
     submissions: g.submissions,
-    coverage: total > 0 ? Math.round((g.submissions / total) * 100) : 0,
-    status: g.submissions === 0 ? 'zero' : g.submissions < total / govStats.length * 0.5 ? 'low' : 'good',
+    share: total > 0 ? Math.round((g.submissions / total) * 100) : 0,
+    status: g.submissions === 0 ? 'zero' : g.submissions < avg * 0.5 ? 'low' : 'good',
   }))
 }
 
@@ -239,26 +254,6 @@ function calculateSupervisorPerformance(submissions: Array<{ submitted_by: strin
     }))
     .sort((a, b) => b.total - a.total)
     .slice(0, 10)
-}
-
-/** Daily activity heatmap data (7 days x 24 hours) */
-function calculateActivityHeatmap(submissions: Array<{ created_at: string }> | undefined) {
-  if (!submissions || submissions.length === 0) return []
-
-  const heatmap: Array<{ day: string; hour: number; count: number }> = []
-  const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
-
-  for (let d = 0; d < 7; d++) {
-    for (let h = 6; h <= 22; h++) {
-      const count = submissions.filter(s => {
-        const date = new Date(s.created_at)
-        return date.getDay() === d && date.getHours() === h
-      }).length
-      heatmap.push({ day: days[d], hour: h, count })
-    }
-  }
-
-  return heatmap
 }
 
 /** Generate EPI-specific recommendations */
@@ -366,7 +361,7 @@ export default function AIInsightsPage() {
   const quickInsights = generateQuickInsights(stats, govStats, shortages)
   const healthScore = calculateHealthScore(stats)
   const predictions = generatePredictions(chartData || [])
-  const coverageByGov = calculateCoverageByGov(govStats)
+  const coverageByGov = calculateSubmissionDistribution(govStats)
   const trendData = calculateTrend(chartData)
   const supervisorPerformance = calculateSupervisorPerformance(submissions)
   const epiRecommendations = generateEPIRecommendations(stats, govStats, shortages)
@@ -399,15 +394,16 @@ export default function AIInsightsPage() {
     if (stats && !aiAnalysis && !aiLoading) {
       fetchAIAnalysis()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stats])
 
   // Radar chart data
   const radarData = stats ? [
-    { metric: 'الاعتماد', value: stats.approval_rate, fullMark: 100 },
-    { metric: 'النشاط', value: Math.min((stats.submissions_today / 20) * 100, 100), fullMark: 100 },
-    { metric: 'التغطية', value: stats.total_users > 0 ? (stats.active_users / stats.total_users) * 100 : 0, fullMark: 100 },
-    { metric: 'الجودة', value: stats.approval_rate > 80 ? 90 : stats.approval_rate > 60 ? 60 : 30, fullMark: 100 },
-    { metric: 'الالتزام', value: stats.submissions_this_week > 50 ? 90 : stats.submissions_this_week > 20 ? 60 : 30, fullMark: 100 },
+    { metric: 'الاعتماد', value: Math.round(stats.approval_rate), fullMark: 100 },
+    { metric: 'النشاط', value: Math.round(Math.min((stats.submissions_today / Math.max(1, stats.active_users)) * 20, 100)), fullMark: 100 },
+    { metric: 'التغطية', value: stats.total_users > 0 ? Math.round((stats.active_users / stats.total_users) * 100) : 0, fullMark: 100 },
+    { metric: 'الجودة', value: Math.round(Math.min(stats.approval_rate * 1.05, 100)), fullMark: 100 },
+    { metric: 'الالتزام', value: Math.round(Math.min((stats.submissions_this_week / Math.max(1, stats.active_users)) * 5, 100)), fullMark: 100 },
   ] : []
 
   return (
@@ -677,7 +673,7 @@ export default function AIInsightsPage() {
                         <span className="text-xs font-medium min-w-[80px] truncate">{gov.name}</span>
                         <div className="flex-1">
                           <Progress
-                            value={gov.coverage}
+                            value={gov.share}
                             className="h-2"
                             indicatorClassName={cn(
                               gov.status === 'zero' ? 'bg-red-500' :

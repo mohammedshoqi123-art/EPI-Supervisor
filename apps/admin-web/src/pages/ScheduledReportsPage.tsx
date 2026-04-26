@@ -120,7 +120,7 @@ function QuickStatCard({ icon: Icon, iconBg, iconColor, label, value, subValue }
     <Card className="border-0 shadow-sm">
       <CardContent className="p-4 flex items-center gap-3">
         <div className={cn('p-2.5 rounded-xl', iconBg)}>
-          <Icon className={cn('w-4.5 h-4.5', iconColor)} />
+          <Icon className={cn('w-4 h-4', iconColor)} />
         </div>
         <div className="min-w-0">
           <p className="text-lg font-heading font-bold tabular-nums">{value}</p>
@@ -698,7 +698,7 @@ export default function ScheduledReportsPage() {
                 <button
                   key={t.type}
                   onClick={() => handleGenerateClientReport(t.type)}
-                  className="flex items-center gap-2.5 p-3 rounded-xl border bg-white hover:bg-muted/30 transition-all text-right group"
+                  className="flex items-center gap-2.5 p-3 rounded-xl border bg-background hover:bg-muted/30 transition-all text-right group"
                 >
                   <span className="text-xl">{t.icon}</span>
                   <div>

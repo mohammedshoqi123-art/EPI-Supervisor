@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
+import { supabase, isConfigured } from '@/lib/supabase'
 
 // ═══ Campaign Types ═══
 export type CampaignType = string
@@ -15,7 +16,7 @@ export interface CampaignOption {
   visible: boolean
 }
 
-// ─── Built-in campaigns (always exist) ───
+// ─── Built-in campaigns (fallback if Supabase unavailable) ───
 const BUILTIN_CAMPAIGNS: CampaignOption[] = [
   {
     id: 'polio_campaign',
@@ -49,7 +50,8 @@ const ALL_OPTION: CampaignOption = {
 }
 
 const STORAGE_KEY = 'epi-admin-active-campaign'
-const CAMPAIGNS_KEY = 'epi-admin-campaigns'
+const CAMPAIGNS_CACHE_KEY = 'epi-admin-campaigns-cache'
+const HIDDEN_BUILTIN_KEY = 'epi-admin-hidden-builtins'
 
 // ═══ Context ═══
 interface CampaignContextValue {
@@ -79,38 +81,153 @@ interface CampaignContextValue {
   deleteCampaign: (id: CampaignType) => boolean
   /** Get campaign by ID */
   getCampaign: (id: CampaignType) => CampaignOption | undefined
+  /** Whether data is loading from Supabase */
+  loading: boolean
 }
 
 const CampaignContext = createContext<CampaignContextValue | null>(null)
 
-// ─── Persistence helpers ───
+// ─── LocalStorage helpers (cache + fallback) ───
 
-function loadCustomCampaigns(): CampaignOption[] {
+function loadCachedCampaigns(): CampaignOption[] {
   if (typeof window === 'undefined') return []
   try {
-    const stored = localStorage.getItem(CAMPAIGNS_KEY)
-    if (stored) {
-      return JSON.parse(stored) as CampaignOption[]
-    }
+    const stored = localStorage.getItem(CAMPAIGNS_CACHE_KEY)
+    if (stored) return JSON.parse(stored) as CampaignOption[]
   } catch {}
   return []
 }
 
-function saveCustomCampaigns(campaigns: CampaignOption[]) {
+function saveCachedCampaigns(campaigns: CampaignOption[]) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(CAMPAIGNS_KEY, JSON.stringify(campaigns))
+    localStorage.setItem(CAMPAIGNS_CACHE_KEY, JSON.stringify(campaigns))
   }
 }
 
 function loadActiveCampaign(): CampaignType {
   if (typeof window === 'undefined') return 'polio_campaign'
-  const stored = localStorage.getItem(STORAGE_KEY)
-  return stored || 'polio_campaign'
+  return localStorage.getItem(STORAGE_KEY) || 'polio_campaign'
 }
 
 function saveActiveCampaign(campaign: CampaignType) {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEY, campaign)
+  }
+}
+
+function loadHiddenBuiltins(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const stored = localStorage.getItem(HIDDEN_BUILTIN_KEY)
+    if (stored) return new Set(JSON.parse(stored))
+  } catch {}
+  return new Set()
+}
+
+function saveHiddenBuiltins(hidden: Set<string>) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(HIDDEN_BUILTIN_KEY, JSON.stringify(Array.from(hidden)))
+  }
+}
+
+// ─── Supabase helpers ───
+
+/** Load campaign types from Supabase campaign_types table */
+async function loadFromSupabase(): Promise<CampaignOption[] | null> {
+  if (!isConfigured) return null
+  try {
+    const { data, error } = await supabase
+      .from('campaign_types')
+      .select('key, label_ar, label_en, icon, color, built_in, visible, sort_order')
+      .order('sort_order', { ascending: true })
+
+    if (error || !data) return null
+
+    return data.map((row: any) => ({
+      id: row.key,
+      labelAr: row.label_ar,
+      labelEn: row.label_en,
+      icon: row.icon,
+      color: row.color,
+      builtIn: row.built_in,
+      visible: row.visible,
+    }))
+  } catch {
+    return null
+  }
+}
+
+/** Insert a new campaign type into Supabase */
+async function insertToSupabase(campaign: CampaignOption): Promise<boolean> {
+  if (!isConfigured) return false
+  try {
+    const { error } = await supabase.from('campaign_types').insert({
+      key: campaign.id,
+      label_ar: campaign.labelAr,
+      label_en: campaign.labelEn,
+      icon: campaign.icon,
+      color: campaign.color,
+      built_in: campaign.builtIn || false,
+      visible: campaign.visible,
+      sort_order: 100,
+    })
+    return !error
+  } catch {
+    return false
+  }
+}
+
+/** Update a campaign type in Supabase */
+async function updateInSupabase(id: string, updates: Partial<CampaignOption>): Promise<boolean> {
+  if (!isConfigured) return false
+  try {
+    const dbUpdates: Record<string, any> = {}
+    if (updates.labelAr !== undefined) dbUpdates.label_ar = updates.labelAr
+    if (updates.labelEn !== undefined) dbUpdates.label_en = updates.labelEn
+    if (updates.icon !== undefined) dbUpdates.icon = updates.icon
+    if (updates.color !== undefined) dbUpdates.color = updates.color
+    if (updates.visible !== undefined) dbUpdates.visible = updates.visible
+
+    const { error } = await supabase
+      .from('campaign_types')
+      .update(dbUpdates)
+      .eq('key', id)
+      .eq('built_in', false) // Can't update built-in types
+
+    return !error
+  } catch {
+    return false
+  }
+}
+
+/** Delete a campaign type from Supabase */
+async function deleteFromSupabase(id: string): Promise<boolean> {
+  if (!isConfigured) return false
+  try {
+    const { error } = await supabase
+      .from('campaign_types')
+      .delete()
+      .eq('key', id)
+      .eq('built_in', false) // Can't delete built-in types
+
+    return !error
+  } catch {
+    return false
+  }
+}
+
+/** Toggle visibility in Supabase */
+async function toggleVisibilityInSupabase(id: string, visible: boolean): Promise<boolean> {
+  if (!isConfigured) return false
+  try {
+    const { error } = await supabase
+      .from('campaign_types')
+      .update({ visible })
+      .eq('key', id)
+
+    return !error
+  } catch {
+    return false
   }
 }
 
@@ -144,48 +261,45 @@ export const CAMPAIGN_COLORS = [
   { value: 'from-teal-500 to-teal-600', label: 'أخضر فاتح', bg: 'bg-teal-50', text: 'text-teal-600' },
 ]
 
-// ─── Hidden built-in campaigns (stored as Set of IDs) ───
-const HIDDEN_BUILTIN_KEY = 'epi-admin-hidden-builtins'
-
-function loadHiddenBuiltins(): Set<string> {
-  if (typeof window === 'undefined') return new Set()
-  try {
-    const stored = localStorage.getItem(HIDDEN_BUILTIN_KEY)
-    if (stored) return new Set(JSON.parse(stored))
-  } catch {}
-  return new Set()
-}
-
-function saveHiddenBuiltins(hidden: Set<string>) {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(HIDDEN_BUILTIN_KEY, JSON.stringify(Array.from(hidden)))
-  }
-}
-
 export function CampaignProvider({ children }: { children: ReactNode }) {
   const [campaign, setCampaignState] = useState<CampaignType>(loadActiveCampaign)
-  const [customCampaigns, setCustomCampaigns] = useState<CampaignOption[]>(loadCustomCampaigns)
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>(loadCachedCampaigns)
   const [hiddenBuiltins, setHiddenBuiltins] = useState<Set<string>>(loadHiddenBuiltins)
+  const [loading, setLoading] = useState(true)
 
-  // Merge built-in + custom campaigns (no duplicates)
+  // ── Load from Supabase on mount ──
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+      const supabaseData = await loadFromSupabase()
+
+      if (!cancelled && supabaseData && supabaseData.length > 0) {
+        setCampaigns(supabaseData)
+        saveCachedCampaigns(supabaseData)
+      }
+      // If Supabase fails, we keep using cached data (or built-in defaults)
+      setLoading(false)
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  // ── Merge: campaigns list (Supabase data or built-in fallback) ──
   const allCampaigns = useMemo(() => {
-    // Custom campaigns that are NOT overrides of built-in campaigns
-    const pureCustom = customCampaigns.filter(
-      cc => !BUILTIN_CAMPAIGNS.some(bc => bc.id === cc.id)
-    )
-    return [...BUILTIN_CAMPAIGNS, ...pureCustom]
-  }, [customCampaigns])
+    if (campaigns.length > 0) return campaigns
+    return BUILTIN_CAMPAIGNS
+  }, [campaigns])
 
-  // Persist active campaign
+  // ── Persist active campaign ──
   useEffect(() => { saveActiveCampaign(campaign) }, [campaign])
 
-  // Persist custom campaigns
-  useEffect(() => { saveCustomCampaigns(customCampaigns) }, [customCampaigns])
-
-  // Persist hidden builtins
+  // ── Persist hidden builtins ──
   useEffect(() => { saveHiddenBuiltins(hiddenBuiltins) }, [hiddenBuiltins])
 
-  // If current campaign is deleted or hidden, switch to 'all'
+  // ── If current campaign is deleted or hidden, switch to 'all' ──
   useEffect(() => {
     const visibleIds = allCampaigns
       .filter(c => !hiddenBuiltins.has(c.id))
@@ -201,19 +315,22 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
   const isCampaignVisible = useCallback((id: CampaignType) => {
     if (id === 'all') return true
-    // Built-in: visible unless in hidden set
-    if (BUILTIN_CAMPAIGNS.some(c => c.id === id)) {
-      return !hiddenBuiltins.has(id)
-    }
-    // Custom: always visible (if it exists)
-    return customCampaigns.some(c => c.id === id)
-  }, [hiddenBuiltins, customCampaigns])
+    const found = allCampaigns.find(c => c.id === id)
+    if (!found) return false
+    // Built-in: check hidden set
+    if (found.builtIn) return !hiddenBuiltins.has(id)
+    // Custom: check visible property from Supabase
+    return found.visible !== false
+  }, [hiddenBuiltins, allCampaigns])
 
   const toggleCampaignVisibility = useCallback((id: CampaignType) => {
     if (id === 'all') return
 
-    // Built-in campaign: toggle in hidden set
-    if (BUILTIN_CAMPAIGNS.some(c => c.id === id)) {
+    const found = allCampaigns.find(c => c.id === id)
+    if (!found) return
+
+    // Built-in campaign: toggle in hidden set (localStorage only)
+    if (found.builtIn) {
       setHiddenBuiltins(prev => {
         const next = new Set(prev)
         if (next.has(id)) next.delete(id)
@@ -223,9 +340,11 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    // Custom campaign: remove from list (toggle = delete)
-    setCustomCampaigns(prev => prev.filter(c => c.id !== id))
-  }, [])
+    // Custom campaign: toggle in Supabase + update local state
+    const newVisible = !(found.visible !== false)
+    setCampaigns(prev => prev.map(c => c.id === id ? { ...c, visible: newVisible } : c))
+    toggleVisibilityInSupabase(id, newVisible)
+  }, [allCampaigns])
 
   const addCampaign = useCallback((data: Omit<CampaignOption, 'id' | 'builtIn' | 'visible'>): CampaignOption => {
     const newCampaign: CampaignOption = {
@@ -234,20 +353,52 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       builtIn: false,
       visible: true,
     }
-    setCustomCampaigns(prev => [...prev, newCampaign])
+
+    // Update local state immediately
+    setCampaigns(prev => {
+      const updated = [...prev, newCampaign]
+      saveCachedCampaigns(updated)
+      return updated
+    })
+
+    // Persist to Supabase
+    insertToSupabase(newCampaign)
+
     return newCampaign
   }, [])
 
   const updateCampaign = useCallback((id: CampaignType, updates: Partial<Pick<CampaignOption, 'labelAr' | 'labelEn' | 'icon' | 'color' | 'visible'>>) => {
-    if (BUILTIN_CAMPAIGNS.some(c => c.id === id)) return
-    setCustomCampaigns(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c))
-  }, [])
+    // Don't update built-in campaigns
+    const found = allCampaigns.find(c => c.id === id)
+    if (found?.builtIn) return
+
+    // Update local state immediately
+    setCampaigns(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c)
+      saveCachedCampaigns(updated)
+      return updated
+    })
+
+    // Persist to Supabase
+    updateInSupabase(id, updates)
+  }, [allCampaigns])
 
   const deleteCampaign = useCallback((id: CampaignType): boolean => {
-    if (BUILTIN_CAMPAIGNS.some(c => c.id === id)) return false
-    setCustomCampaigns(prev => prev.filter(c => c.id !== id))
+    const found = allCampaigns.find(c => c.id === id)
+    if (found?.builtIn) return false
+
+    // Update local state immediately
+    setCampaigns(prev => {
+      const updated = prev.filter(c => c.id !== id)
+      saveCachedCampaigns(updated)
+      return updated
+    })
+
+    // Delete from Supabase
+    deleteFromSupabase(id)
+
     return true
-  }, [])
+  }, [allCampaigns])
 
   const getCampaign = useCallback((id: CampaignType): CampaignOption | undefined => {
     if (id === 'all') return ALL_OPTION
@@ -257,7 +408,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const currentOption = getCampaign(campaign) ?? ALL_OPTION
   const visibleOptions = [
     ALL_OPTION,
-    ...allCampaigns.filter(c => !hiddenBuiltins.has(c.id)),
+    ...allCampaigns.filter(c => !hiddenBuiltins.has(c.id) && c.visible !== false),
   ]
 
   const value: CampaignContextValue = {
@@ -274,6 +425,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     updateCampaign,
     deleteCampaign,
     getCampaign,
+    loading,
   }
 
   return (

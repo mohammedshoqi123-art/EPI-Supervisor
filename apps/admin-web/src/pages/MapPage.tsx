@@ -82,6 +82,8 @@ function createStatusIcon(status: string, isSelected: boolean) {
   const colors: Record<string, string> = {
     draft: '#f59e0b',
     submitted: '#10b981',
+    approved: '#3b82f6',
+    rejected: '#ef4444',
   }
   const color = colors[status] || '#6b7280'
   const size = isSelected ? 16 : 10
@@ -143,33 +145,6 @@ function FitBounds({ points }: { points: [number, number][] }) {
 }
 
 // ═══ PDF Export Helper with Map Images ═══
-
-/** Capture the Leaflet map as a canvas image */
-async function captureMapElement(): Promise<string | null> {
-  try {
-    const mapEl = document.querySelector('.leaflet-container') as HTMLElement
-    if (!mapEl) return null
-    const html2canvas = (await import('html2canvas-pro')).default
-    const canvas = await html2canvas(mapEl, {
-      useCORS: true,
-      allowTaint: true,
-      scale: 2,
-      logging: false,
-      backgroundColor: '#e5e7eb',
-    })
-    return canvas.toDataURL('image/jpeg', 0.85)
-  } catch (err) {
-    console.warn('Map capture failed:', err)
-    return null
-  }
-}
-
-/** Generate a static map image URL from OSM tiles for a location */
-function getStaticMapUrl(lat: number, lng: number, zoom: number = 10, width: number = 800, height: number = 400): string {
-  // Use OpenStreetMap static tile approach via canvas
-  // We'll create this client-side
-  return `https://tile.openstreetmap.org/${zoom}/${Math.floor((lng + 180) / 360 * Math.pow(2, zoom))}/${Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))}.png`
-}
 
 /** Download and composite OSM tiles into a single image with GPS markers */
 async function generateStaticMapImage(
@@ -257,9 +232,18 @@ async function generateStaticMapImage(
           ctx.font = 'bold 9px Cairo, sans-serif'
           const textWidth = ctx.measureText(marker.name).width
 
-          // Background
+          // Background (with roundRect fallback for older browsers)
           ctx.fillStyle = 'rgba(255,255,255,0.85)'
-          ctx.roundRect(pixelX - textWidth / 2 - 3, pixelY - 20, textWidth + 6, 13, 2)
+          const labelX = pixelX - textWidth / 2 - 3
+          const labelY = pixelY - 20
+          const labelW = textWidth + 6
+          const labelH = 13
+          const labelR = 2
+          if (ctx.roundRect) {
+            ctx.roundRect(labelX, labelY, labelW, labelH, labelR)
+          } else {
+            ctx.rect(labelX, labelY, labelW, labelH)
+          }
           ctx.fill()
 
           // Text
@@ -288,9 +272,14 @@ async function generateStaticMapImage(
       const legendX = 10
       const legendY = canvas.height - 10 - Object.keys(roleColors).length * 16
 
-      // Legend background
+      // Legend background (with roundRect fallback)
       ctx.fillStyle = 'rgba(255,255,255,0.9)'
-      ctx.roundRect(legendX, legendY - 5, 110, Object.keys(roleColors).length * 16 + 10, 4)
+      const lgX = legendX, lgY = legendY - 5, lgW = 110, lgH = Object.keys(roleColors).length * 16 + 10
+      if (ctx.roundRect) {
+        ctx.roundRect(lgX, lgY, lgW, lgH, 4)
+      } else {
+        ctx.rect(lgX, lgY, lgW, lgH)
+      }
       ctx.fill()
       ctx.strokeStyle = '#e5e7eb'
       ctx.lineWidth = 1
@@ -323,8 +312,44 @@ async function generateStaticMapImage(
   }
 }
 
+/** Generate a single overview map image covering all GPS points */
+async function generateOverviewMapImage(
+  allMarkers: Array<{ lat: number; lng: number; name: string; role: string }>
+): Promise<string | null> {
+  if (allMarkers.length === 0) return null
+
+  try {
+    // Calculate bounding box
+    const lats = allMarkers.map(m => m.lat)
+    const lngs = allMarkers.map(m => m.lng)
+    const minLat = Math.min(...lats)
+    const maxLat = Math.max(...lats)
+    const minLng = Math.min(...lngs)
+    const maxLng = Math.max(...lngs)
+    const centerLat = (minLat + maxLat) / 2
+    const centerLng = (minLng + maxLng) / 2
+
+    // Estimate zoom level from bounding box span
+    const latSpan = maxLat - minLat
+    const lngSpan = maxLng - minLng
+    const maxSpan = Math.max(latSpan, lngSpan)
+    let zoom = 10
+    if (maxSpan > 10) zoom = 5
+    else if (maxSpan > 5) zoom = 6
+    else if (maxSpan > 2) zoom = 7
+    else if (maxSpan > 1) zoom = 8
+    else if (maxSpan > 0.5) zoom = 9
+
+    return await generateStaticMapImage(centerLat, centerLng, zoom, allMarkers.slice(0, 100))
+  } catch (err) {
+    console.warn('Overview map generation failed:', err)
+    return null
+  }
+}
+
 async function generateMapPDF(
   stats: { total: number; governorates: number; supervisors: number; submitted: number },
+  allMarkers: Array<{ lat: number; lng: number; name: string; role: string }>,
   govData: Array<{
     name: string; submissions: number; supervisors: string[];
     byStatus: Record<string, number>; lat: number; lng: number;
@@ -340,14 +365,8 @@ async function generateMapPDF(
     const pageW = 297
     const pageH = 210
 
-    // ── Helper: Arabic text (simple) ──
-    const addText = (text: string, x: number, y: number, size: number, align: 'right' | 'center' | 'left' = 'right') => {
-      doc.setFontSize(size)
-      doc.text(text, x, y, { align })
-    }
-
-    // ── Capture current map view ──
-    const mapImage = await captureMapElement()
+    // ── Generate overview map covering ALL GPS points (not a screen capture) ──
+    const mapImage = await generateOverviewMapImage(allMarkers)
 
     // ── Page 1: Overview ──
     // Header
@@ -355,22 +374,21 @@ async function generateMapPDF(
     doc.rect(0, 0, pageW, 35, 'F')
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(22)
-    doc.text('EPI Supervisor - Map Report', pageW / 2, 15, { align: 'center' })
+    doc.text('منصة مشرف EPI - تقرير الخريطة', pageW / 2, 15, { align: 'center' })
     doc.setFontSize(11)
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, pageW / 2, 25, { align: 'center' })
+    doc.text(`التاريخ: ${new Date().toLocaleDateString('ar-SA')}`, pageW / 2, 25, { align: 'center' })
 
     // Map image (if captured)
     if (mapImage) {
       try {
         doc.addImage(mapImage, 'JPEG', 15, 38, pageW - 30, 70)
         // Add label over map
-        doc.setFillColor(0, 0, 0)
         doc.setGState(new (doc as any).GState({ opacity: 0.6 }))
         doc.roundedRect(15, 38, 80, 8, 2, 2, 'F')
         doc.setGState(new (doc as any).GState({ opacity: 1 }))
         doc.setTextColor(255, 255, 255)
         doc.setFontSize(8)
-        doc.text('Overview Map — All Submissions', 55, 43.5, { align: 'center' })
+        doc.text('خريطة عامة — جميع الإرساليات', 55, 43.5, { align: 'center' })
       } catch { /* ignore image errors */ }
     }
 
@@ -382,10 +400,10 @@ async function generateMapPDF(
     const startX = (pageW - (cardW * 4 + cardGap * 3)) / 2
 
     const statCards = [
-      { label: 'Total GPS Points', value: stats.total.toString(), color: [37, 99, 235] },
-      { label: 'Governorates', value: stats.governorates.toString(), color: [5, 150, 105] },
-      { label: 'Active Supervisors', value: stats.supervisors.toString(), color: [124, 58, 237] },
-      { label: 'Submitted', value: stats.submitted.toString(), color: [16, 185, 129] },
+      { label: 'نقاط GPS', value: stats.total.toString(), color: [37, 99, 235] },
+      { label: 'محافظة', value: stats.governorates.toString(), color: [5, 150, 105] },
+      { label: 'مشرف نشط', value: stats.supervisors.toString(), color: [124, 58, 237] },
+      { label: 'مُرسلة', value: stats.submitted.toString(), color: [16, 185, 129] },
     ]
 
     statCards.forEach((card, i) => {
@@ -402,7 +420,7 @@ async function generateMapPDF(
     // Governorate table
     doc.setTextColor(0, 0, 0)
     doc.setFontSize(14)
-    doc.text('Governorate Summary', pageW - 15, 85, { align: 'right' })
+    doc.text('ملخص المحافظات', pageW - 15, 85, { align: 'right' })
 
     // Table header
     const tableY = 92
@@ -414,7 +432,7 @@ async function generateMapPDF(
     doc.rect(15, tableY, pageW - 30, 8, 'F')
     doc.setFontSize(8)
     doc.setTextColor(107, 114, 128)
-    const headers = ['#', 'Governorate', 'Submissions', 'Supervisors', 'Submitted', 'Coverage']
+    const headers = ['#', 'المحافظة', 'الإرساليات', 'المشرفون', 'مُرسلة', 'التغطية']
     headers.forEach((h, i) => {
       doc.text(h, colX[i] + colWidths[i] / 2, tableY + 5.5, { align: 'center' })
     })
@@ -446,8 +464,8 @@ async function generateMapPDF(
     // Footer
     doc.setFontSize(7)
     doc.setTextColor(156, 163, 175)
-    doc.text('EPI Supervisor — Automated Report', pageW / 2, pageH - 5, { align: 'center' })
-    doc.text(`Page 1 of ${govData.length + 1}`, pageW - 15, pageH - 5, { align: 'right' })
+    doc.text('منصة مشرف EPI — تقرير تلقائي', pageW / 2, pageH - 5, { align: 'center' })
+    doc.text(`صفحة 1 من ${govData.length + 1}`, pageW - 15, pageH - 5, { align: 'right' })
 
     // ── Pages 2+: One per governorate (with map images) ──
     for (let govIdx = 0; govIdx < govData.length; govIdx++) {
@@ -480,7 +498,7 @@ async function generateMapPDF(
       doc.setFontSize(18)
       doc.text(gov.name, pageW / 2, 12, { align: 'center' })
       doc.setFontSize(10)
-      doc.text(`Governorate Report — ${gov.submissions} submissions`, pageW / 2, 20, { align: 'center' })
+      doc.text(`تقرير المحافظة — ${gov.submissions} إرسالية`, pageW / 2, 20, { align: 'center' })
 
       // Map image (left side) + Stats (right side)
       const mapX = 15
@@ -502,7 +520,7 @@ async function generateMapPDF(
           doc.setGState(new (doc as any).GState({ opacity: 1 }))
           doc.setTextColor(255, 255, 255)
           doc.setFontSize(7)
-          doc.text(`${gov.name} — Zoomed View`, mapX + 32, mapY + 6.5, { align: 'center' })
+          doc.text(`${gov.name} — عرض مُكبّر`, mapX + 32, mapY + 6.5, { align: 'center' })
 
           // Marker at center
           doc.setFillColor(239, 68, 68)
@@ -516,16 +534,16 @@ async function generateMapPDF(
         doc.roundedRect(mapX, mapY, mapW, mapH, 3, 3, 'F')
         doc.setTextColor(156, 163, 175)
         doc.setFontSize(10)
-        doc.text('Map unavailable', mapX + mapW / 2, mapY + mapH / 2, { align: 'center' })
+        doc.text('الخريطة غير متاحة', mapX + mapW / 2, mapY + mapH / 2, { align: 'center' })
       }
 
       // Stats cards (right side of map)
       const statsX = 155
       const statCardsGov = [
-        { label: 'Total', value: gov.submissions.toString(), color: color },
-        { label: 'Supervisors', value: gov.supervisors.length.toString(), color: [124, 58, 237] as [number, number, number] },
-        { label: 'Submitted', value: (gov.byStatus['submitted'] || 0).toString(), color: [16, 185, 129] as [number, number, number] },
-        { label: 'Drafts', value: (gov.byStatus['draft'] || 0).toString(), color: [245, 158, 11] as [number, number, number] },
+        { label: 'الإجمالي', value: gov.submissions.toString(), color: color },
+        { label: 'المشرفون', value: gov.supervisors.length.toString(), color: [124, 58, 237] as [number, number, number] },
+        { label: 'مُرسلة', value: (gov.byStatus['submitted'] || 0).toString(), color: [16, 185, 129] as [number, number, number] },
+        { label: 'مسودات', value: (gov.byStatus['draft'] || 0).toString(), color: [245, 158, 11] as [number, number, number] },
       ]
 
       statCardsGov.forEach((card, i) => {
@@ -544,7 +562,7 @@ async function generateMapPDF(
       const coverage = totalSubs > 0 ? (gov.submissions / totalSubs) * 100 : 0
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(9)
-      doc.text(`Coverage: ${coverage.toFixed(1)}% of total submissions`, pageW - 15, barY, { align: 'right' })
+      doc.text(`التغطية: ${coverage.toFixed(1)}% من إجمالي الإرساليات`, pageW - 15, barY, { align: 'right' })
       doc.setFillColor(229, 231, 235)
       doc.roundedRect(15, barY + 3, pageW - 30, 6, 2, 2, 'F')
       doc.setFillColor(...color)
@@ -554,7 +572,7 @@ async function generateMapPDF(
       const listY = 80
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(12)
-      doc.text('Supervisors', pageW - 15, listY, { align: 'right' })
+      doc.text('المشرفون', pageW - 15, listY, { align: 'right' })
 
       doc.setFontSize(8)
       gov.supervisors.forEach((name, i) => {
@@ -569,23 +587,24 @@ async function generateMapPDF(
 
       if (gov.supervisors.length > 20) {
         doc.setTextColor(156, 163, 175)
-        doc.text(`+ ${gov.supervisors.length - 20} more`, 20, listY + 8 + 20 * 6)
+        doc.text(`+ ${gov.supervisors.length - 20} آخرين`, 20, listY + 8 + 20 * 6)
       }
 
       // Status distribution
       const distY = listY + 8 + Math.min(gov.supervisors.length, 20) * 6 + 15
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(10)
-      doc.text('Status Distribution', pageW - 15, distY, { align: 'right' })
+      doc.text('توزيع الحالات', pageW - 15, distY, { align: 'right' })
 
       const statusEntries = Object.entries(gov.byStatus)
+      const STATUS_LABELS_AR: Record<string, string> = { submitted: 'مُرسلة', draft: 'مسودة', approved: 'مقبولة', rejected: 'مرفوضة' }
       statusEntries.forEach(([status, count], i) => {
         const x = 20 + i * 80
         const barW = 60
         const pct = gov.submissions > 0 ? (count as number / gov.submissions) * 100 : 0
         doc.setFontSize(8)
         doc.setTextColor(0, 0, 0)
-        doc.text(`${status}: ${count}`, x, distY + 8)
+        doc.text(`${STATUS_LABELS_AR[status] || status}: ${count}`, x, distY + 8)
         doc.setFillColor(229, 231, 235)
         doc.roundedRect(x, distY + 10, barW, 4, 1, 1, 'F')
         const barColor: [number, number, number] = status === 'submitted' ? [16, 185, 129] : [245, 158, 11]
@@ -596,8 +615,8 @@ async function generateMapPDF(
       // Footer
       doc.setFontSize(7)
       doc.setTextColor(156, 163, 175)
-      doc.text('EPI Supervisor — Automated Report', pageW / 2, pageH - 5, { align: 'center' })
-      doc.text(`Page ${govIdx + 2} of ${govData.length + 1}`, pageW - 15, pageH - 5, { align: 'right' })
+      doc.text('منصة مشرف EPI — تقرير تلقائي', pageW / 2, pageH - 5, { align: 'center' })
+      doc.text(`صفحة ${govIdx + 2} من ${govData.length + 1}`, pageW - 15, pageH - 5, { align: 'right' })
     }
 
     // Save
@@ -628,8 +647,8 @@ export default function MapPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('individual')
   const [colorMode, setColorMode] = useState<ColorMode>('role')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedSubmission, setSelectedSubmission] = useState<any>(null)
-  const [selectedCluster, setSelectedCluster] = useState<any>(null)
+  const [selectedSubmission, setSelectedSubmission] = useState<Record<string, any> | null>(null)
+  const [selectedCluster, setSelectedCluster] = useState<Record<string, any> | null>(null)
   const [showFilters, setShowFilters] = useState(true)
   const [mapCenter, setMapCenter] = useState<[number, number]>([15.5527, 48.5164])
   const [mapZoom, setMapZoom] = useState(6)
@@ -779,6 +798,16 @@ export default function MapPage() {
   const handleExportPDF = useCallback(async () => {
     setExportingPDF(true)
     try {
+      // Collect all GPS markers with role info
+      const allMarkers = gpsSubmissions
+        .filter((s: any) => s.gps_lat && s.gps_lng)
+        .map((s: any) => ({
+          lat: s.gps_lat,
+          lng: s.gps_lng,
+          name: s.profiles?.full_name || '',
+          role: s.profiles?.role || 'data_entry',
+        }))
+
       await generateMapPDF(
         {
           total: stats.withGps,
@@ -786,6 +815,7 @@ export default function MapPage() {
           supervisors: stats.uniqueSupervisors,
           submitted: stats.byStatus['submitted'] || 0,
         },
+        allMarkers,
         aggregatedData.map(g => ({
           name: g.name,
           submissions: g.count,
@@ -793,14 +823,14 @@ export default function MapPage() {
           byStatus: g.byStatus,
           lat: g.lat,
           lng: g.lng,
-          submissionData: g.submissions, // Full submission objects with GPS + profiles
+          submissionData: g.submissions,
         })),
         toast
       )
     } finally {
       setExportingPDF(false)
     }
-  }, [stats, aggregatedData, toast])
+  }, [stats, aggregatedData, gpsSubmissions, toast])
 
   return (
     <div className="page-enter">
@@ -1127,7 +1157,7 @@ export default function MapPage() {
                 </MapContainer>
 
                 {/* Status Legend */}
-                <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 z-[1000]">
+                <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg p-3 z-[1000]">
                   <p className="text-[10px] font-medium text-muted-foreground mb-2">
                     {colorMode === 'role' ? 'الأدوار' : 'الحالات'}
                   </p>

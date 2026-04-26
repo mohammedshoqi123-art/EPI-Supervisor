@@ -34,7 +34,7 @@ export interface GovGroup {
 }
 
 export interface EvaluationData {
-  users: EnrichedUser[]
+  users: any[]
   subs: any[]
   govs: { id: string; name_ar: string }[]
   dists: { id: string; name_ar: string; governorate_id: string }[]

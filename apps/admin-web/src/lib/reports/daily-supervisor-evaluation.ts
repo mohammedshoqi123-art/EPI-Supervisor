@@ -428,6 +428,28 @@ export async function generateDailySupervisorEvaluation(options?: {
         ${buildKPI('إجمالي الاستمارات', totalForms, '📋', BRAND.info, `مرسلة: ${totalSubmitted} | مسودة: ${totalDraft}`)}
       </div>
 
+      <!-- ═══ نسب الإشراف الإجمالية ═══ -->
+      ${buildSectionTitle('📈', 'نسب الإشراف الإجمالية')}
+      <div class="kpi-grid">
+        ${(() => {
+          const effectiveSupervisors = Math.max(totalSupervisors - generalCount, 1)
+          const activityRate = Math.round((activeToday / effectiveSupervisors) * 100)
+          return buildKPI('نسبة النشاط الكلية', `${activityRate}%`, '🎯', activityRate >= 70 ? BRAND.success : activityRate >= 40 ? BRAND.warning : BRAND.accent)
+        })()}
+        ${(() => {
+          const rate = totalGovs > 0 ? Math.round((coveredGovs / totalGovs) * 100) : 0
+          return buildKPI('تغطية المحافظات', `${rate}%`, '🏛️', rate >= 80 ? BRAND.success : rate >= 50 ? BRAND.warning : BRAND.accent, `${coveredGovs}/${totalGovs}`)
+        })()}
+        ${(() => {
+          const rate = totalDists > 0 ? Math.round((coveredDists / totalDists) * 100) : 0
+          return buildKPI('تغطية المديريات', `${rate}%`, '📍', rate >= 80 ? BRAND.success : rate >= 50 ? BRAND.warning : BRAND.accent, `${coveredDists}/${totalDists}`)
+        })()}
+        ${(() => {
+          const rate = totalForms > 0 ? Math.round((totalSubmitted / totalForms) * 100) : 0
+          return buildKPI('نسبة الإرسال', `${rate}%`, '📤', rate >= 80 ? BRAND.success : rate >= 50 ? BRAND.warning : BRAND.accent, `${totalSubmitted}/${totalForms}`)
+        })()}
+      </div>
+
       <div class="summary-bar">
         <span class="summary-chip chip-total">👥 إجمالي: ${totalSupervisors}</span>
         <span class="summary-chip chip-active">✅ نشط: ${activeToday}</span>
@@ -435,7 +457,59 @@ export async function generateDailySupervisorEvaluation(options?: {
         <span class="summary-chip chip-general">🏛️ إشراف عام: ${generalCount}</span>
       </div>
 
-      <!-- ═══ المحافظات ═══ -->
+      <!-- ═══ ملخص المحافظات ═══ -->
+      ${buildSectionTitle('📊', 'ملخص المحافظات')}
+      ${buildTable(
+        ['المحافظة', 'المشرفين', 'نشط', 'غير نشط', 'إشراف عام', 'المديريات', 'الاستمارات', 'نسبة النشاط'],
+        [...govGroups.values()].map(group => {
+          const active = group.allUsers.filter(u => u.totalToday > 0 && !u.isGenSupervisor).length
+          const inactive = group.allUsers.filter(u => u.totalToday === 0 && !u.isGenSupervisor).length
+          const gen = group.allUsers.filter(u => u.isGenSupervisor).length
+          const forms = group.allUsers.reduce((s, u) => s + u.totalToday, 0)
+          const total = group.allUsers.length
+          const rate = total > 0 ? Math.round((active / Math.max(total - gen, 1)) * 100) : 0
+          return [
+            escapeHtml(group.gov.name_ar),
+            `${total}`,
+            `<span style="color:${BRAND.success};font-weight:700">${active}</span>`,
+            `<span style="color:${inactive > 0 ? BRAND.accent : BRAND.textMuted}">${inactive}</span>`,
+            `${gen}`,
+            `${group.districts.size}`,
+            `${forms}`,
+            `<span style="color:${rate >= 70 ? BRAND.success : rate >= 40 ? BRAND.warning : BRAND.accent};font-weight:700">${rate}%</span>`,
+          ]
+        })
+      )}
+
+      <!-- ═══ ملخص المديريات ═══ -->
+      ${buildSectionTitle('📍', 'ملخص المديريات')}
+      ${(() => {
+        const allDistRows: string[][] = []
+        for (const group of govGroups.values()) {
+          for (const [distKey, distUsers] of group.districts.entries()) {
+            const distName = distUsers[0]?.distName || 'غير محدد'
+            const active = distUsers.filter(u => u.totalToday > 0).length
+            const inactive = distUsers.filter(u => u.totalToday === 0).length
+            const forms = distUsers.reduce((s, u) => s + u.totalToday, 0)
+            const rate = distUsers.length > 0 ? Math.round((active / distUsers.length) * 100) : 0
+            allDistRows.push([
+              escapeHtml(group.gov.name_ar),
+              escapeHtml(distName),
+              `${distUsers.length}`,
+              `<span style="color:${BRAND.success};font-weight:700">${active}</span>`,
+              `<span style="color:${inactive > 0 ? BRAND.accent : BRAND.textMuted}">${inactive}</span>`,
+              `${forms}`,
+              `<span style="color:${rate >= 70 ? BRAND.success : rate >= 40 ? BRAND.warning : BRAND.accent};font-weight:700">${rate}%</span>`,
+            ])
+          }
+        }
+        return buildTable(
+          ['المحافظة', 'المديرية', 'المشرفين', 'نشط', 'غير نشط', 'الاستمارات', 'النشاط'],
+          allDistRows.sort((a, b) => parseInt(b[5]) - parseInt(a[5]))
+        )
+      })()}
+
+      <!-- ═══ تفاصيل المحافظات ═══ -->
       ${[...govGroups.values()].map(group => {
         const activeInGov = group.allUsers.filter(u => u.totalToday > 0).length
         const totalInGov = group.allUsers.length
@@ -525,59 +599,6 @@ export async function generateDailySupervisorEvaluation(options?: {
           </div>
         `
       }).join('')}
-
-      <!-- ═══ ملخص المحافظات ═══ -->
-      ${buildSectionTitle('📊', 'ملخص المحافظات')}
-      ${buildTable(
-        ['المحافظة', 'المشرفين', 'نشط', 'غير نشط', 'إشراف عام', 'المديريات', 'الاستمارات', 'نسبة النشاط'],
-        [...govGroups.values()].map(group => {
-          const active = group.allUsers.filter(u => u.totalToday > 0 && !u.isGenSupervisor).length
-          const inactive = group.allUsers.filter(u => u.totalToday === 0 && !u.isGenSupervisor).length
-          const gen = group.allUsers.filter(u => u.isGenSupervisor).length
-          const forms = group.allUsers.reduce((s, u) => s + u.totalToday, 0)
-          const total = group.allUsers.length
-          const rate = total > 0 ? Math.round((active / Math.max(total - gen, 1)) * 100) : 0
-          return [
-            escapeHtml(group.gov.name_ar),
-            `${total}`,
-            `<span style="color:${BRAND.success};font-weight:700">${active}</span>`,
-            `<span style="color:${inactive > 0 ? BRAND.accent : BRAND.textMuted}">${inactive}</span>`,
-            `${gen}`,
-            `${group.districts.size}`,
-            `${forms}`,
-            `<span style="color:${rate >= 70 ? BRAND.success : rate >= 40 ? BRAND.warning : BRAND.accent};font-weight:700">${rate}%</span>`,
-          ]
-        })
-      )}
-
-      <!-- ═══ ملخص المديريات ═══ -->
-      ${buildSectionTitle('📍', 'ملخص المديريات')}
-      ${(() => {
-        // جمع كل المديريات من كل المحافظات
-        const allDistRows: string[][] = []
-        for (const group of govGroups.values()) {
-          for (const [distKey, distUsers] of group.districts.entries()) {
-            const distName = distUsers[0]?.distName || 'غير محدد'
-            const active = distUsers.filter(u => u.totalToday > 0).length
-            const inactive = distUsers.filter(u => u.totalToday === 0).length
-            const forms = distUsers.reduce((s, u) => s + u.totalToday, 0)
-            const rate = distUsers.length > 0 ? Math.round((active / distUsers.length) * 100) : 0
-            allDistRows.push([
-              escapeHtml(group.gov.name_ar),
-              escapeHtml(distName),
-              `${distUsers.length}`,
-              `<span style="color:${BRAND.success};font-weight:700">${active}</span>`,
-              `<span style="color:${inactive > 0 ? BRAND.accent : BRAND.textMuted}">${inactive}</span>`,
-              `${forms}`,
-              `<span style="color:${rate >= 70 ? BRAND.success : rate >= 40 ? BRAND.warning : BRAND.accent};font-weight:700">${rate}%</span>`,
-            ])
-          }
-        }
-        return buildTable(
-          ['المحافظة', 'المديرية', 'المشرفين', 'نشط', 'غير نشط', 'الاستمارات', 'النشاط'],
-          allDistRows.sort((a, b) => parseInt(b[5]) - parseInt(a[5]))
-        )
-      })()}
 
       ${buildFooter()}
     </body>

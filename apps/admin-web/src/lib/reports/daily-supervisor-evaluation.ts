@@ -43,23 +43,11 @@ const ROLE_ICONS: Record<string, string> = {
 }
 
 // ─── "إشراف عام" check ─────────────────────────────────────
-// فقط 3 أدوار (بالصفة الوظيفية):
-// 1. المدير العام لمكتب الصحة والسكان بالمحافظة (من الاسم)
-// 2. مدير الرعاية بالمحافظة (من الاسم)
-// 3. مشرف التحصين بالمحافظة (role=governorate — واحد لكل محافظة)
+// فقط المدير العام لمكتب الصحة والسكان بالمحافظة (من الاسم)
 
 function isGeneralSupervisor(name: string, role: string): boolean {
-  // مشرف التحصين بالمحافظة = إشراف عام دائماً
-  if (role === 'governorate') return true
-
   const n = (name || '').trim()
-
-  // المدير العام لمكتب الصحة والسكان بالمحافظة
   if (n.includes('مدير عام') || n.includes('المدير العام') || n.includes('مدير مكتب الصحة')) return true
-
-  // مدير الرعاية بالمحافظة
-  if (n.includes('مدير الرعاية') || n.includes('رعاية primaria')) return true
-
   return false
 }
 
@@ -430,7 +418,7 @@ export async function generateDailySupervisorEvaluation(options?: {
         <div class="day-date">تقرير تقييم أداء المشرفين اليومي</div>
       </div>
 
-      <!-- ═══ KPIs ═══ -->
+      <!-- ═══ ملخص اليوم ═══ -->
       ${buildSectionTitle('📊', 'ملخص اليوم')}
       <div class="kpi-grid">
         ${buildKPI('إجمالي المشرفين', totalSupervisors, '👥', BRAND.primary)}
@@ -440,43 +428,11 @@ export async function generateDailySupervisorEvaluation(options?: {
         ${buildKPI('إجمالي الاستمارات', totalForms, '📋', BRAND.info, `مرسلة: ${totalSubmitted} | مسودة: ${totalDraft}`)}
       </div>
 
-      <!-- ═══ تغطية المحافظات والمديريات ═══ -->
-      ${buildSectionTitle('🗺️', 'تغطية الإشراف')}
-      <div class="coverage-bar">
-        <div class="coverage-card ${coveredGovs === totalGovs ? 'good' : coveredGovs > totalGovs * 0.7 ? 'warn' : 'bad'}">
-          <div class="coverage-value" style="color:${coveredGovs === totalGovs ? BRAND.success : coveredGovs > totalGovs * 0.7 ? BRAND.warning : BRAND.accent}">${coveredGovs}/${totalGovs}</div>
-          <div class="coverage-label">محافظات مغطاة بالإشراف</div>
-          <div class="coverage-sub">${totalGovs > 0 ? Math.round((coveredGovs / totalGovs) * 100) : 0}% تغطية | ${uncoveredGovs} محافظة غير مغطاة</div>
-        </div>
-        <div class="coverage-card ${coveredDists === totalDists ? 'good' : coveredDists > totalDists * 0.7 ? 'warn' : 'bad'}">
-          <div class="coverage-value" style="color:${coveredDists === totalDists ? BRAND.success : coveredDists > totalDists * 0.7 ? BRAND.warning : BRAND.accent}">${coveredDists}/${totalDists}</div>
-          <div class="coverage-label">مديريات مغطاة بالإشراف</div>
-          <div class="coverage-sub">${totalDists > 0 ? Math.round((coveredDists / totalDists) * 100) : 0}% تغطية | ${uncoveredDists} مديرية غير مغطاة</div>
-        </div>
-      </div>
-
-      <!-- المديريات غير المغطاة -->
-      ${uncoveredDists > 0 ? `
-        <div style="margin:8px 0;padding:10px 14px;background:#FFEBEE;border-radius:8px;border-right:4px solid ${BRAND.accent};font-size:10px;">
-          <strong>⚠️ مديريات لم يتم تغطيتها ولم ترفع للنظام (${uncoveredDists} مديرية):</strong>
-          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">
-            ${dists
-              .filter(d => !coveredDistIds.has(d.id))
-              .slice(0, 30)
-              .map(d => `<span style="background:white;padding:2px 8px;border-radius:4px;border:1px solid #FFCDD2;">${escapeHtml(d.name_ar)} (${escapeHtml(govsMap.get(d.governorate_id)?.name_ar || '—')})</span>`)
-              .join('')}
-            ${uncoveredDists > 30 ? `<span style="color:${BRAND.textMuted}">... و ${uncoveredDists - 30} مديرية أخرى</span>` : ''}
-          </div>
-        </div>
-      ` : ''}
-
       <div class="summary-bar">
         <span class="summary-chip chip-total">👥 إجمالي: ${totalSupervisors}</span>
         <span class="summary-chip chip-active">✅ نشط: ${activeToday}</span>
         <span class="summary-chip chip-inactive">❌ غير نشط: ${inactiveToday}</span>
         <span class="summary-chip chip-general">🏛️ إشراف عام: ${generalCount}</span>
-        <span class="summary-chip chip-gov">🏛️ محافظات: ${coveredGovs}/${totalGovs}</span>
-        <span class="summary-chip chip-dist">📍 مديريات: ${coveredDists}/${totalDists}</span>
       </div>
 
       <!-- ═══ المحافظات ═══ -->

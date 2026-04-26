@@ -111,6 +111,7 @@ export default function ReportsPage() {
     cards.push({ icon: FileText, title: '📝 PDF — تحديات الإشراف الميداني', subtitle: 'آخر 3 حقول: التحديات والصعوبات، الإجراءات المتخذة، التوصيات', color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700', onClick: h.handleSupervisionChallengesReport, loading: h.exportingReport === 'supervision-challenges', badge: 'ميداني', format: 'pdf' })
     cards.push({ icon: Users, title: '📋 تقييم أداء المشرفين اليومي', subtitle: 'اليومي — المركزي + المحافظات + المديريات | الاسم، الصفة، عدد الاستمارات', color: 'text-white', gradient: 'bg-gradient-to-r from-emerald-600 to-teal-700', onClick: h.handleDailySupervisorEvaluation, loading: h.exportingReport === 'daily-supervisor-eval', badge: 'يومي', format: 'pdf' })
     cards.push({ icon: Sparkles, title: '📊 تحليل حقول نعم/لا', subtitle: 'استمارة الاشراف — تحليل شامل لكل حقل نعم/لا حسب القسم والمحافظة', color: 'text-white', gradient: 'bg-gradient-to-r from-violet-600 to-purple-700', onClick: h.handleYesNoAnalysis, loading: h.exportingReport === 'yesno-analysis', badge: 'تحليل', format: 'pdf' })
+    cards.push({ icon: MapPin, title: '🗺️ خريطة مواقع المشرفين', subtitle: 'خريطة اليمن + خريطة كل محافظة — مواقع GPS للمشرفين', color: 'text-white', gradient: 'bg-gradient-to-r from-teal-500 to-cyan-600', onClick: h.handleMapReport, loading: false, badge: 'خريطة', format: 'pdf' })
 
     // PPTX Reports
     if (canExportAll(h.userRole)) {

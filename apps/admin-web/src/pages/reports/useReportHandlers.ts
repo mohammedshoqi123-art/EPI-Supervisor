@@ -43,6 +43,7 @@ import {
   generateSupervisionChallengesReport,
   generateDailySupervisorEvaluation,
   generateYesNoAnalysisReport,
+  generateMapReport,
   enableCaptureMode,
   disableCaptureMode,
 } from '@/lib/professional-reports'
@@ -455,6 +456,7 @@ export function useReportHandlers() {
   const handleSupervisionChallengesReport = () => exportReport('supervision-challenges', () => captureAndPreview('تقرير تحديات الإشراف الميداني', 'التحديات — الإجراءات — التوصيات', () => generateSupervisionChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
   const handleDailySupervisorEvaluation = () => exportReport('daily-supervisor-eval', () => captureAndPreview('تقييم أداء المشرفين اليومي', 'استمارة الإشراف — النشاط الإيصالي التكاملي', () => generateDailySupervisorEvaluation({ date: dateTo || new Date().toISOString().split('T')[0], governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
   const handleYesNoAnalysis = () => exportReport('yesno-analysis', () => captureAndPreview('تحليل حقول نعم/لا', 'استمارة الاشراف — تحليل شامل', () => generateYesNoAnalysisReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
+  const handleMapReport = () => { generateMapReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }) }
 
   // ═══ Charts data ═══
   const govChartData = useMemo(() => {
@@ -505,6 +507,7 @@ export function useReportHandlers() {
     handleSupervisionFormReport, handleSupervisionChallengesReport,
     handleDailySupervisorEvaluation,
     handleYesNoAnalysis,
+    handleMapReport,
     // Charts
     govChartData, statusPieData,
     // PPTX handlers

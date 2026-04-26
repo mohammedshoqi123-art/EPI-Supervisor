@@ -405,13 +405,13 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     return allCampaigns.find(c => c.id === id)
   }, [allCampaigns])
 
-  const currentOption = getCampaign(campaign) ?? ALL_OPTION
-  const visibleOptions = [
+  const currentOption = useMemo(() => getCampaign(campaign) ?? ALL_OPTION, [getCampaign, campaign])
+  const visibleOptions = useMemo(() => [
     ALL_OPTION,
     ...allCampaigns.filter(c => !hiddenBuiltins.has(c.id) && c.visible !== false),
-  ]
+  ], [allCampaigns, hiddenBuiltins])
 
-  const value: CampaignContextValue = {
+  const value: CampaignContextValue = useMemo(() => ({
     campaign,
     setCampaign,
     currentOption,
@@ -426,7 +426,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     deleteCampaign,
     getCampaign,
     loading,
-  }
+  }), [campaign, setCampaign, currentOption, allCampaigns, visibleOptions, isCampaignVisible, toggleCampaignVisibility, addCampaign, updateCampaign, deleteCampaign, getCampaign, loading])
 
   return (
     <CampaignContext.Provider value={value}>

@@ -26,7 +26,7 @@ export interface BulkFetchOptions {
   /** Order direction */
   orderDirection?: 'asc' | 'desc'
   /** Filters to apply (Supabase query builder) */
-  applyFilters?: (query: ReturnType<typeof supabase.from> extends infer T ? T : never) => T
+  applyFilters?: (query: any) => any
   /** Callback for progress updates */
   onProgress?: (fetched: number, total: number | null) => void
 }

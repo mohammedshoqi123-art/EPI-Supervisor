@@ -294,7 +294,7 @@ export function exportEnhancedExcel(options: EnhancedExportOptions): void {
       if (!cell) continue
 
       // Base style
-      const style: XLSX.CellStyle = {
+      const style: any = {
         alignment: {
           horizontal: columns[c].align || 'right',
           vertical: 'center',

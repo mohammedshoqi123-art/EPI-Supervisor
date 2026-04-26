@@ -1358,8 +1358,8 @@ export default function ReportsPage() {
             <AnalyticsFilterBar
               filter={analyticsFilter}
               onChange={setAnalyticsFilter}
-              onRefresh={() => { refetchStats(); handleRefresh() }}
-              refreshing={isFetching}
+              onRefresh={() => { refetchStats(); refetchForms() }}
+              refreshing={statsLoading}
             />
 
             {/* KPI Cards Row — same as mobile dashboard */}

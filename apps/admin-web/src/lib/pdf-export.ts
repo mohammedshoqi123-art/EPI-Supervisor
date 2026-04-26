@@ -181,7 +181,7 @@ function buildCoverPage(options: ReportOptions): string {
   `
 }
 
-export function generatePDFReport(options: ReportOptions): void {
+export async function generatePDFReport(options: ReportOptions): Promise<void> {
   const now = new Date()
   const dateStr = formatDateArabic(now)
   const sectionsHtml = options.sections.map(buildSection).join('')

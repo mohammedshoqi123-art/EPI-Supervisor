@@ -164,6 +164,7 @@ function generateId(): string {
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
+  const { toast } = useToast()
   const [activeSection, setActiveSection] = useState('general')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const restoreInputRef = useRef<HTMLInputElement>(null)

@@ -1,1227 +1,135 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useMemo } from 'react'
 import {
   BarChart3, FileSpreadsheet, Download, Calendar, Filter,
   Users, FileStack, MapPin, AlertTriangle, TrendingUp, TrendingDown,
   FileText, Activity, Clock, Zap, RefreshCw,
   PackageX, Shield, ArrowUpRight,
-  CheckCircle2, Loader2, PieChart as PieChartIcon, Target,
-  Sparkles, Gauge,
-  FileDown,
-  Info, ScrollText, History, ArrowLeftRight,
+  CheckCircle2, PieChart as PieChartIcon, Target,
+  Sparkles, Gauge, FileDown, Info, ScrollText, History, ArrowLeftRight,
   Search, X, FileSearch
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from '@/components/ui/select'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
-} from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
-import {
-  useAuth, useForms, useGovernorates, useGovernorateStats,
-  useDashboardStats, useShortages, useFormSubmissionCounts,
-  useSubmissionsChart, useRoleDistribution, useAuditLogs
-} from '@/hooks/useApi'
-import { supabase } from '@/lib/supabase'
-import { ROLE_LABELS, ROLE_HIERARCHY, type UserRole, type Form } from '@/types/database'
-import { formatNumber, formatDate, cn } from '@/lib/utils'
-import { useCampaign } from '@/lib/campaign-context'
-import { useToast } from '@/hooks/useToast'
+import { formatNumber, cn } from '@/lib/utils'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, ResponsiveContainer, Legend
 } from 'recharts'
-import {
-  exportToExcel,
-  exportFormSubmissionsToExcel,
-  exportDashboardReport,
-  exportGovernorateReport,
-  exportUsersReport,
-  type ExportColumn
-} from '@/lib/excel-export'
-import {
-  generatePDFReport,
-  generateSubmissionsReport,
-  generateGovernorateReport as generateGovPDFReport,
-  generateUsersReport as generateUsersPDFReport,
-  generateShortagesReport,
-} from '@/lib/pdf-export'
-import {
-  generateCentralReport,
-  generateGovernorateDetailReport,
-  generateFormAnalysisReport,
-  generateDistrictReport,
-  generateSupervisorReport,
-  generateCoverageGapReport,
-  generateCampaignComparisonReport,
-  generateDailyActivityReport,
-  generateDataQualityReport,
-  generateShortagesDetailedReport,
-  generateWeeklyReport,
-  generateUserActivityReport,
-  generateChallengesReport,
-  generateSupervisionFormReport,
-  generateSupervisionChallengesReport,
-  generateDailySupervisorEvaluation,
-  enableCaptureMode,
-  disableCaptureMode,
-} from '@/lib/professional-reports'
-// Enhanced PDF & Preview
-import {
-  generateReportHTML, printReport,
-  buildSubmissionsPDF, buildGovernoratesPDF, buildUsersPDF, buildShortagesPDF, buildFullPDF,
-} from '@/lib/enhanced-pdf'
-import { ReportPreview, useReportPreview } from '@/components/reports/ReportPreview'
-import { ExportProgress, useExportProgress } from '@/components/reports/ExportProgress'
-import { bulkFetchSubmissions, bulkFetchUsers, bulkFetchShortages } from '@/lib/bulk-fetch'
-import { SectionErrorBoundary } from '@/components/ui/section-error-boundary'
-import { generateMonthlyPerformancePPTX, generateWeeklyBulletinPPTX, generateCampaignPerformancePPTX } from '@/lib/pptx-index'
-import { ComparisonReport } from '@/components/reports/ComparisonReport'
-import { AnalyticsFilterBar, DrillDownDialog, ChartCard, FullscreenChart, useSortableData, type DrillDownData, type AnalyticsFilter } from '@/components/reports/InteractiveAnalytics'
-
-// ═══════════════════════════════════════════════════════════════
-// Constants & Helpers
-// ═══════════════════════════════════════════════════════════════
-
-const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899']
-
-function canExportAll(role: UserRole): boolean {
-  return ['admin', 'central'].includes(role)
-}
-function canExportGovernorate(role: UserRole): boolean {
-  return ['admin', 'central', 'governorate'].includes(role)
-}
-
 import { ReportCard, FormExportCard, CustomTooltip } from '@/components/reports/ReportCards'
 import type { ReportCardProps } from '@/components/reports/ReportCards'
+import { ReportPreview } from '@/components/reports/ReportPreview'
+import { ExportProgress } from '@/components/reports/ExportProgress'
+import { SectionErrorBoundary } from '@/components/ui/section-error-boundary'
+import { ComparisonReport } from '@/components/reports/ComparisonReport'
+import { AnalyticsFilterBar, DrillDownDialog, ChartCard, FullscreenChart } from '@/components/reports/InteractiveAnalytics'
+import { useReportHandlers, canExportAll, canExportGovernorate, CHART_COLORS } from './reports'
 
 // ═══════════════════════════════════════════════════════════════
 // Main Reports Page
 // ═══════════════════════════════════════════════════════════════
 
 export default function ReportsPage() {
-  const { data: authData } = useAuth()
-  const userRole = (authData?.profile?.role as UserRole) || 'data_entry'
-  const { campaign, labelAr, isFiltered } = useCampaign()
-  const { toast } = useToast()
-  const { previewProps, openPreview, closePreview } = useReportPreview()
-  const exportProgress = useExportProgress()
-
-  // Data
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats(campaign)
-  const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign)
-  const { data: formsResult, isLoading: formsLoading, refetch: refetchForms } = useForms({ campaignType: campaign })
-  const { data: submissionCounts } = useFormSubmissionCounts(campaign)
-  const { data: governorates } = useGovernorates()
-  const { data: chartData, isLoading: chartLoading } = useSubmissionsChart(campaign)
-  const { data: roleDistribution } = useRoleDistribution()
-  const { data: auditData } = useAuditLogs({ page: 1 })
-
-  const forms = formsResult?.data || []
-
-  // State
-  const [activeTab, setActiveTab] = useState('analytics')
-  const [searchParams] = useSearchParams()
-
-  // Auto-navigate to tab from URL query (e.g., ?tab=quick-reports)
-  useEffect(() => {
-    const tab = searchParams.get('tab')
-    if (tab && ['analytics', 'quick-reports', 'form-exports', 'comparison'].includes(tab)) {
-      setActiveTab(tab)
-    }
-  }, [searchParams])
-  const [exportingFormId, setExportingFormId] = useState<string | null>(null)
-  const [exportingReport, setExportingReport] = useState<string | null>(null)
-  const [formSearch, setFormSearch] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [selectedGovFilter, setSelectedGovFilter] = useState('all')
-
-  // Interactive analytics state
-  const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter>({
-    dateFrom: '', dateTo: '', governorateId: 'all', campaignType: 'all',
-  })
-  const [drillDownOpen, setDrillDownOpen] = useState(false)
-  const [drillDownData, setDrillDownData] = useState<DrillDownData | null>(null)
-  const [fullscreenChart, setFullscreenChart] = useState<string | null>(null)
-  const [reportSearch, setReportSearch] = useState('')
-  const [reportFormat, setReportFormat] = useState<'all' | 'pdf' | 'excel' | 'pptx'>('all')
-
-  // Filtered forms
-  const filteredForms = useMemo(() => {
-    return forms.filter(f => {
-      if (formSearch) {
-        const s = formSearch.toLowerCase()
-        return f.title_ar.toLowerCase().includes(s) || f.title_en.toLowerCase().includes(s)
-      }
-      return true
-    })
-  }, [forms, formSearch])
-
-  // ═══ Export Handlers ═══
-
-  const exportReport = useCallback(async (id: string, fn: () => Promise<void> | void) => {
-    setExportingReport(id)
-    try {
-      await fn()
-      toast({ title: 'تم تصدير التقرير بنجاح ✅', variant: 'success' })
-    } catch (e) {
-      console.error(e)
-      toast({ title: 'فشل التصدير', variant: 'destructive' })
-    } finally {
-      setExportingReport(null)
-    }
-  }, [toast])
-
-  const handleExportDashboard = () => exportReport('dashboard', () => {
-    if (!stats) return
-    exportDashboardReport(stats)
-  })
-
-  const handleExportGovernorates = () => exportReport('governorates', () => {
-    if (!govStats) return
-    exportGovernorateReport(govStats.map(g => ({
-      name_ar: g.name,
-      submissions: g.submissions,
-      completion_rate: govStats.length > 0 ? Math.round((g.submissions / Math.max(...govStats.map(s => s.submissions), 1)) * 100) : 0,
-      active_users: 0,
-      last_submission: null,
-    })))
-  })
-
-  const handleExportUsers = () => exportReport('users', async () => {
-    exportProgress.startFetch()
-
-    const result = await bulkFetchUsers()
-
-    exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
-    exportProgress.startGenerate()
-
-    exportUsersReport((result.data || []).map((u: any) => ({
-      full_name: u.full_name, email: u.email, role: u.role,
-      is_active: u.is_active, governorate: u.governorates?.name_ar,
-      created_at: u.created_at,
-    })))
-
-    exportProgress.done(`تم تصدير ${result.fetchedCount} مستخدم`)
-  })
-
-  const handleExportSubmissions = () => exportReport('submissions', async () => {
-    exportProgress.startFetch()
-
-    // Use bulk fetch for paginated data retrieval (no 5000 hard limit)
-    const result = await bulkFetchSubmissions({
-      governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined,
-      dateFrom: dateFrom || undefined,
-      dateTo: dateTo || undefined,
-    })
-
-    exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
-    exportProgress.startGenerate()
-
-    const columns: ExportColumn[] = [
-      { header: '#', key: 'index', width: 6 },
-      { header: 'النموذج', key: 'form', width: 22 },
-      { header: 'الحالة', key: 'status', width: 12 },
-      { header: 'المُرسل', key: 'submitted_by', width: 20 },
-      { header: 'المحافظة', key: 'governorate', width: 15 },
-      { header: 'المديرية', key: 'district', width: 15 },
-      { header: 'النشاط', key: 'campaign', width: 15 },
-      { header: 'التاريخ', key: 'date', width: 18 },
-    ]
-
-    const rows = result.data.map((s: any, i: number) => ({
-      index: i + 1, form: s.forms?.title_ar || '',
-      status: s.status === 'submitted' ? 'مرسلة' : 'مسودة',
-      submitted_by: s.profiles?.full_name || '',
-      governorate: s.governorates?.name_ar || '', district: s.districts?.name_ar || '',
-      campaign: s.forms?.campaign_type === 'polio_campaign' ? 'شلل أطفال' : 'إيصالي',
-      date: new Date(s.created_at).toLocaleDateString('ar-SA'),
-    }))
-
-    exportToExcel({
-      sheetName: 'إرساليات النماذج',
-      title: 'تقرير الإرساليات الشامل — EPI Supervisor',
-      subtitle: `تصدير: ${new Date().toLocaleDateString('ar-SA')} — ${rows.length} سجل${result.truncated ? ' (مُقتطع)' : ''}`,
-      columns, data: rows,
-      fileName: `submissions_report_${new Date().toISOString().split('T')[0]}`,
-    })
-
-    exportProgress.done(`تم تصدير ${rows.length} إرسالية${result.truncated ? ' (مُقتطع)' : ''}`)
-  })
-
-  const handleExportShortages = () => exportReport('shortages', async () => {
-    exportProgress.startFetch()
-
-    const result = await bulkFetchShortages()
-
-    exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
-    exportProgress.startGenerate()
-
-    const sev: Record<string, string> = { critical: 'حرج', high: 'عالي', medium: 'متوسط', low: 'منخفض' }
-    const columns: ExportColumn[] = [
-      { header: '#', key: 'index', width: 6 }, { header: 'الصنف', key: 'item', width: 22 },
-      { header: 'الفئة', key: 'category', width: 15 }, { header: 'المطلوب', key: 'needed', width: 12 },
-      { header: 'المتاح', key: 'available', width: 10 }, { header: 'الخطورة', key: 'severity', width: 12 },
-      { header: 'محلول', key: 'resolved', width: 10 }, { header: 'المُبلّغ', key: 'by', width: 18 },
-      { header: 'المحافظة', key: 'gov', width: 15 }, { header: 'التاريخ', key: 'date', width: 16 },
-    ]
-    const rows = result.data.map((s: any, i: number) => ({
-      index: i + 1, item: s.item_name, category: s.item_category || '',
-      needed: s.quantity_needed || '', available: s.quantity_available || 0,
-      severity: sev[s.severity] || s.severity, resolved: s.is_resolved ? 'نعم' : 'لا',
-      by: s.profiles?.full_name || '', gov: s.governorates?.name_ar || '',
-      date: new Date(s.created_at).toLocaleDateString('ar-SA'),
-    }))
-    exportToExcel({
-      sheetName: 'النواقص', title: 'تقرير النواقص — EPI Supervisor',
-      subtitle: `${rows.length} سجل`, columns, data: rows,
-      fileName: `shortages_report_${new Date().toISOString().split('T')[0]}`,
-    })
-
-    exportProgress.done(`تم تصدير ${rows.length} نقص`)
-  })
-
-  const handleExportTimeline = () => exportReport('timeline', () => {
-    if (!chartData) return
-    const columns: ExportColumn[] = [
-      { header: 'التاريخ', key: 'date', width: 14 },
-      { header: 'مرسلة', key: 'submitted', width: 10 },
-      { header: 'مسودة', key: 'draft', width: 10 },
-      { header: 'الإجمالي', key: 'total', width: 10 },
-    ]
-    const rows = chartData.map((d: any) => ({
-      date: d.date, submitted: d.submitted || 0, draft: d.draft || 0,
-      total: (d.submitted || 0) + (d.draft || 0),
-    }))
-    exportToExcel({
-      sheetName: 'الإرساليات - خط زمني', title: 'تقرير الإرساليات الزمني — EPI Supervisor',
-      columns, data: rows,
-      fileName: `timeline_report_${new Date().toISOString().split('T')[0]}`,
-    })
-  })
-
-  const handleExportRoles = () => exportReport('roles', () => {
-    if (!roleDistribution) return
-    const columns: ExportColumn[] = [
-      { header: 'الدور', key: 'name', width: 20 },
-      { header: 'العدد', key: 'value', width: 10 },
-    ]
-    exportToExcel({
-      sheetName: 'توزيع الأدوار', title: 'تقرير توزيع الأدوار — EPI Supervisor',
-      columns, data: roleDistribution,
-      fileName: `roles_report_${new Date().toISOString().split('T')[0]}`,
-    })
-  })
-
-  const handleExportAudit = () => exportReport('audit', async () => {
-    exportProgress.startFetch()
-
-    let query = supabase.from('audit_logs').select(`
-      id, action, table_name, record_id, ip_address, created_at,
-      profiles(full_name, email, role)
-    `).order('created_at', { ascending: false }).limit(20000)
-
-    if (dateFrom) query = query.gte('created_at', dateFrom)
-    if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')
-
-    const { data, error } = await query
-    if (error) throw error
-
-    exportProgress.startGenerate()
-
-    const actionLabels: Record<string, string> = {
-      create: 'إنشاء', update: 'تعديل', delete: 'حذف',
-      login: 'تسجيل دخول', logout: 'تسجيل خروج',
-    }
-    const tableLabels: Record<string, string> = {
-      profiles: 'المستخدمين', form_submissions: 'الإرساليات', forms: 'النماذج',
-      supply_shortages: 'النواقص', governorates: 'المحافظات', districts: 'المديريات',
-      notifications: 'الإشعارات',
-    }
-
-    const columns: ExportColumn[] = [
-      { header: '#', key: 'index', width: 6 },
-      { header: 'الإجراء', key: 'action', width: 14 },
-      { header: 'الجدول', key: 'table', width: 16 },
-      { header: 'المستخدم', key: 'user', width: 22 },
-      { header: 'البريد', key: 'email', width: 25 },
-      { header: 'الدور', key: 'role', width: 14 },
-      { header: 'IP', key: 'ip', width: 14 },
-      { header: 'التاريخ', key: 'date', width: 18 },
-    ]
-
-    const rows = (data || []).map((log: any, i: number) => ({
-      index: i + 1,
-      action: actionLabels[log.action] || log.action,
-      table: tableLabels[log.table_name] || log.table_name,
-      user: log.profiles?.full_name || '',
-      email: log.profiles?.email || '',
-      role: log.profiles?.role || '',
-      ip: log.ip_address || '',
-      date: new Date(log.created_at).toLocaleString('ar-SA'),
-    }))
-
-    exportToExcel({
-      sheetName: 'سجل التدقيق',
-      title: 'تقرير سجل التدقيق — EPI Supervisor',
-      subtitle: `تصدير: ${new Date().toLocaleDateString('ar-SA')} — ${rows.length} سجل`,
-      columns, data: rows,
-      fileName: `audit_report_${new Date().toISOString().split('T')[0]}`,
-    })
-
-    exportProgress.done(`تم تصدير ${rows.length} سجل تدقيق`)
-  })
-
-  // ═══ PDF Export Handlers ═══
-
-  const handleExportPDF = () => exportReport('pdf', async () => {
-    // Use enhanced PDF with preview
-    const { data: govData } = await supabase
-      .from('governorates')
-      .select('name_ar')
-      .eq('is_active', true)
-      .is('deleted_at', null)
-      .order('name_ar')
-
-    const { data: subsByGov } = await supabase
-      .from('form_submissions')
-      .select('governorate_id, status, governorates(name_ar)')
-      .is('deleted_at', null)
-      .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-
-    const govMap = new Map<string, { name: string; count: number }>()
-    for (const sub of subsByGov || []) {
-      const name = (sub.governorates as any)?.name_ar || 'غير محدد'
-      const existing = govMap.get(name) || { name, count: 0 }
-      existing.count++
-      govMap.set(name, existing)
-    }
-
-    const { data: recentSubs } = await supabase
-      .from('form_submissions')
-      .select('status, created_at, forms(title_ar), profiles!submitted_by(full_name), governorates(name_ar)')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(20)
-
-    const statusLabels: Record<string, string> = {
-      submitted: 'مرسلة', draft: 'مسودة', approved: 'معتمدة', rejected: 'مرفوضة',
-    }
-
-    // Generate preview HTML
-    const html = generateReportHTML({
-      title: 'تقرير الإرساليات الشامل',
-      subtitle: 'إحصائيات تفصيلية للإرساليات والاستمارات',
-      period: 'آخر 30 يوم',
-      sections: [
-        {
-          title: 'مؤشرات الأداء الرئيسية',
-          icon: '📊',
-          type: 'kpi-grid',
-          kpis: [
-            { label: 'إجمالي الإرساليات', value: stats?.total_submissions || 0, icon: '📋', color: '#1565C0' },
-            { label: 'مرسلة', value: (stats?.total_submissions || 0) - (stats?.draft_submissions || 0), icon: '✅', color: '#2E7D32' },
-            { label: 'مسودات', value: stats?.draft_submissions || 0, icon: '📝', color: '#F57F17' },
-            { label: 'اليوم', value: stats?.submissions_today || 0, icon: '📅', color: '#0277BD' },
-          ],
-        },
-        {
-          title: 'الإرساليات حسب المحافظة',
-          icon: '🗺️',
-          type: 'table',
-          columns: [
-            { key: 'name', label: 'المحافظة' },
-            { key: 'count', label: 'عدد الإرساليات' },
-          ],
-          rows: Array.from(govMap.values()).sort((a, b) => b.count - a.count).slice(0, 15),
-        },
-        {
-          title: 'آخر الإرساليات',
-          icon: '📝',
-          type: 'table',
-          columns: [
-            { key: 'form', label: 'الاستمارة' },
-            { key: 'submitter', label: 'المقدم' },
-            { key: 'governorate', label: 'المحافظة' },
-            { key: 'status', label: 'الحالة' },
-            { key: 'date', label: 'التاريخ' },
-          ],
-          rows: (recentSubs || []).map((s: any) => ({
-            form: s.forms?.title_ar || '—',
-            submitter: s.profiles?.full_name || '—',
-            governorate: s.governorates?.name_ar || '—',
-            status: statusLabels[s.status] || s.status,
-            date: new Date(s.created_at).toLocaleDateString('ar-SA'),
-          })),
-        },
-      ],
-    })
-
-    openPreview('تقرير الإرساليات الشامل', html, 'آخر 30 يوم')
-  })
-
-  const handleExportGovPDF = () => exportReport('gov-pdf', async () => {
-    if (!govStats) return
-
-    const zeroGovs = govStats.filter(g => g.submissions === 0)
-    const topGov = govStats.length > 0 ? govStats[0] : null
-    const coveragePct = govStats.length > 0
-      ? Math.round((govStats.filter(g => g.submissions > 0).length / govStats.length) * 100)
-      : 0
-
-    const html = generateReportHTML({
-      title: 'تقرير أداء المحافظات',
-      subtitle: 'مقارنة شاملة لأداء جميع المحافظات',
-      sections: [
-        {
-          title: 'مؤشرات التغطية',
-          icon: '🎯',
-          type: 'kpi-grid',
-          kpis: [
-            { label: 'نسبة التغطية', value: `${coveragePct}%`, icon: '📊', color: coveragePct >= 80 ? '#2E7D32' : '#F57F17' },
-            { label: 'محافظات نشطة', value: govStats.filter(g => g.submissions > 0).length, icon: '🏛️', color: '#1565C0' },
-            { label: 'بدون تغطية', value: zeroGovs.length, icon: '⚠️', color: zeroGovs.length > 0 ? '#E53935' : '#2E7D32' },
-            { label: 'الأعلى نشاطاً', value: topGov?.name || '—', icon: '🏆', color: '#FFD600' },
-          ],
-        },
-        {
-          title: 'أداء المحافظات',
-          icon: '🏛️',
-          type: 'table',
-          columns: [
-            { key: 'rank', label: '#', width: 40 },
-            { key: 'name', label: 'المحافظة', width: 200 },
-            { key: 'submissions', label: 'إرساليات', width: 120 },
-          ],
-          rows: govStats.map((g, i) => ({
-            rank: i + 1,
-            name: g.name,
-            submissions: g.submissions,
-          })),
-        },
-        ...(zeroGovs.length > 0 ? [{
-          title: 'محافظات بدون تغطية',
-          icon: '⚠️',
-          type: 'list' as const,
-          items: zeroGovs.map(g => ({ label: g.name, value: 'لا توجد إرساليات', color: '#E53935' })),
-        }] : []),
-      ],
-    })
-
-    openPreview('تقرير أداء المحافظات', html, `${govStats.length} محافظة`)
-  })
-
-  const handleExportUsersPDF = () => exportReport('users-pdf', async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('full_name, email, role, is_active, governorates(name_ar)')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(200)
-
-    const roleLabels: Record<string, string> = {
-      admin: 'مدير النظام', central: 'مركزي', governorate: 'محافظة', district: 'مديرية', data_entry: 'إدخال بيانات',
-    }
-    const byRole: Record<string, number> = {}
-    for (const u of data || []) {
-      byRole[u.role] = (byRole[u.role] || 0) + 1
-    }
-
-    const html = generateReportHTML({
-      title: 'تقرير المستخدمين',
-      subtitle: 'إحصائيات شاملة للمستخدمين والأدوار',
-      sections: [
-        {
-          title: 'ملخص المستخدمين',
-          icon: '👥',
-          type: 'kpi-grid',
-          kpis: [
-            { label: 'إجمالي المستخدمين', value: data?.length || 0, icon: '👤', color: '#1565C0' },
-            { label: 'نشطين', value: data?.filter(u => u.is_active).length || 0, icon: '✅', color: '#2E7D32' },
-            { label: 'غير نشطين', value: data?.filter(u => !u.is_active).length || 0, icon: '⏸️', color: '#F57F17' },
-          ],
-        },
-        {
-          title: 'توزيع الأدوار',
-          icon: '📊',
-          type: 'summary',
-          items: Object.entries(byRole).map(([role, count]) => ({
-            label: roleLabels[role] || role,
-            value: count,
-            color: role === 'admin' ? '#8E24AA' : '#1565C0',
-          })),
-        },
-        {
-          title: 'قائمة المستخدمين',
-          icon: '📋',
-          type: 'table',
-          columns: [
-            { key: 'name', label: 'الاسم', width: 150 },
-            { key: 'email', label: 'البريد', width: 180 },
-            { key: 'role', label: 'الدور', width: 100 },
-            { key: 'governorate', label: 'المحافظة', width: 120 },
-            { key: 'active', label: 'نشط', width: 60 },
-          ],
-          rows: (data || []).map((u: any) => ({
-            name: u.full_name,
-            email: u.email,
-            role: roleLabels[u.role] || u.role,
-            governorate: u.governorates?.name_ar || '—',
-            active: u.is_active ? 'نعم' : 'لا',
-          })),
-        },
-      ],
-    })
-
-    openPreview('تقرير المستخدمين', html, `${data?.length || 0} مستخدم`)
-  })
-
-  const handleExportShortagesPDF = () => exportReport('shortages-pdf', async () => {
-    const { data } = await supabase
-      .from('supply_shortages')
-      .select('item_name, severity, quantity_needed, quantity_available, is_resolved, governorates(name_ar)')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(200)
-
-    const sevLabels: Record<string, string> = { critical: 'حرج', high: 'عالي', medium: 'متوسط', low: 'منخفض' }
-    const sevColors: Record<string, string> = { critical: '#E53935', high: '#FF6D00', medium: '#F57F17', low: '#2E7D32' }
-
-    const html = generateReportHTML({
-      title: 'تقرير النواقص التفصيلي',
-      subtitle: 'نواقص اللقاحات والمعدات والتجهيزات',
-      sections: [
-        {
-          title: 'ملخص النواقص',
-          icon: '📦',
-          type: 'kpi-grid',
-          kpis: [
-            { label: 'إجمالي النواقص', value: data?.length || 0, icon: '📦', color: '#1565C0' },
-            { label: 'حرجة', value: data?.filter(s => s.severity === 'critical').length || 0, icon: '🔴', color: '#E53935' },
-            { label: 'عالية', value: data?.filter(s => s.severity === 'high').length || 0, icon: '🟠', color: '#FF6D00' },
-            { label: 'محلولة', value: data?.filter(s => s.is_resolved).length || 0, icon: '✅', color: '#2E7D32' },
-          ],
-        },
-        {
-          title: 'نسبة الحل',
-          icon: '🎯',
-          type: 'progress',
-          progressItems: [
-            { label: 'نواقص محلولة', value: data?.filter(s => s.is_resolved).length || 0, max: data?.length || 1, color: '#2E7D32' },
-            { label: 'نواقص حرجة', value: data?.filter(s => s.severity === 'critical').length || 0, max: data?.length || 1, color: '#E53935' },
-          ],
-        },
-        {
-          title: 'تفاصيل النواقص',
-          icon: '📋',
-          type: 'table',
-          columns: [
-            { key: 'item', label: 'الصنف', width: 150 },
-            { key: 'severity', label: 'الخطورة', width: 80 },
-            { key: 'needed', label: 'المطلوب', width: 80 },
-            { key: 'available', label: 'المتاح', width: 80 },
-            { key: 'gap', label: 'النقص', width: 80 },
-            { key: 'governorate', label: 'المحافظة', width: 120 },
-            { key: 'resolved', label: 'محلول', width: 60 },
-          ],
-          rows: (data || []).map((s: any) => ({
-            item: s.item_name,
-            severity: sevLabels[s.severity] || s.severity,
-            needed: s.quantity_needed || 0,
-            available: s.quantity_available || 0,
-            gap: Math.max(0, (s.quantity_needed || 0) - s.quantity_available),
-            governorate: s.governorates?.name_ar || '—',
-            resolved: s.is_resolved ? 'نعم' : 'لا',
-          })),
-        },
-      ],
-    })
-
-    openPreview('تقرير النواقص التفصيلي', html, `${data?.length || 0} نقص`)
-  })
-
-  const handleExportFullPDF = () => exportReport('full-pdf', async () => {
-    if (!stats) return
-
-    const coveragePct = govStats && govStats.length > 0
-      ? Math.round((govStats.filter(g => g.submissions > 0).length / govStats.length) * 100)
-      : 0
-
-    const html = generateReportHTML({
-      title: 'التقرير الشامل — EPI Supervisor',
-      subtitle: 'جميع البيانات والإحصائيات في تقرير واحد',
-      period: 'آخر 30 يوم',
-      sections: [
-        {
-          title: 'مؤشرات الأداء الرئيسية',
-          icon: '📊',
-          type: 'kpi-grid',
-          kpis: [
-            { label: 'المستخدمين', value: stats.total_users, icon: '👥', color: '#0277BD', sub: `${stats.active_users} نشط` },
-            { label: 'إرساليات اليوم', value: stats.submissions_today, icon: '📅', color: '#2E7D32' },
-            { label: 'المسودات', value: stats.draft_submissions, icon: '📝', color: '#F57F17' },
-            { label: 'نسبة الإنجاز', value: `${stats.approval_rate.toFixed(1)}%`, icon: '🎯', color: '#8E24AA' },
-            { label: 'النماذج النشطة', value: stats.active_forms, icon: '📄', color: '#1565C0' },
-            { label: 'التغطية', value: `${coveragePct}%`, icon: '🗺️', color: coveragePct >= 80 ? '#2E7D32' : '#F57F17' },
-          ],
-        },
-        {
-          title: 'توزيع الحالات',
-          icon: '📈',
-          type: 'summary',
-          items: [
-            { label: 'مرسلة', value: stats.total_submissions - stats.draft_submissions, color: '#2E7D32' },
-            { label: 'مسودة', value: stats.draft_submissions, color: '#F57F17' },
-            { label: 'هذا الأسبوع', value: stats.submissions_this_week, color: '#0277BD' },
-            { label: 'الاتجاه', value: `${stats.submissions_trend > 0 ? '+' : ''}${stats.submissions_trend}%`, color: stats.submissions_trend >= 0 ? '#2E7D32' : '#E53935' },
-          ],
-        },
-        ...(govStats && govStats.length > 0 ? [{
-          title: 'أداء المحافظات',
-          icon: '🏛️',
-          type: 'table' as const,
-          columns: [
-            { key: 'rank', label: '#', width: 40 },
-            { key: 'name', label: 'المحافظة', width: 200 },
-            { key: 'submissions', label: 'إرساليات', width: 120 },
-          ],
-          rows: govStats.map((g, i) => ({
-            rank: i + 1,
-            name: g.name,
-            submissions: g.submissions,
-          })),
-        }] : []),
-      ],
-    })
-
-    openPreview('التقرير الشامل', html, 'جميع البيانات والإحصائيات')
-  })
-
-  // Form-level export
-  const handleExportForm = async (form: Form, format: 'xlsx' | 'csv') => {
-    setExportingFormId(form.id)
-    try {
-      const schema = form.schema as any
-      const fields: Array<{ label_ar: string; key: string }> = []
-      if (schema?.fields) schema.fields.forEach((f: any) => fields.push({ label_ar: f.label_ar || f.label || '', key: f.id || f.key || '' }))
-      if (schema?.sections) schema.sections.forEach((s: any) => s.fields?.forEach((f: any) => fields.push({ label_ar: f.label_ar || f.label || '', key: f.id || f.key || '' })))
-
-      // Bulk fetch with pagination (no 5000 hard limit)
-      const allSubmissions: any[] = []
-      let offset = 0
-      const pageSize = 1000
-      while (true) {
-        const { data, error } = await supabase.from('form_submissions').select(`
-          id, status, data, created_at,
-          profiles!submitted_by(full_name), governorates(name_ar), districts(name_ar)
-        `).eq('form_id', form.id).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + pageSize - 1)
-        if (error) throw error
-        if (!data || data.length === 0) break
-        allSubmissions.push(...data)
-        if (data.length < pageSize || allSubmissions.length >= 50000) break
-        offset += pageSize
-        await new Promise(r => setTimeout(r, 50))
-      }
-
-      const mapped = allSubmissions.map((s: any) => ({
-        id: s.id, status: s.status, submitted_by: s.profiles?.full_name || '',
-        governorate: s.governorates?.name_ar || '', district: s.districts?.name_ar || '',
-        created_at: s.created_at, data: s.data || {},
-      }))
-
-      if (mapped.length === 0) { toast({ title: 'لا توجد إرساليات', variant: 'destructive' }); return }
-
-      if (format === 'csv') {
-        // CSV injection protection: sanitize all values
-        const sanitizeCSV = (val: unknown): string => {
-          const str = String(val ?? '')
-          // Prevent CSV injection by prefixing dangerous chars with apostrophe
-          const dangerous = /^[=+\-@\t\r]/.test(str)
-          const escaped = str.includes(',') || str.includes('"') || str.includes('\n')
-            ? `"${str.replace(/"/g, '""')}"`
-            : str
-          return dangerous ? `'${escaped}` : escaped
-        }
-
-        const headers = ['#', 'الحالة', 'المُرسل', 'المحافظة', 'التاريخ', ...fields.map(f => f.label_ar)]
-        const rows = mapped.map((s, i) => [
-          i + 1,
-          sanitizeCSV(s.status === 'submitted' ? 'مرسلة' : 'مسودة'),
-          sanitizeCSV(s.submitted_by),
-          sanitizeCSV(s.governorate),
-          sanitizeCSV(new Date(s.created_at).toLocaleDateString('ar-SA')),
-          ...fields.map(f => sanitizeCSV(s.data?.[f.key]))
-        ])
-        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
-        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a'); a.href = url; a.download = `${form.title_ar}.csv`; a.click(); URL.revokeObjectURL(url)
-      } else {
-        exportFormSubmissionsToExcel(form.title_ar, fields, mapped)
-      }
-      toast({ title: `تم تصدير ${mapped.length} إرسالية ✅`, variant: 'success' })
-    } catch { toast({ title: 'فشل التصدير', variant: 'destructive' }) }
-    finally { setExportingFormId(null) }
-  }
+  const h = useReportHandlers()
 
   // ═══ Report Cards Definition ═══
-
   const reportCards = useMemo(() => {
     const cards: ReportCardProps[] = []
 
-    // 1. Dashboard Summary — matches mobile KPIs
-    if (canExportGovernorate(userRole)) {
-      cards.push({
-        icon: Gauge, title: 'ملخص المؤشرات', subtitle: 'KPIs — المستخدمين، الإرساليات، النماذج، معدل الأداء',
-        value: stats ? formatNumber(stats.total_submissions) : undefined,
-        trend: stats?.submissions_trend, color: 'text-blue-600', gradient: 'bg-gradient-to-r from-blue-500 to-blue-600',
-        onClick: handleExportDashboard, loading: exportingReport === 'dashboard',
-        badge: 'KPIs', format: 'excel',
-      })
+    if (canExportGovernorate(h.userRole)) {
+      cards.push({ icon: Gauge, title: 'ملخص المؤشرات', subtitle: 'KPIs — المستخدمين، الإرساليات، النماذج، معدل الأداء', value: h.stats ? formatNumber(h.stats.total_submissions) : undefined, trend: h.stats?.submissions_trend, color: 'text-blue-600', gradient: 'bg-gradient-to-r from-blue-500 to-blue-600', onClick: h.handleExportDashboard, loading: h.exportingReport === 'dashboard', badge: 'KPIs', format: 'excel' })
+    }
+    cards.push({ icon: Activity, title: 'الإرساليات — خط زمني', subtitle: 'تطور الإرساليات خلال آخر 30 يوم (مرسلة / مسودة)', value: h.stats ? formatNumber(h.stats.submissions_today) : undefined, color: 'text-emerald-600', gradient: 'bg-gradient-to-r from-emerald-500 to-emerald-600', onClick: h.handleExportTimeline, loading: h.exportingReport === 'timeline', badge: '30 يوم', format: 'excel' })
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: MapPin, title: 'أداء المحافظات', subtitle: 'مقارنة الإرساليات والتغطية الجغرافية بين المحافظات', value: h.govStats ? formatNumber(h.govStats.length) + ' محافظة' : undefined, color: 'text-purple-600', gradient: 'bg-gradient-to-r from-purple-500 to-purple-600', onClick: h.handleExportGovernorates, loading: h.exportingReport === 'governorates', format: 'excel' })
+    }
+    cards.push({ icon: PieChartIcon, title: 'توزيع الحالات', subtitle: 'نسبة الإرساليات المرسلة مقابل المسودات', value: h.stats ? `${h.stats.approval_rate.toFixed(1)}%` : undefined, color: 'text-amber-600', gradient: 'bg-gradient-to-r from-amber-500 to-amber-600', onClick: h.handleExportSubmissions, loading: h.exportingReport === 'submissions', badge: 'تحليل', format: 'excel' })
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: Users, title: 'توزيع المستخدمين', subtitle: 'المستخدمون حسب الدور: مدير، مركزي، محافظة، قضاء، إدخال بيانات', value: h.roleDistribution ? formatNumber(h.roleDistribution.reduce((s, r) => s + r.value, 0)) : undefined, color: 'text-cyan-600', gradient: 'bg-gradient-to-r from-cyan-500 to-cyan-600', onClick: h.handleExportRoles, loading: h.exportingReport === 'roles', format: 'excel' })
+    }
+    cards.push({ icon: FileStack, title: 'تقرير الإرساليات الشامل', subtitle: 'جميع الإرساليات مع تفاصيل النماذج والمُرسلين والمحافظات', value: h.stats ? formatNumber(h.stats.total_submissions) : undefined, color: 'text-indigo-600', gradient: 'bg-gradient-to-r from-indigo-500 to-indigo-600', onClick: h.handleExportSubmissions, loading: h.exportingReport === 'submissions', badge: 'شامل', format: 'excel' })
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: Users, title: 'تقرير المستخدمين', subtitle: 'قائمة جميع المستخدمين مع أدوارهم ومحافظاتهم', color: 'text-rose-600', gradient: 'bg-gradient-to-r from-rose-500 to-rose-600', onClick: h.handleExportUsers, loading: h.exportingReport === 'users', format: 'excel' })
+    }
+    if (canExportGovernorate(h.userRole)) {
+      cards.push({ icon: PackageX, title: 'تقرير النواقص', subtitle: 'نواقص اللقاحات والمعدات — الخطورة، المحافظة، حالة الحل', color: 'text-orange-600', gradient: 'bg-gradient-to-r from-orange-500 to-orange-600', onClick: h.handleExportShortages, loading: h.exportingReport === 'shortages', format: 'excel' })
+    }
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: ScrollText, title: 'سجل التدقيق', subtitle: 'جميع العمليات: إنشاء، تعديل، حذف، تسجيل دخول — مع IP والمستخدم', color: 'text-slate-600', gradient: 'bg-gradient-to-r from-slate-500 to-slate-600', onClick: h.handleExportAudit, loading: h.exportingReport === 'audit', badge: 'audit', format: 'excel' })
     }
 
-    // 2. Submissions Timeline — matches mobile timeline chart
-    cards.push({
-      icon: Activity, title: 'الإرساليات — خط زمني', subtitle: 'تطور الإرساليات خلال آخر 30 يوم (مرسلة / مسودة)',
-      value: stats ? formatNumber(stats.submissions_today) : undefined,
-      color: 'text-emerald-600', gradient: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
-      onClick: handleExportTimeline, loading: exportingReport === 'timeline',
-      badge: '30 يوم', format: 'excel',
-    })
-
-    // 3. Governorate Performance — matches mobile governorate chart
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: MapPin, title: 'أداء المحافظات', subtitle: 'مقارنة الإرساليات والتغطية الجغرافية بين المحافظات',
-        value: govStats ? formatNumber(govStats.length) + ' محافظة' : undefined,
-        color: 'text-purple-600', gradient: 'bg-gradient-to-r from-purple-500 to-purple-600',
-        onClick: handleExportGovernorates, loading: exportingReport === 'governorates',
-        format: 'excel',
-      })
+    // PDF Reports
+    cards.push({ icon: FileText, title: '📄 PDF — تقرير الإرساليات', subtitle: 'تقرير PDF احترافي للإرساليات مع إحصائيات المحافظات', color: 'text-red-600', gradient: 'bg-gradient-to-r from-red-500 to-red-600', onClick: h.handleExportPDF, loading: h.exportingReport === 'pdf', badge: 'PDF', format: 'pdf' })
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: MapPin, title: '📄 PDF — أداء المحافظات', subtitle: 'تقرير PDF مقارن لأداء المحافظات', color: 'text-red-600', gradient: 'bg-gradient-to-r from-red-600 to-rose-600', onClick: h.handleExportGovPDF, loading: h.exportingReport === 'gov-pdf', badge: 'PDF', format: 'pdf' })
+      cards.push({ icon: Users, title: '📄 PDF — المستخدمين', subtitle: 'تقرير PDF للمستخدمين والأدوار', color: 'text-red-600', gradient: 'bg-gradient-to-r from-rose-500 to-pink-600', onClick: h.handleExportUsersPDF, loading: h.exportingReport === 'users-pdf', badge: 'PDF', format: 'pdf' })
+    }
+    if (canExportGovernorate(h.userRole)) {
+      cards.push({ icon: PackageX, title: '📄 PDF — النواقص', subtitle: 'تقرير PDF لنواقص الإمدادات', color: 'text-red-600', gradient: 'bg-gradient-to-r from-orange-500 to-red-500', onClick: h.handleExportShortagesPDF, loading: h.exportingReport === 'shortages-pdf', badge: 'PDF', format: 'pdf' })
+    }
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: FileDown, title: '📄 PDF — التقرير الشامل', subtitle: 'تقرير PDF شامل بكل البيانات والإحصائيات', color: 'text-white', gradient: 'bg-gradient-to-r from-red-700 to-red-900', onClick: h.handleExportFullPDF, loading: h.exportingReport === 'full-pdf', badge: 'PDF شامل', format: 'pdf' })
     }
 
-    // 4. Status Distribution — matches mobile pie chart
-    cards.push({
-      icon: PieChartIcon, title: 'توزيع الحالات', subtitle: 'نسبة الإرساليات المرسلة مقابل المسودات',
-      value: stats ? `${stats.approval_rate.toFixed(1)}%` : undefined,
-      color: 'text-amber-600', gradient: 'bg-gradient-to-r from-amber-500 to-amber-600',
-      onClick: handleExportSubmissions, loading: exportingReport === 'submissions',
-      badge: 'تحليل', format: 'excel',
-    })
-
-    // 5. Role Distribution — matches mobile user roles
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: Users, title: 'توزيع المستخدمين', subtitle: 'المستخدمون حسب الدور: مدير، مركزي، محافظة، قضاء، إدخال بيانات',
-        value: roleDistribution ? formatNumber(roleDistribution.reduce((s, r) => s + r.value, 0)) : undefined,
-        color: 'text-cyan-600', gradient: 'bg-gradient-to-r from-cyan-500 to-cyan-600',
-        onClick: handleExportRoles, loading: exportingReport === 'roles',
-        format: 'excel',
-      })
-    }
-
-    // 6. Submissions Full Report
-    cards.push({
-      icon: FileStack, title: 'تقرير الإرساليات الشامل', subtitle: 'جميع الإرساليات مع تفاصيل النماذج والمُرسلين والمحافظات',
-      value: stats ? formatNumber(stats.total_submissions) : undefined,
-      color: 'text-indigo-600', gradient: 'bg-gradient-to-r from-indigo-500 to-indigo-600',
-      onClick: handleExportSubmissions, loading: exportingReport === 'submissions',
-      badge: 'شامل', format: 'excel',
-    })
-
-    // 7. Users Report
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: Users, title: 'تقرير المستخدمين', subtitle: 'قائمة جميع المستخدمين مع أدوارهم ومحافظاتهم',
-        color: 'text-rose-600', gradient: 'bg-gradient-to-r from-rose-500 to-rose-600',
-        onClick: handleExportUsers, loading: exportingReport === 'users',
-        format: 'excel',
-      })
-    }
-
-    // 8. Shortages Report — matches mobile shortages
-    if (canExportGovernorate(userRole)) {
-      cards.push({
-        icon: PackageX, title: 'تقرير النواقص', subtitle: 'نواقص اللقاحات والمعدات — الخطورة، المحافظة، حالة الحل',
-        color: 'text-orange-600', gradient: 'bg-gradient-to-r from-orange-500 to-orange-600',
-        onClick: handleExportShortages, loading: exportingReport === 'shortages',
-        format: 'excel',
-      })
-    }
-
-    // 9. Audit Log Report — matches mobile audit screen
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: ScrollText, title: 'سجل التدقيق', subtitle: 'جميع العمليات: إنشاء، تعديل، حذف، تسجيل دخول — مع IP والمستخدم',
-        color: 'text-slate-600', gradient: 'bg-gradient-to-r from-slate-500 to-slate-600',
-        onClick: handleExportAudit, loading: exportingReport === 'audit',
-        badge: 'audit', format: 'excel',
-      })
-    }
-
-    // ═══ PDF Reports ═══
-
-    // 10. PDF — تقرير الإرساليات
-    cards.push({
-      icon: FileText, title: '📄 PDF — تقرير الإرساليات', subtitle: 'تقرير PDF احترافي للإرساليات مع إحصائيات المحافظات',
-      color: 'text-red-600', gradient: 'bg-gradient-to-r from-red-500 to-red-600',
-      onClick: handleExportPDF, loading: exportingReport === 'pdf',
-      badge: 'PDF', format: 'pdf',
-    })
-
-    // 11. PDF — أداء المحافظات
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: MapPin, title: '📄 PDF — أداء المحافظات', subtitle: 'تقرير PDF مقارن لأداء المحافظات',
-        color: 'text-red-600', gradient: 'bg-gradient-to-r from-red-600 to-rose-600',
-        onClick: handleExportGovPDF, loading: exportingReport === 'gov-pdf',
-        badge: 'PDF', format: 'pdf',
-      })
-    }
-
-    // 12. PDF — المستخدمين
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: Users, title: '📄 PDF — المستخدمين', subtitle: 'تقرير PDF للمستخدمين والأدوار',
-        color: 'text-red-600', gradient: 'bg-gradient-to-r from-rose-500 to-pink-600',
-        onClick: handleExportUsersPDF, loading: exportingReport === 'users-pdf',
-        badge: 'PDF', format: 'pdf',
-      })
-    }
-
-    // 13. PDF — النواقص
-    if (canExportGovernorate(userRole)) {
-      cards.push({
-        icon: PackageX, title: '📄 PDF — النواقص', subtitle: 'تقرير PDF لنواقص الإمدادات',
-        color: 'text-red-600', gradient: 'bg-gradient-to-r from-orange-500 to-red-500',
-        onClick: handleExportShortagesPDF, loading: exportingReport === 'shortages-pdf',
-        badge: 'PDF', format: 'pdf',
-      })
-    }
-
-    // 14. PDF — التقرير الشامل
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: FileDown, title: '📄 PDF — التقرير الشامل', subtitle: 'تقرير PDF شامل بكل البيانات والإحصائيات',
-        color: 'text-white', gradient: 'bg-gradient-to-r from-red-700 to-red-900',
-        onClick: handleExportFullPDF, loading: exportingReport === 'full-pdf',
-        badge: 'PDF شامل', format: 'pdf',
-      })
-    }
-
-
-  // ═══ Professional Report Handlers — with Preview ═══
-
-  /** Wrapper: capture HTML from professional reports and show in preview */
-  const captureAndPreview = async (
-    title: string,
-    subtitle: string,
-    generator: () => Promise<void>
-  ) => {
-    const gen = enableCaptureMode()
-    try {
-      await generator()
-      const html = disableCaptureMode(gen)
-      if (html) {
-        openPreview(title, html, subtitle)
+    // Professional Reports
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: Shield, title: '🏛️ التقرير المركزي الشامل', subtitle: 'تقرير احترافي شامل — جميع المحافظات، المستخدمين، النماذج، النواقص، التغطية', color: 'text-white', gradient: 'bg-gradient-to-r from-blue-700 to-indigo-800', onClick: h.handleCentralReport, loading: h.exportingReport === 'central-report', badge: 'احترافي', format: 'pdf' })
+      if (h.governorates) {
+        h.governorates.forEach((gov: any) => {
+          cards.push({ icon: MapPin, title: `🏛️ تقرير محافظة ${gov.name_ar}`, subtitle: `تقرير تفصيلي — المديريات، المستخدمين، الإرساليات، النواقص`, color: 'text-blue-600', gradient: 'bg-gradient-to-r from-blue-500 to-blue-600', onClick: () => h.handleGovDetailReport(gov.id), loading: h.exportingReport === 'gov-detail-' + gov.id, badge: 'محافظة', format: 'pdf' })
+        })
       }
-    } catch (e) {
-      disableCaptureMode(gen)
-      throw e
     }
-  }
-
-  const handleCentralReport = () => exportReport('central-report', () =>
-    captureAndPreview('التقرير المركزي الشامل', 'جميع المحافظات والبيانات',
-      () => generateCentralReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignType: campaign !== 'all' ? campaign : undefined }))
-  )
-
-  const handleGovDetailReport = (govId: string) => exportReport('gov-detail-' + govId, () =>
-    captureAndPreview(`تقرير محافظة`, 'تفاصيل تفصيلية',
-      () => generateGovernorateDetailReport(govId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }))
-  )
-
-  const handleFormAnalysisReport = (formId: string) => exportReport('form-analysis-' + formId, () =>
-    captureAndPreview('تحليل النموذج', 'تقرير تفصيلي',
-      () => generateFormAnalysisReport(formId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }))
-  )
-
-
-    // ═══════════════════════════════════════
-    // PROFESSIONAL REPORTS — تقارير احترافية
-    // ═══════════════════════════════════════
-
-    // P1. التقرير المركزي الشامل
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: Shield, title: '🏛️ التقرير المركزي الشامل', subtitle: 'تقرير احترافي شامل — جميع المحافظات، المستخدمين، النماذج، النواقص، التغطية',
-        color: 'text-white', gradient: 'bg-gradient-to-r from-blue-700 to-indigo-800',
-        onClick: handleCentralReport, loading: exportingReport === 'central-report',
-        badge: 'احترافي', format: 'pdf',
+    if (h.forms) {
+      h.forms.forEach((form: any) => {
+        cards.push({ icon: FileText, title: `📊 تحليل: ${form.title_ar}`, subtitle: 'تقرير تفصيلي — تحليل كل حقل، التغطية حسب المحافظة، التوقيت، الإرساليات', color: 'text-emerald-600', gradient: 'bg-gradient-to-r from-emerald-500 to-emerald-600', onClick: () => h.handleFormAnalysisReport(form.id), loading: h.exportingReport === 'form-analysis-' + form.id, badge: 'تحليل نموذج', format: 'pdf' })
       })
     }
-
-    // P2. تقارير المحافظات التفصيلية
-    if (canExportAll(userRole) && governorates) {
-      governorates.forEach((gov: any) => {
-        cards.push({
-          icon: MapPin, title: `🏛️ تقرير محافظة ${gov.name_ar}`, subtitle: `تقرير تفصيلي — المديريات، المستخدمين، الإرساليات، النواقص`,
-          color: 'text-blue-600', gradient: 'bg-gradient-to-r from-blue-500 to-blue-600',
-          onClick: () => handleGovDetailReport(gov.id), loading: exportingReport === 'gov-detail-' + gov.id,
-          badge: 'محافظة', format: 'pdf',
-        })
-      })
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: Users, title: '👥 تقرير أداء المشرفين', subtitle: 'تقييم شامل — كل مشرف وكم أرسل، التقييم، النشاط، جودة البيانات', color: 'text-white', gradient: 'bg-gradient-to-r from-violet-600 to-purple-700', onClick: h.handleSupervisorReport, loading: h.exportingReport === 'supervisor-report', badge: 'مشرفين', format: 'pdf' })
+      cards.push({ icon: AlertTriangle, title: '🎯 تقرير الفجوة التغطية', subtitle: 'أين البيانات ناقصة — محافظات ومديريات بدون تغطية', color: 'text-white', gradient: 'bg-gradient-to-r from-red-600 to-rose-700', onClick: h.handleCoverageGapReport, loading: h.exportingReport === 'coverage-gap', badge: 'فجوة', format: 'pdf' })
+      cards.push({ icon: Target, title: '⚖️ تقرير مقارنة الحملات', subtitle: 'شلل أطفال vs الإيصالي التكاملي — مقارنة شاملة', color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700', onClick: h.handleCampaignComparisonReport, loading: h.exportingReport === 'campaign-comparison', badge: 'مقارنة', format: 'pdf' })
     }
-
-    // P3. تقارير تحليل النماذج التفصيلية
-    if (forms) {
-      forms.forEach((form: any) => {
-        cards.push({
-          icon: FileText, title: `📊 تحليل: ${form.title_ar}`, subtitle: 'تقرير تفصيلي — تحليل كل حقل، التغطية حسب المحافظة، التوقيت، الإرساليات',
-          color: 'text-emerald-600', gradient: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
-          onClick: () => handleFormAnalysisReport(form.id), loading: exportingReport === 'form-analysis-' + form.id,
-          badge: 'تحليل نموذج', format: 'pdf',
-        })
-      })
+    cards.push({ icon: Clock, title: '📅 تقرير النشاط اليومي', subtitle: 'نشاط اليوم — إرساليات، دخول، مقارنة بأمس', color: 'text-white', gradient: 'bg-gradient-to-r from-cyan-600 to-teal-700', onClick: h.handleDailyActivityReport, loading: h.exportingReport === 'daily-activity', badge: 'يومي', format: 'pdf' })
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: Sparkles, title: '✨ تقرير جودة البيانات', subtitle: 'تحليل اكتمال البيانات — GPS، صور، حقول فارغة', color: 'text-white', gradient: 'bg-gradient-to-r from-amber-500 to-orange-600', onClick: h.handleDataQualityReport, loading: h.exportingReport === 'data-quality', badge: 'جودة', format: 'pdf' })
     }
-
-
-  const handleSupervisorReport = () => exportReport('supervisor-report', () =>
-    captureAndPreview('تقرير أداء المشرفين', 'تقييم شامل لكل مشرف',
-      () => generateSupervisorReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }))
-  )
-  const handleCoverageGapReport = () => exportReport('coverage-gap', () =>
-    captureAndPreview('تقرير الفجوة التغطية', 'أين البيانات ناقصة',
-      () => generateCoverageGapReport())
-  )
-  const handleCampaignComparisonReport = () => exportReport('campaign-comparison', () =>
-    captureAndPreview('تقرير مقارنة الحملات', 'شلل أطفال vs الإيصالي التكاملي',
-      () => generateCampaignComparisonReport())
-  )
-  const handleDailyActivityReport = () => exportReport('daily-activity', () =>
-    captureAndPreview('تقرير النشاط اليومي', 'نشاط اليوم — إرساليات، دخول، مقارنة',
-      () => generateDailyActivityReport())
-  )
-  const handleDataQualityReport = () => exportReport('data-quality', () =>
-    captureAndPreview('تقرير جودة البيانات', 'تحليل اكتمال البيانات — GPS، صور، حقول فارغة',
-      () => generateDataQualityReport())
-  )
-  const handleShortagesDetailedReport = () => exportReport('shortages-detailed', () =>
-    captureAndPreview('تقرير النواقص التفصيلي', 'تحليل شامل — حرج/عالي/متوسط',
-      () => generateShortagesDetailedReport())
-  )
-  const handleWeeklyReport = () => exportReport('weekly-report', () =>
-    captureAndPreview('التقرير الأسبوعي', 'ملخص الأسبوع — مقارنة بالسابق',
-      () => generateWeeklyReport())
-  )
-  const handleUserActivityReport = () => exportReport('user-activity', () =>
-    captureAndPreview('تقرير نشاط المستخدمين', 'دخول، نشاط، مستخدمين خاملين',
-      () => generateUserActivityReport())
-  )
-
-  const handleChallengesReport = () => exportReport('challenges', () =>
-    captureAndPreview('تقرير التحديات والصعوبات', 'تحديات، إجراءات، توصيات',
-      () => generateChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }))
-  )
-
-  const handleSupervisionFormReport = () => exportReport('supervision-form', () =>
-    captureAndPreview('تقرير استمارة الإشراف', 'النشاط الإيصالي التكاملي — 8 أقسام × 33 مؤشر',
-      () => generateSupervisionFormReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }))
-  )
-
-  const handleSupervisionChallengesReport = () => exportReport('supervision-challenges', () =>
-    captureAndPreview('تقرير تحديات الإشراف الميداني', 'التحديات — الإجراءات — التوصيات',
-      () => generateSupervisionChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }))
-  )
-
-  const handleDailySupervisorEvaluation = () => exportReport('daily-supervisor-eval', () =>
-    captureAndPreview('تقييم أداء المشرفين اليومي', 'استمارة الإشراف — النشاط الإيصالي التكاملي',
-      () => generateDailySupervisorEvaluation({ date: dateTo || new Date().toISOString().split('T')[0], governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }))
-  )
-
-
-    // ═══════════════════════════════════════
-    // تقارير إضافية احترافية
-    // ═══════════════════════════════════════
-
-    // P4. تقرير أداء المشرفين
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: Users, title: '👥 تقرير أداء المشرفين', subtitle: 'تقييم شامل — كل مشرف وكم أرسل، التقييم، النشاط، جودة البيانات',
-        color: 'text-white', gradient: 'bg-gradient-to-r from-violet-600 to-purple-700',
-        onClick: handleSupervisorReport, loading: exportingReport === 'supervisor-report',
-        badge: 'مشرفين', format: 'pdf',
-      })
+    cards.push({ icon: PackageX, title: '📦 تقرير النواقص التفصيلي', subtitle: 'تحليل شامل — حرج/عالي/متوسط، حسب المحافظة والفئة', color: 'text-white', gradient: 'bg-gradient-to-r from-red-500 to-pink-600', onClick: h.handleShortagesDetailedReport, loading: h.exportingReport === 'shortages-detailed', badge: 'نواقص', format: 'pdf' })
+    cards.push({ icon: Activity, title: '📊 التقرير الأسبوعي', subtitle: 'ملخص الأسبوع — مقارنة بالسابق، نشاط يومي، أداء المحافظات', color: 'text-white', gradient: 'bg-gradient-to-r from-emerald-600 to-green-700', onClick: h.handleWeeklyReport, loading: h.exportingReport === 'weekly-report', badge: 'أسبوعي', format: 'pdf' })
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: Users, title: '🔐 تقرير نشاط المستخدمين', subtitle: 'دخول، نشاط، مستخدمين خاملين — من دخل ومتى', color: 'text-white', gradient: 'bg-gradient-to-r from-slate-600 to-gray-700', onClick: h.handleUserActivityReport, loading: h.exportingReport === 'user-activity', badge: 'نشاط', format: 'pdf' })
     }
+    cards.push({ icon: AlertTriangle, title: '⚠️ PDF — التحديات والصعوبات', subtitle: 'تقرير شامل — فجوات التغطية، النواقص، المشرفين غير النشطين، جودة البيانات، التوصيات', color: 'text-white', gradient: 'bg-gradient-to-r from-amber-600 to-orange-700', onClick: h.handleChallengesReport, loading: h.exportingReport === 'challenges', badge: 'تحديات', format: 'pdf' })
+    cards.push({ icon: FileSearch, title: '📋 PDF — استمارة الإشراف', subtitle: 'النشاط الإيصالي التكاملي — 8 أقسام إشرافية، 33 مؤشر، تحليل تحديات ميدانية', color: 'text-white', gradient: 'bg-gradient-to-r from-teal-600 to-cyan-700', onClick: h.handleSupervisionFormReport, loading: h.exportingReport === 'supervision-form', badge: 'إشراف', format: 'pdf' })
+    cards.push({ icon: FileText, title: '📝 PDF — تحديات الإشراف الميداني', subtitle: 'آخر 3 حقول: التحديات والصعوبات، الإجراءات المتخذة، التوصيات', color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700', onClick: h.handleSupervisionChallengesReport, loading: h.exportingReport === 'supervision-challenges', badge: 'ميداني', format: 'pdf' })
+    cards.push({ icon: Users, title: '📋 تقييم أداء المشرفين اليومي', subtitle: 'اليومي — المركزي + المحافظات + المديريات | الاسم، الصفة، عدد الاستمارات', color: 'text-white', gradient: 'bg-gradient-to-r from-emerald-600 to-teal-700', onClick: h.handleDailySupervisorEvaluation, loading: h.exportingReport === 'daily-supervisor-eval', badge: 'يومي', format: 'pdf' })
 
-    // P5. تقرير الفجوة التغطية
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: AlertTriangle, title: '🎯 تقرير الفجوة التغطية', subtitle: 'أين البيانات ناقصة — محافظات ومديريات بدون تغطية',
-        color: 'text-white', gradient: 'bg-gradient-to-r from-red-600 to-rose-700',
-        onClick: handleCoverageGapReport, loading: exportingReport === 'coverage-gap',
-        badge: 'فجوة', format: 'pdf',
-      })
+    // PPTX Reports
+    if (canExportAll(h.userRole)) {
+      cards.push({ icon: BarChart3, title: '📊 PPTX — التقرير الشهري', subtitle: 'عرض PowerPoint احترافي — KPIs، مقارنة الحملات، تغطية المحافظات، التوصيات', color: 'text-white', gradient: 'bg-gradient-to-r from-orange-500 to-amber-600', onClick: () => h.exportReport('pptx-monthly', async () => { await generateMonthlyPerformancePPTX() }), loading: h.exportingReport === 'pptx-monthly', badge: 'شهري', format: 'pptx' })
     }
-
-    // P6. تقرير مقارنة الحملات
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: Target, title: '⚖️ تقرير مقارنة الحملات', subtitle: 'شلل أطفال vs الإيصالي التكاملي — مقارنة شاملة',
-        color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700',
-        onClick: handleCampaignComparisonReport, loading: exportingReport === 'campaign-comparison',
-        badge: 'مقارنة', format: 'pdf',
-      })
-    }
-
-    // P7. تقرير النشاط اليومي
-    cards.push({
-      icon: Clock, title: '📅 تقرير النشاط اليومي', subtitle: 'نشاط اليوم — إرساليات، دخول، مقارنة بأمس',
-      color: 'text-white', gradient: 'bg-gradient-to-r from-cyan-600 to-teal-700',
-      onClick: handleDailyActivityReport, loading: exportingReport === 'daily-activity',
-      badge: 'يومي', format: 'pdf',
-    })
-
-    // P8. تقرير جودة البيانات
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: Sparkles, title: '✨ تقرير جودة البيانات', subtitle: 'تحليل اكتمال البيانات — GPS، صور، حقول فارغة',
-        color: 'text-white', gradient: 'bg-gradient-to-r from-amber-500 to-orange-600',
-        onClick: handleDataQualityReport, loading: exportingReport === 'data-quality',
-        badge: 'جودة', format: 'pdf',
-      })
-    }
-
-    // P9. تقرير النواقص التفصيلي
-    cards.push({
-      icon: PackageX, title: '📦 تقرير النواقص التفصيلي', subtitle: 'تحليل شامل — حرج/عالي/متوسط، حسب المحافظة والفئة',
-      color: 'text-white', gradient: 'bg-gradient-to-r from-red-500 to-pink-600',
-      onClick: handleShortagesDetailedReport, loading: exportingReport === 'shortages-detailed',
-      badge: 'نواقص', format: 'pdf',
-    })
-
-    // P10. التقرير الأسبوعي
-    cards.push({
-      icon: Activity, title: '📊 التقرير الأسبوعي', subtitle: 'ملخص الأسبوع — مقارنة بالسابق، نشاط يومي، أداء المحافظات',
-      color: 'text-white', gradient: 'bg-gradient-to-r from-emerald-600 to-green-700',
-      onClick: handleWeeklyReport, loading: exportingReport === 'weekly-report',
-      badge: 'أسبوعي', format: 'pdf',
-    })
-
-    // P11. تقرير نشاط المستخدمين
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: Users, title: '🔐 تقرير نشاط المستخدمين', subtitle: 'دخول، نشاط، مستخدمين خاملين — من دخل ومتى',
-        color: 'text-white', gradient: 'bg-gradient-to-r from-slate-600 to-gray-700',
-        onClick: handleUserActivityReport, loading: exportingReport === 'user-activity',
-        badge: 'نشاط', format: 'pdf',
-      })
-    }
-
-    // PDF — تقرير التحديات والصعوبات
-    cards.push({
-      icon: AlertTriangle, title: '⚠️ PDF — التحديات والصعوبات', subtitle: 'تقرير شامل — فجوات التغطية، النواقص، المشرفين غير النشطين، جودة البيانات، التوصيات',
-      color: 'text-white', gradient: 'bg-gradient-to-r from-amber-600 to-orange-700',
-      onClick: handleChallengesReport, loading: exportingReport === 'challenges',
-      badge: 'تحديات', format: 'pdf',
-    })
-
-    // PDF — تقرير استمارة الإشراف
-    cards.push({
-      icon: FileSearch, title: '📋 PDF — استمارة الإشراف', subtitle: 'النشاط الإيصالي التكاملي — 8 أقسام إشرافية، 33 مؤشر، تحليل تحديات ميدانية بالمحافظة/المديرية/الفريق',
-      color: 'text-white', gradient: 'bg-gradient-to-r from-teal-600 to-cyan-700',
-      onClick: handleSupervisionFormReport, loading: exportingReport === 'supervision-form',
-      badge: 'إشراف', format: 'pdf',
-    })
-
-    // PDF — تحديات الإشراف الميداني (آخر 3 حقول)
-    cards.push({
-      icon: FileText, title: '📝 PDF — تحديات الإشراف الميداني', subtitle: 'آخر 3 حقول: التحديات والصعوبات، الإجراءات المتخذة، التوصيات — بالمحافظة/المديرية/الفريق/الإحداثيات',
-      color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700',
-      onClick: handleSupervisionChallengesReport, loading: exportingReport === 'supervision-challenges',
-      badge: 'ميداني', format: 'pdf',
-    })
-
-    // تقييم أداء المشرفين اليومي
-    cards.push({
-      icon: Users, title: '📋 تقييم أداء المشرفين اليومي', subtitle: 'اليومي — المركزي + المحافظات + المديريات | الاسم، الصفة، عدد الاستمارات | إشراف عام للمديرين',
-      color: 'text-white', gradient: 'bg-gradient-to-r from-emerald-600 to-teal-700',
-      onClick: handleDailySupervisorEvaluation, loading: exportingReport === 'daily-supervisor-eval',
-      badge: 'يومي', format: 'pdf',
-    })
-
-    // ═══════════════════════════════════════
-    // PPTX REPORTS — عروض PowerPoint
-    // ═══════════════════════════════════════
-
-    // PPTX 1. التقرير الشهري
-    if (canExportAll(userRole)) {
-      cards.push({
-        icon: BarChart3, title: '📊 PPTX — التقرير الشهري', subtitle: 'عرض PowerPoint احترافي — KPIs، مقارنة الحملات، تغطية المحافظات، التوصيات',
-        color: 'text-white', gradient: 'bg-gradient-to-r from-orange-500 to-amber-600',
-        onClick: () => exportReport('pptx-monthly', async () => {
-          await generateMonthlyPerformancePPTX()
-          toast({ title: 'تم إنشاء عرض PowerPoint الشهري ✅', variant: 'success' })
-        }),
-        loading: exportingReport === 'pptx-monthly', badge: 'شهري', format: 'pptx',
-      })
-    }
-
-    // PPTX 2. النشرة الأسبوعية
-    cards.push({
-      icon: Activity, title: '📅 PPTX — النشرة الأسبوعية', subtitle: 'عرض PowerPoint — ملخص الأسبوع، النشاط اليومي، ترتيب المحافظات، التنبيهات',
-      color: 'text-white', gradient: 'bg-gradient-to-r from-orange-600 to-red-500',
-      onClick: () => exportReport('pptx-weekly', async () => {
-        await generateWeeklyBulletinPPTX()
-        toast({ title: 'تم إنشاء النشرة الأسبوعية ✅', variant: 'success' })
-      }),
-      loading: exportingReport === 'pptx-weekly', badge: 'أسبوعي', format: 'pptx',
-    })
-
-    // PPTX 3. تقرير أداء الحملات
-    cards.push({
-      icon: Target, title: '💉 PPTX — أداء الحملات', subtitle: 'عرض PowerPoint — شلل أطفال vs الإيصالي، معدل التسريب، التغطية، تأثير النواقص',
-      color: 'text-white', gradient: 'bg-gradient-to-r from-rose-500 to-pink-600',
-      onClick: () => exportReport('pptx-campaign', async () => {
-        await generateCampaignPerformancePPTX()
-        toast({ title: 'تم إنشاء تقرير أداء الحملات ✅', variant: 'success' })
-      }),
-      loading: exportingReport === 'pptx-campaign', badge: 'حملات', format: 'pptx',
-    })
+    cards.push({ icon: Activity, title: '📅 PPTX — النشرة الأسبوعية', subtitle: 'عرض PowerPoint — ملخص الأسبوع، النشاط اليومي، ترتيب المحافظات، التنبيهات', color: 'text-white', gradient: 'bg-gradient-to-r from-orange-600 to-red-500', onClick: () => h.exportReport('pptx-weekly', async () => { await generateWeeklyBulletinPPTX() }), loading: h.exportingReport === 'pptx-weekly', badge: 'أسبوعي', format: 'pptx' })
+    cards.push({ icon: Target, title: '💉 PPTX — أداء الحملات', subtitle: 'عرض PowerPoint — شلل أطفال vs الإيصالي، معدل التسريب، التغطية، تأثير النواقص', color: 'text-white', gradient: 'bg-gradient-to-r from-rose-500 to-pink-600', onClick: () => h.exportReport('pptx-campaign', async () => { await generateCampaignPerformancePPTX() }), loading: h.exportingReport === 'pptx-campaign', badge: 'حملات', format: 'pptx' })
 
     return cards
-  }, [userRole, stats, govStats, chartData, roleDistribution, exportingReport, dateFrom, dateTo, selectedGovFilter, campaign])
+  }, [h.userRole, h.stats, h.govStats, h.chartData, h.roleDistribution, h.exportingReport, h.dateFrom, h.dateTo, h.selectedGovFilter, h.campaign, h.governorates, h.forms])
 
-  // ═══ Filtered Report Cards (search) ═══
   const filteredReportCards = useMemo(() => {
     let result = reportCards
-    // Filter by format
-    if (reportFormat !== 'all') {
-      result = result.filter(card => card.format === reportFormat)
-    }
-    // Filter by search
-    if (reportSearch.trim()) {
-      const q = reportSearch.trim().toLowerCase()
-      result = result.filter(card =>
-        card.title.toLowerCase().includes(q) ||
-        card.subtitle.toLowerCase().includes(q) ||
-        (card.badge && card.badge.toLowerCase().includes(q))
-      )
+    if (h.reportFormat !== 'all') result = result.filter(card => card.format === h.reportFormat)
+    if (h.reportSearch.trim()) {
+      const q = h.reportSearch.trim().toLowerCase()
+      result = result.filter(card => card.title.toLowerCase().includes(q) || card.subtitle.toLowerCase().includes(q) || (card.badge && card.badge.toLowerCase().includes(q)))
     }
     return result
-  }, [reportCards, reportSearch, reportFormat])
+  }, [reportCards, h.reportSearch, h.reportFormat])
 
-  // Format counts
   const formatCounts = useMemo(() => {
     const counts = { all: reportCards.length, pdf: 0, excel: 0, pptx: 0 }
     reportCards.forEach(card => {
@@ -1232,31 +140,16 @@ export default function ReportsPage() {
     return counts
   }, [reportCards])
 
-  // ═══ Charts data ═══
-  const govChartData = useMemo(() => {
-    if (!govStats) return []
-    return govStats.slice(0, 10).map(g => ({ name: g.name, الإرساليات: g.submissions }))
-  }, [govStats])
-
-  const statusPieData = useMemo(() => {
-    if (!stats) return []
-    return [
-      { name: 'مرسلة', value: stats.total_submissions - stats.draft_submissions, color: '#10b981' },
-      { name: 'مسودة', value: stats.draft_submissions, color: '#f59e0b' },
-    ]
-  }, [stats])
-
   return (
     <div className="page-enter">
       <Header
         title="التقارير والبيانات"
-        subtitle={isFiltered ? `تحليلات وتصدير — ${labelAr}` : 'تحليلات ذكية وتصدير احترافي للبيانات'}
-        onRefresh={() => { refetchStats(); refetchForms() }}
+        subtitle={h.isFiltered ? `تحليلات وتصدير — ${h.labelAr}` : 'تحليلات ذكية وتصدير احترافي للبيانات'}
+        onRefresh={() => { h.refetchStats(); h.refetchForms() }}
       />
 
       <div className="p-6 space-y-6">
-
-        {/* ═══ Filters ═══ */}
+        {/* Filters */}
         <Card className="border-0 shadow-md">
           <CardContent className="p-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -1266,24 +159,24 @@ export default function ReportsPage() {
               </div>
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-[140px] h-9 text-xs" />
+                <Input type="date" value={h.dateFrom} onChange={e => h.setDateFrom(e.target.value)} className="w-[140px] h-9 text-xs" />
                 <span className="text-xs text-muted-foreground">—</span>
-                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[140px] h-9 text-xs" />
+                <Input type="date" value={h.dateTo} onChange={e => h.setDateTo(e.target.value)} className="w-[140px] h-9 text-xs" />
               </div>
-              {canExportGovernorate(userRole) && (
-                <Select value={selectedGovFilter} onValueChange={setSelectedGovFilter}>
+              {canExportGovernorate(h.userRole) && (
+                <Select value={h.selectedGovFilter} onValueChange={h.setSelectedGovFilter}>
                   <SelectTrigger className="w-[160px] h-9">
                     <MapPin className="w-3.5 h-3.5 ml-2 text-muted-foreground" />
                     <SelectValue placeholder="المحافظة" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">كل المحافظات</SelectItem>
-                    {(governorates || []).map(g => <SelectItem key={g.id} value={g.id}>{g.name_ar}</SelectItem>)}
+                    {(h.governorates || []).map((g: any) => <SelectItem key={g.id} value={g.id}>{g.name_ar}</SelectItem>)}
                   </SelectContent>
                 </Select>
               )}
-              {(dateFrom || dateTo || selectedGovFilter !== 'all') && (
-                <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); setSelectedGovFilter('all') }} className="h-9 gap-1 text-muted-foreground">
+              {(h.dateFrom || h.dateTo || h.selectedGovFilter !== 'all') && (
+                <Button variant="ghost" size="sm" onClick={() => { h.setDateFrom(''); h.setDateTo(''); h.setSelectedGovFilter('all') }} className="h-9 gap-1 text-muted-foreground">
                   <RefreshCw className="w-3 h-3" /> مسح
                 </Button>
               )}
@@ -1291,9 +184,9 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        {/* ═══ Tabs ═══ */}
+        {/* Tabs */}
         <SectionErrorBoundary title="التقارير">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={h.activeTab} onValueChange={h.setActiveTab}>
           <TabsList className="w-full justify-start gap-1 bg-transparent p-0 h-auto">
             <TabsTrigger value="analytics" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2.5 gap-2 font-medium">
               <Sparkles className="w-4 h-4" /> التحليلات
@@ -1303,7 +196,7 @@ export default function ReportsPage() {
             </TabsTrigger>
             <TabsTrigger value="form-exports" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2.5 gap-2 font-medium">
               <FileSpreadsheet className="w-4 h-4" /> تصدير النماذج
-              <Badge variant="secondary" className="text-[10px] px-1.5">{forms.length}</Badge>
+              <Badge variant="secondary" className="text-[10px] px-1.5">{h.forms.length}</Badge>
             </TabsTrigger>
             <TabsTrigger value="comparison" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2.5 gap-2 font-medium">
               <ArrowLeftRight className="w-4 h-4" /> مقارنة الفترات
@@ -1312,30 +205,21 @@ export default function ReportsPage() {
 
           <Separator className="my-4" />
 
-          {/* ═══════════════════════════════════════════════════ */}
-          {/* TAB 1: Analytics — matching mobile app analytics   */}
-          {/* ═══════════════════════════════════════════════════ */}
+          {/* TAB 1: Analytics */}
           <TabsContent value="analytics" className="mt-0 space-y-6">
+            <AnalyticsFilterBar filter={h.analyticsFilter} onChange={h.setAnalyticsFilter} onRefresh={() => { h.refetchStats(); h.refetchForms() }} refreshing={h.statsLoading} />
 
-            {/* ═══ Interactive Filter Bar ═══ */}
-            <AnalyticsFilterBar
-              filter={analyticsFilter}
-              onChange={setAnalyticsFilter}
-              onRefresh={() => { refetchStats(); refetchForms() }}
-              refreshing={statsLoading}
-            />
-
-            {/* KPI Cards Row — same as mobile dashboard */}
+            {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-              {statsLoading ? (
+              {h.statsLoading ? (
                 Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
-              ) : stats && [
-                { icon: Users, label: 'المستخدمون', value: stats.total_users, sub: `${stats.active_users} نشط`, color: 'text-blue-600', bg: 'bg-blue-50' },
-                { icon: FileStack, label: 'إرساليات اليوم', value: stats.submissions_today, sub: `من ${formatNumber(stats.total_submissions)} إجمالي`, color: 'text-emerald-600', bg: 'bg-emerald-50', trend: stats.submissions_trend },
-                { icon: FileText, label: 'المسودات', value: stats.draft_submissions, sub: 'قيد الإعداد', color: 'text-amber-600', bg: 'bg-amber-50' },
-                { icon: CheckCircle2, label: 'معدل الاعتماد', value: `${stats.approval_rate.toFixed(1)}%`, sub: 'نسبة الإرسال', color: 'text-purple-600', bg: 'bg-purple-50' },
-                { icon: FileText, label: 'النماذج النشطة', value: stats.active_forms, sub: `من ${stats.total_forms}`, color: 'text-cyan-600', bg: 'bg-cyan-50' },
-                { icon: Clock, label: 'إرساليات الأسبوع', value: stats.submissions_this_week, sub: 'آخر 7 أيام', color: 'text-rose-600', bg: 'bg-rose-50' },
+              ) : h.stats && [
+                { icon: Users, label: 'المستخدمون', value: h.stats.total_users, sub: `${h.stats.active_users} نشط`, color: 'text-blue-600', bg: 'bg-blue-50' },
+                { icon: FileStack, label: 'إرساليات اليوم', value: h.stats.submissions_today, sub: `من ${formatNumber(h.stats.total_submissions)} إجمالي`, color: 'text-emerald-600', bg: 'bg-emerald-50', trend: h.stats.submissions_trend },
+                { icon: FileText, label: 'المسودات', value: h.stats.draft_submissions, sub: 'قيد الإعداد', color: 'text-amber-600', bg: 'bg-amber-50' },
+                { icon: CheckCircle2, label: 'معدل الاعتماد', value: `${h.stats.approval_rate.toFixed(1)}%`, sub: 'نسبة الإرسال', color: 'text-purple-600', bg: 'bg-purple-50' },
+                { icon: FileText, label: 'النماذج النشطة', value: h.stats.active_forms, sub: `من ${h.stats.total_forms}`, color: 'text-cyan-600', bg: 'bg-cyan-50' },
+                { icon: Clock, label: 'إرساليات الأسبوع', value: h.stats.submissions_this_week, sub: 'آخر 7 أيام', color: 'text-rose-600', bg: 'bg-rose-50' },
               ].map((kpi, i) => {
                 const Icon = kpi.icon
                 return (
@@ -1362,9 +246,8 @@ export default function ReportsPage() {
               })}
             </div>
 
-            {/* Charts Row — matching mobile dashboard */}
+            {/* Charts Row */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              {/* Timeline Chart */}
               <Card className="xl:col-span-2 border-0 shadow-md overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <div>
@@ -1374,14 +257,14 @@ export default function ReportsPage() {
                     </CardTitle>
                     <CardDescription className="text-xs">آخر 30 يوم</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportTimeline}>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={h.handleExportTimeline}>
                     <FileDown className="w-3.5 h-3.5" /> تصدير
                   </Button>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  {chartLoading ? <Skeleton className="w-full h-[280px]" /> : (
+                  {h.chartLoading ? <Skeleton className="w-full h-[280px]" /> : (
                     <ResponsiveContainer width="100%" height={280}>
-                      <AreaChart data={chartData || []}>
+                      <AreaChart data={h.chartData || []}>
                         <defs>
                           <linearGradient id="gSubmitted" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -1405,7 +288,6 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* Status Pie Chart */}
               <Card className="border-0 shadow-md overflow-hidden">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base font-heading flex items-center gap-2">
@@ -1414,18 +296,18 @@ export default function ReportsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {statsLoading ? <Skeleton className="w-full h-[260px]" /> : (
+                  {h.statsLoading ? <Skeleton className="w-full h-[260px]" /> : (
                     <>
                       <ResponsiveContainer width="100%" height={180}>
                         <PieChart>
-                          <Pie data={statusPieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={4} dataKey="value" stroke="#fff" strokeWidth={2}>
-                            {statusPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                          <Pie data={h.statusPieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={4} dataKey="value" stroke="#fff" strokeWidth={2}>
+                            {h.statusPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                           </Pie>
                           <ReTooltip content={<CustomTooltip />} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="space-y-2 mt-2">
-                        {statusPieData.map((item, i) => (
+                        {h.statusPieData.map((item, i) => (
                           <div key={i} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
                               <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />
@@ -1450,45 +332,22 @@ export default function ReportsPage() {
                       <BarChart3 className="w-5 h-5 text-primary" />
                       الإرساليات حسب المحافظة
                     </CardTitle>
-                    <CardDescription className="text-xs">أعلى 10 محافظات — اضغط على أي شريط للتفاصيل</CardDescription>
+                    <CardDescription className="text-xs">أعلى 10 محافظات</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportGovernorates}>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={h.handleExportGovernorates}>
                     <FileDown className="w-3.5 h-3.5" /> تصدير
                   </Button>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  {govLoading ? <Skeleton className="w-full h-[280px]" /> : (
+                  {h.govLoading ? <Skeleton className="w-full h-[280px]" /> : (
                     <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={govChartData} layout="vertical">
+                      <BarChart data={h.govChartData} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
                         <XAxis type="number" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" />
                         <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" width={70} />
                         <ReTooltip content={<CustomTooltip />} />
-                        <Bar
-                          dataKey="الإرساليات"
-                          radius={[0, 8, 8, 0]}
-                          cursor="pointer"
-                          onClick={(data) => {
-                            if (data?.name) {
-                              setDrillDownData({
-                                type: 'governorate',
-                                title: `تفاصيل محافظة: ${data.name}`,
-                                subtitle: `${data.الإرساليات} إرسالية`,
-                                columns: [
-                                  { key: 'metric', label: 'المؤشر' },
-                                  { key: 'value', label: 'القيمة', sortable: false },
-                                ],
-                                data: [
-                                  { metric: 'الإرساليات', value: data.الإرساليات },
-                                  { metric: 'النسبة من الإجمالي', value: stats?.total_submissions ? `${Math.round((data.الإرساليات / stats.total_submissions) * 100)}%` : '—' },
-                                  { metric: 'الترتيب', value: `#${(govChartData.findIndex(g => g.name === data.name) + 1)}` },
-                                ],
-                              })
-                              setDrillDownOpen(true)
-                            }
-                          }}
-                        >
-                          {govChartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                        <Bar dataKey="الإرساليات" radius={[0, 8, 8, 0]}>
+                          {h.govChartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -1496,7 +355,6 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* Role Distribution */}
               <Card className="border-0 shadow-md overflow-hidden">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base font-heading flex items-center gap-2">
@@ -1505,18 +363,18 @@ export default function ReportsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {!roleDistribution ? <Skeleton className="w-full h-[260px]" /> : (
+                  {!h.roleDistribution ? <Skeleton className="w-full h-[260px]" /> : (
                     <>
                       <ResponsiveContainer width="100%" height={180}>
                         <PieChart>
-                          <Pie data={roleDistribution} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={4} dataKey="value" stroke="#fff" strokeWidth={2}>
-                            {roleDistribution.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                          <Pie data={h.roleDistribution} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={4} dataKey="value" stroke="#fff" strokeWidth={2}>
+                            {h.roleDistribution.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                           </Pie>
                           <ReTooltip content={<CustomTooltip />} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="space-y-2 mt-2">
-                        {roleDistribution.map((item, i) => (
+                        {h.roleDistribution.map((item, i) => (
                           <div key={i} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
                               <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
@@ -1532,8 +390,8 @@ export default function ReportsPage() {
               </Card>
             </div>
 
-            {/* Recent Activity Feed — matches mobile dashboard activity */}
-            {auditData && auditData.data && auditData.data.length > 0 && (
+            {/* Recent Activity Feed */}
+            {h.auditData?.data && h.auditData.data.length > 0 && (
               <Card className="border-0 shadow-md overflow-hidden">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <div>
@@ -1543,29 +401,23 @@ export default function ReportsPage() {
                     </CardTitle>
                     <CardDescription className="text-xs">آخر العمليات المسجلة في النظام</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportAudit}>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={h.handleExportAudit}>
                     <FileDown className="w-3.5 h-3.5" /> تصدير السجل
                   </Button>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-0">
-                    {auditData.data.slice(0, 8).map((log: any, i: number) => {
+                    {h.auditData.data.slice(0, 8).map((log: any, i: number) => {
                       const actionIcons: Record<string, { icon: React.ElementType; color: string }> = {
                         create: { icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50' },
                         update: { icon: Activity, color: 'text-blue-600 bg-blue-50' },
                         delete: { icon: AlertTriangle, color: 'text-red-600 bg-red-50' },
                         login: { icon: Users, color: 'text-purple-600 bg-purple-50' },
                       }
-                      const actionLabels: Record<string, string> = {
-                        create: 'إنشاء', update: 'تعديل', delete: 'حذف', login: 'دخول', logout: 'خروج',
-                      }
-                      const tableLabels: Record<string, string> = {
-                        profiles: 'المستخدمين', form_submissions: 'الإرساليات', forms: 'النماذج',
-                        supply_shortages: 'النواقص', notifications: 'الإشعارات',
-                      }
+                      const actionLabels: Record<string, string> = { create: 'إنشاء', update: 'تعديل', delete: 'حذف', login: 'دخول', logout: 'خروج' }
+                      const tableLabels: Record<string, string> = { profiles: 'المستخدمين', form_submissions: 'الإرساليات', forms: 'النماذج', supply_shortages: 'النواقص', notifications: 'الإشعارات' }
                       const actionInfo = actionIcons[log.action] || { icon: Info, color: 'text-muted-foreground bg-muted' }
                       const ActionIcon = actionInfo.icon
-
                       const timeDiff = Date.now() - new Date(log.created_at).getTime()
                       let timeLabel: string
                       if (timeDiff < 60000) timeLabel = 'الآن'
@@ -1574,7 +426,7 @@ export default function ReportsPage() {
                       else timeLabel = `منذ ${Math.floor(timeDiff / 86400000)} يوم`
 
                       return (
-                        <div key={log.id} className={cn('flex items-center gap-3 py-3 px-2 rounded-lg hover:bg-muted/50 transition-colors', i < auditData.data.length - 1 && 'border-b')}>
+                        <div key={log.id} className={cn('flex items-center gap-3 py-3 px-2 rounded-lg hover:bg-muted/50 transition-colors', i < h.auditData.data.length - 1 && 'border-b')}>
                           <div className={cn('p-2 rounded-lg', actionInfo.color)}>
                             <ActionIcon className="w-4 h-4" />
                           </div>
@@ -1597,9 +449,7 @@ export default function ReportsPage() {
             )}
           </TabsContent>
 
-          {/* ═══════════════════════════════════════════════════ */}
-          {/* TAB 2: Quick Reports                                */}
-          {/* ═══════════════════════════════════════════════════ */}
+          {/* TAB 2: Quick Reports */}
           <TabsContent value="quick-reports" className="mt-0 space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
@@ -1612,14 +462,9 @@ export default function ReportsPage() {
               <div className="flex items-center gap-3">
                 <div className="relative w-64">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="بحث في التقارير..."
-                    value={reportSearch}
-                    onChange={e => setReportSearch(e.target.value)}
-                    className="pr-10 h-9 text-sm"
-                  />
-                  {reportSearch && (
-                    <button onClick={() => setReportSearch('')} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <Input placeholder="بحث في التقارير..." value={h.reportSearch} onChange={e => h.setReportSearch(e.target.value)} className="pr-10 h-9 text-sm" />
+                  {h.reportSearch && (
+                    <button onClick={() => h.setReportSearch('')} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -1628,7 +473,6 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* ═══ Format Sub-Tabs ═══ */}
             <div className="flex items-center gap-2 flex-wrap">
               {[
                 { key: 'all' as const, label: 'الكل', icon: FileStack, color: 'bg-primary text-primary-foreground' },
@@ -1637,60 +481,32 @@ export default function ReportsPage() {
                 { key: 'pptx' as const, label: 'PowerPoint', icon: BarChart3, color: 'bg-orange-600 text-white' },
               ].map(tab => {
                 const Icon = tab.icon
-                const isActive = reportFormat === tab.key
+                const isActive = h.reportFormat === tab.key
                 const count = formatCounts[tab.key]
                 return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setReportFormat(tab.key)}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border',
-                      isActive
-                        ? `${tab.color} shadow-md scale-105`
-                        : 'bg-card border-border hover:bg-muted/50 text-muted-foreground hover:text-foreground'
-                    )}
-                  >
+                  <button key={tab.key} onClick={() => h.setReportFormat(tab.key)} className={cn('flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border', isActive ? `${tab.color} shadow-md scale-105` : 'bg-card border-border hover:bg-muted/50 text-muted-foreground hover:text-foreground')}>
                     <Icon className="w-4 h-4" />
                     <span>{tab.label}</span>
-                    <span className={cn(
-                      'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                      isActive ? 'bg-white/20' : 'bg-muted'
-                    )}>{count}</span>
+                    <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full', isActive ? 'bg-white/20' : 'bg-muted')}>{count}</span>
                   </button>
                 )
               })}
             </div>
 
-            {filteredReportCards.length === 0 && reportFormat === 'pptx' ? (
-              <div className="text-center py-16">
-                <BarChart3 className="w-16 h-16 mx-auto text-orange-300 mb-4" />
-                <h3 className="text-lg font-medium">تقارير PowerPoint قريباً</h3>
-                <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-                  تقارير العروض التقديمية قيد التطوير. ستتوفر قريباً إمكانية تصدير التقارير بصيغة PPTX.
-                </p>
-                <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-sm">
-                  <Sparkles className="w-4 h-4" />
-                  قيد التطوير
-                </div>
-              </div>
-            ) : filteredReportCards.length === 0 ? (
+            {filteredReportCards.length === 0 ? (
               <div className="text-center py-16">
                 <Shield className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-medium">{reportSearch ? 'لا توجد نتائج للبحث' : 'لا توجد تقارير متاحة'}</h3>
-                <p className="text-sm text-muted-foreground">{reportSearch ? 'جرّب كلمة مختلفة' : 'تواصل مع مدير النظام للحصول على صلاحيات'}</p>
+                <h3 className="text-lg font-medium">{h.reportSearch ? 'لا توجد نتائج للبحث' : 'لا توجد تقارير متاحة'}</h3>
+                <p className="text-sm text-muted-foreground">{h.reportSearch ? 'جرّب كلمة مختلفة' : 'تواصل مع مدير النظام للحصول على صلاحيات'}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {filteredReportCards.map((card, i) => (
-                  <ReportCard key={i} {...card} />
-                ))}
+                {filteredReportCards.map((card, i) => <ReportCard key={i} {...card} />)}
               </div>
             )}
           </TabsContent>
 
-          {/* ═══════════════════════════════════════════════════ */}
-          {/* TAB 3: Form Exports                                 */}
-          {/* ═══════════════════════════════════════════════════ */}
+          {/* TAB 3: Form Exports */}
           <TabsContent value="form-exports" className="mt-0 space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -1702,37 +518,29 @@ export default function ReportsPage() {
               </div>
               <div className="relative w-64">
                 <FileText className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="بحث..." value={formSearch} onChange={e => setFormSearch(e.target.value)} className="pr-10 h-9 text-sm" />
+                <Input placeholder="بحث..." value={h.formSearch} onChange={e => h.setFormSearch(e.target.value)} className="pr-10 h-9 text-sm" />
               </div>
             </div>
 
-            {formsLoading ? (
+            {h.formsLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-56 rounded-xl" />)}
               </div>
-            ) : filteredForms.length === 0 ? (
+            ) : h.filteredForms.length === 0 ? (
               <div className="text-center py-16">
                 <FileSpreadsheet className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-medium">{formSearch ? 'لا توجد نتائج' : 'لا توجد نماذج'}</h3>
+                <h3 className="text-lg font-medium">{h.formSearch ? 'لا توجد نتائج' : 'لا توجد نماذج'}</h3>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredForms.map(form => (
-                  <FormExportCard
-                    key={form.id}
-                    form={form}
-                    submissionCount={submissionCounts?.[form.id]}
-                    onExport={handleExportForm}
-                    exporting={exportingFormId === form.id}
-                  />
+                {h.filteredForms.map(form => (
+                  <FormExportCard key={form.id} form={form} submissionCount={h.submissionCounts?.[form.id]} onExport={h.handleExportForm} exporting={h.exportingFormId === form.id} />
                 ))}
               </div>
             )}
           </TabsContent>
 
-          {/* ═══════════════════════════════════════════════════ */}
-          {/* TAB 4: Period Comparison                            */}
-          {/* ═══════════════════════════════════════════════════ */}
+          {/* TAB 4: Period Comparison */}
           <TabsContent value="comparison" className="mt-0 space-y-4">
             <div>
               <h2 className="text-lg font-heading font-bold flex items-center gap-2">
@@ -1747,34 +555,18 @@ export default function ReportsPage() {
         </SectionErrorBoundary>
       </div>
 
-      {/* ═══ Export Progress Indicator ═══ */}
-      {exportProgress.isActive && (
+      {/* Export Progress */}
+      {h.exportProgress.isActive && (
         <div className="fixed bottom-4 left-4 right-4 z-50 max-w-md mx-auto">
-          <ExportProgress
-            status={exportProgress.status}
-            message={exportProgress.message}
-            progress={exportProgress.progress}
-            total={exportProgress.total}
-          />
+          <ExportProgress status={h.exportProgress.status} message={h.exportProgress.message} progress={h.exportProgress.progress} total={h.exportProgress.total} />
         </div>
       )}
 
-      {/* ═══ Report Preview Modal ═══ */}
-      <ReportPreview {...previewProps} />
+      <ReportPreview {...h.previewProps} />
 
-      {/* ═══ Drill-Down Dialog ═══ */}
-      <DrillDownDialog
-        open={drillDownOpen}
-        onClose={() => setDrillDownOpen(false)}
-        data={drillDownData}
-      />
+      <DrillDownDialog open={h.drillDownOpen} onClose={() => h.setDrillDownOpen(false)} data={h.drillDownData} />
 
-      {/* ═══ Fullscreen Chart ═══ */}
-      <FullscreenChart
-        open={!!fullscreenChart}
-        onClose={() => setFullscreenChart(null)}
-        title={fullscreenChart || ''}
-      >
+      <FullscreenChart open={!!h.fullscreenChart} onClose={() => h.setFullscreenChart(null)} title={h.fullscreenChart || ''}>
         <div className="h-full flex items-center justify-center text-muted-foreground">
           <p className="text-sm">اضغط ESC للإغلاق</p>
         </div>
@@ -1782,4 +574,3 @@ export default function ReportsPage() {
     </div>
   )
 }
-// force redeploy Thu Apr 23 01:38:03 AM CST 2026

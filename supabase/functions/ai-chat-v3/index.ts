@@ -190,7 +190,8 @@ function buildDynamicSystemPrompt(
 • مستوى التحليل: ${roleConfig.depth}
 • مجال التركيز: ${roleConfig.focus}
 • الصلاحيات: ${roleConfig.permissions}
-• أنت لست مجرد شات بوت — أنت copilot يفهم السياق العملي
+• أنت لست مجرد شات بوت — أنت copilot يفهم السياق العملي ويستطيع تنفيذ العمليات
+• لديك صلاحية القراءة والكتابة — يمكنك تحديث الإرساليات، إرسال الإشعارات، تصدير البيانات، إنشاء تقارير مجدولة
 
 == معلومات المستخدم ==
 • الاسم: ${profile.full_name}
@@ -569,6 +570,129 @@ const TOOLS = [
           threshold: { type: 'number', description: 'الحد الأدنى للإرساليات (افتراضي 10)' },
         },
         required: [],
+      },
+    },
+  },
+  // ═══ WRITE TOOLS — تعديل البيانات ═══
+  {
+    type: 'function',
+    function: {
+      name: 'update_submission_status',
+      description: 'تغيير حالة إرسالية (موافق/مرفوض/مسودة). يمكن تغيير حالة واحدة أو مجموعة.',
+      parameters: {
+        type: 'object',
+        properties: {
+          submission_id: { type: 'string', description: 'معرف الإرسالية (UUID) — للتغيير الفردي' },
+          status: { type: 'string', enum: ['draft', 'submitted', 'approved', 'rejected'], description: 'الحالة الجديدة' },
+          notes: { type: 'string', description: 'ملاحظات (سبب الرفض مثلاً)' },
+          batch_governorate: { type: 'string', description: 'اسم المحافظة — لتغيير جماعي لكل إرساليات المحافظة' },
+          batch_current_status: { type: 'string', enum: ['draft', 'submitted', 'approved', 'rejected'], description: 'الحالة الحالية — لتغيير جماعي' },
+        },
+        required: ['status'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_notification',
+      description: 'إرسال إشعار/تنبيه لمستخدم أو مجموعة مستخدمين.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'عنوان الإشعار' },
+          body: { type: 'string', description: 'نص الإشعار' },
+          target_role: { type: 'string', enum: ['admin', 'central', 'governorate', 'district', 'data_entry', 'all'], description: 'الدور المستهدف' },
+          target_governorate: { type: 'string', description: 'المحافظة المستهدفة (اختياري)' },
+          priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'], description: 'الأولوية' },
+        },
+        required: ['title', 'body'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'execute_sql',
+      description: 'تنفيذ استعلام SQL للقراءة فقط (SELECT). لاستعلامات مخصصة معقدة لا تغطيها الأدوات الأخرى. ممنوع DELETE/UPDATE/INSERT/DROP.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'استعلام SQL (يجب أن يبدأ بـ SELECT)' },
+          description: { type: 'string', description: 'وصف ما يفعله الاستعلام' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_chart',
+      description: 'توليد بيانات رسم بياني للعرض في الواجهة. يدعم أعمدة، دائرية، خطوط، شريط.',
+      parameters: {
+        type: 'object',
+        properties: {
+          chart_type: { type: 'string', enum: ['bar', 'pie', 'line', 'progress'], description: 'نوع الرسم' },
+          title: { type: 'string', description: 'عنوان الرسم' },
+          data_source: { type: 'string', enum: ['governorates', 'submissions_by_day', 'users_by_role', 'shortages_by_severity', 'forms_by_campaign'], description: 'مصدر البيانات' },
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+          days: { type: 'number', description: 'عدد الأيام' },
+          limit: { type: 'number', description: 'عدد العناصر (افتراضي 10)' },
+        },
+        required: ['chart_type', 'data_source'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'bulk_export',
+      description: 'تصدير بيانات كاملة بصيغة JSON للتحميل. يدعم الإرساليات، المستخدمين، النواقص.',
+      parameters: {
+        type: 'object',
+        properties: {
+          data_type: { type: 'string', enum: ['submissions', 'users', 'shortages', 'governorates', 'forms'], description: 'نوع البيانات' },
+          format: { type: 'string', enum: ['json', 'csv'], description: 'صيغة التصدير' },
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+          governorate_name: { type: 'string', description: 'فلتر محافظة' },
+          days: { type: 'number', description: 'آخر كم يوم' },
+          limit: { type: 'number', description: 'عدد السجلات (افتراضي 1000)' },
+        },
+        required: ['data_type'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_scheduled_report',
+      description: 'إنشاء تقرير مجدول — يُرسل تلقائياً كل يوم/أسبوع/شهر.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'اسم التقرير' },
+          report_type: { type: 'string', enum: ['daily', 'weekly', 'monthly'], description: 'النوع' },
+          schedule: { type: 'string', description: 'التوقيت (cron expression مثل: 0 8 * * * = كل يوم 8 صباحاً)' },
+          recipients: { type: 'string', description: 'المستلمين (الدور أو البريد)' },
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+        },
+        required: ['name', 'report_type'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'workflow_chain',
+      description: 'تنفيذ سلسلة عمليات متتالية (workflow). مثلاً: حلل → أرسل إشعار → صدّر.',
+      parameters: {
+        type: 'object',
+        properties: {
+          steps: { type: 'array', items: { type: 'object', properties: { action: { type: 'string' }, params: { type: 'object' } } }, description: 'خطوات Workflow' },
+          description: { type: 'string', description: 'وصف الـ workflow' },
+        },
+        required: ['steps'],
       },
     },
   },
@@ -1290,6 +1414,318 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
         }
       }
 
+      // ═══ WRITE TOOLS IMPLEMENTATIONS ═══
+
+      case 'update_submission_status': {
+        const { submission_id, status, notes, batch_governorate, batch_current_status } = args
+        if (!status) return { error: 'الحالة مطلوبة' }
+
+        // Batch update by governorate
+        if (batch_governorate) {
+          const { data: gov } = await supa.from('governorates').select('id').ilike('name_ar', `%${batch_governorate}%`).limit(1)
+          if (!gov?.[0]) return { error: `المحافظة "${batch_governorate}" غير موجودة` }
+
+          let updateQuery = supa.from('form_submissions')
+            .update({ status, notes: notes || null, updated_at: new Date().toISOString() })
+            .eq('governorate_id', gov[0].id)
+            .is('deleted_at', null)
+
+          if (batch_current_status) updateQuery = updateQuery.eq('status', batch_current_status)
+
+          const { count } = await withTimeout(updateQuery.select('id', { count: 'exact', head: true }), 15_000) ?? {}
+          return {
+            success: true,
+            action: 'batch_update',
+            governorate: batch_governorate,
+            new_status: status,
+            updated_count: count || 0,
+            message: `✅ تم تحديث ${count || 0} إرسالية في ${batch_governorate} إلى "${status}"`,
+          }
+        }
+
+        // Single update
+        if (!submission_id) return { error: 'submission_id مطلوب للتغيير الفردي' }
+        const { data: sub, error: updateErr } = await withTimeout(
+          supa.from('form_submissions')
+            .update({ status, notes: notes || null, updated_at: new Date().toISOString() })
+            .eq('id', submission_id)
+            .select('id, status')
+            .single(),
+          10_000
+        )
+        if (updateErr) return { error: `فشل التحديث: ${updateErr.message}` }
+        return { success: true, submission_id, new_status: status, message: `✅ تم تحديث الإرسالية إلى "${status}"` }
+      }
+
+      case 'create_notification': {
+        const { title, body, target_role, target_governorate, priority } = args
+        if (!title || !body) return { error: 'العنوان والنص مطلوبان' }
+
+        // Get target user IDs
+        let userQuery = supa.from('profiles').select('id').eq('is_active', true).is('deleted_at', null)
+        if (target_role && target_role !== 'all') userQuery = userQuery.eq('role', target_role)
+        if (target_governorate) {
+          const { data: gov } = await supa.from('governorates').select('id').ilike('name_ar', `%${target_governorate}%`).limit(1)
+          if (gov?.[0]) userQuery = userQuery.eq('governorate_id', gov[0].id)
+        }
+        const { data: users } = await withTimeout(userQuery.limit(500), 8_000) ?? {}
+        if (!users || users.length === 0) return { error: 'لا يوجد مستلمين' }
+
+        // Insert notifications
+        const notifications = users.map((u: any) => ({
+          user_id: u.id,
+          title,
+          body,
+          priority: priority || 'normal',
+          is_read: false,
+          created_at: new Date().toISOString(),
+        }))
+
+        const { error: insertErr } = await withTimeout(
+          supa.from('notifications').insert(notifications),
+          15_000
+        )
+        if (insertErr) return { error: `فشل إرسال الإشعارات: ${insertErr.message}` }
+
+        const roleLabel = target_role === 'all' ? 'الكل' : target_role
+        return {
+          success: true,
+          sent_to: users.length,
+          target: roleLabel,
+          message: `✅ تم إرسال "${title}" إلى ${users.length} مستخدم (${roleLabel})`,
+        }
+      }
+
+      case 'execute_sql': {
+        const { query, description } = args
+        if (!query) return { error: 'الاستعلام مطلوب' }
+
+        // Security: only SELECT allowed
+        const normalized = query.trim().toUpperCase()
+        if (!normalized.startsWith('SELECT')) {
+          return { error: '❌ مسموح فقط باستعلامات SELECT. ممنوع DELETE/UPDATE/INSERT/DROP.' }
+        }
+        const forbidden = ['DELETE', 'UPDATE', 'INSERT', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT', 'REVOKE']
+        for (const kw of forbidden) {
+          if (normalized.includes(kw)) {
+            return { error: `❌ ممنوع استخدام ${kw} في الاستعلام` }
+          }
+        }
+
+        // Execute via Supabase RPC or direct query
+        try {
+          const { data, error: sqlErr } = await withTimeout(
+            supa.rpc('exec_sql', { sql_query: query }).limit(100),
+            15_000
+          )
+          if (sqlErr) {
+            // Fallback: try raw query via postgrest
+            return { error: `خطأ SQL: ${sqlErr.message}`, hint: 'تأكد من صحة الاستعلام' }
+          }
+          return {
+            success: true,
+            description: description || 'استعلام مخصص',
+            rows: Array.isArray(data) ? data.slice(0, 100) : data,
+            row_count: Array.isArray(data) ? data.length : 1,
+          }
+        } catch (e) {
+          return { error: `فشل التنفيذ: ${e}` }
+        }
+      }
+
+      case 'generate_chart': {
+        const { chart_type, data_source, campaign_type, days, limit } = args
+        const campaignType = campaign_type || 'all'
+        const chartLimit = limit || 10
+        const periodDays = days || 30
+
+        let chartData: any[] = []
+
+        switch (data_source) {
+          case 'governorates': {
+            const formIds = await getCampaignFormIds(campaignType)
+            const since = new Date(Date.now() - periodDays * 86400000).toISOString()
+            let q = supa.from('form_submissions').select('governorate_id, status').is('deleted_at', null).gte('created_at', since).limit(10000)
+            if (formIds && formIds.length > 0) q = q.in('form_id', formIds)
+            const { data: subs } = await withTimeout(q, 10_000) ?? {}
+
+            const { data: govs } = await withTimeout(supa.from('governorates').select('id, name_ar').eq('is_active', true), 5_000) ?? {}
+            const govMap: Record<string, string> = {}
+            govs?.forEach((g: any) => { govMap[g.id] = g.name_ar })
+
+            const govCounts: Record<string, number> = {}
+            subs?.forEach((s: any) => {
+              if (s.governorate_id) govCounts[s.governorate_id] = (govCounts[s.governorate_id] || 0) + 1
+            })
+
+            chartData = Object.entries(govCounts)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, chartLimit)
+              .map(([id, val]) => ({ label: govMap[id] || id.slice(0, 8), value: val }))
+            break
+          }
+          case 'submissions_by_day': {
+            const formIds = await getCampaignFormIds(campaignType)
+            const since = new Date(Date.now() - periodDays * 86400000).toISOString()
+            let q = supa.from('form_submissions').select('created_at, status').is('deleted_at', null).gte('created_at', since).limit(10000)
+            if (formIds && formIds.length > 0) q = q.in('form_id', formIds)
+            const { data: subs } = await withTimeout(q, 10_000) ?? {}
+
+            const dayCounts: Record<string, number> = {}
+            subs?.forEach((s: any) => {
+              const day = s.created_at?.split('T')[0]
+              if (day) dayCounts[day] = (dayCounts[day] || 0) + 1
+            })
+            chartData = Object.entries(dayCounts).sort(([a], [b]) => a.localeCompare(b)).slice(-chartLimit).map(([day, val]) => ({ label: day, value: val }))
+            break
+          }
+          case 'users_by_role': {
+            const { data: users } = await withTimeout(supa.from('profiles').select('role').is('deleted_at', null), 5_000) ?? {}
+            const roleCounts: Record<string, number> = {}
+            const roleLabels: Record<string, string> = { admin: 'مدير', central: 'مركزي', governorate: 'محافظة', district: 'مديرية', data_entry: 'إدخال' }
+            users?.forEach((u: any) => { const r = roleLabels[u.role] || u.role; roleCounts[r] = (roleCounts[r] || 0) + 1 })
+            chartData = Object.entries(roleCounts).map(([label, val]) => ({ label, value: val }))
+            break
+          }
+          case 'shortages_by_severity': {
+            const { data: shs } = await withTimeout(supa.from('supply_shortages').select('severity').is('deleted_at', null).eq('is_resolved', false), 5_000) ?? {}
+            const sevCounts: Record<string, number> = {}
+            const sevLabels: Record<string, string> = { critical: 'حرج', high: 'عالي', medium: 'متوسط', low: 'منخفض' }
+            shs?.forEach((s: any) => { const l = sevLabels[s.severity] || s.severity; sevCounts[l] = (sevCounts[l] || 0) + 1 })
+            chartData = Object.entries(sevCounts).map(([label, val]) => ({ label, value: val }))
+            break
+          }
+          case 'forms_by_campaign': {
+            const { data: forms } = await withTimeout(supa.from('forms').select('campaign_type, title_ar').is('deleted_at', null).eq('is_active', true), 5_000) ?? {}
+            const formCounts: Record<string, number> = {}
+            forms?.forEach((f: any) => { const l = f.campaign_type === 'polio_campaign' ? 'شلل أطفال' : 'إيصالي تكاملي'; formCounts[l] = (formCounts[l] || 0) + 1 })
+            chartData = Object.entries(formCounts).map(([label, val]) => ({ label, value: val }))
+            break
+          }
+        }
+
+        const colors = ['#1565C0', '#2E7D32', '#F57F17', '#E53935', '#7C3AED', '#0891B2', '#DB2777', '#059669', '#6366F1', '#EA580C']
+        return {
+          chart_type,
+          title: args.title || data_source,
+          items: chartData.map((d, i) => ({ ...d, color: colors[i % colors.length] })),
+          generated_at: new Date().toISOString(),
+        }
+      }
+
+      case 'bulk_export': {
+        const { data_type, format, campaign_type, governorate_name, days, limit } = args
+        const campaignType = campaign_type || 'all'
+        const exportLimit = Math.min(limit || 1000, 5000)
+        const periodDays = days || 30
+        const since = new Date(Date.now() - periodDays * 86400000).toISOString()
+
+        let result: any = {}
+
+        switch (data_type) {
+          case 'submissions': {
+            let q = supa.from('form_submissions')
+              .select('id, status, data, created_at, governorate_id, district_id, form_id, submitted_by')
+              .is('deleted_at', null).gte('created_at', since).order('created_at', { ascending: false }).limit(exportLimit)
+            if (campaignType !== 'all') {
+              const formIds = await getCampaignFormIds(campaignType)
+              if (formIds) q = q.in('form_id', formIds)
+            }
+            if (governorate_name) {
+              const { data: gov } = await supa.from('governorates').select('id').ilike('name_ar', `%${governorate_name}%`).limit(1)
+              if (gov?.[0]) q = q.eq('governorate_id', gov[0].id)
+            }
+            const { data } = await withTimeout(q, 15_000) ?? {}
+            result = { data_type: 'submissions', count: data?.length || 0, records: data || [] }
+            break
+          }
+          case 'users': {
+            const { data } = await withTimeout(
+              supa.from('profiles').select('id, full_name, role, governorate_id, is_active, created_at').is('deleted_at', null).limit(exportLimit),
+              10_000
+            ) ?? {}
+            result = { data_type: 'users', count: data?.length || 0, records: data || [] }
+            break
+          }
+          case 'shortages': {
+            let q = supa.from('supply_shortages').select('*').is('deleted_at', null).gte('created_at', since).limit(exportLimit)
+            const { data } = await withTimeout(q, 10_000) ?? {}
+            result = { data_type: 'shortages', count: data?.length || 0, records: data || [] }
+            break
+          }
+          case 'governorates': {
+            const { data } = await withTimeout(supa.from('governorates').select('*').eq('is_active', true).is('deleted_at', null), 5_000) ?? {}
+            result = { data_type: 'governorates', count: data?.length || 0, records: data || [] }
+            break
+          }
+          case 'forms': {
+            const { data } = await withTimeout(supa.from('forms').select('*').is('deleted_at', null).eq('is_active', true), 5_000) ?? {}
+            result = { data_type: 'forms', count: data?.length || 0, records: data || [] }
+            break
+          }
+        }
+
+        result.export_format = format || 'json'
+        result.exported_at = new Date().toISOString()
+        result.message = `✅ تم تصدير ${result.count} سجل من ${data_type}`
+        return result
+      }
+
+      case 'create_scheduled_report': {
+        const { name, report_type, schedule, recipients, campaign_type } = args
+        if (!name) return { error: 'اسم التقرير مطلوب' }
+
+        const { data: report, error: insertErr } = await withTimeout(
+          supa.from('scheduled_reports').insert({
+            name,
+            report_type,
+            schedule: schedule || '0 8 * * *',
+            recipients: recipients || 'admin',
+            campaign_type: campaign_type || 'all',
+            is_active: true,
+            created_at: new Date().toISOString(),
+          }).select().single(),
+          10_000
+        )
+
+        if (insertErr) return { error: `فشل الإنشاء: ${insertErr.message}` }
+        return {
+          success: true,
+          report_id: report?.id,
+          message: `✅ تم إنشاء التقرير المجدول "${name}" — يُرسل ${report_type === 'daily' ? 'يومياً' : report_type === 'weekly' ? 'أسبوعياً' : 'شهرياً'}`,
+        }
+      }
+
+      case 'workflow_chain': {
+        const { steps, description } = args
+        if (!steps || steps.length === 0) return { error: 'الخطوات مطلوبة' }
+
+        const results: any[] = []
+        let stepNum = 0
+        for (const step of steps) {
+          stepNum++
+          try {
+            const result = await executeFunction(supa, step.action, step.params || {})
+            results.push({ step: stepNum, action: step.action, success: !result.error, result })
+            if (result.error) {
+              results.push({ step: stepNum, action: step.action, error: result.error, stopped: true })
+              break
+            }
+          } catch (e) {
+            results.push({ step: stepNum, action: step.action, error: String(e), stopped: true })
+            break
+          }
+        }
+
+        return {
+          workflow: description || 'سلسلة عمليات',
+          total_steps: steps.length,
+          completed: results.filter(r => !r.error).length,
+          results,
+          message: `✅ تم تنفيذ ${results.filter(r => !r.error).length}/${steps.length} خطوات`,
+        }
+      }
+
       default:
         return { error: `وظيفة غير معروفة: ${name}` }
     }
@@ -1945,7 +2381,7 @@ serve(async (req) => {
         model: dbModelId || 'llama-3.3-70b-versatile',
         maxTokens: dbMaxTokens,
         temperature: dbTemperature,
-        maxSteps: 3,
+        maxSteps: 5,
       })
 
       if (multiStepResult) {

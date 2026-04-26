@@ -438,11 +438,11 @@ export async function generateDailySupervisorEvaluation(options?: {
         })()}
         ${(() => {
           const rate = totalGovs > 0 ? Math.round((coveredGovs / totalGovs) * 100) : 0
-          return buildKPI('تغطية المحافظات', `${rate}%`, '🏛️', rate >= 80 ? BRAND.success : rate >= 50 ? BRAND.warning : BRAND.accent, `${coveredGovs}/${totalGovs}`)
+          return buildKPI('تغطية إشراف المحافظات', `${rate}%`, '🏛️', rate >= 80 ? BRAND.success : rate >= 50 ? BRAND.warning : BRAND.accent, `${coveredGovs}/${totalGovs}`)
         })()}
         ${(() => {
           const rate = totalDists > 0 ? Math.round((coveredDists / totalDists) * 100) : 0
-          return buildKPI('تغطية المديريات', `${rate}%`, '📍', rate >= 80 ? BRAND.success : rate >= 50 ? BRAND.warning : BRAND.accent, `${coveredDists}/${totalDists}`)
+          return buildKPI('تغطية إشراف المديريات', `${rate}%`, '📍', rate >= 80 ? BRAND.success : rate >= 50 ? BRAND.warning : BRAND.accent, `${coveredDists}/${totalDists}`)
         })()}
         ${(() => {
           const rate = totalForms > 0 ? Math.round((totalSubmitted / totalForms) * 100) : 0

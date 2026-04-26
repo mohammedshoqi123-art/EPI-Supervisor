@@ -9,8 +9,8 @@
  */
 
 import PptxGenJS from 'pptxgenjs'
-import { supabase } from '../supabase'
-import { EPI_LOGO_BASE64 } from '../epi-logo'
+import { supabase } from './supabase'
+import { EPI_LOGO_BASE64 } from './epi-logo'
 
 // ─── Brand Colors ────────────────────────────────────────────
 

@@ -452,7 +452,7 @@ export async function generateSupervisionFormReport(options?: {
                       : '<span style="color:' + BRAND.accent + ';font-size:9px">⚠️ بدون GPS</span>'
                     }
                     <span class="meta-item"><span class="meta-icon">📅</span> ${new Date(sub.created_at).toLocaleDateString('ar-SA')}</span>
-                    ${sub.profiles?.[0]?.phone ? `<span class="meta-item"><span class="meta-icon">📱</span> ${sub.profiles.phone}</span>` : ''}
+                    ${sub.profiles?.[0]?.phone ? `<span class="meta-item"><span class="meta-icon">📱</span> ${sub.profiles?.[0]?.phone}</span>` : ''}
                   </div>
                 </div>
                 <div class="card-score" style="color:${getStatusColor(overallScore, 80)};background:${overallScore >= 80 ? '#E8F5E9' : '#FFEBEE'}">

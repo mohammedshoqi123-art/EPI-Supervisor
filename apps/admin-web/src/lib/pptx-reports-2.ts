@@ -6,8 +6,8 @@
  */
 
 import PptxGenJS from 'pptxgenjs'
-import { supabase } from '../supabase'
-import { EPI_LOGO_BASE64 } from '../epi-logo'
+import { supabase } from './supabase'
+import { EPI_LOGO_BASE64 } from './epi-logo'
 
 const C = {
   primary: '1565C0', primaryDark: '0D47A1', accent: 'E53935',
@@ -54,13 +54,15 @@ function addKPIRow(slide: PptxGenJS.Slide, kpis: Array<{ label: string; value: s
   })
 }
 
-function addTable(slide: PptxGenJS.Slide, headers: string[], rows: string[][], y = 3.5) {
-  const w = 9.4
+function addTable(slide: PptxGenJS.Slide, headers: string[], rows: string[][], opts?: { x?: number; y?: number; w?: number }) {
+  const x = opts?.x || 0.3
+  const y = opts?.y || 3.5
+  const w = opts?.w || 9.4
   const tableRows = [
     headers.map(h => ({ text: h, options: { bold: true, color: C.white, fill: { color: C.primary }, fontSize: 9, align: 'center' as const } })),
-    ...rows.map((row, i) => row.map(cell => ({ text: cell, options: { fontSize: 8, fill: { color: i % 2 === 0 ? C.bg : C.white }, align: 'center' as const } }))),
+    ...rows.map((row: string[], i: number) => row.map((cell: string) => ({ text: cell, options: { fontSize: 8, fill: { color: i % 2 === 0 ? C.bg : C.white }, align: 'center' as const } }))),
   ]
-  slide.addTable(tableRows, { x: 0.3, y, w, border: { type: 'solid', pt: 0.5, color: C.border }, rowH: 0.35, autoPage: false })
+  slide.addTable(tableRows, { x, y, w, border: { type: 'solid', pt: 0.5, color: C.border }, rowH: 0.35, autoPage: false })
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -86,10 +88,10 @@ export async function generateWeeklyBulletinPPTX(): Promise<void> {
   const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
   const shortages = shortagesRes.status === 'fulfilled' ? shortagesRes.value.data || [] : []
 
-  const submitted = thisWeek.filter(s => s.status === 'submitted')
-  const draft = thisWeek.filter(s => s.status === 'draft')
-  const activeUsers = new Set(thisWeek.map(s => s.submitted_by)).size
-  const activeGovs = new Set(thisWeek.map(s => s.governorate_id).filter(Boolean)).size
+  const submitted = thisWeek.filter((s: any) => s.status === 'submitted')
+  const draft = thisWeek.filter((s: any) => s.status === 'draft')
+  const activeUsers = new Set(thisWeek.map((s: any) => s.submitted_by)).size
+  const activeGovs = new Set(thisWeek.map((s: any) => s.governorate_id).filter(Boolean)).size
   const diff = thisWeek.length - lastWeekCount
   const diffPct = lastWeekCount > 0 ? Math.round((diff / lastWeekCount) * 100) : 0
 
@@ -98,15 +100,15 @@ export async function generateWeeklyBulletinPPTX(): Promise<void> {
     const d = new Date(weekStart.getTime() + i * 86400000)
     const dayStr = d.toISOString().split('T')[0]
     const dayName = d.toLocaleDateString('ar-SA', { weekday: 'long' })
-    const daySubs = thisWeek.filter(s => s.created_at.startsWith(dayStr))
-    return { day: dayName, count: daySubs.length, submitted: daySubs.filter(s => s.status === 'submitted').length }
+    const daySubs = thisWeek.filter((s: any) => s.created_at.startsWith(dayStr))
+    return { day: dayName, count: daySubs.length, submitted: daySubs.filter((s: any) => s.status === 'submitted').length }
   })
 
   // Top governorates
-  const govWeekly = govs.map(g => ({
+  const govWeekly = govs.map((g: any) => ({
     name: g.name_ar,
-    count: thisWeek.filter(s => s.governorate_id === g.id).length,
-  })).sort((a, b) => b.count - a.count).filter(g => g.count > 0)
+    count: thisWeek.filter((s: any) => s.governorate_id === g.id).length,
+  })).sort((a: any, b: any) => b.count - a.count).filter((g: any) => g.count > 0)
 
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_WIDE'
@@ -186,36 +188,36 @@ export async function generateCampaignPerformancePPTX(): Promise<void> {
   const shortages = shortagesRes.status === 'fulfilled' ? shortagesRes.value.data || [] : []
 
   // Campaign breakdown
-  const polioFormIds = forms.filter(f => f.campaign_type === 'polio_campaign').map(f => f.id)
-  const epiFormIds = forms.filter(f => f.campaign_type !== 'polio_campaign').map(f => f.id)
+  const polioFormIds = forms.filter((f: any) => f.campaign_type === 'polio_campaign').map((f: any) => f.id)
+  const epiFormIds = forms.filter((f: any) => f.campaign_type !== 'polio_campaign').map((f: any) => f.id)
 
-  const polioSubs = subs.filter(s => polioFormIds.includes(s.form_id))
-  const epiSubs = subs.filter(s => epiFormIds.includes(s.form_id))
+  const polioSubs = subs.filter((s: any) => polioFormIds.includes(s.form_id))
+  const epiSubs = subs.filter((s: any) => epiFormIds.includes(s.form_id))
 
-  const polioSubmitted = polioSubs.filter(s => s.status === 'submitted')
-  const epiSubmitted = epiSubs.filter(s => s.status === 'submitted')
-  const polioDraft = polioSubs.filter(s => s.status === 'draft')
-  const epiDraft = epiSubs.filter(s => s.status === 'draft')
+  const polioSubmitted = polioSubs.filter((s: any) => s.status === 'submitted')
+  const epiSubmitted = epiSubs.filter((s: any) => s.status === 'submitted')
+  const polioDraft = polioSubs.filter((s: any) => s.status === 'draft')
+  const epiDraft = epiSubs.filter((s: any) => s.status === 'draft')
 
   const polioDropout = polioSubs.length > 0 ? Math.round(((polioSubs.length - polioSubmitted.length) / polioSubs.length) * 100) : 0
   const epiDropout = epiSubs.length > 0 ? Math.round(((epiSubs.length - epiSubmitted.length) / epiSubs.length) * 100) : 0
 
   // Coverage by governorate per campaign
-  const polioByGov = govs.map(g => ({
+  const polioByGov = govs.map((g: any) => ({
     name: g.name_ar,
-    total: polioSubs.filter(s => s.governorate_id === g.id).length,
-    submitted: polioSubs.filter(s => s.governorate_id === g.id && s.status === 'submitted').length,
-  })).sort((a, b) => b.total - a.total)
+    total: polioSubs.filter((s: any) => s.governorate_id === g.id).length,
+    submitted: polioSubs.filter((s: any) => s.governorate_id === g.id && s.status === 'submitted').length,
+  })).sort((a: any, b: any) => b.total - a.total)
 
-  const epiByGov = govs.map(g => ({
+  const epiByGov = govs.map((g: any) => ({
     name: g.name_ar,
-    total: epiSubs.filter(s => s.governorate_id === g.id).length,
-    submitted: epiSubs.filter(s => s.governorate_id === g.id && s.status === 'submitted').length,
-  })).sort((a, b) => b.total - a.total)
+    total: epiSubs.filter((s: any) => s.governorate_id === g.id).length,
+    submitted: epiSubs.filter((s: any) => s.governorate_id === g.id && s.status === 'submitted').length,
+  })).sort((a: any, b: any) => b.total - a.total)
 
   // Zero coverage
-  const polioZeroGovs = polioByGov.filter(g => g.total === 0)
-  const epiZeroGovs = epiByGov.filter(g => g.total === 0)
+  const polioZeroGovs = polioByGov.filter((g: any) => g.total === 0)
+  const epiZeroGovs = epiByGov.filter((g: any) => g.total === 0)
 
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_WIDE'
@@ -267,12 +269,12 @@ export async function generateCampaignPerformancePPTX(): Promise<void> {
   const s4 = addBrandedSlide(pptx)
   s4.addText('💉 تغطية حملة شلل أطفال حسب المحافظة', { x: 0.3, y: 0.3, w: 9.4, h: 0.5, fontSize: 18, bold: true, color: C.blue, fontFace: 'Cairo' })
   addKPIRow(s4, [
-    { label: 'محافظات نشطة', value: `${polioByGov.filter(g => g.total > 0).length}/${govs.length}`, icon: '🏛️', color: C.info },
+    { label: 'محافظات نشطة', value: `${polioByGov.filter((g: any) => g.total > 0).length}/${govs.length}`, icon: '🏛️', color: C.info },
     { label: 'بدون تغطية', value: polioZeroGovs.length.toString(), icon: '⚠️', color: polioZeroGovs.length > 0 ? C.accent : C.success },
   ], 1.2)
   addTable(s4,
     ['#', 'المحافظة', 'الإرساليات', 'مرسلة', 'نسبة التغطية'],
-    polioByGov.filter(g => g.total > 0).slice(0, 12).map((g, i) => [
+    polioByGov.filter((g: any) => g.total > 0).slice(0, 12).map((g: any, i: number) => [
       `${i + 1}`, g.name, g.total.toString(), g.submitted.toString(),
       `${Math.round((g.submitted / Math.max(g.total, 1)) * 100)}%`,
     ]),
@@ -283,12 +285,12 @@ export async function generateCampaignPerformancePPTX(): Promise<void> {
   const s5 = addBrandedSlide(pptx)
   s5.addText('🏥 تغطية الإيصالي التكاملي حسب المحافظة', { x: 0.3, y: 0.3, w: 9.4, h: 0.5, fontSize: 18, bold: true, color: C.green, fontFace: 'Cairo' })
   addKPIRow(s5, [
-    { label: 'محافظات نشطة', value: `${epiByGov.filter(g => g.total > 0).length}/${govs.length}`, icon: '🏛️', color: C.info },
+    { label: 'محافظات نشطة', value: `${epiByGov.filter((g: any) => g.total > 0).length}/${govs.length}`, icon: '🏛️', color: C.info },
     { label: 'بدون تغطية', value: epiZeroGovs.length.toString(), icon: '⚠️', color: epiZeroGovs.length > 0 ? C.accent : C.success },
   ], 1.2)
   addTable(s5,
     ['#', 'المحافظة', 'الإرساليات', 'مرسلة', 'نسبة التغطية'],
-    epiByGov.filter(g => g.total > 0).slice(0, 12).map((g, i) => [
+    epiByGov.filter((g: any) => g.total > 0).slice(0, 12).map((g: any, i: number) => [
       `${i + 1}`, g.name, g.total.toString(), g.submitted.toString(),
       `${Math.round((g.submitted / Math.max(g.total, 1)) * 100)}%`,
     ]),
@@ -299,19 +301,19 @@ export async function generateCampaignPerformancePPTX(): Promise<void> {
   const s6 = addBrandedSlide(pptx)
   s6.addText('تأثير النواقص على الحملات', { x: 0.3, y: 0.3, w: 9.4, h: 0.5, fontSize: 20, bold: true, color: C.accent, fontFace: 'Cairo' })
 
-  const criticalShortages = shortages.filter(s => s.severity === 'critical' && !s.is_resolved)
-  const highShortages = shortages.filter(s => s.severity === 'high' && !s.is_resolved)
+  const criticalShortages = shortages.filter((s: any) => s.severity === 'critical' && !s.is_resolved)
+  const highShortages = shortages.filter((s: any) => s.severity === 'high' && !s.is_resolved)
 
   addKPIRow(s6, [
     { label: 'نواقص حرجة', value: criticalShortages.length.toString(), icon: '🚨', color: C.accent },
     { label: 'نواقص عالية', value: highShortages.length.toString(), icon: '🟠', color: 'E65100' },
-    { label: 'معدل الحل', value: `${shortages.length > 0 ? Math.round((shortages.filter(s => s.is_resolved).length / shortages.length) * 100) : 0}%`, icon: '📈', color: C.info },
+    { label: 'معدل الحل', value: `${shortages.length > 0 ? Math.round((shortages.filter((s: any) => s.is_resolved).length / shortages.length) * 100) : 0}%`, icon: '📈', color: C.info },
   ], 1.2)
 
   if (criticalShortages.length > 0) {
     addTable(s6,
       ['النقص', 'المحافظة', 'الخطورة', 'الكمية المطلوبة'],
-      criticalShortages.slice(0, 8).map(s => [
+      criticalShortages.slice(0, 8).map((s: any) => [
         s.item_name, s.governorates?.name_ar || '—', '🔴 حرج', `${s.quantity_needed || '—'}`,
       ]),
       { y: 3 }

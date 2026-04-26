@@ -404,7 +404,7 @@ export async function generateSupervisionChallengesReport(options?: {
                         : '<span class="entry-meta-item" style="color:#FFCDD2">⚠️ بدون GPS</span>'
                       }
                       <span class="entry-meta-item">📅 ${new Date(sub.created_at).toLocaleDateString('ar-SA')}</span>
-                      ${sub.profiles?.[0]?.phone ? `<span class="entry-meta-item">📱 ${sub.profiles.phone}</span>` : ''}
+                      ${sub.profiles?.[0]?.phone ? `<span class="entry-meta-item">📱 ${sub.profiles?.[0]?.phone}</span>` : ''}
                     </div>
                   </div>
                   <div class="entry-score" style="color:${challengeCount === 3 ? '#C8E6C9' : challengeCount >= 2 ? '#FFECB3' : '#FFCDD2'}">

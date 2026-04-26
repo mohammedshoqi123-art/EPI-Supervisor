@@ -192,9 +192,8 @@ export function generatePDFReport(options: ReportOptions): void {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(options.title)} — EPI Supervisor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Tajawal:wght@300;400;500;700&display=swap');
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     @page {
@@ -485,22 +484,24 @@ export function generatePDFReport(options: ReportOptions): void {
 </body>
 </html>`
 
-  // Open in new window for printing/PDF
-  const printWindow = window.open('', '_blank')
-  if (!printWindow) {
-    alert('يرجى السماح بالنوافذ المنبثقة لتصدير التقرير')
-    return
-  }
-
-  printWindow.document.write(html)
-  printWindow.document.close()
-
-  // Wait for fonts to load then trigger print
-  printWindow.onload = () => {
-    setTimeout(() => {
-      printWindow.print()
-    }, 500)
-  }
+  // Use enhanced PDF system (no window.open, no popup blocker issues)
+  const { generateReportHTML, printReport: enhancedPrintReport } = await import('./enhanced-pdf')
+  enhancedPrintReport({
+    title: options.title,
+    subtitle: options.subtitle,
+    period: options.period,
+    generatedBy: options.generatedBy,
+    sections: options.sections.map(s => ({
+      title: s.title,
+      icon: s.icon,
+      type: s.type as any,
+      kpis: s.kpis,
+      items: s.items,
+      columns: s.columns,
+      rows: s.rows,
+      text: s.text,
+    })),
+  })
 }
 
 // ═══════════════════════════════════════════════════════════════

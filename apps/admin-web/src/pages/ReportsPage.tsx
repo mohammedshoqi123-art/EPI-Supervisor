@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import {
   BarChart3, FileSpreadsheet, Download, Calendar, Filter,
   Users, FileStack, MapPin, AlertTriangle, TrendingUp, TrendingDown,
@@ -7,7 +7,7 @@ import {
   CheckCircle2, Loader2, PieChart as PieChartIcon, Target,
   Layers, Send, ClipboardList, Gauge, Star, Sparkles,
   ChevronRight, ChevronDown, FileDown, Database,
-  ArrowUp, ArrowDown, Info, ScrollText, History
+  ArrowUp, ArrowDown, Info, ScrollText, History, ArrowLeftRight
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -66,7 +66,20 @@ import {
   generateShortagesDetailedReport,
   generateWeeklyReport,
   generateUserActivityReport,
+  enableCaptureMode,
+  disableCaptureMode,
 } from '@/lib/professional-reports'
+// Enhanced PDF & Preview
+import {
+  generateReportHTML, printReport,
+  buildSubmissionsPDF, buildGovernoratesPDF, buildUsersPDF, buildShortagesPDF, buildFullPDF,
+} from '@/lib/enhanced-pdf'
+import { ReportPreview, useReportPreview } from '@/components/reports/ReportPreview'
+import { ExportProgress, useExportProgress } from '@/components/reports/ExportProgress'
+import { bulkFetchSubmissions, bulkFetchUsers, bulkFetchShortages } from '@/lib/bulk-fetch'
+import { SectionErrorBoundary } from '@/components/ui/section-error-boundary'
+import { ComparisonReport } from '@/components/reports/ComparisonReport'
+import { AnalyticsFilterBar, DrillDownDialog, ChartCard, FullscreenChart, useSortableData, type DrillDownData, type AnalyticsFilter } from '@/components/reports/InteractiveAnalytics'
 
 // ═══════════════════════════════════════════════════════════════
 // Constants & Helpers
@@ -272,6 +285,8 @@ export default function ReportsPage() {
   const userRole = (authData?.profile?.role as UserRole) || 'data_entry'
   const { campaign, labelAr, isFiltered } = useCampaign()
   const { toast } = useToast()
+  const { previewProps, openPreview, closePreview } = useReportPreview()
+  const exportProgress = useExportProgress()
 
   // Data
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats(campaign)
@@ -293,6 +308,14 @@ export default function ReportsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [selectedGovFilter, setSelectedGovFilter] = useState('all')
+
+  // Interactive analytics state
+  const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter>({
+    dateFrom: '', dateTo: '', governorateId: 'all', campaignType: 'all',
+  })
+  const [drillDownOpen, setDrillDownOpen] = useState(false)
+  const [drillDownData, setDrillDownData] = useState<DrillDownData | null>(null)
+  const [fullscreenChart, setFullscreenChart] = useState<string | null>(null)
 
   // Filtered forms
   const filteredForms = useMemo(() => {
@@ -337,31 +360,34 @@ export default function ReportsPage() {
   })
 
   const handleExportUsers = () => exportReport('users', async () => {
-    const { data, error } = await supabase
-      .from('profiles').select('full_name, email, role, is_active, created_at, governorates(name_ar)')
-      .is('deleted_at', null).order('created_at', { ascending: false })
-    if (error) throw error
-    exportUsersReport((data || []).map(u => ({
+    exportProgress.startFetch()
+
+    const result = await bulkFetchUsers()
+
+    exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
+    exportProgress.startGenerate()
+
+    exportUsersReport((result.data || []).map((u: any) => ({
       full_name: u.full_name, email: u.email, role: u.role,
-      is_active: u.is_active, governorate: (u.governorates as any)?.name_ar,
+      is_active: u.is_active, governorate: u.governorates?.name_ar,
       created_at: u.created_at,
     })))
+
+    exportProgress.done(`تم تصدير ${result.fetchedCount} مستخدم`)
   })
 
   const handleExportSubmissions = () => exportReport('submissions', async () => {
-    let query = supabase.from('form_submissions').select(`
-      id, status, data, notes, created_at,
-      forms(title_ar, campaign_type),
-      profiles!submitted_by(full_name, email),
-      governorates(name_ar), districts(name_ar)
-    `).is('deleted_at', null).order('created_at', { ascending: false }).limit(5000)
+    exportProgress.startFetch()
 
-    if (dateFrom) query = query.gte('created_at', dateFrom)
-    if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')
-    if (selectedGovFilter !== 'all') query = query.eq('governorate_id', selectedGovFilter)
+    // Use bulk fetch for paginated data retrieval (no 5000 hard limit)
+    const result = await bulkFetchSubmissions({
+      governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    })
 
-    const { data, error } = await query
-    if (error) throw error
+    exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
+    exportProgress.startGenerate()
 
     const columns: ExportColumn[] = [
       { header: '#', key: 'index', width: 6 },
@@ -374,7 +400,7 @@ export default function ReportsPage() {
       { header: 'التاريخ', key: 'date', width: 18 },
     ]
 
-    const rows = (data || []).map((s: any, i: number) => ({
+    const rows = result.data.map((s: any, i: number) => ({
       index: i + 1, form: s.forms?.title_ar || '',
       status: s.status === 'submitted' ? 'مرسلة' : 'مسودة',
       submitted_by: s.profiles?.full_name || '',
@@ -386,19 +412,21 @@ export default function ReportsPage() {
     exportToExcel({
       sheetName: 'إرساليات النماذج',
       title: 'تقرير الإرساليات الشامل — EPI Supervisor',
-      subtitle: `تصدير: ${new Date().toLocaleDateString('ar-SA')} — ${rows.length} سجل`,
+      subtitle: `تصدير: ${new Date().toLocaleDateString('ar-SA')} — ${rows.length} سجل${result.truncated ? ' (مُقتطع)' : ''}`,
       columns, data: rows,
       fileName: `submissions_report_${new Date().toISOString().split('T')[0]}`,
     })
+
+    exportProgress.done(`تم تصدير ${rows.length} إرسالية${result.truncated ? ' (مُقتطع)' : ''}`)
   })
 
   const handleExportShortages = () => exportReport('shortages', async () => {
-    const { data, error } = await supabase.from('supply_shortages').select(`
-      id, item_name, item_category, quantity_needed, quantity_available,
-      unit, severity, notes, is_resolved, created_at,
-      profiles!reported_by(full_name), governorates(name_ar), districts(name_ar)
-    `).is('deleted_at', null).order('created_at', { ascending: false }).limit(5000)
-    if (error) throw error
+    exportProgress.startFetch()
+
+    const result = await bulkFetchShortages()
+
+    exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
+    exportProgress.startGenerate()
 
     const sev: Record<string, string> = { critical: 'حرج', high: 'عالي', medium: 'متوسط', low: 'منخفض' }
     const columns: ExportColumn[] = [
@@ -408,7 +436,7 @@ export default function ReportsPage() {
       { header: 'محلول', key: 'resolved', width: 10 }, { header: 'المُبلّغ', key: 'by', width: 18 },
       { header: 'المحافظة', key: 'gov', width: 15 }, { header: 'التاريخ', key: 'date', width: 16 },
     ]
-    const rows = (data || []).map((s: any, i: number) => ({
+    const rows = result.data.map((s: any, i: number) => ({
       index: i + 1, item: s.item_name, category: s.item_category || '',
       needed: s.quantity_needed || '', available: s.quantity_available || 0,
       severity: sev[s.severity] || s.severity, resolved: s.is_resolved ? 'نعم' : 'لا',
@@ -420,6 +448,8 @@ export default function ReportsPage() {
       subtitle: `${rows.length} سجل`, columns, data: rows,
       fileName: `shortages_report_${new Date().toISOString().split('T')[0]}`,
     })
+
+    exportProgress.done(`تم تصدير ${rows.length} نقص`)
   })
 
   const handleExportTimeline = () => exportReport('timeline', () => {
@@ -455,16 +485,20 @@ export default function ReportsPage() {
   })
 
   const handleExportAudit = () => exportReport('audit', async () => {
+    exportProgress.startFetch()
+
     let query = supabase.from('audit_logs').select(`
       id, action, table_name, record_id, ip_address, created_at,
       profiles(full_name, email, role)
-    `).order('created_at', { ascending: false }).limit(5000)
+    `).order('created_at', { ascending: false }).limit(20000)
 
     if (dateFrom) query = query.gte('created_at', dateFrom)
     if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')
 
     const { data, error } = await query
     if (error) throw error
+
+    exportProgress.startGenerate()
 
     const actionLabels: Record<string, string> = {
       create: 'إنشاء', update: 'تعديل', delete: 'حذف',
@@ -505,12 +539,14 @@ export default function ReportsPage() {
       columns, data: rows,
       fileName: `audit_report_${new Date().toISOString().split('T')[0]}`,
     })
+
+    exportProgress.done(`تم تصدير ${rows.length} سجل تدقيق`)
   })
 
   // ═══ PDF Export Handlers ═══
 
   const handleExportPDF = () => exportReport('pdf', async () => {
-    // Fetch governorate data for PDF
+    // Use enhanced PDF with preview
     const { data: govData } = await supabase
       .from('governorates')
       .select('name_ar')
@@ -518,7 +554,6 @@ export default function ReportsPage() {
       .is('deleted_at', null)
       .order('name_ar')
 
-    // Fetch submissions by governorate
     const { data: subsByGov } = await supabase
       .from('form_submissions')
       .select('governorate_id, status, governorates(name_ar)')
@@ -533,7 +568,6 @@ export default function ReportsPage() {
       govMap.set(name, existing)
     }
 
-    // Fetch recent submissions
     const { data: recentSubs } = await supabase
       .from('form_submissions')
       .select('status, created_at, forms(title_ar), profiles!submitted_by(full_name), governorates(name_ar)')
@@ -545,39 +579,107 @@ export default function ReportsPage() {
       submitted: 'مرسلة', draft: 'مسودة', approved: 'معتمدة', rejected: 'مرفوضة',
     }
 
-    generateSubmissionsReport({
-      total: stats?.total_submissions || 0,
-      submitted: (stats?.total_submissions || 0) - (stats?.draft_submissions || 0),
-      draft: stats?.draft_submissions || 0,
-      today: stats?.submissions_today || 0,
-      byGovernorate: Array.from(govMap.values()).sort((a, b) => b.count - a.count).slice(0, 15),
-      byStatus: {
-        submitted: (stats?.total_submissions || 0) - (stats?.draft_submissions || 0),
-        draft: stats?.draft_submissions || 0,
-      },
-      recentSubmissions: (recentSubs || []).map((s: any) => ({
-        form: s.forms?.title_ar || '—',
-        submitter: s.profiles?.full_name || '—',
-        governorate: s.governorates?.name_ar || '—',
-        status: statusLabels[s.status] || s.status,
-        date: new Date(s.created_at).toLocaleDateString('ar-SA'),
-      })),
+    // Generate preview HTML
+    const html = generateReportHTML({
+      title: 'تقرير الإرساليات الشامل',
+      subtitle: 'إحصائيات تفصيلية للإرساليات والاستمارات',
+      period: 'آخر 30 يوم',
+      sections: [
+        {
+          title: 'مؤشرات الأداء الرئيسية',
+          icon: '📊',
+          type: 'kpi-grid',
+          kpis: [
+            { label: 'إجمالي الإرساليات', value: stats?.total_submissions || 0, icon: '📋', color: '#1565C0' },
+            { label: 'مرسلة', value: (stats?.total_submissions || 0) - (stats?.draft_submissions || 0), icon: '✅', color: '#2E7D32' },
+            { label: 'مسودات', value: stats?.draft_submissions || 0, icon: '📝', color: '#F57F17' },
+            { label: 'اليوم', value: stats?.submissions_today || 0, icon: '📅', color: '#0277BD' },
+          ],
+        },
+        {
+          title: 'الإرساليات حسب المحافظة',
+          icon: '🗺️',
+          type: 'table',
+          columns: [
+            { key: 'name', label: 'المحافظة' },
+            { key: 'count', label: 'عدد الإرساليات' },
+          ],
+          rows: Array.from(govMap.values()).sort((a, b) => b.count - a.count).slice(0, 15),
+        },
+        {
+          title: 'آخر الإرساليات',
+          icon: '📝',
+          type: 'table',
+          columns: [
+            { key: 'form', label: 'الاستمارة' },
+            { key: 'submitter', label: 'المقدم' },
+            { key: 'governorate', label: 'المحافظة' },
+            { key: 'status', label: 'الحالة' },
+            { key: 'date', label: 'التاريخ' },
+          ],
+          rows: (recentSubs || []).map((s: any) => ({
+            form: s.forms?.title_ar || '—',
+            submitter: s.profiles?.full_name || '—',
+            governorate: s.governorates?.name_ar || '—',
+            status: statusLabels[s.status] || s.status,
+            date: new Date(s.created_at).toLocaleDateString('ar-SA'),
+          })),
+        },
+      ],
     })
+
+    openPreview('تقرير الإرساليات الشامل', html, 'آخر 30 يوم')
   })
 
   const handleExportGovPDF = () => exportReport('gov-pdf', async () => {
     if (!govStats) return
-    generateGovPDFReport({
-      governorates: govStats.map(g => ({
-        name: g.name,
-        submissions: g.submissions,
-        submitted: Math.round(g.submissions * 0.7),
-        draft: Math.round(g.submissions * 0.3),
-        districts: 0,
-        facilities: 0,
-        users: 0,
-      })),
+
+    const zeroGovs = govStats.filter(g => g.submissions === 0)
+    const topGov = govStats.length > 0 ? govStats[0] : null
+    const coveragePct = govStats.length > 0
+      ? Math.round((govStats.filter(g => g.submissions > 0).length / govStats.length) * 100)
+      : 0
+
+    const html = generateReportHTML({
+      title: 'تقرير أداء المحافظات',
+      subtitle: 'مقارنة شاملة لأداء جميع المحافظات',
+      sections: [
+        {
+          title: 'مؤشرات التغطية',
+          icon: '🎯',
+          type: 'kpi-grid',
+          kpis: [
+            { label: 'نسبة التغطية', value: `${coveragePct}%`, icon: '📊', color: coveragePct >= 80 ? '#2E7D32' : '#F57F17' },
+            { label: 'محافظات نشطة', value: govStats.filter(g => g.submissions > 0).length, icon: '🏛️', color: '#1565C0' },
+            { label: 'بدون تغطية', value: zeroGovs.length, icon: '⚠️', color: zeroGovs.length > 0 ? '#E53935' : '#2E7D32' },
+            { label: 'الأعلى نشاطاً', value: topGov?.name || '—', icon: '🏆', color: '#FFD600' },
+          ],
+        },
+        {
+          title: 'أداء المحافظات',
+          icon: '🏛️',
+          type: 'table',
+          columns: [
+            { key: 'rank', label: '#', width: 40 },
+            { key: 'name', label: 'المحافظة', width: 200 },
+            { key: 'submissions', label: 'إرساليات', width: 120 },
+          ],
+          rows: govStats.map((g, i) => ({
+            rank: i + 1,
+            name: g.name,
+            submissions: g.submissions,
+          })),
+        },
+        ...(zeroGovs.length > 0 ? [{
+          title: 'محافظات بدون تغطية',
+          icon: '⚠️',
+          type: 'list' as const,
+          items: zeroGovs.map(g => ({ label: g.name, value: 'لا توجد إرساليات', color: '#E53935' })),
+        }] : []),
+      ],
     })
+
+    openPreview('تقرير أداء المحافظات', html, `${govStats.length} محافظة`)
   })
 
   const handleExportUsersPDF = () => exportReport('users-pdf', async () => {
@@ -588,22 +690,61 @@ export default function ReportsPage() {
       .order('created_at', { ascending: false })
       .limit(200)
 
+    const roleLabels: Record<string, string> = {
+      admin: 'مدير النظام', central: 'مركزي', governorate: 'محافظة', district: 'مديرية', data_entry: 'إدخال بيانات',
+    }
     const byRole: Record<string, number> = {}
     for (const u of data || []) {
       byRole[u.role] = (byRole[u.role] || 0) + 1
     }
 
-    generateUsersPDFReport({
-      total: data?.length || 0,
-      byRole,
-      users: (data || []).map((u: any) => ({
-        name: u.full_name,
-        email: u.email,
-        role: u.role === 'admin' ? 'مسؤول' : u.role === 'central' ? 'مركزي' : u.role === 'governorate' ? 'محافظة' : u.role === 'district' ? 'مديرية' : u.role,
-        governorate: u.governorates?.name_ar || '—',
-        active: u.is_active,
-      })),
+    const html = generateReportHTML({
+      title: 'تقرير المستخدمين',
+      subtitle: 'إحصائيات شاملة للمستخدمين والأدوار',
+      sections: [
+        {
+          title: 'ملخص المستخدمين',
+          icon: '👥',
+          type: 'kpi-grid',
+          kpis: [
+            { label: 'إجمالي المستخدمين', value: data?.length || 0, icon: '👤', color: '#1565C0' },
+            { label: 'نشطين', value: data?.filter(u => u.is_active).length || 0, icon: '✅', color: '#2E7D32' },
+            { label: 'غير نشطين', value: data?.filter(u => !u.is_active).length || 0, icon: '⏸️', color: '#F57F17' },
+          ],
+        },
+        {
+          title: 'توزيع الأدوار',
+          icon: '📊',
+          type: 'summary',
+          items: Object.entries(byRole).map(([role, count]) => ({
+            label: roleLabels[role] || role,
+            value: count,
+            color: role === 'admin' ? '#8E24AA' : '#1565C0',
+          })),
+        },
+        {
+          title: 'قائمة المستخدمين',
+          icon: '📋',
+          type: 'table',
+          columns: [
+            { key: 'name', label: 'الاسم', width: 150 },
+            { key: 'email', label: 'البريد', width: 180 },
+            { key: 'role', label: 'الدور', width: 100 },
+            { key: 'governorate', label: 'المحافظة', width: 120 },
+            { key: 'active', label: 'نشط', width: 60 },
+          ],
+          rows: (data || []).map((u: any) => ({
+            name: u.full_name,
+            email: u.email,
+            role: roleLabels[u.role] || u.role,
+            governorate: u.governorates?.name_ar || '—',
+            active: u.is_active ? 'نعم' : 'لا',
+          })),
+        },
+      ],
     })
+
+    openPreview('تقرير المستخدمين', html, `${data?.length || 0} مستخدم`)
   })
 
   const handleExportShortagesPDF = () => exportReport('shortages-pdf', async () => {
@@ -614,76 +755,117 @@ export default function ReportsPage() {
       .order('created_at', { ascending: false })
       .limit(200)
 
-    generateShortagesReport({
-      total: data?.length || 0,
-      critical: data?.filter(s => s.severity === 'critical').length || 0,
-      resolved: data?.filter(s => s.is_resolved).length || 0,
-      shortages: (data || []).map((s: any) => ({
-        item: s.item_name,
-        severity: s.severity,
-        needed: s.quantity_needed || 0,
-        available: s.quantity_available || 0,
-        governorate: s.governorates?.name_ar || '—',
-        resolved: s.is_resolved,
-      })),
+    const sevLabels: Record<string, string> = { critical: 'حرج', high: 'عالي', medium: 'متوسط', low: 'منخفض' }
+    const sevColors: Record<string, string> = { critical: '#E53935', high: '#FF6D00', medium: '#F57F17', low: '#2E7D32' }
+
+    const html = generateReportHTML({
+      title: 'تقرير النواقص التفصيلي',
+      subtitle: 'نواقص اللقاحات والمعدات والتجهيزات',
+      sections: [
+        {
+          title: 'ملخص النواقص',
+          icon: '📦',
+          type: 'kpi-grid',
+          kpis: [
+            { label: 'إجمالي النواقص', value: data?.length || 0, icon: '📦', color: '#1565C0' },
+            { label: 'حرجة', value: data?.filter(s => s.severity === 'critical').length || 0, icon: '🔴', color: '#E53935' },
+            { label: 'عالية', value: data?.filter(s => s.severity === 'high').length || 0, icon: '🟠', color: '#FF6D00' },
+            { label: 'محلولة', value: data?.filter(s => s.is_resolved).length || 0, icon: '✅', color: '#2E7D32' },
+          ],
+        },
+        {
+          title: 'نسبة الحل',
+          icon: '🎯',
+          type: 'progress',
+          progressItems: [
+            { label: 'نواقص محلولة', value: data?.filter(s => s.is_resolved).length || 0, max: data?.length || 1, color: '#2E7D32' },
+            { label: 'نواقص حرجة', value: data?.filter(s => s.severity === 'critical').length || 0, max: data?.length || 1, color: '#E53935' },
+          ],
+        },
+        {
+          title: 'تفاصيل النواقص',
+          icon: '📋',
+          type: 'table',
+          columns: [
+            { key: 'item', label: 'الصنف', width: 150 },
+            { key: 'severity', label: 'الخطورة', width: 80 },
+            { key: 'needed', label: 'المطلوب', width: 80 },
+            { key: 'available', label: 'المتاح', width: 80 },
+            { key: 'gap', label: 'النقص', width: 80 },
+            { key: 'governorate', label: 'المحافظة', width: 120 },
+            { key: 'resolved', label: 'محلول', width: 60 },
+          ],
+          rows: (data || []).map((s: any) => ({
+            item: s.item_name,
+            severity: sevLabels[s.severity] || s.severity,
+            needed: s.quantity_needed || 0,
+            available: s.quantity_available || 0,
+            gap: Math.max(0, (s.quantity_needed || 0) - s.quantity_available),
+            governorate: s.governorates?.name_ar || '—',
+            resolved: s.is_resolved ? 'نعم' : 'لا',
+          })),
+        },
+      ],
     })
+
+    openPreview('تقرير النواقص التفصيلي', html, `${data?.length || 0} نقص`)
   })
 
   const handleExportFullPDF = () => exportReport('full-pdf', async () => {
-    // Comprehensive PDF with all sections
-    const sections: any[] = []
+    if (!stats) return
 
-    // KPIs
-    if (stats) {
-      sections.push({
-        title: 'ملخص المؤشرات الرئيسية',
-        icon: '📊',
-        type: 'kpi-grid',
-        kpis: [
-          { label: 'إجمالي المستخدمين', value: stats.total_users, icon: '👥', color: '#1E88E5' },
-          { label: 'إرساليات اليوم', value: stats.submissions_today, icon: '📋', color: '#43A047' },
-          { label: 'المسودات', value: stats.draft_submissions, icon: '📝', color: '#FB8C00' },
-          { label: 'النماذج النشطة', value: stats.active_forms, icon: '📄', color: '#E53935' },
-          { label: 'المحافظات', value: govStats?.length ?? 0, icon: '🗺️', color: '#00897B' },
-          { label: 'معدل الأداء', value: `${stats.approval_rate.toFixed(1)}%`, icon: '📈', color: '#8E24AA' },
-        ],
-      })
-    }
+    const coveragePct = govStats && govStats.length > 0
+      ? Math.round((govStats.filter(g => g.submissions > 0).length / govStats.length) * 100)
+      : 0
 
-    // Governorate performance
-    if (govStats?.length) {
-      sections.push({
-        title: 'أداء المحافظات',
-        icon: '🏛️',
-        type: 'table',
-        columns: [
-          { key: 'name', label: 'المحافظة' },
-          { key: 'submissions', label: 'إرساليات' },
-        ],
-        rows: govStats.map(g => ({ name: g.name, submissions: g.submissions })),
-      })
-    }
-
-    // Submissions by status
-    if (stats) {
-      sections.push({
-        title: 'توزيع الحالات',
-        icon: '📈',
-        type: 'summary',
-        items: [
-          { label: 'مرسلة', value: stats.total_submissions - stats.draft_submissions, color: '#10b981' },
-          { label: 'مسودة', value: stats.draft_submissions, color: '#f59e0b' },
-          { label: 'معدل الإنجاز', value: `${stats.approval_rate.toFixed(1)}%`, color: '#00897B' },
-        ],
-      })
-    }
-
-    generatePDFReport({
+    const html = generateReportHTML({
       title: 'التقرير الشامل — EPI Supervisor',
-      subtitle: 'جميع البيانات والإحصائيات',
+      subtitle: 'جميع البيانات والإحصائيات في تقرير واحد',
       period: 'آخر 30 يوم',
-      sections,
+      sections: [
+        {
+          title: 'مؤشرات الأداء الرئيسية',
+          icon: '📊',
+          type: 'kpi-grid',
+          kpis: [
+            { label: 'المستخدمين', value: stats.total_users, icon: '👥', color: '#0277BD', sub: `${stats.active_users} نشط` },
+            { label: 'إرساليات اليوم', value: stats.submissions_today, icon: '📅', color: '#2E7D32' },
+            { label: 'المسودات', value: stats.draft_submissions, icon: '📝', color: '#F57F17' },
+            { label: 'نسبة الإنجاز', value: `${stats.approval_rate.toFixed(1)}%`, icon: '🎯', color: '#8E24AA' },
+            { label: 'النماذج النشطة', value: stats.active_forms, icon: '📄', color: '#1565C0' },
+            { label: 'التغطية', value: `${coveragePct}%`, icon: '🗺️', color: coveragePct >= 80 ? '#2E7D32' : '#F57F17' },
+          ],
+        },
+        {
+          title: 'توزيع الحالات',
+          icon: '📈',
+          type: 'summary',
+          items: [
+            { label: 'مرسلة', value: stats.total_submissions - stats.draft_submissions, color: '#2E7D32' },
+            { label: 'مسودة', value: stats.draft_submissions, color: '#F57F17' },
+            { label: 'هذا الأسبوع', value: stats.submissions_this_week, color: '#0277BD' },
+            { label: 'الاتجاه', value: `${stats.submissions_trend > 0 ? '+' : ''}${stats.submissions_trend}%`, color: stats.submissions_trend >= 0 ? '#2E7D32' : '#E53935' },
+          ],
+        },
+        ...(govStats && govStats.length > 0 ? [{
+          title: 'أداء المحافظات',
+          icon: '🏛️',
+          type: 'table' as const,
+          columns: [
+            { key: 'rank', label: '#', width: 40 },
+            { key: 'name', label: 'المحافظة', width: 200 },
+            { key: 'submissions', label: 'إرساليات', width: 120 },
+          ],
+          rows: govStats.map((g, i) => ({
+            rank: i + 1,
+            name: g.name,
+            submissions: g.submissions,
+          })),
+        }] : []),
+      ],
     })
+
+    openPreview('التقرير الشامل', html, 'جميع البيانات والإحصائيات')
   })
 
   // Form-level export
@@ -695,13 +877,24 @@ export default function ReportsPage() {
       if (schema?.fields) schema.fields.forEach((f: any) => fields.push({ label_ar: f.label_ar || f.label || '', key: f.id || f.key || '' }))
       if (schema?.sections) schema.sections.forEach((s: any) => s.fields?.forEach((f: any) => fields.push({ label_ar: f.label_ar || f.label || '', key: f.id || f.key || '' })))
 
-      const { data: submissions, error } = await supabase.from('form_submissions').select(`
-        id, status, data, created_at,
-        profiles!submitted_by(full_name), governorates(name_ar), districts(name_ar)
-      `).eq('form_id', form.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(5000)
-      if (error) throw error
+      // Bulk fetch with pagination (no 5000 hard limit)
+      const allSubmissions: any[] = []
+      let offset = 0
+      const pageSize = 1000
+      while (true) {
+        const { data, error } = await supabase.from('form_submissions').select(`
+          id, status, data, created_at,
+          profiles!submitted_by(full_name), governorates(name_ar), districts(name_ar)
+        `).eq('form_id', form.id).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + pageSize - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        allSubmissions.push(...data)
+        if (data.length < pageSize || allSubmissions.length >= 50000) break
+        offset += pageSize
+        await new Promise(r => setTimeout(r, 50))
+      }
 
-      const mapped = (submissions || []).map((s: any) => ({
+      const mapped = allSubmissions.map((s: any) => ({
         id: s.id, status: s.status, submitted_by: s.profiles?.full_name || '',
         governorate: s.governorates?.name_ar || '', district: s.districts?.name_ar || '',
         created_at: s.created_at, data: s.data || {},
@@ -710,9 +903,27 @@ export default function ReportsPage() {
       if (mapped.length === 0) { toast({ title: 'لا توجد إرساليات', variant: 'destructive' }); return }
 
       if (format === 'csv') {
+        // CSV injection protection: sanitize all values
+        const sanitizeCSV = (val: unknown): string => {
+          const str = String(val ?? '')
+          // Prevent CSV injection by prefixing dangerous chars with apostrophe
+          const dangerous = /^[=+\-@\t\r]/.test(str)
+          const escaped = str.includes(',') || str.includes('"') || str.includes('\n')
+            ? `"${str.replace(/"/g, '""')}"`
+            : str
+          return dangerous ? `'${escaped}` : escaped
+        }
+
         const headers = ['#', 'الحالة', 'المُرسل', 'المحافظة', 'التاريخ', ...fields.map(f => f.label_ar)]
-        const rows = mapped.map((s, i) => [i + 1, s.status === 'submitted' ? 'مرسلة' : 'مسودة', s.submitted_by, s.governorate, new Date(s.created_at).toLocaleDateString('ar-SA'), ...fields.map(f => { const v = s.data?.[f.key]; return v == null ? '' : String(v) })])
-        const csv = [headers.join(','), ...rows.map(r => r.map(v => { const str = String(v); return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str }).join(','))].join('\n')
+        const rows = mapped.map((s, i) => [
+          i + 1,
+          sanitizeCSV(s.status === 'submitted' ? 'مرسلة' : 'مسودة'),
+          sanitizeCSV(s.submitted_by),
+          sanitizeCSV(s.governorate),
+          sanitizeCSV(new Date(s.created_at).toLocaleDateString('ar-SA')),
+          ...fields.map(f => sanitizeCSV(s.data?.[f.key]))
+        ])
+        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a'); a.href = url; a.download = `${form.title_ar}.csv`; a.click(); URL.revokeObjectURL(url)
@@ -866,18 +1077,41 @@ export default function ReportsPage() {
     }
 
 
-  // ═══ Professional Report Handlers ═══
-  const handleCentralReport = () => exportReport('central-report', async () => {
-    await generateCentralReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignType: campaign !== 'all' ? campaign : undefined })
-  })
+  // ═══ Professional Report Handlers — with Preview ═══
 
-  const handleGovDetailReport = (govId: string) => exportReport('gov-detail-' + govId, async () => {
-    await generateGovernorateDetailReport(govId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })
-  })
+  /** Wrapper: capture HTML from professional reports and show in preview */
+  const captureAndPreview = useCallback(async (
+    title: string,
+    subtitle: string,
+    generator: () => Promise<void>
+  ) => {
+    enableCaptureMode()
+    try {
+      await generator()
+      const html = disableCaptureMode()
+      if (html) {
+        openPreview(title, html, subtitle)
+      }
+    } catch (e) {
+      disableCaptureMode()
+      throw e
+    }
+  }, [openPreview])
 
-  const handleFormAnalysisReport = (formId: string) => exportReport('form-analysis-' + formId, async () => {
-    await generateFormAnalysisReport(formId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })
-  })
+  const handleCentralReport = () => exportReport('central-report', () =>
+    captureAndPreview('التقرير المركزي الشامل', 'جميع المحافظات والبيانات',
+      () => generateCentralReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignType: campaign !== 'all' ? campaign : undefined }))
+  )
+
+  const handleGovDetailReport = (govId: string) => exportReport('gov-detail-' + govId, () =>
+    captureAndPreview(`تقرير محافظة`, 'تفاصيل تفصيلية',
+      () => generateGovernorateDetailReport(govId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }))
+  )
+
+  const handleFormAnalysisReport = (formId: string) => exportReport('form-analysis-' + formId, () =>
+    captureAndPreview('تحليل النموذج', 'تقرير تفصيلي',
+      () => generateFormAnalysisReport(formId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }))
+  )
 
 
     // ═══════════════════════════════════════
@@ -919,30 +1153,38 @@ export default function ReportsPage() {
     }
 
 
-  const handleSupervisorReport = () => exportReport('supervisor-report', async () => {
-    await generateSupervisorReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })
-  })
-  const handleCoverageGapReport = () => exportReport('coverage-gap', async () => {
-    await generateCoverageGapReport()
-  })
-  const handleCampaignComparisonReport = () => exportReport('campaign-comparison', async () => {
-    await generateCampaignComparisonReport()
-  })
-  const handleDailyActivityReport = () => exportReport('daily-activity', async () => {
-    await generateDailyActivityReport()
-  })
-  const handleDataQualityReport = () => exportReport('data-quality', async () => {
-    await generateDataQualityReport()
-  })
-  const handleShortagesDetailedReport = () => exportReport('shortages-detailed', async () => {
-    await generateShortagesDetailedReport()
-  })
-  const handleWeeklyReport = () => exportReport('weekly-report', async () => {
-    await generateWeeklyReport()
-  })
-  const handleUserActivityReport = () => exportReport('user-activity', async () => {
-    await generateUserActivityReport()
-  })
+  const handleSupervisorReport = () => exportReport('supervisor-report', () =>
+    captureAndPreview('تقرير أداء المشرفين', 'تقييم شامل لكل مشرف',
+      () => generateSupervisorReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }))
+  )
+  const handleCoverageGapReport = () => exportReport('coverage-gap', () =>
+    captureAndPreview('تقرير الفجوة التغطية', 'أين البيانات ناقصة',
+      () => generateCoverageGapReport())
+  )
+  const handleCampaignComparisonReport = () => exportReport('campaign-comparison', () =>
+    captureAndPreview('تقرير مقارنة الحملات', 'شلل أطفال vs الإيصالي التكاملي',
+      () => generateCampaignComparisonReport())
+  )
+  const handleDailyActivityReport = () => exportReport('daily-activity', () =>
+    captureAndPreview('تقرير النشاط اليومي', 'نشاط اليوم — إرساليات، دخول، مقارنة',
+      () => generateDailyActivityReport())
+  )
+  const handleDataQualityReport = () => exportReport('data-quality', () =>
+    captureAndPreview('تقرير جودة البيانات', 'تحليل اكتمال البيانات — GPS، صور، حقول فارغة',
+      () => generateDataQualityReport())
+  )
+  const handleShortagesDetailedReport = () => exportReport('shortages-detailed', () =>
+    captureAndPreview('تقرير النواقص التفصيلي', 'تحليل شامل — حرج/عالي/متوسط',
+      () => generateShortagesDetailedReport())
+  )
+  const handleWeeklyReport = () => exportReport('weekly-report', () =>
+    captureAndPreview('التقرير الأسبوعي', 'ملخص الأسبوع — مقارنة بالسابق',
+      () => generateWeeklyReport())
+  )
+  const handleUserActivityReport = () => exportReport('user-activity', () =>
+    captureAndPreview('تقرير نشاط المستخدمين', 'دخول، نشاط، مستخدمين خاملين',
+      () => generateUserActivityReport())
+  )
 
 
     // ═══════════════════════════════════════
@@ -1087,6 +1329,7 @@ export default function ReportsPage() {
         </Card>
 
         {/* ═══ Tabs ═══ */}
+        <SectionErrorBoundary title="التقارير">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start gap-1 bg-transparent p-0 h-auto">
             <TabsTrigger value="analytics" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2.5 gap-2 font-medium">
@@ -1099,6 +1342,9 @@ export default function ReportsPage() {
               <FileSpreadsheet className="w-4 h-4" /> تصدير النماذج
               <Badge variant="secondary" className="text-[10px] px-1.5">{forms.length}</Badge>
             </TabsTrigger>
+            <TabsTrigger value="comparison" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2.5 gap-2 font-medium">
+              <ArrowLeftRight className="w-4 h-4" /> مقارنة الفترات
+            </TabsTrigger>
           </TabsList>
 
           <Separator className="my-4" />
@@ -1107,6 +1353,14 @@ export default function ReportsPage() {
           {/* TAB 1: Analytics — matching mobile app analytics   */}
           {/* ═══════════════════════════════════════════════════ */}
           <TabsContent value="analytics" className="mt-0 space-y-6">
+
+            {/* ═══ Interactive Filter Bar ═══ */}
+            <AnalyticsFilterBar
+              filter={analyticsFilter}
+              onChange={setAnalyticsFilter}
+              onRefresh={() => { refetchStats(); handleRefresh() }}
+              refreshing={isFetching}
+            />
 
             {/* KPI Cards Row — same as mobile dashboard */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -1233,7 +1487,7 @@ export default function ReportsPage() {
                       <BarChart3 className="w-5 h-5 text-primary" />
                       الإرساليات حسب المحافظة
                     </CardTitle>
-                    <CardDescription className="text-xs">أعلى 10 محافظات</CardDescription>
+                    <CardDescription className="text-xs">أعلى 10 محافظات — اضغط على أي شريط للتفاصيل</CardDescription>
                   </div>
                   <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleExportGovernorates}>
                     <FileDown className="w-3.5 h-3.5" /> تصدير
@@ -1247,7 +1501,30 @@ export default function ReportsPage() {
                         <XAxis type="number" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" />
                         <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#d1d5db" width={70} />
                         <ReTooltip content={<CustomTooltip />} />
-                        <Bar dataKey="الإرساليات" radius={[0, 8, 8, 0]}>
+                        <Bar
+                          dataKey="الإرساليات"
+                          radius={[0, 8, 8, 0]}
+                          cursor="pointer"
+                          onClick={(data) => {
+                            if (data?.name) {
+                              setDrillDownData({
+                                type: 'governorate',
+                                title: `تفاصيل محافظة: ${data.name}`,
+                                subtitle: `${data.الإرساليات} إرسالية`,
+                                columns: [
+                                  { key: 'metric', label: 'المؤشر' },
+                                  { key: 'value', label: 'القيمة', sortable: false },
+                                ],
+                                data: [
+                                  { metric: 'الإرساليات', value: data.الإرساليات },
+                                  { metric: 'النسبة من الإجمالي', value: stats?.total_submissions ? `${Math.round((data.الإرساليات / stats.total_submissions) * 100)}%` : '—' },
+                                  { metric: 'الترتيب', value: `#${(govChartData.findIndex(g => g.name === data.name) + 1)}` },
+                                ],
+                              })
+                              setDrillDownOpen(true)
+                            }
+                          }}
+                        >
                           {govChartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                         </Bar>
                       </BarChart>
@@ -1428,8 +1705,56 @@ export default function ReportsPage() {
               </div>
             )}
           </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════ */}
+          {/* TAB 4: Period Comparison                            */}
+          {/* ═══════════════════════════════════════════════════ */}
+          <TabsContent value="comparison" className="mt-0 space-y-4">
+            <div>
+              <h2 className="text-lg font-heading font-bold flex items-center gap-2">
+                <ArrowLeftRight className="w-5 h-5 text-primary" />
+                مقارنة الفترات
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">قارن أداء الفترة الحالية بالسابقة</p>
+            </div>
+            <ComparisonReport />
+          </TabsContent>
         </Tabs>
+        </SectionErrorBoundary>
       </div>
+
+      {/* ═══ Export Progress Indicator ═══ */}
+      {exportProgress.isActive && (
+        <div className="fixed bottom-4 left-4 right-4 z-50 max-w-md mx-auto">
+          <ExportProgress
+            status={exportProgress.status}
+            message={exportProgress.message}
+            progress={exportProgress.progress}
+            total={exportProgress.total}
+          />
+        </div>
+      )}
+
+      {/* ═══ Report Preview Modal ═══ */}
+      <ReportPreview {...previewProps} />
+
+      {/* ═══ Drill-Down Dialog ═══ */}
+      <DrillDownDialog
+        open={drillDownOpen}
+        onClose={() => setDrillDownOpen(false)}
+        data={drillDownData}
+      />
+
+      {/* ═══ Fullscreen Chart ═══ */}
+      <FullscreenChart
+        open={!!fullscreenChart}
+        onClose={() => setFullscreenChart(null)}
+        title={fullscreenChart || ''}
+      >
+        <div className="h-full flex items-center justify-center text-muted-foreground">
+          <p className="text-sm">اضغط ESC للإغلاق</p>
+        </div>
+      </FullscreenChart>
     </div>
   )
 }

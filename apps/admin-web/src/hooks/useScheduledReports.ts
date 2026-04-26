@@ -234,26 +234,52 @@ export function useRunScheduledReportNow() {
         .eq('id', reportId)
 
       // Call the edge function to generate the report
-      const { data, error } = await supabase.functions.invoke('generate-scheduled-report', {
-        body: { run_id: run.id, scheduled_report_id: reportId },
-      })
+      // With retry logic for transient failures
+      const MAX_RETRIES = 2
+      let lastError: Error | null = null
 
-      if (error) {
-        // Mark run as failed
-        await supabase
-          .from('scheduled_report_runs')
-          .update({ status: 'error', error_message: error.message, completed_at: new Date().toISOString() })
-          .eq('id', run.id)
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const { data, error } = await supabase.functions.invoke('generate-scheduled-report', {
+            body: { run_id: run.id, scheduled_report_id: reportId },
+          })
 
-        await supabase
-          .from('scheduled_reports')
-          .update({ last_run_status: 'error', last_run_error: error.message })
-          .eq('id', reportId)
+          if (error) throw error
+          return data
+        } catch (err: unknown) {
+          lastError = err instanceof Error ? err : new Error(String(err))
+          const isLastAttempt = attempt === MAX_RETRIES
 
-        throw error
+          if (!isLastAttempt) {
+            // Wait before retry with exponential backoff
+            await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000))
+            continue
+          }
+
+          // Final failure — mark as error
+          await supabase
+            .from('scheduled_report_runs')
+            .update({
+              status: 'error',
+              error_message: lastError.message,
+              completed_at: new Date().toISOString(),
+              metadata: { retries: attempt, last_attempt_at: new Date().toISOString() },
+            })
+            .eq('id', run.id)
+
+          await supabase
+            .from('scheduled_reports')
+            .update({
+              last_run_status: 'error',
+              last_run_error: `فشلت بعد ${attempt + 1} محاولات: ${lastError.message}`,
+            })
+            .eq('id', reportId)
+
+          throw lastError
+        }
       }
 
-      return data
+      throw lastError || new Error('Unknown error')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['scheduled-reports'] })

@@ -134,9 +134,8 @@ function buildProgress(label: string, value: number, max: number, color: string)
 // ─── CSS Styles ───
 function getStyles(): string {
   return `
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap');
-      
       * { margin: 0; padding: 0; box-sizing: border-box; }
       
       @page {
@@ -144,13 +143,14 @@ function getStyles(): string {
         margin: 15mm 20mm;
       }
       
-      body {
-        font-family: 'Cairo', 'Segoe UI', sans-serif;
+      html, body {
+        font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
         direction: rtl;
         color: ${BRAND.textDark};
         background: white;
-        font-size: 11px;
+        font-size: 12px;
         line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
       }
       
       /* ─── Header ─── */
@@ -549,7 +549,7 @@ export async function generateGovernorateDetailReport(
   const districts = districtsRes.status === 'fulfilled' ? districtsRes.value.data || [] : []
   const shortages = shortagesRes.status === 'fulfilled' ? shortagesRes.value.data || [] : []
 
-  if (!gov) { alert('المحافظة غير موجودة'); return }
+  if (!gov) { console.warn('[Report] المحافظة غير موجودة'); return }
 
   const totalSubs = subs.length
   const submittedSubs = subs.filter(s => s.status === 'submitted').length
@@ -661,7 +661,7 @@ export async function generateFormAnalysisReport(
   const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
   const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
 
-  if (!form) { alert('النموذج غير موجود'); return }
+  if (!form) { console.warn('[Report] النموذج غير موجود'); return }
 
   const totalSubs = subs.length
   const submittedSubs = subs.filter(s => s.status === 'submitted').length
@@ -867,7 +867,7 @@ export async function generateDistrictReport(
   const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
   const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
 
-  if (!dist) { alert('المديرية غير موجودة'); return }
+  if (!dist) { console.warn('[Report] المديرية غير موجودة'); return }
 
   const totalSubs = subs.length
   const submittedSubs = subs.filter(s => s.status === 'submitted').length
@@ -951,17 +951,75 @@ export async function generateDistrictReport(
 // Print Helper
 // ═══════════════════════════════════════════════════════════════
 
-function printReport(html: string, filename: string) {
-  const printWindow = window.open('', '_blank')
-  if (!printWindow) {
-    alert('يرجى السماح بالنوافذ المنبثقة لتصدير التقرير')
+// ═══ HTML Capture Mode ═══
+// When captureMode is true, printReport() stores HTML instead of printing
+let _captureMode = false
+let _capturedHTML = ''
+
+/** Enable capture mode — printReport will store HTML instead of printing */
+export function enableCaptureMode(): void {
+  _captureMode = true
+  _capturedHTML = ''
+}
+
+/** Disable capture mode and return captured HTML */
+export function disableCaptureMode(): string {
+  _captureMode = false
+  const html = _capturedHTML
+  _capturedHTML = ''
+  return html
+}
+
+function printReport(html: string, filename: string, options?: { returnHtml?: boolean }): string | void {
+  // Capture mode: store HTML instead of printing
+  if (_captureMode) {
+    _capturedHTML = html
+    return html
+  }
+
+  // If returnHtml is true, return the HTML instead of printing
+  if (options?.returnHtml) {
+    return html
+  }
+
+  // Use enhanced PDF system — no popup blocker issues
+  // Create a temporary iframe for printing
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'
+  iframe.style.top = '-9999px'
+  iframe.style.left = '-9999px'
+  iframe.style.width = '210mm'
+  iframe.style.height = '297mm'
+  document.body.appendChild(iframe)
+
+  const doc = iframe.contentDocument || iframe.contentWindow?.document
+  if (!doc) {
+    document.body.removeChild(iframe)
+    // Last resort: download as HTML file
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${filename || 'تقرير'}.html`
+    a.click()
+    URL.revokeObjectURL(url)
     return
   }
-  printWindow.document.write(html)
-  printWindow.document.close()
+
+  doc.open()
+  doc.write(html)
+  doc.close()
+
+  // Wait for content to render, then print
   setTimeout(() => {
-    printWindow.print()
-  }, 500)
+    iframe.contentWindow?.print()
+    // Clean up after a delay (user may interact with print dialog)
+    setTimeout(() => {
+      if (document.body.contains(iframe)) {
+        document.body.removeChild(iframe)
+      }
+    }, 10000)
+  }, 600)
 }
 
 

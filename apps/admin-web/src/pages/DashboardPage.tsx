@@ -301,7 +301,9 @@ export default function DashboardPage() {
         .order('created_at', { ascending: false })
 
       if (!data || data.length === 0) {
-        alert('لا توجد إرساليات اليوم')
+        // No submissions today — show empty state instead of alert
+        const emptyBtn = document.querySelector('[data-export-today]') as HTMLButtonElement
+        if (emptyBtn) emptyBtn.disabled = true
         return
       }
 

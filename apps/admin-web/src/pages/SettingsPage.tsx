@@ -390,7 +390,7 @@ export default function SettingsPage() {
       setTimeout(() => setExportState({ loading: false, progress: 0, table: '', format: 'json' }), 1500)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل التصدير'
-      alert(message)
+      toast({ title: message, variant: 'destructive' })
       setExportState({ loading: false, progress: 0, table: '', format: 'json' })
     }
   }
@@ -427,7 +427,7 @@ export default function SettingsPage() {
       setTimeout(() => setExportState({ loading: false, progress: 0, table: '', format: 'json' }), 1500)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل التصدير الشامل'
-      alert(message)
+      toast({ title: message, variant: 'destructive' })
       setExportState({ loading: false, progress: 0, table: '', format: 'json' })
     }
   }
@@ -469,7 +469,7 @@ export default function SettingsPage() {
       }))
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل قراءة الملف'
-      alert(message)
+      toast({ title: message, variant: 'destructive' })
       setImportState({ loading: false, progress: 0, table: '', preview: [], conflictStrategy: 'skip' })
     }
   }
@@ -515,14 +515,14 @@ export default function SettingsPage() {
       }
 
       setImportState(s => ({ ...s, progress: 100, loading: false }))
-      alert(`تم استيراد البيانات بنجاح`)
+      toast({ title: 'تم استيراد البيانات بنجاح ✅', variant: 'success' })
       setTimeout(() => {
         setImportState({ loading: false, progress: 0, table: '', preview: [], conflictStrategy: 'skip' })
         importFullDataRef.current = []
       }, 2000)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل الاستيراد'
-      alert(message)
+      toast({ title: message, variant: 'destructive' })
       setImportState(s => ({ ...s, loading: false, progress: 0 }))
     }
   }
@@ -566,7 +566,7 @@ export default function SettingsPage() {
       }))
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل قراءة الملف'
-      alert(message)
+      toast({ title: message, variant: 'destructive' })
       setImportState({ loading: false, progress: 0, table: '', preview: [], conflictStrategy: 'skip' })
       importFullDataRef.current = []
     }
@@ -609,7 +609,7 @@ export default function SettingsPage() {
       setTimeout(() => setBackupState({ loading: false, progress: 0, phase: '' }), 3000)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل إنشاء النسخة الاحتياطية'
-      alert(message)
+      toast({ title: message, variant: 'destructive' })
       setBackupState({ loading: false, progress: 0, phase: '' })
     }
   }
@@ -656,7 +656,7 @@ export default function SettingsPage() {
       setTimeout(() => setBackupState({ loading: false, progress: 0, phase: '' }), 3000)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل استعادة النسخة الاحتياطية'
-      alert(message)
+      toast({ title: message, variant: 'destructive' })
       setBackupState({ loading: false, progress: 0, phase: '' })
     }
   }
@@ -682,7 +682,7 @@ export default function SettingsPage() {
       setTimeout(() => setClearState({ loading: false, table: '', progress: 0 }), 2000)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل مسح البيانات'
-      alert(message)
+      toast({ title: message, variant: 'destructive' })
       setClearState({ loading: false, table: '', progress: 0 })
     }
   }
@@ -706,11 +706,11 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      alert('يرفق صورة فقط')
+      toast({ title: 'يرفق صورة فقط', variant: 'destructive' })
       return
     }
     if (file.size > 2 * 1024 * 1024) {
-      alert('حجم الصورة يجب أن يكون أقل من 2 ميجا')
+      toast({ title: 'حجم الصورة يجب أن يكون أقل من 2 ميجا', variant: 'destructive' })
       return
     }
     const reader = new FileReader()

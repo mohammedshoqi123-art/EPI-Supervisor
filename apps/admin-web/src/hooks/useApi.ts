@@ -28,6 +28,8 @@ export async function getCampaignFormIds(campaignType?: string): Promise<string[
  * Apply campaign filter to a Supabase query on form_submissions.
  * Uses the form_id foreign key to filter by campaign.
  */
+// Supabase query builder type — too complex to inline, using generic any is pragmatic here
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function applyCampaignFilter(
   query: any,
   campaignType?: string
@@ -157,9 +159,11 @@ export function useDashboardStats(campaignType?: string) {
       const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
       const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString()
 
-      const [usersRes, totalSubsRes, todaySubsRes, weekSubsRes, lastWeekSubsRes, submittedRes, draftRes, formsRes] = await Promise.allSettled([
-        // Users: count only (lightweight)
-        supabase.from('profiles').select('id, is_active', { count: 'exact' }).is('deleted_at', null).limit(1),
+      const [usersRes, activeUsersRes, totalSubsRes, todaySubsRes, weekSubsRes, lastWeekSubsRes, submittedRes, draftRes, formsRes] = await Promise.allSettled([
+        // Users: total count
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+        // Active users: count only active ones
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('is_active', true),
         // Total submissions count
         applyFormFilter(
           supabase.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null)
@@ -195,14 +199,8 @@ export function useDashboardStats(campaignType?: string) {
         return res.value.count || 0
       }
 
-      const totalUsers = usersRes.status === 'fulfilled' ? (usersRes.value.count || 0) : 0
-      // For active users, we need a small fetch since head:true doesn't support filtering on computed fields
-      const activeUsersData = usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : []
-      // Estimate active ratio from the sample (or use count if available)
-      const activeRatio = activeUsersData.length > 0
-        ? activeUsersData.filter((u: any) => u.is_active).length / activeUsersData.length
-        : 0.8
-      const activeUsers = Math.round(totalUsers * activeRatio)
+      const totalUsers = getCount(usersRes)
+      const activeUsers = getCount(activeUsersRes)
 
       const totalSubmissions = getCount(totalSubsRes)
       const submissionsToday = getCount(todaySubsRes)

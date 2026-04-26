@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
 
 // ═══ Campaign Types ═══
 export type CampaignType = string
@@ -144,30 +144,56 @@ export const CAMPAIGN_COLORS = [
   { value: 'from-teal-500 to-teal-600', label: 'أخضر فاتح', bg: 'bg-teal-50', text: 'text-teal-600' },
 ]
 
+// ─── Hidden built-in campaigns (stored as Set of IDs) ───
+const HIDDEN_BUILTIN_KEY = 'epi-admin-hidden-builtins'
+
+function loadHiddenBuiltins(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const stored = localStorage.getItem(HIDDEN_BUILTIN_KEY)
+    if (stored) return new Set(JSON.parse(stored))
+  } catch {}
+  return new Set()
+}
+
+function saveHiddenBuiltins(hidden: Set<string>) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(HIDDEN_BUILTIN_KEY, JSON.stringify(Array.from(hidden)))
+  }
+}
+
 export function CampaignProvider({ children }: { children: ReactNode }) {
   const [campaign, setCampaignState] = useState<CampaignType>(loadActiveCampaign)
   const [customCampaigns, setCustomCampaigns] = useState<CampaignOption[]>(loadCustomCampaigns)
+  const [hiddenBuiltins, setHiddenBuiltins] = useState<Set<string>>(loadHiddenBuiltins)
 
-  // Merge built-in + custom campaigns
-  const allCampaigns = [...BUILTIN_CAMPAIGNS, ...customCampaigns]
-
-  // Persist active campaign
-  useEffect(() => {
-    saveActiveCampaign(campaign)
-  }, [campaign])
-
-  // Persist custom campaigns
-  useEffect(() => {
-    saveCustomCampaigns(customCampaigns)
+  // Merge built-in + custom campaigns (no duplicates)
+  const allCampaigns = useMemo(() => {
+    // Custom campaigns that are NOT overrides of built-in campaigns
+    const pureCustom = customCampaigns.filter(
+      cc => !BUILTIN_CAMPAIGNS.some(bc => bc.id === cc.id)
+    )
+    return [...BUILTIN_CAMPAIGNS, ...pureCustom]
   }, [customCampaigns])
 
-  // If current campaign is deleted, switch to 'all'
+  // Persist active campaign
+  useEffect(() => { saveActiveCampaign(campaign) }, [campaign])
+
+  // Persist custom campaigns
+  useEffect(() => { saveCustomCampaigns(customCampaigns) }, [customCampaigns])
+
+  // Persist hidden builtins
+  useEffect(() => { saveHiddenBuiltins(hiddenBuiltins) }, [hiddenBuiltins])
+
+  // If current campaign is deleted or hidden, switch to 'all'
   useEffect(() => {
-    const exists = campaign === 'all' || allCampaigns.some(c => c.id === campaign)
-    if (!exists) {
+    const visibleIds = allCampaigns
+      .filter(c => !hiddenBuiltins.has(c.id))
+      .map(c => c.id)
+    if (campaign !== 'all' && !visibleIds.includes(campaign)) {
       setCampaignState('all')
     }
-  }, [campaign, allCampaigns])
+  }, [campaign, allCampaigns, hiddenBuiltins])
 
   const setCampaign = useCallback((newCampaign: CampaignType) => {
     setCampaignState(newCampaign)
@@ -175,31 +201,30 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
   const isCampaignVisible = useCallback((id: CampaignType) => {
     if (id === 'all') return true
-    const found = allCampaigns.find(c => c.id === id)
-    return found?.visible !== false
-  }, [allCampaigns])
+    // Built-in: visible unless in hidden set
+    if (BUILTIN_CAMPAIGNS.some(c => c.id === id)) {
+      return !hiddenBuiltins.has(id)
+    }
+    // Custom: always visible (if it exists)
+    return customCampaigns.some(c => c.id === id)
+  }, [hiddenBuiltins, customCampaigns])
 
   const toggleCampaignVisibility = useCallback((id: CampaignType) => {
     if (id === 'all') return
-    // Check if it's a built-in campaign
-    const builtIn = BUILTIN_CAMPAIGNS.find(c => c.id === id)
-    if (builtIn) {
-      // For built-in campaigns, we just toggle visibility (stored in custom campaigns as override)
-      setCustomCampaigns(prev => {
-        const existing = prev.find(c => c.id === id)
-        if (existing) {
-          return prev.map(c => c.id === id ? { ...c, visible: !c.visible } : c)
-        } else {
-          // Add an override entry
-          return [...prev, { ...builtIn, visible: false }]
-        }
+
+    // Built-in campaign: toggle in hidden set
+    if (BUILTIN_CAMPAIGNS.some(c => c.id === id)) {
+      setHiddenBuiltins(prev => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
       })
-    } else {
-      // Custom campaign
-      setCustomCampaigns(prev =>
-        prev.map(c => c.id === id ? { ...c, visible: !c.visible } : c)
-      )
+      return
     }
+
+    // Custom campaign: remove from list (toggle = delete)
+    setCustomCampaigns(prev => prev.filter(c => c.id !== id))
   }, [])
 
   const addCampaign = useCallback((data: Omit<CampaignOption, 'id' | 'builtIn' | 'visible'>): CampaignOption => {
@@ -214,20 +239,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateCampaign = useCallback((id: CampaignType, updates: Partial<Pick<CampaignOption, 'labelAr' | 'labelEn' | 'icon' | 'color' | 'visible'>>) => {
-    // Can't update built-in campaigns' core data (only visibility)
-    const isBuiltIn = BUILTIN_CAMPAIGNS.some(c => c.id === id)
-    if (isBuiltIn) return
-
-    setCustomCampaigns(prev =>
-      prev.map(c => c.id === id ? { ...c, ...updates } : c)
-    )
+    if (BUILTIN_CAMPAIGNS.some(c => c.id === id)) return
+    setCustomCampaigns(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c))
   }, [])
 
   const deleteCampaign = useCallback((id: CampaignType): boolean => {
-    // Can't delete built-in campaigns
-    const isBuiltIn = BUILTIN_CAMPAIGNS.some(c => c.id === id)
-    if (isBuiltIn) return false
-
+    if (BUILTIN_CAMPAIGNS.some(c => c.id === id)) return false
     setCustomCampaigns(prev => prev.filter(c => c.id !== id))
     return true
   }, [])
@@ -238,7 +255,10 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   }, [allCampaigns])
 
   const currentOption = getCampaign(campaign) ?? ALL_OPTION
-  const visibleOptions = [ALL_OPTION, ...allCampaigns.filter(c => c.visible !== false)]
+  const visibleOptions = [
+    ALL_OPTION,
+    ...allCampaigns.filter(c => !hiddenBuiltins.has(c.id)),
+  ]
 
   const value: CampaignContextValue = {
     campaign,

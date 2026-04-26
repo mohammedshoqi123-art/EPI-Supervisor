@@ -26,6 +26,9 @@ import { AIBriefingCard } from '@/components/ai/AIBriefingCard'
 import { useSmartAlerts } from '@/hooks/useSmartAlerts'
 import { isConfigured, supabase } from '@/lib/supabase'
 import { STATUS_LABELS, STATUS_COLORS, type SubmissionStatus } from '@/types/database'
+import { AnimatedCounter } from '@/components/ui/animated-counter'
+import { SectionErrorBoundary } from '@/components/ui/section-error-boundary'
+import { KeyboardShortcutsHelper } from '@/components/ui/keyboard-shortcuts'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -62,7 +65,7 @@ function LiveDot({ color = 'bg-emerald-500' }: { color?: string }) {
   )
 }
 
-// ═══ Stat Card — Modern ═══
+// ═══ Stat Card — Modern with Animated Counter ═══
 function StatCard({ icon: Icon, iconBg, iconColor, label, value, subValue, trend, trendLabel, loading, onClick }: {
   icon: React.ElementType
   iconBg: string
@@ -85,6 +88,8 @@ function StatCard({ icon: Icon, iconBg, iconColor, label, value, subValue, trend
     )
   }
 
+  const numericValue = typeof value === 'number' ? value : null
+
   return (
     <Card
       className={cn(
@@ -92,6 +97,10 @@ function StatCard({ icon: Icon, iconBg, iconColor, label, value, subValue, trend
         onClick && 'cursor-pointer hover:-translate-y-0.5'
       )}
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={`${label}: ${value}`}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
     >
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
@@ -108,7 +117,14 @@ function StatCard({ icon: Icon, iconBg, iconColor, label, value, subValue, trend
             </div>
           )}
         </div>
-        <p className="text-2xl font-heading font-bold tabular-nums">{value}</p>
+        {numericValue !== null ? (
+          <AnimatedCounter
+            value={numericValue}
+            className="text-2xl font-heading font-bold"
+          />
+        ) : (
+          <p className="text-2xl font-heading font-bold tabular-nums">{value}</p>
+        )}
         <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
         {subValue && (
           <p className="text-[10px] text-muted-foreground/70 mt-1">{subValue}</p>
@@ -313,6 +329,30 @@ export default function DashboardPage() {
     }
   }
 
+  // ─── Keyboard Navigation Shortcuts ─────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore when typing in input/textarea
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+
+      switch (e.key) {
+        case '1': navigate('/dashboard'); break
+        case '2': navigate('/submissions'); break
+        case '3': navigate('/forms'); break
+        case '4': navigate('/shortages'); break
+        case 'r':
+          if (!e.ctrlKey && !e.metaKey) {
+            e.preventDefault()
+            handleRefresh()
+          }
+          break
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [navigate, handleRefresh])
+
   // ─── Error states ─────────────────────────────────────
   if (!isConfigured) {
     return (
@@ -358,8 +398,9 @@ export default function DashboardPage() {
         subtitle={isFiltered ? `عرض: ${labelAr}` : 'مرحباً بك'}
         onRefresh={handleRefresh}
       />
+      <KeyboardShortcutsHelper />
 
-      <div className="p-4 sm:p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6" role="main" aria-label="لوحة التحكم الرئيسية">
 
         {/* ═══ Status Bar ═══ */}
         <div className="flex items-center justify-between">
@@ -390,10 +431,13 @@ export default function DashboardPage() {
         </div>
 
         {/* ═══ 0. AI BRIEFING — Smart Daily Summary ═══ */}
-        <AIBriefingCard stats={stats || null} govStats={govStats || undefined} chartData={chartData || undefined} />
+        <SectionErrorBoundary title="الملخص الذكي">
+          <AIBriefingCard stats={stats || null} govStats={govStats || undefined} chartData={chartData || undefined} />
+        </SectionErrorBoundary>
 
         {/* ═══ 0.5 SMART ALERTS — Proactive Anomaly Detection ═══ */}
-        {smartAlerts.length > 0 && (
+        <SectionErrorBoundary title="التنبيهات الذكية">
+          {smartAlerts.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <div className="p-1 rounded-md bg-violet-100">
@@ -451,6 +495,7 @@ export default function DashboardPage() {
             </div>
           </section>
         )}
+        </SectionErrorBoundary>
 
         {/* ═══ 1. ALERTS — What needs action NOW ═══ */}
         <section>
@@ -626,6 +671,7 @@ export default function DashboardPage() {
         </section>
 
         {/* ═══ 3. ACTIVITY — Charts + Live Feed ═══ */}
+        <SectionErrorBoundary title="النشاط">
         <section>
           <div className="flex items-center gap-2 mb-3">
             <div className="p-1 rounded-md bg-emerald-100">
@@ -756,8 +802,10 @@ export default function DashboardPage() {
             </div>
           </div>
         </section>
+        </SectionErrorBoundary>
 
         {/* ═══ 4. COVERAGE — Governorate Map ═══ */}
+        <SectionErrorBoundary title="تغطية المحافظات">
         <section>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -865,8 +913,10 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </section>
+        </SectionErrorBoundary>
 
         {/* ═══ 5. RECENT + NOTIFICATIONS ═══ */}
+        <SectionErrorBoundary title="الإرساليات والإشعارات">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Recent Submissions */}
@@ -974,6 +1024,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+        </SectionErrorBoundary>
 
       </div>
     </div>

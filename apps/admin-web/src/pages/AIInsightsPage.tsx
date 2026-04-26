@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
-  Sparkles, Brain, TrendingUp, AlertTriangle, Target, Lightbulb,
+  Sparkles, Brain, TrendingUp, TrendingDown, AlertTriangle, Target, Lightbulb,
   BarChart3, Shield, Zap, RefreshCw, ChevronRight, Star, Activity,
   FileText, MapPin, Clock, Users, CheckCircle2, ArrowUpRight, ArrowDownRight,
-  Loader2
+  Loader2, Syringe, Droplets, Baby, Heart, CircleDot, Gauge, Award,
+  Calendar, Percent, TrendingDown as TrendDown
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,14 +13,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
-import { useDashboardStats, useGovernorateStats, useSubmissionsChart, useShortages } from '@/hooks/useApi'
+import { useDashboardStats, useGovernorateStats, useSubmissionsChart, useShortages, useUsers, useSubmissions, useForms } from '@/hooks/useApi'
 import { cn, formatNumber } from '@/lib/utils'
 import { generateAIInsights } from '@/lib/ai-providers'
 import { PredictiveEngine } from '@/lib/epi-bot-engine'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area, Cell
+  AreaChart, Area, Cell, PieChart, Pie, Legend, LineChart, Line
 } from 'recharts'
 
 // ─── Rule-based Insights (fast, offline) ─────────────────────
@@ -162,6 +163,193 @@ const INSIGHT_COLORS = {
   info: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: 'text-blue-600', badge: 'bg-blue-100 text-blue-700' },
 }
 
+// ─── Immunization-Specific Analytics ─────────────────────────
+
+/** Calculate coverage rate by governorate */
+function calculateCoverageByGov(govStats: Array<{ name: string; submissions: number }> | undefined) {
+  if (!govStats || govStats.length === 0) return []
+  const total = govStats.reduce((sum, g) => sum + g.submissions, 0)
+  return govStats.map(g => ({
+    name: g.name,
+    submissions: g.submissions,
+    coverage: total > 0 ? Math.round((g.submissions / total) * 100) : 0,
+    status: g.submissions === 0 ? 'zero' : g.submissions < total / govStats.length * 0.5 ? 'low' : 'good',
+  }))
+}
+
+/** Calculate submission trend (week over week) */
+function calculateTrend(chartData: Array<{ date: string; submitted: number; draft: number }> | undefined) {
+  if (!chartData || chartData.length < 14) return { trend: 'stable', change: 0, weeklyData: [] }
+
+  const weeklyData = []
+  for (let i = 0; i < chartData.length; i += 7) {
+    const week = chartData.slice(i, i + 7)
+    const total = week.reduce((sum, d) => sum + d.submitted + d.draft, 0)
+    const submitted = week.reduce((sum, d) => sum + d.submitted, 0)
+    weeklyData.push({
+      week: `أسبوع ${Math.floor(i / 7) + 1}`,
+      total,
+      submitted,
+      draft: total - submitted,
+    })
+  }
+
+  if (weeklyData.length < 2) return { trend: 'stable', change: 0, weeklyData }
+
+  const lastWeek = weeklyData[weeklyData.length - 1].total
+  const prevWeek = weeklyData[weeklyData.length - 2].total
+  const change = prevWeek > 0 ? ((lastWeek - prevWeek) / prevWeek) * 100 : lastWeek > 0 ? 100 : 0
+
+  return {
+    trend: change > 10 ? 'up' : change < -10 ? 'down' : 'stable',
+    change,
+    weeklyData,
+  }
+}
+
+/** Calculate supervisor performance metrics */
+function calculateSupervisorPerformance(submissions: Array<{ submitted_by: string; profiles?: { full_name: string }; status: string; created_at: string }> | undefined) {
+  if (!submissions || submissions.length === 0) return []
+
+  const byUser: Record<string, { name: string; total: number; submitted: number; draft: number; lastActivity: string }> = {}
+
+  for (const s of submissions) {
+    const id = s.submitted_by
+    if (!byUser[id]) {
+      byUser[id] = {
+        name: s.profiles?.full_name || 'غير معروف',
+        total: 0,
+        submitted: 0,
+        draft: 0,
+        lastActivity: s.created_at,
+      }
+    }
+    byUser[id].total++
+    if (s.status === 'submitted') byUser[id].submitted++
+    else byUser[id].draft++
+    if (s.created_at > byUser[id].lastActivity) byUser[id].lastActivity = s.created_at
+  }
+
+  return Object.entries(byUser)
+    .map(([id, data]) => ({
+      id,
+      ...data,
+      approvalRate: data.total > 0 ? Math.round((data.submitted / data.total) * 100) : 0,
+      isActive: new Date(data.lastActivity).toDateString() === new Date().toDateString(),
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10)
+}
+
+/** Daily activity heatmap data (7 days x 24 hours) */
+function calculateActivityHeatmap(submissions: Array<{ created_at: string }> | undefined) {
+  if (!submissions || submissions.length === 0) return []
+
+  const heatmap: Array<{ day: string; hour: number; count: number }> = []
+  const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+
+  for (let d = 0; d < 7; d++) {
+    for (let h = 6; h <= 22; h++) {
+      const count = submissions.filter(s => {
+        const date = new Date(s.created_at)
+        return date.getDay() === d && date.getHours() === h
+      }).length
+      heatmap.push({ day: days[d], hour: h, count })
+    }
+  }
+
+  return heatmap
+}
+
+/** Generate EPI-specific recommendations */
+function generateEPIRecommendations(
+  stats: { approval_rate: number; submissions_today: number; active_users: number; total_users: number; submissions_this_week: number } | null | undefined,
+  govStats: Array<{ name: string; submissions: number }> | undefined,
+  shortages: Array<{ severity: string; is_resolved: boolean; item_name: string }> | undefined
+): Array<{ priority: 'high' | 'medium' | 'low'; category: string; title: string; description: string; icon: React.ElementType }> {
+  const recs: Array<{ priority: 'high' | 'medium' | 'low'; category: string; title: string; description: string; icon: React.ElementType }> = []
+
+  if (!stats) return recs
+
+  // Coverage gaps
+  if (govStats) {
+    const zeroGovs = govStats.filter(g => g.submissions === 0)
+    if (zeroGovs.length > 0) {
+      recs.push({
+        priority: 'high',
+        category: 'التغطية',
+        title: `${zeroGovs.length} محافظة بدون تغطية`,
+        description: `المحافظات التالية لا توجد بها إرساليات: ${zeroGovs.slice(0, 3).map(g => g.name).join('، ')}. يجب التواصل مع مشرفي هذه المحافظات.`,
+        icon: MapPin,
+      })
+    }
+  }
+
+  // Low approval rate
+  if (stats.approval_rate < 70 && stats.total_users > 5) {
+    recs.push({
+      priority: 'high',
+      category: 'الجودة',
+      title: 'معدل اعتماد منخفض',
+      description: `معدل الاعتماد ${stats.approval_rate.toFixed(0)}% — أقل من المعدل المقبول (70%). راجع جودة البيانات المدخلة.`,
+      icon: Shield,
+    })
+  }
+
+  // Inactive users
+  const inactiveRatio = stats.total_users > 0 ? (stats.total_users - stats.active_users) / stats.total_users : 0
+  if (inactiveRatio > 0.3) {
+    recs.push({
+      priority: 'medium',
+      category: 'المستخدمين',
+      title: 'نسبة مرتفعة من المستخدمين غير النشطين',
+      description: `${Math.round(inactiveRatio * 100)}% من المستخدمين غير نشطين. تحقق من أسباب عدم مشاركتهم.`,
+      icon: Users,
+    })
+  }
+
+  // Critical shortages
+  if (shortages) {
+    const critical = shortages.filter(s => s.severity === 'critical' && !s.is_resolved)
+    if (critical.length > 0) {
+      recs.push({
+        priority: 'high',
+        category: 'النواقص',
+        title: `${critical.length} نقص حرج مفتوح`,
+        description: `نواقص حرجة تحتاج تدخل فوري: ${critical.slice(0, 2).map(s => s.item_name).join('، ')}`,
+        icon: AlertTriangle,
+      })
+    }
+  }
+
+  // Low activity today
+  if (stats.submissions_today < 3 && stats.active_users > 5) {
+    recs.push({
+      priority: 'medium',
+      category: 'النشاط',
+      title: 'نشاط منخفض اليوم',
+      description: `${stats.submissions_today} إرساليات فقط اليوم مع ${stats.active_users} مستخدم نشط. تحقق من وجود مشاكل تقنية.`,
+      icon: Activity,
+    })
+  }
+
+  // Strong performance
+  if (stats.approval_rate >= 85 && stats.submissions_this_week > 50) {
+    recs.push({
+      priority: 'low',
+      category: 'الأداء',
+      title: 'أداء ممتاز — استمر!',
+      description: `معدل اعتماد ${stats.approval_rate.toFixed(0)}% مع ${stats.submissions_this_week} إرسالية هذا الأسبوع.`,
+      icon: Award,
+    })
+  }
+
+  return recs.sort((a, b) => {
+    const order = { high: 0, medium: 1, low: 2 }
+    return order[a.priority] - order[b.priority]
+  })
+}
+
 // ─── Main Component ──────────────────────────────────────────
 
 export default function AIInsightsPage() {
@@ -169,10 +357,19 @@ export default function AIInsightsPage() {
   const { data: govStats } = useGovernorateStats()
   const { data: chartData } = useSubmissionsChart()
   const { data: shortages } = useShortages()
+  const { data: users } = useUsers()
+  const { data: submissionsData } = useSubmissions({ pageSize: 1000 })
+  const { data: formsData } = useForms({ pageSize: 100 })
+
+  const submissions = submissionsData?.data || []
 
   const quickInsights = generateQuickInsights(stats, govStats, shortages)
   const healthScore = calculateHealthScore(stats)
   const predictions = generatePredictions(chartData || [])
+  const coverageByGov = calculateCoverageByGov(govStats)
+  const trendData = calculateTrend(chartData)
+  const supervisorPerformance = calculateSupervisorPerformance(submissions)
+  const epiRecommendations = generateEPIRecommendations(stats, govStats, shortages)
 
   // AI Analysis state
   const [aiAnalysis, setAiAnalysis] = useState<string>('')
@@ -362,6 +559,331 @@ export default function AIInsightsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* ═══ EPI-Specific Analytics Tabs ═══ */}
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="h-10">
+            <TabsTrigger value="overview" className="text-xs gap-1.5">
+              <Gauge className="w-3.5 h-3.5" /> نظرة عامة
+            </TabsTrigger>
+            <TabsTrigger value="coverage" className="text-xs gap-1.5">
+              <MapPin className="w-3.5 h-3.5" /> التغطية
+            </TabsTrigger>
+            <TabsTrigger value="performance" className="text-xs gap-1.5">
+              <Users className="w-3.5 h-3.5" /> أداء المشرفين
+            </TabsTrigger>
+            <TabsTrigger value="recommendations" className="text-xs gap-1.5">
+              <Lightbulb className="w-3.5 h-3.5" /> التوصيات
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ─── Overview Tab ─── */}
+          <TabsContent value="overview" className="space-y-4">
+            {/* Weekly Trend Chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-heading flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                  الاتجاه الأسبوعي للإرساليات
+                </CardTitle>
+                <CardDescription>
+                  تحليل الأداء الأسبوعي مع اتجاه النمو
+                  {trendData.change !== 0 && (
+                    <Badge className={cn('mr-2 text-[10px]', trendData.change > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
+                      {trendData.change > 0 ? '↑' : '↓'} {Math.abs(trendData.change).toFixed(0)}% الأسبوع الماضي
+                    </Badge>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={trendData.weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="submitted" name="مُرسلة" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="draft" name="مسودة" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* KPI Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4 text-center">
+                  <div className="p-2 rounded-xl bg-blue-50 w-fit mx-auto mb-2">
+                    <Syringe className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <p className="text-2xl font-heading font-bold">{formatNumber(stats?.total_submissions || 0)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">إجمالي الإرساليات</p>
+                </CardContent>
+              </Card>
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4 text-center">
+                  <div className="p-2 rounded-xl bg-emerald-50 w-fit mx-auto mb-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <p className="text-2xl font-heading font-bold">{stats?.approval_rate?.toFixed(0) || 0}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">معدل الاعتماد</p>
+                </CardContent>
+              </Card>
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4 text-center">
+                  <div className="p-2 rounded-xl bg-violet-50 w-fit mx-auto mb-2">
+                    <Users className="w-5 h-5 text-violet-600" />
+                  </div>
+                  <p className="text-2xl font-heading font-bold">{stats?.active_users || 0}/{stats?.total_users || 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">مستخدمين نشطين</p>
+                </CardContent>
+              </Card>
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4 text-center">
+                  <div className="p-2 rounded-xl bg-amber-50 w-fit mx-auto mb-2">
+                    <Calendar className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <p className="text-2xl font-heading font-bold">{stats?.submissions_today || 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">إرساليات اليوم</p>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ─── Coverage Tab ─── */}
+          <TabsContent value="coverage" className="space-y-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {/* Coverage by Governorate */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-heading flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-primary" />
+                    تغطية المحافظات
+                  </CardTitle>
+                  <CardDescription>
+                    نسبة الإرساليات لكل محافظة
+                    {coverageByGov.filter(g => g.status === 'zero').length > 0 && (
+                      <Badge variant="destructive" className="mr-2 text-[10px]">
+                        {coverageByGov.filter(g => g.status === 'zero').length} بدون تغطية
+                      </Badge>
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {coverageByGov.map((gov, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-xs font-medium min-w-[80px] truncate">{gov.name}</span>
+                        <div className="flex-1">
+                          <Progress
+                            value={gov.coverage}
+                            className="h-2"
+                            indicatorClassName={cn(
+                              gov.status === 'zero' ? 'bg-red-500' :
+                              gov.status === 'low' ? 'bg-amber-500' : 'bg-emerald-500'
+                            )}
+                          />
+                        </div>
+                        <span className="text-xs font-bold tabular-nums min-w-[40px] text-left">
+                          {gov.submissions}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Coverage Pie Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-heading flex items-center gap-2">
+                    <CircleDot className="w-5 h-5 text-primary" />
+                    حالة التغطية
+                  </CardTitle>
+                  <CardDescription>توزيع المحافظات حسب مستوى النشاط</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'نشطة', value: coverageByGov.filter(g => g.status === 'good').length, fill: '#10b981' },
+                          { name: 'منخفضة', value: coverageByGov.filter(g => g.status === 'low').length, fill: '#f59e0b' },
+                          { name: 'بدون تغطية', value: coverageByGov.filter(g => g.status === 'zero').length, fill: '#ef4444' },
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={90}
+                        paddingAngle={5}
+                        dataKey="value"
+                        label={({ name, value }) => `${name}: ${value}`}
+                      />
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="text-center mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      {coverageByGov.filter(g => g.status === 'good').length} من {coverageByGov.length} محافظة نشطة
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Zero Coverage Alert */}
+            {coverageByGov.filter(g => g.status === 'zero').length > 0 && (
+              <Card className="border-red-200 bg-red-50/50">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+                    <div>
+                      <h4 className="font-bold text-red-800 text-sm">محافظات بدون إرساليات</h4>
+                      <p className="text-xs text-red-700 mt-1">
+                        المحافظات التالية لا توجد بها أي إرساليات:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {coverageByGov.filter(g => g.status === 'zero').map((gov, i) => (
+                          <Badge key={i} variant="destructive" className="text-[10px]">{gov.name}</Badge>
+                        ))}
+                      </div>
+                      <p className="text-xs text-red-600 mt-2 font-medium">
+                        التوصية: تواصل مع مشرفي هذه المحافظات للتأكد من عملهم
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ─── Performance Tab ─── */}
+          <TabsContent value="performance" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-heading flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  أداء المشرفين الميدانيين
+                </CardTitle>
+                <CardDescription>ترتيب المشرفين حسب عدد الإرساليات وجودة البيانات</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {supervisorPerformance.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">لا توجد بيانات كافية</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-right py-2 px-3 font-medium text-muted-foreground">#</th>
+                          <th className="text-right py-2 px-3 font-medium text-muted-foreground">المشرف</th>
+                          <th className="text-center py-2 px-3 font-medium text-muted-foreground">الإرساليات</th>
+                          <th className="text-center py-2 px-3 font-medium text-muted-foreground">مُرسلة</th>
+                          <th className="text-center py-2 px-3 font-medium text-muted-foreground">مسودة</th>
+                          <th className="text-center py-2 px-3 font-medium text-muted-foreground">معدل الاعتماد</th>
+                          <th className="text-center py-2 px-3 font-medium text-muted-foreground">الحالة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {supervisorPerformance.map((sup, i) => (
+                          <tr key={sup.id} className="border-b last:border-0 hover:bg-muted/30">
+                            <td className="py-2.5 px-3 text-muted-foreground">{i + 1}</td>
+                            <td className="py-2.5 px-3 font-medium">{sup.name}</td>
+                            <td className="py-2.5 px-3 text-center font-bold">{sup.total}</td>
+                            <td className="py-2.5 px-3 text-center text-emerald-600">{sup.submitted}</td>
+                            <td className="py-2.5 px-3 text-center text-amber-600">{sup.draft}</td>
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Progress
+                                  value={sup.approvalRate}
+                                  className="h-1.5 w-16"
+                                  indicatorClassName={cn(
+                                    sup.approvalRate >= 80 ? 'bg-emerald-500' :
+                                    sup.approvalRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                                  )}
+                                />
+                                <span className={cn(
+                                  'font-bold',
+                                  sup.approvalRate >= 80 ? 'text-emerald-600' :
+                                  sup.approvalRate >= 50 ? 'text-amber-600' : 'text-red-600'
+                                )}>
+                                  {sup.approvalRate}%
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {sup.isActive ? (
+                                <Badge className="bg-emerald-100 text-emerald-700 text-[9px]">نشط اليوم</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[9px] text-muted-foreground">غير نشط</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ─── Recommendations Tab ─── */}
+          <TabsContent value="recommendations" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-heading flex items-center gap-2">
+                  <Lightbulb className="w-5 h-5 text-amber-500" />
+                  توصيات متخصصة في التحصين
+                </CardTitle>
+                <CardDescription>توصيات مبنية على تحليل بيانات الحملة</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {epiRecommendations.length === 0 ? (
+                  <div className="text-center py-8">
+                    <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
+                    <p className="font-medium">كل شيء يبدو جيداً! 🎉</p>
+                    <p className="text-sm text-muted-foreground">لا توجد توصيات حالياً</p>
+                  </div>
+                ) : (
+                  epiRecommendations.map((rec, i) => {
+                    const Icon = rec.icon
+                    const colors = rec.priority === 'high'
+                      ? { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', badge: 'bg-red-100 text-red-700' }
+                      : rec.priority === 'medium'
+                      ? { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' }
+                      : { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' }
+
+                    return (
+                      <div key={i} className={cn('p-4 rounded-xl border', colors.bg, colors.border)}>
+                        <div className="flex items-start gap-3">
+                          <div className={cn('p-2 rounded-lg bg-white/80', colors.text)}>
+                            <Icon className="w-5 h-5" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge className={cn('text-[10px]', colors.badge)}>
+                                {rec.priority === 'high' ? 'عالي' : rec.priority === 'medium' ? 'متوسط' : 'منخفض'}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px]">{rec.category}</Badge>
+                            </div>
+                            <h4 className={cn('font-bold text-sm', colors.text)}>{rec.title}</h4>
+                            <p className={cn('text-xs mt-1', colors.text, 'opacity-80')}>{rec.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
         {/* AI Analysis (Real AI) */}
         <Card className="border-primary/20">

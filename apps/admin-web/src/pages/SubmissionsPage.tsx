@@ -75,6 +75,7 @@ export default function SubmissionsPage() {
   const canBulkAction = ['admin', 'central'].includes(userRole || '')
 
   const bulkUpdate = useBulkUpdateSubmissionStatus()
+  const [approveAllLoading, setApproveAllLoading] = useState(false)
 
   const { data, isLoading, isError, error, refetch } = useSubmissions({
     status: statusFilter !== 'all' ? (statusFilter as SubmissionStatus) : undefined,
@@ -195,6 +196,33 @@ export default function SubmissionsPage() {
 
   const hasFilters = statusFilter !== 'all' || formFilter !== 'all' || govFilter !== 'all' || search
 
+  // ─── Approve All Filtered Submissions ─────────────────────
+  const handleApproveAll = async () => {
+    if (!canBulkAction) return
+    const draftCount = submissions.filter(s => s.status === 'draft').length
+    if (draftCount === 0) {
+      toast({ title: 'لا توجد مسودات للموافقة عليها', variant: 'destructive' })
+      return
+    }
+    if (!confirm(`هل تريد موافقة جميع المسودات (${draftCount}) في الصفحة الحالية؟`)) return
+
+    setApproveAllLoading(true)
+    try {
+      const draftIds = submissions.filter(s => s.status === 'draft').map(s => s.id)
+      await bulkUpdate.mutateAsync({
+        ids: draftIds,
+        status: 'submitted',
+        review_notes: 'موافقة جماعية على جميع الإرساليات',
+      })
+      toast({ title: `تمت الموافقة على ${draftCount} إرسالية`, variant: 'success' })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'خطأ غير معروف'
+      toast({ title: 'خطأ في الموافقة الجماعية', description: message, variant: 'destructive' })
+    } finally {
+      setApproveAllLoading(false)
+    }
+  }
+
   return (
     <div className="page-enter">
       <Header
@@ -273,6 +301,23 @@ export default function SubmissionsPage() {
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs mr-auto" onClick={exportAll}>
                 <Download className="w-3.5 h-3.5" /> تصدير
               </Button>
+
+              {/* Approve All Button */}
+              {canBulkAction && submissions.some(s => s.status === 'draft') && (
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={handleApproveAll}
+                  disabled={approveAllLoading}
+                >
+                  {approveAllLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  )}
+                  موافقة الكل ({submissions.filter(s => s.status === 'draft').length})
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

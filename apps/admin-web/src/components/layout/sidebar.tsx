@@ -39,34 +39,77 @@ interface NavItem {
   href: string
   badge?: number
   roles?: UserRole[]
-  separator?: boolean
 }
 
-const navItems: NavItem[] = [
-  // ─── نظرة عامة (جميع الأدوار) ───
-  { icon: Gauge, label: 'لوحة التحكم', href: '/dashboard' },
-  // ─── إدارة البيانات (جميع الأدوار) ───
-  { icon: FileSearch, label: 'النماذج', href: '/forms', separator: true },
-  { icon: FileStack, label: 'الإرساليات', href: '/submissions' },
-  { icon: PackageX, label: 'النواقص', href: '/shortages', roles: ['admin', 'central', 'governorate', 'district'] },
-  // ─── التحليلات والتقارير (إدارة وما فوق) ───
-  { icon: BarChart3, label: 'التحليلات', href: '/insights', separator: true, roles: ['admin', 'central', 'governorate', 'district'] },
-  { icon: FileSpreadsheet, label: 'التقارير والبيانات', href: '/reports', roles: ['admin', 'central', 'governorate', 'district'] },
-  { icon: Calendar, label: 'التقارير المجدولة', href: '/scheduled-reports', roles: ['admin', 'central', 'governorate', 'district'] },
-  { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
-  // ─── التواصل (جميع الأدوار) ───
-  { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat', separator: true },
-  { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },
-  { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
-  // ─── الإدارة (مركزي + أدمن) ───
-  { icon: Users, label: 'المستخدمون', href: '/users', separator: true, roles: ['admin', 'central'] },
-  { icon: MapPinned, label: 'المحافظات', href: '/governorates', roles: ['admin', 'central', 'governorate', 'district'] },
-  { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
-  { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
-  // ─── النظام (أدمن فقط) ───
-  { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin'], separator: true },
-  { icon: Brain, label: 'إعدادات الذكاء الاصطناعي', href: '/ai-settings', roles: ['admin'] },
-  { icon: Cog, label: 'الإعدادات', href: '/settings', roles: ['admin'] },
+interface NavSection {
+  id: string
+  label: string
+  icon: React.ElementType
+  items: NavItem[]
+  roles?: UserRole[]
+}
+
+const navSections: NavSection[] = [
+  {
+    id: 'overview',
+    label: 'نظرة عامة',
+    icon: Gauge,
+    items: [
+      { icon: Gauge, label: 'لوحة التحكم', href: '/dashboard' },
+    ],
+  },
+  {
+    id: 'data',
+    label: 'إدارة البيانات',
+    icon: FileSearch,
+    items: [
+      { icon: FileSearch, label: 'النماذج', href: '/forms' },
+      { icon: FileStack, label: 'الإرساليات', href: '/submissions' },
+      { icon: PackageX, label: 'النواقص', href: '/shortages', roles: ['admin', 'central', 'governorate', 'district'] },
+    ],
+  },
+  {
+    id: 'analytics',
+    label: 'التحليلات والتقارير',
+    icon: BarChart3,
+    items: [
+      { icon: BarChart3, label: 'التحليلات', href: '/insights', roles: ['admin', 'central', 'governorate', 'district'] },
+      { icon: FileSpreadsheet, label: 'التقارير والبيانات', href: '/reports', roles: ['admin', 'central', 'governorate', 'district'] },
+      { icon: Calendar, label: 'التقارير المجدولة', href: '/scheduled-reports', roles: ['admin', 'central', 'governorate', 'district'] },
+      { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
+    ],
+  },
+  {
+    id: 'communication',
+    label: 'التواصل',
+    icon: MessageSquare,
+    items: [
+      { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
+      { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },
+      { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
+    ],
+  },
+  {
+    id: 'management',
+    label: 'الإدارة',
+    icon: Users,
+    items: [
+      { icon: Users, label: 'المستخدمون', href: '/users', roles: ['admin', 'central'] },
+      { icon: MapPinned, label: 'المحافظات', href: '/governorates', roles: ['admin', 'central', 'governorate', 'district'] },
+      { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
+      { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
+    ],
+  },
+  {
+    id: 'system',
+    label: 'النظام',
+    icon: Cog,
+    items: [
+      { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin'] },
+      { icon: Brain, label: 'إعدادات الذكاء الاصطناعي', href: '/ai-settings', roles: ['admin'] },
+      { icon: Cog, label: 'الإعدادات', href: '/settings', roles: ['admin'] },
+    ],
+  },
 ]
 
 function LiveClock({ collapsed }: { collapsed: boolean }) {
@@ -98,14 +141,38 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
   const signOut = useSignOut()
   const { data: stats } = useDashboardStats()
   const { campaign, setCampaign, visibleOptions } = useCampaign()
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
 
-  const filteredItems = navItems.filter(item => {
-    if (!item.roles) return true
-    return user?.role && item.roles.includes(user.role)
-  })
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) next.delete(sectionId)
+      else next.add(sectionId)
+      return next
+    })
+  }
 
-  // Add dynamic badges (removed pending/shortages badges)
-  const itemsWithBadges = filteredItems
+  // Check if a section has an active item
+  const isSectionActive = (section: NavSection) => {
+    return section.items.some(item => {
+      if (!item.roles || (user?.role && item.roles.includes(user.role))) {
+        return location.pathname === item.href ||
+          (item.href !== '/' && location.pathname.startsWith(item.href))
+      }
+      return false
+    })
+  }
+
+  // Filter sections by role and get visible items
+  const visibleSections = navSections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => {
+        if (!item.roles) return true
+        return user?.role && item.roles.includes(user.role)
+      }),
+    }))
+    .filter(section => section.items.length > 0)
 
   return (
     <aside
@@ -212,53 +279,82 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
 
       <Separator className="bg-white/10" />
 
-      {/* Navigation */}
+      {/* Navigation — Collapsible Sections */}
       <ScrollArea className="flex-1 py-2">
         <nav className="px-3 space-y-1">
-          {itemsWithBadges.map((item) => {
-            const isActive = location.pathname === item.href ||
-              (item.href !== '/' && location.pathname.startsWith(item.href))
-            const Icon = item.icon
+          {visibleSections.map((section) => {
+            const SectionIcon = section.icon
+            const isCollapsed = collapsedSections.has(section.id)
+            const hasActive = isSectionActive(section)
 
             return (
-              <div key={item.href}>
-                {item.separator && !collapsed && (
-                  <div className="pt-3 pb-1 px-1">
-                    <div className="h-px bg-white/10" />
-                  </div>
-                )}
-                <Link
-                  to={item.href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 relative group',
-                    isActive
-                      ? 'bg-white/20 text-white shadow-md shadow-black/10'
-                      : 'text-blue-100 hover:bg-white/10 hover:text-white',
-                    collapsed && 'justify-center px-0'
-                  )}
-                >
-                {isActive && !collapsed && (
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-l-full" />
-                )}
-                <Icon className={cn('w-5 h-5 shrink-0', collapsed && 'w-5 h-5')} />
-                {!collapsed && <span className="flex-1">{item.label}</span>}
-                {!collapsed && item.badge && item.badge > 0 && (
-                  <Badge
-                    variant={item.badge > 5 ? 'destructive' : 'warning'}
-                    className="text-[10px] px-1.5 py-0"
+              <div key={section.id} className="mb-1">
+                {/* Section Header — Clickable to collapse/expand */}
+                {!collapsed && (
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-medium uppercase tracking-wider transition-all duration-200',
+                      hasActive
+                        ? 'text-white/90 bg-white/10'
+                        : 'text-blue-200/70 hover:text-white hover:bg-white/5'
+                    )}
                   >
-                    {item.badge}
-                  </Badge>
+                    <SectionIcon className="w-3.5 h-3.5" />
+                    <span className="flex-1 text-right">{section.label}</span>
+                    <ChevronLeft className={cn(
+                      'w-3 h-3 transition-transform duration-200',
+                      isCollapsed && '-rotate-90'
+                    )} />
+                  </button>
                 )}
-                {collapsed && item.badge && item.badge > 0 && (
-                  <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-red-500" />
-                )}
-                {collapsed && (
-                  <div className="absolute right-full ml-2 px-2 py-1 bg-white text-gray-900 text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                    {item.label}
+
+                {/* Section Items */}
+                {(!isCollapsed || collapsed) && (
+                  <div className="space-y-0.5 mt-0.5">
+                    {section.items.map((item) => {
+                      const isActive = location.pathname === item.href ||
+                        (item.href !== '/' && location.pathname.startsWith(item.href))
+                      const Icon = item.icon
+
+                      return (
+                        <Link
+                          key={item.href}
+                          to={item.href}
+                          className={cn(
+                            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 relative group',
+                            isActive
+                              ? 'bg-white/20 text-white shadow-md shadow-black/10'
+                              : 'text-blue-100 hover:bg-white/10 hover:text-white',
+                            collapsed && 'justify-center px-0'
+                          )}
+                        >
+                          {isActive && !collapsed && (
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-l-full" />
+                          )}
+                          <Icon className={cn('w-5 h-5 shrink-0')} />
+                          {!collapsed && <span className="flex-1">{item.label}</span>}
+                          {!collapsed && item.badge && item.badge > 0 && (
+                            <Badge
+                              variant={item.badge > 5 ? 'destructive' : 'warning'}
+                              className="text-[10px] px-1.5 py-0"
+                            >
+                              {item.badge}
+                            </Badge>
+                          )}
+                          {collapsed && item.badge && item.badge > 0 && (
+                            <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-red-500" />
+                          )}
+                          {collapsed && (
+                            <div className="absolute right-full ml-2 px-2 py-1 bg-white text-gray-900 text-xs rounded-md shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                              {item.label}
+                            </div>
+                          )}
+                        </Link>
+                      )
+                    })}
                   </div>
                 )}
-              </Link>
               </div>
             )
           })}
@@ -338,9 +434,19 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
 // Mobile sidebar (overlay) — uses React Portal to render outside parent stacking context
 export function MobileSidebar({ user }: { user?: { full_name: string; email: string; role: UserRole } | null }) {
   const [open, setOpen] = useState(false)
+  const [collapsedSectionsMobile, setCollapsedSectionsMobile] = useState<Set<string>>(new Set())
   const location = useLocation()
   const { campaign, setCampaign, visibleOptions } = useCampaign()
   const signOut = useSignOut()
+
+  const toggleMobileSection = (sectionId: string) => {
+    setCollapsedSectionsMobile(prev => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) next.delete(sectionId)
+      else next.add(sectionId)
+      return next
+    })
+  }
 
   // Close on route change
   useEffect(() => {
@@ -356,11 +462,6 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
     }
     return () => { document.body.style.overflow = '' }
   }, [open])
-
-  const filteredItems = navItems.filter(item => {
-    if (!item.roles) return true
-    return user?.role && item.roles.includes(user.role)
-  })
 
   const overlay = open ? (
     <div className="fixed inset-0" style={{ zIndex: 99999 }}>
@@ -421,29 +522,56 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
         </div>
         <Separator className="bg-white/10" />
 
-        {/* Navigation */}
+        {/* Navigation — Collapsible Sections (Mobile) */}
         <nav className="px-3 py-4 space-y-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
-          {filteredItems.map((item) => {
-            const isActive = location.pathname === item.href
-            const Icon = item.icon
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                onClick={() => setOpen(false)}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive ? 'bg-white/20 text-white shadow-md' : 'text-blue-100 hover:bg-white/10 hover:text-white'
-                )}
-              >
-                <Icon className="w-5 h-5" />
-                <span>{item.label}</span>
-                {item.badge && item.badge > 0 && (
-                  <Badge variant="destructive" className="mr-auto text-[10px]">{item.badge}</Badge>
-                )}
-              </Link>
-            )
-          })}
+          {navSections
+            .map(section => ({
+              ...section,
+              items: section.items.filter(item => {
+                if (!item.roles) return true
+                return user?.role && item.roles.includes(user.role)
+              }),
+            }))
+            .filter(section => section.items.length > 0)
+            .map((section) => {
+              const SectionIcon = section.icon
+              const isCollapsed = collapsedSectionsMobile.has(section.id)
+
+              return (
+                <div key={section.id} className="mb-1">
+                  <button
+                    onClick={() => toggleMobileSection(section.id)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-medium uppercase tracking-wider text-blue-200/70 hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    <SectionIcon className="w-3.5 h-3.5" />
+                    <span className="flex-1 text-right">{section.label}</span>
+                    <ChevronLeft className={cn('w-3 h-3 transition-transform duration-200', isCollapsed && '-rotate-90')} />
+                  </button>
+                  {!isCollapsed && (
+                    <div className="space-y-0.5 mt-0.5">
+                      {section.items.map((item) => {
+                        const isActive = location.pathname === item.href
+                        const Icon = item.icon
+                        return (
+                          <Link
+                            key={item.href}
+                            to={item.href}
+                            onClick={() => setOpen(false)}
+                            className={cn(
+                              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                              isActive ? 'bg-white/20 text-white shadow-md' : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                            )}
+                          >
+                            <Icon className="w-5 h-5" />
+                            <span>{item.label}</span>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
         </nav>
 
         {/* User Info + Logout at bottom */}

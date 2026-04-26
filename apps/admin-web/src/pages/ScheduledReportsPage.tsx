@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════
-// Scheduled Reports Page — Auto-generate & deliver reports
-// التقارير المجدولة — إنشاء تلقائي وتوصيل
+// Scheduled Reports — Professional Edition
+// التقارير المجدولة — إصدار احترافي
 // ═══════════════════════════════════════════════════════════
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
   Calendar, Clock, Plus, Play, Pause, Trash2, Edit3,
   FileText, FileSpreadsheet, Download, Mail, Webhook,
@@ -11,7 +11,8 @@ import {
   MoreVertical, Eye, RefreshCw, Zap, Bell, Settings,
   ChevronDown, ChevronUp, ArrowUpRight, Timer,
   BarChart3, Users, MapPin, Package, TrendingUp, Target,
-  Globe, Send, ExternalLink
+  Globe, Send, ExternalLink, Filter, Info, RotateCw,
+  FileDown, CalendarClock, Activity, CircleDot
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -36,7 +37,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import { Header } from '@/components/layout/header'
-import { useGovernorates } from '@/hooks/useApi'
+import { useGovernorates, useDashboardStats, useSubmissionsChart, useGovernorateStats } from '@/hooks/useApi'
 import {
   useScheduledReports, useScheduledReportRuns,
   useCreateScheduledReport, useUpdateScheduledReport,
@@ -45,38 +46,49 @@ import {
   SCHEDULE_PRESETS, DELIVERY_METHODS, REPORT_TYPE_LABELS,
   type ScheduledReport, type CreateScheduledReportInput
 } from '@/hooks/useScheduledReports'
-import { formatRelativeTime, cn } from '@/lib/utils'
+import { formatRelativeTime, formatDateTime, cn } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
+import { supabase } from '@/lib/supabase'
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell, Legend
+} from 'recharts'
 
-// ═══ Helper: Parse cron to human-readable ═══
+// ═══ Helpers ═══
+
 function cronToLabel(cron: string): string {
   const parts = cron.split(' ')
   if (parts.length < 5) return cron
   const [min, hour, dom, , dow] = parts
-
   const time = `${hour.padStart(2, '0')}:${min.padStart(2, '0')}`
 
-  if (dow === '0') return `كل أحد الساعة ${time}`
-  if (dow === '1') return `كل اثنين الساعة ${time}`
-  if (dow === '4') return `كل خميس الساعة ${time}`
-  if (dow === '1,3') return `كل اثنين وأربعاء الساعة ${time}`
-  if (dom === '1') return `أول كل شهر الساعة ${time}`
-  if (dom === '15') return `نصف الشهر الساعة ${time}`
-  return `يومياً الساعة ${time}`
+  if (dow === '0') return `كل أحد ${time}`
+  if (dow === '1') return `كل اثنين ${time}`
+  if (dow === '4') return `كل خميس ${time}`
+  if (dow === '1,3') return `إثنين وأربعاء ${time}`
+  if (dom === '1') return `أول كل شهر ${time}`
+  if (dom === '15') return `نصف الشهر ${time}`
+  return `يومياً ${time}`
 }
+
+const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
 
 // ═══ Status Badge ═══
 function StatusBadge({ status }: { status: string | null }) {
-  if (!status) return <Badge variant="outline" className="text-[10px]">لم يُشغّل بعد</Badge>
+  if (!status) return (
+    <Badge variant="outline" className="text-[10px] gap-1 text-muted-foreground">
+      <CircleDot className="w-2.5 h-2.5" /> لم يُشغّل
+    </Badge>
+  )
   const config = {
-    success: { icon: CheckCircle2, variant: 'success' as const, label: 'نجح' },
-    error: { icon: XCircle, variant: 'destructive' as const, label: 'فشل' },
-    running: { icon: Loader2, variant: 'default' as const, label: 'يعمل...' },
+    success: { icon: CheckCircle2, className: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'نجح' },
+    error: { icon: XCircle, className: 'bg-red-100 text-red-700 border-red-200', label: 'فشل' },
+    running: { icon: Loader2, className: 'bg-blue-100 text-blue-700 border-blue-200', label: 'يعمل...' },
   }
-  const c = config[status as keyof typeof config] || { icon: Clock, variant: 'outline' as const, label: status }
+  const c = config[status as keyof typeof config] || { icon: Clock, className: '', label: status }
   const Icon = c.icon
   return (
-    <Badge variant={c.variant} className="text-[10px] gap-1">
+    <Badge variant="outline" className={cn('text-[10px] gap-1', c.className)}>
       <Icon className={cn('w-3 h-3', status === 'running' && 'animate-spin')} />
       {c.label}
     </Badge>
@@ -84,7 +96,7 @@ function StatusBadge({ status }: { status: string | null }) {
 }
 
 // ═══ Report Type Icon ═══
-function ReportTypeIcon({ type }: { type: string }) {
+function ReportTypeIcon({ type, className }: { type: string; className?: string }) {
   const icons: Record<string, React.ElementType> = {
     daily_summary: BarChart3,
     weekly_analysis: TrendingUp,
@@ -93,21 +105,38 @@ function ReportTypeIcon({ type }: { type: string }) {
     shortage_report: Package,
     user_activity: Users,
     form_performance: FileText,
-    trend_analysis: TrendingUp,
+    trend_analysis: Activity,
   }
   const Icon = icons[type] || FileText
-  return <Icon className="w-4 h-4" />
+  return <Icon className={cn('w-4 h-4', className)} />
+}
+
+// ═══ Quick Stats Card ═══
+function QuickStatCard({ icon: Icon, iconBg, iconColor, label, value, subValue }: {
+  icon: React.ElementType; iconBg: string; iconColor: string
+  label: string; value: string | number; subValue?: string
+}) {
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className={cn('p-2.5 rounded-xl', iconBg)}>
+          <Icon className={cn('w-4.5 h-4.5', iconColor)} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-lg font-heading font-bold tabular-nums">{value}</p>
+          <p className="text-[10px] text-muted-foreground">{label}</p>
+          {subValue && <p className="text-[9px] text-muted-foreground/70">{subValue}</p>}
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 // ═══ Create/Edit Dialog ═══
 function ReportDialog({
-  open,
-  onOpenChange,
-  editReport,
+  open, onOpenChange, editReport,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  editReport?: ScheduledReport | null
+  open: boolean; onOpenChange: (open: boolean) => void; editReport?: ScheduledReport | null
 }) {
   const { data: governorates } = useGovernorates()
   const createMutation = useCreateScheduledReport()
@@ -131,17 +160,11 @@ function ReportDialog({
       }
     }
     return {
-      name: '',
-      description: '',
-      report_type: 'daily_summary',
-      format: 'pdf',
-      schedule_cron: '0 8 * * *',
-      schedule_label: 'يومياً الساعة 8 صباحاً',
-      timezone: 'Asia/Aden',
-      campaign_type: 'all',
-      governorate_ids: [],
-      delivery_method: 'download',
-      delivery_config: {},
+      name: '', description: '',
+      report_type: 'daily_summary', format: 'pdf',
+      schedule_cron: '0 8 * * *', schedule_label: 'يومياً الساعة 8 صباحاً',
+      timezone: 'Asia/Aden', campaign_type: 'all',
+      governorate_ids: [], delivery_method: 'download', delivery_config: {},
     }
   })
 
@@ -155,8 +178,7 @@ function ReportDialog({
 
   const handleSubmit = async () => {
     if (!form.name.trim()) {
-      toast({ title: 'خطأ', description: 'أدخل اسم التقرير', variant: 'destructive' })
-      return
+      toast({ title: 'أدخل اسم التقرير', variant: 'destructive' }); return
     }
 
     const config = { ...form }
@@ -169,14 +191,15 @@ function ReportDialog({
     try {
       if (editReport) {
         await updateMutation.mutateAsync({ id: editReport.id, ...config })
-        toast({ title: 'تم التحديث', description: 'تم تحديث التقرير المجدول' })
+        toast({ title: 'تم تحديث التقرير المجدول', variant: 'success' })
       } else {
         await createMutation.mutateAsync(config)
-        toast({ title: 'تم الإنشاء', description: 'تم إنشاء التقرير المجدول' })
+        toast({ title: 'تم إنشاء التقرير المجدول', variant: 'success' })
       }
       onOpenChange(false)
-    } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ غير معروف'
+      toast({ title: 'خطأ', description: msg, variant: 'destructive' })
     }
   }
 
@@ -186,25 +209,27 @@ function ReportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-heading flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-primary" />
+          <DialogTitle className="font-heading flex items-center gap-2 text-lg">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Calendar className="w-5 h-5 text-primary" />
+            </div>
             {editReport ? 'تعديل التقرير المجدول' : 'تقرير مجدول جديد'}
           </DialogTitle>
           <DialogDescription>
-            أنشئ تقريراً تلقائياً يُولّد ويوصّل حسب الجدول الزمني
+            أنشئ تقريراً تلقائياً يُولّد ويُوصّل حسب الجدول الزمني
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-5 py-4">
           {/* Name & Description */}
           <div className="space-y-3">
             <div>
-              <Label className="text-xs font-medium">اسم التقرير *</Label>
+              <Label className="text-xs font-medium">اسم التقرير <span className="text-red-500">*</span></Label>
               <Input
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="مثال: التقرير اليومي — ملخص شامل"
-                className="mt-1"
+                className="mt-1.5"
               />
             </div>
             <div>
@@ -212,8 +237,8 @@ function ReportDialog({
               <Input
                 value={form.description || ''}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="وصف مختصر للتقرير"
-                className="mt-1"
+                placeholder="وصف مختصر"
+                className="mt-1.5"
               />
             </div>
           </div>
@@ -224,19 +249,12 @@ function ReportDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-xs font-medium">نوع التقرير</Label>
-              <Select
-                value={form.report_type}
-                onValueChange={v => setForm(f => ({ ...f, report_type: v }))}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.report_type} onValueChange={v => setForm(f => ({ ...f, report_type: v }))}>
+                <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(REPORT_TYPE_LABELS).map(([key, { label, icon }]) => (
                     <SelectItem key={key} value={key}>
-                      <span className="flex items-center gap-2">
-                        <span>{icon}</span> {label}
-                      </span>
+                      <span className="flex items-center gap-2"><span>{icon}</span> {label}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -244,23 +262,12 @@ function ReportDialog({
             </div>
             <div>
               <Label className="text-xs font-medium">الصيغة</Label>
-              <Select
-                value={form.format}
-                onValueChange={v => setForm(f => ({ ...f, format: v as any }))}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v as 'pdf' | 'excel' | 'both' }))}>
+                <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pdf">
-                    <span className="flex items-center gap-2"><FileText className="w-4 h-4" /> PDF</span>
-                  </SelectItem>
-                  <SelectItem value="excel">
-                    <span className="flex items-center gap-2"><FileSpreadsheet className="w-4 h-4" /> Excel</span>
-                  </SelectItem>
-                  <SelectItem value="both">
-                    <span className="flex items-center gap-2"><FileText className="w-4 h-4" /> PDF + Excel</span>
-                  </SelectItem>
+                  <SelectItem value="pdf"><span className="flex items-center gap-2"><FileText className="w-4 h-4" /> PDF</span></SelectItem>
+                  <SelectItem value="excel"><span className="flex items-center gap-2"><FileSpreadsheet className="w-4 h-4" /> Excel</span></SelectItem>
+                  <SelectItem value="both"><span className="flex items-center gap-2"><FileText className="w-4 h-4" /> PDF + Excel</span></SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -275,28 +282,21 @@ function ReportDialog({
               {SCHEDULE_PRESETS.map(preset => (
                 <button
                   key={preset.cron}
-                  onClick={() => setForm(f => ({
-                    ...f,
-                    schedule_cron: preset.cron,
-                    schedule_label: preset.label,
-                  }))}
+                  onClick={() => setForm(f => ({ ...f, schedule_cron: preset.cron, schedule_label: preset.label }))}
                   className={cn(
                     'flex items-center gap-2 p-2.5 rounded-lg border text-right text-xs transition-all',
                     form.schedule_cron === preset.cron
-                      ? 'border-primary bg-primary/5 text-primary font-medium'
+                      ? 'border-primary bg-primary/5 text-primary font-medium shadow-sm'
                       : 'border-border hover:bg-muted/50'
                   )}
                 >
                   <span className="text-base">{preset.icon}</span>
                   <span className="flex-1 truncate">{preset.label}</span>
-                  {form.schedule_cron === preset.cron && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                  )}
+                  {form.schedule_cron === preset.cron && <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />}
                 </button>
               ))}
             </div>
 
-            {/* Custom cron toggle */}
             <button
               onClick={() => setShowCustomCron(!showCustomCron)}
               className="flex items-center gap-1.5 text-xs text-primary mt-2 hover:underline"
@@ -316,7 +316,7 @@ function ReportDialog({
                   dir="ltr"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1" dir="ltr">
-                  Format: minute hour day-of-month month day-of-week (0=Sun)
+                  minute hour day-of-month month day-of-week (0=Sun)
                 </p>
               </div>
             )}
@@ -331,11 +331,11 @@ function ReportDialog({
               {DELIVERY_METHODS.map(method => (
                 <button
                   key={method.value}
-                  onClick={() => setForm(f => ({ ...f, delivery_method: method.value as any }))}
+                  onClick={() => setForm(f => ({ ...f, delivery_method: method.value as 'download' | 'email' | 'webhook' }))}
                   className={cn(
                     'w-full flex items-center gap-3 p-3 rounded-lg border text-right transition-all',
                     form.delivery_method === method.value
-                      ? 'border-primary bg-primary/5'
+                      ? 'border-primary bg-primary/5 shadow-sm'
                       : 'border-border hover:bg-muted/50'
                   )}
                 >
@@ -344,14 +344,11 @@ function ReportDialog({
                     <p className="text-sm font-medium">{method.label}</p>
                     <p className="text-[10px] text-muted-foreground">{method.description}</p>
                   </div>
-                  {form.delivery_method === method.value && (
-                    <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
-                  )}
+                  {form.delivery_method === method.value && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
                 </button>
               ))}
             </div>
 
-            {/* Email config */}
             {form.delivery_method === 'email' && (
               <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
                 <Label className="text-xs font-medium">عناوين البريد الإلكتروني</Label>
@@ -362,13 +359,10 @@ function ReportDialog({
                   className="mt-1"
                   dir="ltr"
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  افصل بين العناوين بفاصلة
-                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">افصل بين العناوين بفاصلة</p>
               </div>
             )}
 
-            {/* Webhook config */}
             {form.delivery_method === 'webhook' && (
               <div className="mt-3 p-3 rounded-lg bg-muted/30 border">
                 <Label className="text-xs font-medium">Webhook URL</Label>
@@ -384,7 +378,7 @@ function ReportDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
           <Button onClick={handleSubmit} disabled={saving} className="gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
@@ -398,92 +392,125 @@ function ReportDialog({
 
 // ═══ Run History Dialog ═══
 function RunHistoryDialog({
-  open,
-  onOpenChange,
-  report,
+  open, onOpenChange, report,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  report: ScheduledReport | null
+  open: boolean; onOpenChange: (open: boolean) => void; report: ScheduledReport | null
 }) {
   const { data: runs, isLoading } = useScheduledReportRuns(report?.id || null)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="font-heading flex items-center gap-2">
-            <Clock className="w-5 h-5 text-primary" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Clock className="w-5 h-5 text-primary" />
+            </div>
             سجل التشغيل — {report?.name}
           </DialogTitle>
+          <DialogDescription>آخر {runs?.length || 0} تشغيلات</DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
-          </div>
+          <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : !runs || runs.length === 0 ? (
-          <div className="text-center py-8">
-            <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">لم يُشغّل بعد</p>
+          <div className="text-center py-12">
+            <div className="w-16 h-16 rounded-2xl bg-muted mx-auto mb-4 flex items-center justify-center">
+              <Clock className="w-8 h-8 text-muted-foreground/40" />
+            </div>
+            <p className="text-sm font-medium text-muted-foreground">لم يُشغّل بعد</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">سيظهر السجل هنا بعد أول تشغيل</p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">التاريخ</TableHead>
-                <TableHead className="text-xs">الحالة</TableHead>
-                <TableHead className="text-xs">السجلات</TableHead>
-                <TableHead className="text-xs">الحجم</TableHead>
-                <TableHead className="text-xs">المدة</TableHead>
-                <TableHead className="text-xs"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {runs.map(run => {
-                const duration = run.completed_at
-                  ? Math.round((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000)
-                  : null
-                return (
-                  <TableRow key={run.id}>
-                    <TableCell className="text-xs">
-                      {new Date(run.started_at).toLocaleString('ar-SA')}
-                    </TableCell>
-                    <TableCell><StatusBadge status={run.status} /></TableCell>
-                    <TableCell className="text-xs tabular-nums">
-                      {run.record_count?.toLocaleString() || '—'}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {run.file_size_bytes
-                        ? `${(run.file_size_bytes / 1024).toFixed(1)} KB`
-                        : '—'}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {duration ? `${duration} ثانية` : '—'}
-                    </TableCell>
-                    <TableCell>
-                      {run.file_url && (
-                        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" asChild>
-                          <a href={run.file_url} download>
-                            <Download className="w-3 h-3" /> تحميل
-                          </a>
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead className="text-xs">التاريخ</TableHead>
+                  <TableHead className="text-xs">الحالة</TableHead>
+                  <TableHead className="text-xs">السجلات</TableHead>
+                  <TableHead className="text-xs">الحجم</TableHead>
+                  <TableHead className="text-xs">المدة</TableHead>
+                  <TableHead className="text-xs"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {runs.map(run => {
+                  const duration = run.completed_at
+                    ? Math.round((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000)
+                    : null
+                  return (
+                    <TableRow key={run.id} className="hover:bg-muted/20">
+                      <TableCell className="text-xs">{formatDateTime(run.started_at)}</TableCell>
+                      <TableCell><StatusBadge status={run.status} /></TableCell>
+                      <TableCell className="text-xs tabular-nums">{run.record_count?.toLocaleString() || '—'}</TableCell>
+                      <TableCell className="text-xs">{run.file_size_bytes ? `${(run.file_size_bytes / 1024).toFixed(1)} KB` : '—'}</TableCell>
+                      <TableCell className="text-xs">{duration ? `${duration}s` : '—'}</TableCell>
+                      <TableCell>
+                        {run.file_url && (
+                          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" asChild>
+                            <a href={run.file_url} download><Download className="w-3 h-3" /> تحميل</a>
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </DialogContent>
     </Dialog>
   )
 }
 
+// ═══ Empty State ═══
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardContent className="p-16 text-center">
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 mx-auto mb-6 flex items-center justify-center">
+          <CalendarClock className="w-10 h-10 text-primary/60" />
+        </div>
+        <h3 className="text-xl font-heading font-bold mb-2">لا توجد تقارير مجدولة</h3>
+        <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+          أنشئ تقارير تلقائية تُولّد حسب الجدول الزمني الذي تحدده.
+          مثالية للتقارير اليومية والأسبوعية التي تحتاجها بانتظام.
+        </p>
+        <Button onClick={onCreate} className="gap-2" size="lg">
+          <Plus className="w-5 h-5" /> إنشاء أول تقرير مجدول
+        </Button>
+
+        {/* Quick templates */}
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-lg mx-auto">
+          {[
+            { icon: '📊', label: 'تقرير يومي', desc: 'ملخص كل يوم الساعة 8 صباحاً' },
+            { icon: '📈', label: 'تقرير أسبوعي', desc: 'تحليل كل أسبوع الأحد' },
+            { icon: '🗺️', label: 'تقرير المحافظات', desc: 'مقارنة أداء المحافظات' },
+          ].map((tpl, i) => (
+            <button
+              key={i}
+              onClick={onCreate}
+              className="p-4 rounded-xl border hover:bg-muted/50 transition-all text-right group"
+            >
+              <span className="text-2xl block mb-2">{tpl.icon}</span>
+              <p className="text-xs font-medium">{tpl.label}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{tpl.desc}</p>
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 // ═══ Main Page ═══
 export default function ScheduledReportsPage() {
-  const { data: reports, isLoading } = useScheduledReports()
+  const { data: reports, isLoading, error: reportsError, refetch } = useScheduledReports()
+  const { data: stats } = useDashboardStats()
+  const { data: govStats } = useGovernorateStats()
+  const { data: chartData } = useSubmissionsChart()
   const toggleMutation = useToggleScheduledReport()
   const deleteMutation = useDeleteScheduledReport()
   const runNowMutation = useRunScheduledReportNow()
@@ -492,111 +519,237 @@ export default function ScheduledReportsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editReport, setEditReport] = useState<ScheduledReport | null>(null)
   const [historyReport, setHistoryReport] = useState<ScheduledReport | null>(null)
+  const [searchFilter, setSearchFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
 
   const activeCount = reports?.filter(r => r.is_active).length || 0
   const totalRuns = reports?.reduce((sum, r) => sum + r.run_count, 0) || 0
+  const successRuns = reports?.filter(r => r.last_run_status === 'success').length || 0
+  const errorRuns = reports?.filter(r => r.last_run_status === 'error').length || 0
+
+  // Filtered reports
+  const filteredReports = useMemo(() => {
+    if (!reports) return []
+    return reports.filter(r => {
+      if (searchFilter && !r.name.toLowerCase().includes(searchFilter.toLowerCase())) return false
+      if (typeFilter !== 'all' && r.report_type !== typeFilter) return false
+      return true
+    })
+  }, [reports, searchFilter, typeFilter])
+
+  // Next run time
+  const nextRunReport = useMemo(() => {
+    if (!reports) return null
+    return reports
+      .filter(r => r.is_active && r.next_run_at)
+      .sort((a, b) => new Date(a.next_run_at!).getTime() - new Date(b.next_run_at!).getTime())[0] || null
+  }, [reports])
 
   const handleToggle = async (report: ScheduledReport) => {
     try {
       await toggleMutation.mutateAsync({ id: report.id, is_active: !report.is_active })
       toast({
-        title: report.is_active ? 'تم الإيقاف' : 'تم التفعيل',
-        description: `${report.name} — ${report.is_active ? 'متوقف الآن' : 'يعمل الآن'}`,
+        title: report.is_active ? 'تم إيقاف التقرير' : 'تم تفعيل التقرير',
+        description: report.name,
+        variant: 'success',
       })
-    } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ'
+      toast({ title: 'خطأ', description: msg, variant: 'destructive' })
     }
   }
 
   const handleDelete = async (report: ScheduledReport) => {
-    if (!confirm(`حذف "${report.name}"؟`)) return
+    if (!confirm(`هل تريد حذف "${report.name}"؟`)) return
     try {
       await deleteMutation.mutateAsync(report.id)
-      toast({ title: 'تم الحذف', description: report.name })
-    } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' })
+      toast({ title: 'تم حذف التقرير', description: report.name, variant: 'success' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ'
+      toast({ title: 'خطأ', description: msg, variant: 'destructive' })
     }
   }
 
   const handleRunNow = async (report: ScheduledReport) => {
     try {
       await runNowMutation.mutateAsync(report.id)
-      toast({ title: 'جاري التشغيل', description: `${report.name} — سيتم إنشاء التقرير قريباً` })
-    } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' })
+      toast({ title: 'جاري التشغيل', description: `${report.name} — سيتم إنشاء التقرير قريباً`, variant: 'success' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ'
+      toast({ title: 'خطأ في التشغيل', description: msg, variant: 'destructive' })
     }
   }
+
+  const handleGenerateClientReport = async (reportType: string) => {
+    toast({ title: 'جاري إنشاء التقرير...', variant: 'default' })
+    try {
+      // Generate a simple CSV report client-side
+      const today = new Date().toISOString().split('T')[0]
+      let csvContent = ''
+
+      if (reportType === 'daily_summary' && stats) {
+        csvContent = [
+          'البيان,القيمة',
+          `التاريخ,${today}`,
+          `إجمالي الإرساليات,${stats.total_submissions}`,
+          `إرساليات اليوم,${stats.submissions_today}`,
+          `إرساليات هذا الأسبوع,${stats.submissions_this_week}`,
+          `معدل الاعتماد,${stats.approval_rate.toFixed(1)}%`,
+          `المستخدمين النشطين,${stats.active_users}/${stats.total_users}`,
+          `النماذج النشطة,${stats.active_forms}`,
+        ].join('\n')
+      } else if (reportType === 'governorate_comparison' && govStats) {
+        csvContent = [
+          'المحافظة,الإرساليات',
+          ...govStats.map(g => `${g.name},${g.submissions}`),
+        ].join('\n')
+      } else {
+        csvContent = `نوع التقرير,${reportType}\nالتاريخ,${today}\nملاحظة,تم إنشاء هذا التقرير من لوحة التحكم`
+      }
+
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `تقرير_${reportType}_${today}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+
+      toast({ title: 'تم إنشاء التقرير', description: 'تم تحميل الملف', variant: 'success' })
+    } catch {
+      toast({ title: 'فشل إنشاء التقرير', variant: 'destructive' })
+    }
+  }
+
+  // ─── Table Distribution Data ───
+  const typeDistribution = useMemo(() => {
+    if (!reports) return []
+    const counts: Record<string, number> = {}
+    reports.forEach(r => {
+      const label = REPORT_TYPE_LABELS[r.report_type]?.label || r.report_type
+      counts[label] = (counts[label] || 0) + 1
+    })
+    return Object.entries(counts).map(([name, value]) => ({ name, value }))
+  }, [reports])
 
   return (
     <div className="page-enter">
       <Header
         title="التقارير المجدولة"
-        subtitle={`${activeCount} نشط | ${reports?.length || 0} إجمالي`}
+        subtitle={`${activeCount} نشط من أصل ${reports?.length || 0}`}
+        onRefresh={() => refetch()}
       />
 
       <div className="p-4 sm:p-6 space-y-6">
 
+        {/* ═══ Error State ═══ */}
+        {reportsError && (
+          <Card className="border-red-200 bg-red-50/50">
+            <CardContent className="p-6 text-center">
+              <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+              <h3 className="font-bold text-red-700 mb-1">خطأ في تحميل التقارير المجدولة</h3>
+              <p className="text-sm text-red-600 mb-3">
+                {(reportsError as Error)?.message || 'تعذر الاتصال بقاعدة البيانات'}
+              </p>
+              <p className="text-xs text-red-500 mb-3">
+                تأكد من تطبيق مигра scheduled_reports على Supabase
+              </p>
+              <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
+                <RefreshCw className="w-4 h-4" /> إعادة المحاولة
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* ═══ Stats Bar ═══ */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-blue-50">
-                <Calendar className="w-4 h-4 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-lg font-bold tabular-nums">{reports?.length || 0}</p>
-                <p className="text-[10px] text-muted-foreground">إجمالي التقارير</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-emerald-50">
-                <Zap className="w-4 h-4 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-lg font-bold tabular-nums">{activeCount}</p>
-                <p className="text-[10px] text-muted-foreground">نشط</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-violet-50">
-                <Play className="w-4 h-4 text-violet-600" />
-              </div>
-              <div>
-                <p className="text-lg font-bold tabular-nums">{totalRuns}</p>
-                <p className="text-[10px] text-muted-foreground">مرات التشغيل</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-amber-50">
-                <Timer className="w-4 h-4 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-sm font-bold">
-                  {reports?.[0]?.next_run_at
-                    ? formatRelativeTime(reports[0].next_run_at)
-                    : '—'}
-                </p>
-                <p className="text-[10px] text-muted-foreground">أقرب تشغيل</p>
-              </div>
-            </CardContent>
-          </Card>
+          <QuickStatCard icon={Calendar} iconBg="bg-blue-50" iconColor="text-blue-600" label="إجمالي التقارير" value={reports?.length || 0} />
+          <QuickStatCard icon={Zap} iconBg="bg-emerald-50" iconColor="text-emerald-600" label="نشط" value={activeCount} />
+          <QuickStatCard icon={Play} iconBg="bg-violet-50" iconColor="text-violet-600" label="مرات التشغيل" value={totalRuns} />
+          <QuickStatCard
+            icon={Timer}
+            iconBg="bg-amber-50"
+            iconColor="text-amber-600"
+            label="أقرب تشغيل"
+            value={nextRunReport ? formatRelativeTime(nextRunReport.next_run_at!) : '—'}
+            subValue={nextRunReport?.name}
+          />
         </div>
 
+        {/* ═══ Quick Generate Section ═══ */}
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-primary/5 to-background">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-heading font-bold flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-primary" />
+                  إنشاء تقرير فوري
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">أنشئ تقريراً الآن بدون انتظار الجدول</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { type: 'daily_summary', icon: '📊', label: 'تقرير يومي' },
+                { type: 'governorate_comparison', icon: '🗺️', label: 'مقارنة المحافظات' },
+                { type: 'shortage_report', icon: '📦', label: 'تقرير النواقص' },
+                { type: 'user_activity', icon: '👥', label: 'نشاط المستخدمين' },
+              ].map(t => (
+                <button
+                  key={t.type}
+                  onClick={() => handleGenerateClientReport(t.type)}
+                  className="flex items-center gap-2.5 p-3 rounded-xl border bg-white hover:bg-muted/30 transition-all text-right group"
+                >
+                  <span className="text-xl">{t.icon}</span>
+                  <div>
+                    <p className="text-xs font-medium">{t.label}</p>
+                    <p className="text-[10px] text-muted-foreground">تحميل فوري</p>
+                  </div>
+                  <FileDown className="w-3.5 h-3.5 text-muted-foreground mr-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* ═══ Action Bar ═══ */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-heading font-bold flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-primary" />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <h2 className="text-sm font-heading font-bold flex items-center gap-2 shrink-0">
+              <CalendarClock className="w-4 h-4 text-primary" />
               التقارير المجدولة
             </h2>
+            {/* Search */}
+            <div className="relative flex-1 max-w-xs">
+              <Input
+                placeholder="بحث..."
+                value={searchFilter}
+                onChange={e => setSearchFilter(e.target.value)}
+                className="h-8 text-xs pr-8"
+              />
+              {searchFilter && (
+                <button
+                  onClick={() => setSearchFilter('')}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <XCircle className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            {/* Type filter */}
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-36 h-8 text-xs">
+                <SelectValue placeholder="النوع" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الأنواع</SelectItem>
+                {Object.entries(REPORT_TYPE_LABELS).map(([key, { label }]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <Button onClick={() => { setEditReport(null); setCreateOpen(true) }} className="gap-2">
+          <Button onClick={() => { setEditReport(null); setCreateOpen(true) }} className="gap-2 shrink-0">
             <Plus className="w-4 h-4" /> تقرير جديد
           </Button>
         </div>
@@ -606,30 +759,25 @@ export default function ScheduledReportsPage() {
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
               <Card key={i} className="border-0 shadow-sm">
-                <CardContent className="p-5">
-                  <Skeleton className="h-20 w-full" />
-                </CardContent>
+                <CardContent className="p-5"><Skeleton className="h-24 w-full" /></CardContent>
               </Card>
             ))}
           </div>
         ) : !reports || reports.length === 0 ? (
+          <EmptyState onCreate={() => { setEditReport(null); setCreateOpen(true) }} />
+        ) : filteredReports.length === 0 ? (
           <Card className="border-0 shadow-sm">
             <CardContent className="p-12 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 mx-auto mb-4 flex items-center justify-center">
-                <Calendar className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-lg font-heading font-bold mb-2">لا توجد تقارير مجدولة</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                أنشئ تقريراً تلقائياً يُولّد حسب الجدول الزمني الذي تحدده
-              </p>
-              <Button onClick={() => { setEditReport(null); setCreateOpen(true) }} className="gap-2">
-                <Plus className="w-4 h-4" /> إنشاء أول تقرير
+              <Filter className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">لا توجد نتائج مطابقة</p>
+              <Button variant="ghost" size="sm" className="mt-2 text-xs" onClick={() => { setSearchFilter(''); setTypeFilter('all') }}>
+                مسح الفلاتر
               </Button>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-3">
-            {reports.map(report => {
+            {filteredReports.map(report => {
               const typeInfo = REPORT_TYPE_LABELS[report.report_type] || { label: report.report_type, icon: '📄' }
               const deliveryInfo = DELIVERY_METHODS.find(d => d.value === report.delivery_method)
 
@@ -637,27 +785,30 @@ export default function ScheduledReportsPage() {
                 <Card
                   key={report.id}
                   className={cn(
-                    'border-0 shadow-sm transition-all hover:shadow-md',
-                    !report.is_active && 'opacity-60'
+                    'border-0 shadow-sm transition-all hover:shadow-md group',
+                    !report.is_active && 'opacity-60 hover:opacity-80'
                   )}
                 >
                   <CardContent className="p-5">
                     <div className="flex items-start gap-4">
                       {/* Icon */}
                       <div className={cn(
-                        'p-3 rounded-xl shrink-0',
-                        report.is_active ? 'bg-primary/10' : 'bg-muted'
+                        'p-3 rounded-xl shrink-0 transition-colors',
+                        report.is_active ? 'bg-primary/10 group-hover:bg-primary/15' : 'bg-muted'
                       )}>
                         <span className="text-2xl">{typeInfo.icon}</span>
                       </div>
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <h3 className="text-sm font-heading font-bold truncate">{report.name}</h3>
                           <Badge
-                            variant={report.is_active ? 'success' : 'outline'}
-                            className="text-[9px] px-1.5 py-0"
+                            variant={report.is_active ? 'default' : 'outline'}
+                            className={cn(
+                              'text-[9px] px-1.5 py-0',
+                              report.is_active && 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                            )}
                           >
                             {report.is_active ? 'نشط' : 'متوقف'}
                           </Badge>
@@ -668,53 +819,63 @@ export default function ScheduledReportsPage() {
                           <p className="text-xs text-muted-foreground mb-2 truncate">{report.description}</p>
                         )}
 
-                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <ReportTypeIcon type={report.report_type} />
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <ReportTypeIcon type={report.report_type} className="text-primary/60" />
                             {typeInfo.label}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
+                          <span className="flex items-center gap-1.5">
+                            <Clock className="w-3 h-3 text-primary/60" />
                             {report.schedule_label}
                           </span>
-                          <span className="flex items-center gap-1">
-                            {report.format === 'pdf' ? <FileText className="w-3 h-3" /> : <FileSpreadsheet className="w-3 h-3" />}
+                          <span className="flex items-center gap-1.5">
+                            {report.format === 'pdf'
+                              ? <FileText className="w-3 h-3 text-red-400" />
+                              : <FileSpreadsheet className="w-3 h-3 text-emerald-400" />
+                            }
                             {report.format.toUpperCase()}
                           </span>
-                          <span className="flex items-center gap-1">
-                            {deliveryInfo?.icon || '📥'}
+                          <span className="flex items-center gap-1.5">
+                            <span>{deliveryInfo?.icon || '📥'}</span>
                             {deliveryInfo?.label || report.delivery_method}
                           </span>
-                          {report.last_run_at && (
-                            <span className="flex items-center gap-1">
-                              <Timer className="w-3 h-3" />
-                              آخر تشغيل: {formatRelativeTime(report.last_run_at)}
-                            </span>
-                          )}
-                          {report.next_run_at && report.is_active && (
-                            <span className="flex items-center gap-1 text-primary font-medium">
-                              <ArrowUpRight className="w-3 h-3" />
-                              التالي: {formatRelativeTime(report.next_run_at)}
-                            </span>
-                          )}
                           {report.run_count > 0 && (
-                            <span className="flex items-center gap-1">
-                              <Play className="w-3 h-3" />
+                            <span className="flex items-center gap-1.5">
+                              <Activity className="w-3 h-3" />
                               {report.run_count} مرة
                             </span>
                           )}
                         </div>
 
+                        {/* Timeline info */}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px]">
+                          {report.last_run_at && (
+                            <span className="text-muted-foreground">
+                              آخر تشغيل: {formatRelativeTime(report.last_run_at)}
+                            </span>
+                          )}
+                          {report.next_run_at && report.is_active && (
+                            <span className="text-primary font-medium flex items-center gap-1">
+                              <ArrowUpRight className="w-3 h-3" />
+                              التالي: {formatRelativeTime(report.next_run_at)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Error display */}
                         {report.last_run_error && (
-                          <div className="mt-2 p-2 rounded-lg bg-red-50 border border-red-200 text-[10px] text-red-700">
-                            <AlertTriangle className="w-3 h-3 inline mr-1" />
-                            {report.last_run_error}
+                          <div className="mt-2 p-2.5 rounded-lg bg-red-50 border border-red-200 text-[10px] text-red-700 flex items-start gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-medium">خطأ في آخر تشغيل:</p>
+                              <p className="mt-0.5 opacity-80">{report.last_run_error}</p>
+                            </div>
                           </div>
                         )}
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         <Switch
                           checked={report.is_active}
                           onCheckedChange={() => handleToggle(report)}
@@ -726,22 +887,22 @@ export default function ScheduledReportsPage() {
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem onClick={() => handleRunNow(report)}>
-                              <Play className="w-3.5 h-3.5 mr-2" /> تشغيل الآن
+                              <Play className="w-3.5 h-3.5 ml-2" /> تشغيل الآن
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setHistoryReport(report)}>
-                              <Eye className="w-3.5 h-3.5 mr-2" /> سجل التشغيل
+                              <Eye className="w-3.5 h-3.5 ml-2" /> سجل التشغيل
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => { setEditReport(report); setCreateOpen(true) }}>
-                              <Edit3 className="w-3.5 h-3.5 mr-2" /> تعديل
+                              <Edit3 className="w-3.5 h-3.5 ml-2" /> تعديل
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => handleDelete(report)}
                               className="text-red-600 focus:text-red-600"
                             >
-                              <Trash2 className="w-3.5 h-3.5 mr-2" /> حذف
+                              <Trash2 className="w-3.5 h-3.5 ml-2" /> حذف
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -753,19 +914,44 @@ export default function ScheduledReportsPage() {
             })}
           </div>
         )}
+
+        {/* ═══ Distribution Chart (if reports exist) ═══ */}
+        {reports && reports.length > 0 && typeDistribution.length > 1 && (
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-heading flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary" />
+                توزيع أنواع التقارير
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={typeDistribution}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={3}
+                    dataKey="value"
+                    label={({ name, value }) => `${name} (${value})`}
+                  >
+                    {typeDistribution.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Dialogs */}
-      <ReportDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        editReport={editReport}
-      />
-      <RunHistoryDialog
-        open={!!historyReport}
-        onOpenChange={() => setHistoryReport(null)}
-        report={historyReport}
-      />
+      <ReportDialog open={createOpen} onOpenChange={setCreateOpen} editReport={editReport} />
+      <RunHistoryDialog open={!!historyReport} onOpenChange={() => setHistoryReport(null)} report={historyReport} />
     </div>
   )
 }

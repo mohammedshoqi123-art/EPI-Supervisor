@@ -52,24 +52,35 @@ export function ReportPreview({
         doc.write(html)
         doc.close()
 
-        // Force-reload any external CSS (Google Fonts) after write
-        const links = doc.querySelectorAll('link[rel="stylesheet"]')
-        links.forEach(link => {
-          const href = link.getAttribute('href')
-          if (href) {
-            link.setAttribute('href', href + '?t=' + Date.now())
-          }
-        })
+        // Wait for content to render, then fix dimensions
+        setTimeout(() => {
+          if (!iframeRef.current) return
+          const iDoc = iframeRef.current.contentDocument
+          if (!iDoc) return
 
-        // Inject base styles for iframe context
-        const style = doc.createElement('style')
-        style.textContent = `
-          html, body { margin: 0; padding: 16px; background: white; }
-          @media screen {
-            body { max-width: 210mm; margin: 0 auto; padding: 20px; }
-          }
-        `
-        doc.head.appendChild(style)
+          // Force-reload any external CSS (Google Fonts) after write
+          const links = iDoc.querySelectorAll('link[rel="stylesheet"]')
+          links.forEach(link => {
+            const href = link.getAttribute('href')
+            if (href) {
+              link.setAttribute('href', href + '?t=' + Date.now())
+            }
+          })
+
+          // Inject base styles for iframe context
+          const style = iDoc.createElement('style')
+          style.textContent = `
+            html, body { margin: 0; padding: 16px; background: white; overflow: visible; }
+            @media screen {
+              body { max-width: 210mm; margin: 0 auto; padding: 20px; }
+            }
+          `
+          iDoc.head.appendChild(style)
+
+          // Auto-resize iframe to content height
+          const bodyHeight = iDoc.body?.scrollHeight || 800
+          iframeRef.current.style.height = `${bodyHeight + 40}px`
+        }, 300)
       }
     }
   }, [html, open])
@@ -84,10 +95,22 @@ export function ReportPreview({
 
   const handlePrint = useCallback(() => {
     if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.print()
+      // Ensure iframe content is loaded before printing
+      try {
+        iframeRef.current.contentWindow.focus()
+        iframeRef.current.contentWindow.print()
+      } catch (e) {
+        // Fallback: open in new window and print
+        const win = window.open('', '_blank')
+        if (win) {
+          win.document.write(html)
+          win.document.close()
+          setTimeout(() => win.print(), 500)
+        }
+      }
     }
     onPrint?.()
-  }, [onPrint])
+  }, [onPrint, html])
 
   const handleOpenExternal = useCallback(() => {
     const win = window.open('', '_blank')
@@ -203,10 +226,10 @@ export function ReportPreview({
         {/* Preview iframe */}
         <div className="relative bg-gray-100 overflow-auto" style={{ height: isFullscreen ? 'calc(100vh - 52px)' : '70vh' }}>
           <div
-            className="mx-auto my-4 bg-white shadow-lg"
+            className="mx-auto my-4 bg-white shadow-lg overflow-auto"
             style={{
-              width: `${zoom}%`,
-              maxWidth: '210mm',
+              width: '210mm',
+              maxWidth: '100%',
               minHeight: '297mm',
               transform: `scale(${zoom / 100})`,
               transformOrigin: 'top center',
@@ -215,9 +238,9 @@ export function ReportPreview({
             <iframe
               ref={iframeRef}
               className="w-full border-0"
-              style={{ minHeight: '297mm', height: '100%' }}
+              style={{ minHeight: '297mm', height: '100%', display: 'block' }}
               title="معاينة التقرير"
-              sandbox="allow-same-origin allow-scripts"
+              sandbox="allow-same-origin allow-scripts allow-modals allow-popups"
             />
           </div>
         </div>

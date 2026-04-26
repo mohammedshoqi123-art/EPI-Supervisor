@@ -234,7 +234,7 @@ export async function generateSupervisionChallengesReport(options?: {
           align-items: center;
         }
         .gov-card-name { font-size: 16px; font-weight: 800; }
-        .gov-card-stats { font-size: 10px; opacity: 0.9; display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+        .gov-card-stats { font-size: 12px; opacity: 0.9; display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
         .gov-card-badge {
           font-size: 22px; font-weight: 900;
           background: rgba(255,255,255,0.2);
@@ -244,7 +244,7 @@ export async function generateSupervisionChallengesReport(options?: {
         .gov-card-body { padding: 14px 18px; }
         .gov-meta-row {
           display: flex; flex-wrap: wrap; gap: 6px;
-          margin-bottom: 12px; font-size: 9px;
+          margin-bottom: 12px; font-size: 11px;
         }
         .gov-meta-tag {
           display: inline-flex; align-items: center; gap: 3px;
@@ -259,7 +259,7 @@ export async function generateSupervisionChallengesReport(options?: {
           background: ${BRAND.bgLight}; border-radius: 8px; padding: 8px;
         }
         .stat-value { font-size: 18px; font-weight: 800; }
-        .stat-label { font-size: 8px; color: ${BRAND.textMuted}; }
+        .stat-label { font-size: 12px; color: ${BRAND.textMuted}; }
       </style>
     </head>
     <body>

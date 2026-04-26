@@ -203,7 +203,7 @@ export async function generateMapReport(options?: {
       background: white;
       border: 1px solid #dee2e6;
       border-radius: 14px;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 600;
     }
     .supervisor-dot {

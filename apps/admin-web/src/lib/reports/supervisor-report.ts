@@ -105,7 +105,7 @@ export async function generateSupervisorReport(options?: {
           display: inline-block;
           padding: 3px 10px;
           border-radius: 12px;
-          font-size: 10px;
+          font-size: 12px;
           font-weight: 700;
           color: white;
         }
@@ -132,7 +132,7 @@ export async function generateSupervisorReport(options?: {
           border-bottom: 1px solid ${BRAND.border};
         }
         .supervisor-name { font-size: 12px; font-weight: 700; }
-        .supervisor-meta { font-size: 9px; color: ${BRAND.textMuted}; }
+        .supervisor-meta { font-size: 11px; color: ${BRAND.textMuted}; }
         .supervisor-stats {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -145,7 +145,7 @@ export async function generateSupervisorReport(options?: {
           padding: 6px;
         }
         .stat-value { font-size: 16px; font-weight: 800; }
-        .stat-label { font-size: 8px; color: ${BRAND.textMuted}; }
+        .stat-label { font-size: 12px; color: ${BRAND.textMuted}; }
       </style>
     </head>
     <body>

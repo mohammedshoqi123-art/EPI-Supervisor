@@ -346,21 +346,21 @@ export async function generateSupervisionFormReport(options?: {
           border-bottom: 2px solid ${BRAND.border};
         }
         .card-title { font-size: 14px; font-weight: 800; color: ${BRAND.textDark}; }
-        .card-subtitle { font-size: 10px; color: ${BRAND.textMuted}; margin-top: 4px; }
+        .card-subtitle { font-size: 12px; color: ${BRAND.textMuted}; margin-top: 4px; }
         .card-score {
           font-size: 28px; font-weight: 900; line-height: 1;
           padding: 8px 16px; border-radius: 12px; text-align: center;
         }
         .card-meta {
           display: flex; flex-wrap: wrap; gap: 10px;
-          margin-bottom: 12px; font-size: 10px; color: ${BRAND.textMuted};
+          margin-bottom: 12px; font-size: 12px; color: ${BRAND.textMuted};
         }
         .meta-item { display: flex; align-items: center; gap: 4px; }
         .meta-icon { font-size: 12px; }
         .section-bar {
           display: flex; align-items: center; gap: 8px;
           padding: 6px 10px; margin: 4px 0;
-          border-radius: 6px; font-size: 10px;
+          border-radius: 6px; font-size: 12px;
         }
         .section-bar.good { background: #E8F5E9; }
         .section-bar.warning { background: #FFF8E1; }
@@ -372,13 +372,13 @@ export async function generateSupervisionFormReport(options?: {
         .challenge-item {
           display: flex; align-items: center; gap: 6px;
           padding: 4px 8px; margin: 2px 0;
-          border-radius: 4px; font-size: 9px;
+          border-radius: 4px; font-size: 11px;
         }
         .challenge-item.fail { background: #FFEBEE; }
         .challenge-item.warn { background: #FFF8E1; }
         .challenge-item.pass { background: #E8F5E9; }
         .gps-tag {
-          font-family: monospace; font-size: 9px;
+          font-family: monospace; font-size: 11px;
           color: #00695C; background: #E0F7FA;
           padding: 2px 6px; border-radius: 4px;
           direction: ltr; display: inline-block;
@@ -386,19 +386,19 @@ export async function generateSupervisionFormReport(options?: {
         .team-badge {
           display: inline-flex; align-items: center; gap: 4px;
           padding: 3px 10px; border-radius: 12px;
-          font-size: 10px; font-weight: 700;
+          font-size: 12px; font-weight: 700;
           background: #E3F2FD; color: #1565C0;
         }
         .gov-badge {
           display: inline-flex; align-items: center; gap: 4px;
           padding: 3px 10px; border-radius: 12px;
-          font-size: 10px; font-weight: 700;
+          font-size: 12px; font-weight: 700;
           background: #F3E5F5; color: #7B1FA2;
         }
         .dist-badge {
           display: inline-flex; align-items: center; gap: 4px;
           padding: 3px 10px; border-radius: 12px;
-          font-size: 10px; font-weight: 700;
+          font-size: 12px; font-weight: 700;
           background: #E0F7FA; color: #00695C;
         }
       </style>

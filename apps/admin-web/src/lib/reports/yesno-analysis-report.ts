@@ -343,14 +343,14 @@ export async function generateYesNoAnalysisReport(options?: {
         .field-row:last-child { border-bottom: none; }
         .field-label {
           flex: 1;
-          font-size: 10px;
+          font-size: 12px;
           font-weight: 600;
           color: ${BRAND.textDark};
         }
         .field-stats {
           display: flex;
           gap: 8px;
-          font-size: 9px;
+          font-size: 11px;
           font-weight: 600;
           min-width: 100px;
           justify-content: flex-end;
@@ -383,7 +383,7 @@ export async function generateYesNoAnalysisReport(options?: {
           align-items: center;
           gap: 8px;
           padding: 4px 0;
-          font-size: 10px;
+          font-size: 12px;
         }
         .top-item-rate {
           font-weight: 800;

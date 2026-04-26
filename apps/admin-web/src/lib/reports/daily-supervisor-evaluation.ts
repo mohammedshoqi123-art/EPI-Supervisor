@@ -10,7 +10,6 @@
  * ═══════════════════════════════════════════════════════════════
  */
 
-import { supabase } from '../supabase'
 import { BRAND } from '../pdf-brand'
 import {
   escapeHtml,
@@ -23,6 +22,7 @@ import {
   getStyles,
   printReport,
 } from './shared'
+import { fetchEvaluationData, isGeneralSupervisor, type EnrichedUser, type GovGroup } from './evaluation-helpers'
 
 // ─── Role Labels ────────────────────────────────────────────
 
@@ -42,26 +42,6 @@ const ROLE_ICONS: Record<string, string> = {
   data_entry: '⚪',
 }
 
-// ─── "إشراف عام" check ─────────────────────────────────────
-// فقط المدير العام لمكتب الصحة والسكان بالمحافظة (من الاسم)
-
-function isGeneralSupervisor(name: string, role: string): boolean {
-  const n = (name || '').trim()
-  if (n.includes('مدير عام') || n.includes('المدير العام') || n.includes('مدير مكتب الصحة')) return true
-  return false
-}
-
-// ─── Date Helpers ───────────────────────────────────────────
-
-function getTodayStr(): string {
-  return new Date().toISOString().split('T')[0]
-}
-
-function getDayName(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('ar-SA', { weekday: 'long' })
-}
-
 // ═══════════════════════════════════════════════════════════════
 // MAIN REPORT
 // ═══════════════════════════════════════════════════════════════
@@ -70,80 +50,11 @@ export async function generateDailySupervisorEvaluation(options?: {
   date?: string
   governorateId?: string
 }): Promise<void> {
-  const targetDate = options?.date || getTodayStr()
-  const dayStart = `${targetDate}T00:00:00`
-  const dayEnd = `${targetDate}T23:59:59`
-  const dayName = getDayName(targetDate)
-  const dateArabic = formatDateArabic(new Date(targetDate))
-
-  // ── Fetch all data ──
-  const [usersRes, subsRes, govsRes, distsRes] = await Promise.allSettled([
-    supabase.from('profiles')
-      .select('id, full_name, phone, role, governorate_id, district_id, is_active')
-      .is('deleted_at', null)
-      .order('governorate_id', { ascending: true }),
-
-    supabase.from('form_submissions')
-      .select('id, submitted_by, governorate_id, district_id, status, created_at')
-      .is('deleted_at', null)
-      .gte('created_at', dayStart)
-      .lte('created_at', dayEnd)
-      .limit(50000),
-
-    supabase.from('governorates')
-      .select('id, name_ar')
-      .eq('is_active', true)
-      .is('deleted_at', null)
-      .order('name_ar', { ascending: true }),
-
-    supabase.from('districts')
-      .select('id, name_ar, governorate_id')
-      .eq('is_active', true)
-      .is('deleted_at', null)
-      .order('name_ar', { ascending: true }),
-  ])
-
-  const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
-  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
-  const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
-  const dists = distsRes.status === 'fulfilled' ? distsRes.value.data || [] : []
-
-  // ── Build lookup maps ──
-  const govsMap = new Map<string, { id: string; name_ar: string }>()
-  for (const g of govs) govsMap.set(g.id, g)
-
-  const distsMap = new Map<string, { id: string; name_ar: string; governorate_id: string }>()
-  for (const d of dists) distsMap.set(d.id, d)
-
-  // ── Enrich each user ──
-  const enriched = users
-    .filter(u => u.is_active) // فقط النشطين
-    .map(u => {
-      const userSubs = subs.filter(s => s.submitted_by === u.id)
-      const submitted = userSubs.filter(s => s.status === 'submitted').length
-      const draft = userSubs.filter(s => s.status === 'draft').length
-      const total = userSubs.length
-      const gov = u.governorate_id ? govsMap.get(u.governorate_id) : null
-      const dist = u.district_id ? distsMap.get(u.district_id) : null
-      const isGen = isGeneralSupervisor(u.full_name || '', u.role)
-
-      return {
-        ...u,
-        totalToday: total,
-        submittedToday: submitted,
-        draftToday: draft,
-        isGenSupervisor: isGen,
-        govName: gov?.name_ar || '',
-        govId: u.governorate_id || '',
-        distName: dist?.name_ar || '',
-      }
-    })
+  const data = await fetchEvaluationData(options)
+  const { enriched, govs, dists, subs, targetDate, dayName, dateArabic, govGroups } = data
 
   // ── المركزي بدون محافظة → يُستبعد ──
-  // المركزي مع محافظة → يظهر مع محافظته
-  // المركزي بدون → لا يُذكر
   const centralWithGov = enriched.filter(u => (u.role === 'central' || u.role === 'admin') && u.govId)
-  const centralWithoutGov = enriched.filter(u => (u.role === 'central' || u.role === 'admin') && !u.govId)
 
   // ── كل المستخدمين اللي يظهرون بالتقرير ──
   // (الميدانيون + المركزي مع محافظة)
@@ -158,41 +69,6 @@ export async function generateDailySupervisorEvaluation(options?: {
   if (options?.governorateId && options.governorateId !== 'all') {
     filteredGovs = govs.filter(g => g.id === options.governorateId)
     filteredUsers = allReportUsers.filter(u => u.govId === options.governorateId)
-  }
-
-  // ── تجميع حسب المحافظة ──
-  const govGroups = new Map<string, {
-    gov: typeof govs[0]
-    allUsers: typeof enriched
-    govLevelUsers: typeof enriched    // مشرفي المحافظة + المركزي
-    districts: Map<string, typeof enriched>
-  }>()
-
-  for (const gov of filteredGovs) {
-    const govUsers = filteredUsers.filter(u => u.govId === gov.id)
-
-    // مشرفي المحافظة (role=governorate) + المركزي (role=central/admin)
-    const govLevel = govUsers.filter(u => u.role === 'governorate' || u.role === 'central' || u.role === 'admin')
-      .sort((a, b) => {
-        // المركزي أولاً ثم مشرف التحصين
-        const order: Record<string, number> = { central: 0, admin: 0, governorate: 1 }
-        return (order[a.role] ?? 9) - (order[b.role] ?? 9)
-      })
-
-    // المديريات (role=district/data_entry)
-    const distMap = new Map<string, typeof enriched>()
-    for (const u of govUsers.filter(u => u.role === 'district' || u.role === 'data_entry')) {
-      const distKey = u.district_id || '_no_district'
-      if (!distMap.has(distKey)) distMap.set(distKey, [])
-      distMap.get(distKey)!.push(u)
-    }
-
-    govGroups.set(gov.id, {
-      gov,
-      allUsers: govUsers,
-      govLevelUsers: govLevel,
-      districts: distMap,
-    })
   }
 
   // ══════════════════════════════════════════════
@@ -274,7 +150,7 @@ export async function generateDailySupervisorEvaluation(options?: {
           display: inline-block;
           padding: 3px 10px;
           border-radius: 12px;
-          font-size: 9px;
+          font-size: 11px;
           font-weight: 700;
         }
         .status-active { background: #E8F5E9; color: ${BRAND.success}; }
@@ -285,7 +161,7 @@ export async function generateDailySupervisorEvaluation(options?: {
           display: inline-block;
           padding: 2px 8px;
           border-radius: 8px;
-          font-size: 9px;
+          font-size: 11px;
           font-weight: 600;
         }
         .role-admin { background: #E3F2FD; color: #0D47A1; }
@@ -332,7 +208,7 @@ export async function generateDailySupervisorEvaluation(options?: {
           align-items: center;
         }
         .dist-count {
-          font-size: 10px;
+          font-size: 12px;
           color: ${BRAND.textMuted};
           font-weight: 400;
         }
@@ -349,7 +225,7 @@ export async function generateDailySupervisorEvaluation(options?: {
           gap: 4px;
           padding: 4px 12px;
           border-radius: 16px;
-          font-size: 10px;
+          font-size: 12px;
           font-weight: 600;
         }
         .chip-active { background: #E8F5E9; color: ${BRAND.success}; }
@@ -385,6 +261,51 @@ export async function generateDailySupervisorEvaluation(options?: {
           font-size: 11px;
         }
 
+        /* ─── ملخص المديريات — مجموعات بالمحافظة ─── */
+        .dist-summary-group {
+          margin-bottom: 14px;
+          page-break-inside: avoid;
+        }
+        .dist-summary-gov-header {
+          background: linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark});
+          color: white;
+          padding: 10px 16px;
+          border-radius: 8px 8px 0 0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .dist-summary-gov-header .gov-sub {
+          font-size: 12px;
+          font-weight: 400;
+          opacity: 0.85;
+        }
+        .dist-summary-gov-total {
+          background: ${BRAND.bgLight};
+          border: 2px solid ${BRAND.primary};
+          border-top: none;
+          padding: 10px 16px;
+          border-radius: 0 0 8px 8px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 12px;
+          font-weight: 800;
+          color: ${BRAND.primaryDark};
+        }
+        .dist-summary-gov-total .total-stats {
+          display: flex;
+          gap: 16px;
+          font-size: 11px;
+        }
+        .dist-summary-gov-total .total-stats span {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+        }
+
         .coverage-bar {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -401,8 +322,8 @@ export async function generateDailySupervisorEvaluation(options?: {
         .coverage-card.warn { border-top: 4px solid ${BRAND.warning}; }
         .coverage-card.bad { border-top: 4px solid ${BRAND.accent}; }
         .coverage-value { font-size: 28px; font-weight: 900; }
-        .coverage-label { font-size: 10px; color: ${BRAND.textMuted}; margin-top: 4px; }
-        .coverage-sub { font-size: 9px; color: ${BRAND.textMuted}; }
+        .coverage-label { font-size: 12px; color: ${BRAND.textMuted}; margin-top: 4px; }
+        .coverage-sub { font-size: 11px; color: ${BRAND.textMuted}; }
       </style>
     </head>
     <body>
@@ -481,33 +402,72 @@ export async function generateDailySupervisorEvaluation(options?: {
         })
       )}
 
-      <!-- ═══ ملخص المديريات ═══ -->
+      <!-- ═══ ملخص المديريات — مجمّع بالمحافظة ═══ -->
       ${buildSectionTitle('📍', 'ملخص المديريات')}
-      ${(() => {
-        const allDistRows: string[][] = []
-        for (const group of govGroups.values()) {
-          for (const [distKey, distUsers] of group.districts.entries()) {
+      ${[...govGroups.values()].map(group => {
+        // تخطي المحافظات بدون مديريات
+        if (group.districts.size === 0) return ''
+
+        // حساب إجمالي المحافظة
+        const govTotalUsers = group.allUsers.filter(u => u.role === 'district' || u.role === 'data_entry').length
+        const govActiveUsers = group.allUsers.filter(u => (u.role === 'district' || u.role === 'data_entry') && u.totalToday > 0).length
+        const govInactiveUsers = govTotalUsers - govActiveUsers
+        const govTotalForms = group.allUsers.filter(u => u.role === 'district' || u.role === 'data_entry').reduce((s, u) => s + u.totalToday, 0)
+        const govCoveredDists = [...group.districts.values()].filter(users => users.some(u => u.totalToday > 0)).length
+        const govRate = govTotalUsers > 0 ? Math.round((govActiveUsers / govTotalUsers) * 100) : 0
+
+        // صفوف المديريات
+        const distRows = [...group.districts.entries()]
+          .sort((a, b) => {
+            const aForms = a[1].reduce((s, u) => s + u.totalToday, 0)
+            const bForms = b[1].reduce((s, u) => s + u.totalToday, 0)
+            return bForms - aForms
+          })
+          .map(([distKey, distUsers]) => {
             const distName = distUsers[0]?.distName || 'غير محدد'
             const active = distUsers.filter(u => u.totalToday > 0).length
             const inactive = distUsers.filter(u => u.totalToday === 0).length
             const forms = distUsers.reduce((s, u) => s + u.totalToday, 0)
             const rate = distUsers.length > 0 ? Math.round((active / distUsers.length) * 100) : 0
-            allDistRows.push([
-              escapeHtml(group.gov.name_ar),
+            return [
               escapeHtml(distName),
               `${distUsers.length}`,
               `<span style="color:${BRAND.success};font-weight:700">${active}</span>`,
               `<span style="color:${inactive > 0 ? BRAND.accent : BRAND.textMuted}">${inactive}</span>`,
               `${forms}`,
               `<span style="color:${rate >= 70 ? BRAND.success : rate >= 40 ? BRAND.warning : BRAND.accent};font-weight:700">${rate}%</span>`,
-            ])
-          }
-        }
-        return buildTable(
-          ['المحافظة', 'المديرية', 'المشرفين', 'نشط', 'غير نشط', 'الاستمارات', 'النشاط'],
-          allDistRows.sort((a, b) => parseInt(b[5]) - parseInt(a[5]))
-        )
-      })()}
+            ]
+          })
+
+        return `
+          <div class="dist-summary-group">
+            <!-- header المحافظة -->
+            <div class="dist-summary-gov-header">
+              <span>🏛️ ${escapeHtml(group.gov.name_ar)}</span>
+              <span class="gov-sub">${group.districts.size} مديرية | ${govTotalUsers} مشرف</span>
+            </div>
+
+            <!-- جدول مديريات المحافظة -->
+            ${buildTable(
+              ['المديرية', 'المشرفين', 'نشط', 'غير نشط', 'الاستمارات', 'النشاط'],
+              distRows
+            )}
+
+            <!-- إجمالي المحافظة -->
+            <div class="dist-summary-gov-total">
+              <span>📊 إجمالي ${escapeHtml(group.gov.name_ar)}</span>
+              <div class="total-stats">
+                <span>👥 ${govTotalUsers} مشرف</span>
+                <span style="color:${BRAND.success}">✅ ${govActiveUsers} نشط</span>
+                ${govInactiveUsers > 0 ? `<span style="color:${BRAND.accent}">❌ ${govInactiveUsers} غير نشط</span>` : ''}
+                <span>📋 ${govTotalForms} استمارة</span>
+                <span>📍 ${govCoveredDists}/${group.districts.size} مديرية</span>
+                <span style="color:${govRate >= 70 ? BRAND.success : govRate >= 40 ? BRAND.warning : BRAND.accent}">🎯 ${govRate}%</span>
+              </div>
+            </div>
+          </div>
+        `
+      }).join('')}
 
       <!-- ═══ تفاصيل المحافظات ═══ -->
       ${[...govGroups.values()].map(group => {

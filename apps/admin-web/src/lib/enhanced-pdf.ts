@@ -270,9 +270,9 @@ function buildReportHTML(options: PDFReportOptions): string {
       justify-content: center;
     }
     .brand-title { font-size: 11px; font-weight: 700; color: ${PDF_BRAND.primary}; }
-    .brand-sub { font-size: 9px; color: ${PDF_BRAND.textMuted}; }
+    .brand-sub { font-size: 11px; color: ${PDF_BRAND.textMuted}; }
     .header-left { text-align: left; }
-    .header-meta { font-size: 10px; color: ${PDF_BRAND.textMuted}; margin-bottom: 2px; }
+    .header-meta { font-size: 12px; color: ${PDF_BRAND.textMuted}; margin-bottom: 2px; }
 
     /* ═══ Title Block ═══ */
     .report-title-block {
@@ -327,8 +327,8 @@ function buildReportHTML(options: PDFReportOptions): string {
     }
     .kpi-icon { font-size: 22px; margin-bottom: 4px; }
     .kpi-value { font-size: 24px; font-weight: 900; }
-    .kpi-label { font-size: 10px; color: ${PDF_BRAND.textMuted}; margin-top: 2px; }
-    .kpi-sub { font-size: 9px; color: ${PDF_BRAND.textMuted}; opacity: 0.7; margin-top: 2px; }
+    .kpi-label { font-size: 12px; color: ${PDF_BRAND.textMuted}; margin-top: 2px; }
+    .kpi-sub { font-size: 11px; color: ${PDF_BRAND.textMuted}; opacity: 0.7; margin-top: 2px; }
 
     /* ═══ Summary ═══ */
     .summary-grid {
@@ -356,7 +356,7 @@ function buildReportHTML(options: PDFReportOptions): string {
       padding: 8px 10px;
       text-align: right;
       font-weight: 600;
-      font-size: 10px;
+      font-size: 12px;
       white-space: nowrap;
     }
     tbody td { padding: 7px 10px; border-bottom: 1px solid #E0E0E0; }
@@ -368,7 +368,7 @@ function buildReportHTML(options: PDFReportOptions): string {
     .progress-list { display: flex; flex-direction: column; gap: 10px; }
     .progress-item { background: ${PDF_BRAND.bgLight}; border-radius: 8px; padding: 10px 14px; }
     .progress-header { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; }
-    .progress-stats { font-weight: 700; color: ${PDF_BRAND.primary}; font-size: 10px; }
+    .progress-stats { font-weight: 700; color: ${PDF_BRAND.primary}; font-size: 12px; }
     .progress-bar { height: 8px; background: #E0E0E0; border-radius: 4px; overflow: hidden; }
     .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
 
@@ -391,7 +391,7 @@ function buildReportHTML(options: PDFReportOptions): string {
       border-top: 2px solid ${PDF_BRAND.border};
       display: flex;
       justify-content: space-between;
-      font-size: 9px;
+      font-size: 11px;
       color: ${PDF_BRAND.textMuted};
     }
 

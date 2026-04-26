@@ -201,7 +201,7 @@ export async function generateChallengesReport(options?: {
           border-bottom: 1px solid ${BRAND.border};
         }
         .challenge-title { font-size: 13px; font-weight: 800; color: ${BRAND.textDark}; }
-        .challenge-meta { font-size: 9px; color: ${BRAND.textMuted}; display: flex; gap: 12px; flex-wrap: wrap; }
+        .challenge-meta { font-size: 11px; color: ${BRAND.textMuted}; display: flex; gap: 12px; flex-wrap: wrap; }
         .challenge-meta-item { display: flex; align-items: center; gap: 4px; }
         .challenge-body { font-size: 11px; line-height: 1.8; color: ${BRAND.textDark}; }
         .challenge-section { margin-top: 10px; }
@@ -210,7 +210,7 @@ export async function generateChallengesReport(options?: {
           display: inline-block;
           padding: 2px 8px;
           border-radius: 12px;
-          font-size: 9px;
+          font-size: 11px;
           font-weight: 700;
           margin: 2px;
         }
@@ -224,7 +224,7 @@ export async function generateChallengesReport(options?: {
           border-radius: 8px;
           padding: 10px 14px;
           margin-top: 8px;
-          font-size: 10px;
+          font-size: 12px;
         }
         .action-box strong { color: ${BRAND.success}; }
         .recommendation-box {
@@ -233,12 +233,12 @@ export async function generateChallengesReport(options?: {
           border-radius: 8px;
           padding: 10px 14px;
           margin-top: 8px;
-          font-size: 10px;
+          font-size: 12px;
         }
         .recommendation-box strong { color: ${BRAND.primary}; }
         .gps-coord {
           font-family: monospace;
-          font-size: 10px;
+          font-size: 12px;
           color: #00695C;
           background: #E0F7FA;
           padding: 2px 6px;

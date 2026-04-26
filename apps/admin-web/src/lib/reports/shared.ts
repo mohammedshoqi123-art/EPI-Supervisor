@@ -134,8 +134,8 @@ export function getStyles(): string {
         direction: rtl;
         color: ${BRAND.textDark};
         background: white;
-        font-size: 12px;
-        line-height: 1.6;
+        font-size: 14px;
+        line-height: 1.7;
         -webkit-font-smoothing: antialiased;
       }
       
@@ -170,16 +170,16 @@ export function getStyles(): string {
         justify-content: center;
       }
       .brand-title {
-        font-size: 14px;
+        font-size: 16px;
         font-weight: 800;
       }
       .brand-sub {
-        font-size: 10px;
+        font-size: 12px;
         opacity: 0.85;
       }
       .header-meta {
         text-align: left;
-        font-size: 9px;
+        font-size: 11px;
         opacity: 0.9;
       }
       .meta-item { margin-bottom: 2px; }
@@ -191,13 +191,13 @@ export function getStyles(): string {
         border-right: 4px solid ${BRAND.primary};
       }
       .header-title-section h1 {
-        font-size: 18px;
+        font-size: 22px;
         font-weight: 800;
         color: ${BRAND.primaryDark};
         margin-bottom: 4px;
       }
       .header-title-section p {
-        font-size: 11px;
+        font-size: 13px;
         color: ${BRAND.textMuted};
       }
       
@@ -216,17 +216,17 @@ export function getStyles(): string {
         text-align: center;
         box-shadow: 0 1px 3px rgba(0,0,0,0.06);
       }
-      .kpi-icon { font-size: 20px; margin-bottom: 4px; }
-      .kpi-value { font-size: 22px; font-weight: 900; }
-      .kpi-label { font-size: 9px; color: ${BRAND.textMuted}; margin-top: 2px; }
-      .kpi-sub { font-size: 8px; color: ${BRAND.textMuted}; margin-top: 1px; }
+      .kpi-icon { font-size: 24px; margin-bottom: 4px; }
+      .kpi-value { font-size: 28px; font-weight: 900; }
+      .kpi-label { font-size: 11px; color: ${BRAND.textMuted}; margin-top: 2px; }
+      .kpi-sub { font-size: 10px; color: ${BRAND.textMuted}; margin-top: 1px; }
       
       /* ─── Section Title ─── */
       .section-title {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 13px;
+        font-size: 15px;
         font-weight: 700;
         color: ${BRAND.primaryDark};
         margin: 18px 0 10px;
@@ -234,9 +234,9 @@ export function getStyles(): string {
         border-bottom: 2px solid ${BRAND.primary};
         page-break-after: avoid;
       }
-      .section-icon { font-size: 16px; }
+      .section-icon { font-size: 18px; }
       .section-badge {
-        font-size: 9px;
+        font-size: 11px;
         background: ${BRAND.primary};
         color: white;
         padding: 2px 8px;
@@ -249,18 +249,18 @@ export function getStyles(): string {
         width: 100%;
         border-collapse: collapse;
         margin: 8px 0;
-        font-size: 10px;
+        font-size: 12px;
       }
       .data-table th {
         background: ${BRAND.primary};
         color: white;
-        padding: 8px 10px;
+        padding: 10px 12px;
         text-align: right;
-        font-weight: 600;
-        font-size: 9px;
+        font-weight: 700;
+        font-size: 11px;
       }
       .data-table td {
-        padding: 6px 10px;
+        padding: 8px 12px;
         border-bottom: 1px solid ${BRAND.border};
       }
       .data-table tr:nth-child(even) { background: ${BRAND.bgLight}; }
@@ -272,7 +272,7 @@ export function getStyles(): string {
       .progress-header {
         display: flex;
         justify-content: space-between;
-        font-size: 10px;
+        font-size: 12px;
         margin-bottom: 3px;
       }
       .progress-value { font-weight: 700; color: ${BRAND.primary}; }
@@ -290,10 +290,10 @@ export function getStyles(): string {
       
       /* ─── Alert Box ─── */
       .alert-box {
-        padding: 10px 14px;
+        padding: 12px 16px;
         border-radius: 8px;
         margin: 10px 0;
-        font-size: 10px;
+        font-size: 12px;
         border-right: 4px solid;
       }
       .alert-success { background: #E8F5E9; border-color: ${BRAND.success}; color: ${BRAND.success}; }
@@ -321,7 +321,7 @@ export function getStyles(): string {
       .footer-content {
         display: flex;
         justify-content: space-between;
-        font-size: 8px;
+        font-size: 10px;
         color: ${BRAND.textMuted};
       }
       
@@ -340,10 +340,10 @@ export function getStyles(): string {
       /* ─── Status Badges ─── */
       .status-badge {
         display: inline-block;
-        padding: 2px 8px;
+        padding: 3px 10px;
         border-radius: 10px;
-        font-size: 9px;
-        font-weight: 600;
+        font-size: 11px;
+        font-weight: 700;
       }
       .status-ready { background: #E8F5E9; color: ${BRAND.success}; }
       .status-partial { background: #FFF8E1; color: #F57F17; }

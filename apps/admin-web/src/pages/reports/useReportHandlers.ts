@@ -19,6 +19,15 @@ import {
   type ExportColumn
 } from '@/lib/excel-export'
 import {
+  exportDashboardStyledExcel,
+  exportGovernorateStyledExcel,
+  exportTimelineStyledExcel,
+  exportSubmissionsStyledExcel,
+  exportShortagesStyledExcel,
+  exportUsersStyledExcel,
+  exportRolesStyledExcel,
+} from '@/lib/styled-excel'
+import {
   generateReportHTML,
 } from '@/lib/enhanced-pdf'
 import { useReportPreview } from '@/components/reports/ReportPreview'
@@ -128,18 +137,16 @@ export function useReportHandlers() {
     }
   }, [toast])
 
-  // ═══ Excel Export Handlers ═══
+  // ═══ Excel Export Handlers — Styled ═══
   const handleExportDashboard = () => exportReport('dashboard', () => {
     if (!stats) return
-    exportDashboardReport(stats)
+    exportDashboardStyledExcel(stats)
   })
 
   const handleExportGovernorates = () => exportReport('governorates', () => {
     if (!govStats) return
-    exportGovernorateReport(govStats.map(g => ({
-      name_ar: g.name, submissions: g.submissions,
-      completion_rate: govStats.length > 0 ? Math.round((g.submissions / Math.max(...govStats.map(s => s.submissions), 1)) * 100) : 0,
-      active_users: 0, last_submission: null,
+    exportGovernorateStyledExcel(govStats.map(g => ({
+      name: g.name, submissions: g.submissions,
     })))
   })
 
@@ -148,7 +155,7 @@ export function useReportHandlers() {
     const result = await bulkFetchUsers()
     exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
     exportProgress.startGenerate()
-    exportUsersReport((result.data || []).map((u: any) => ({
+    exportUsersStyledExcel((result.data || []).map((u: any) => ({
       full_name: u.full_name, email: u.email, role: u.role,
       is_active: u.is_active, governorate: u.governorates?.name_ar, created_at: u.created_at,
     })))
@@ -163,12 +170,6 @@ export function useReportHandlers() {
     })
     exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
     exportProgress.startGenerate()
-    const columns: ExportColumn[] = [
-      { header: '#', key: 'index', width: 6 }, { header: 'النموذج', key: 'form', width: 22 },
-      { header: 'الحالة', key: 'status', width: 12 }, { header: 'المُرسل', key: 'submitted_by', width: 20 },
-      { header: 'المحافظة', key: 'governorate', width: 15 }, { header: 'المديرية', key: 'district', width: 15 },
-      { header: 'النشاط', key: 'campaign', width: 15 }, { header: 'التاريخ', key: 'date', width: 18 },
-    ]
     const rows = result.data.map((s: any, i: number) => ({
       index: i + 1, form: s.forms?.title_ar || '',
       status: s.status === 'submitted' ? 'مرسلة' : 'مسودة',
@@ -177,12 +178,7 @@ export function useReportHandlers() {
       campaign: s.forms?.campaign_type === 'polio_campaign' ? 'شلل أطفال' : 'إيصالي',
       date: new Date(s.created_at).toLocaleDateString('ar-SA'),
     }))
-    exportToExcel({
-      sheetName: 'إرساليات النماذج', title: 'تقرير الإرساليات الشامل — EPI Supervisor',
-      subtitle: `تصدير: ${new Date().toLocaleDateString('ar-SA')} — ${rows.length} سجل${result.truncated ? ' (مُقتطع)' : ''}`,
-      columns, data: rows,
-      fileName: `submissions_report_${new Date().toISOString().split('T')[0]}`,
-    })
+    exportSubmissionsStyledExcel(rows)
     exportProgress.done(`تم تصدير ${rows.length} إرسالية${result.truncated ? ' (مُقتطع)' : ''}`)
   })
 
@@ -192,13 +188,6 @@ export function useReportHandlers() {
     exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
     exportProgress.startGenerate()
     const sev: Record<string, string> = { critical: 'حرج', high: 'عالي', medium: 'متوسط', low: 'منخفض' }
-    const columns: ExportColumn[] = [
-      { header: '#', key: 'index', width: 6 }, { header: 'الصنف', key: 'item', width: 22 },
-      { header: 'الفئة', key: 'category', width: 15 }, { header: 'المطلوب', key: 'needed', width: 12 },
-      { header: 'المتاح', key: 'available', width: 10 }, { header: 'الخطورة', key: 'severity', width: 12 },
-      { header: 'محلول', key: 'resolved', width: 10 }, { header: 'المُبلّغ', key: 'by', width: 18 },
-      { header: 'المحافظة', key: 'gov', width: 15 }, { header: 'التاريخ', key: 'date', width: 16 },
-    ]
     const rows = result.data.map((s: any, i: number) => ({
       index: i + 1, item: s.item_name, category: s.item_category || '',
       needed: s.quantity_needed || '', available: s.quantity_available || 0,
@@ -206,46 +195,18 @@ export function useReportHandlers() {
       by: s.profiles?.full_name || '', gov: s.governorates?.name_ar || '',
       date: new Date(s.created_at).toLocaleDateString('ar-SA'),
     }))
-    exportToExcel({
-      sheetName: 'النواقص', title: 'تقرير النواقص — EPI Supervisor',
-      subtitle: `${rows.length} سجل`, columns, data: rows,
-      fileName: `shortages_report_${new Date().toISOString().split('T')[0]}`,
-    })
+    exportShortagesStyledExcel(rows)
     exportProgress.done(`تم تصدير ${rows.length} نقص`)
   })
 
   const handleExportTimeline = () => exportReport('timeline', () => {
     if (!chartData) return
-    const columns: ExportColumn[] = [
-      { header: 'التاريخ', key: 'date', width: 14 }, { header: 'مرسلة', key: 'submitted', width: 10 },
-      { header: 'مسودة', key: 'draft', width: 10 }, { header: 'الإجمالي', key: 'total', width: 10 },
-    ]
-    const rows = chartData.map((d: any) => ({
-      date: d.date, submitted: d.submitted || 0, draft: d.draft || 0,
-      total: (d.submitted || 0) + (d.draft || 0),
-    }))
-    exportToExcel({
-      sheetName: 'الإرساليات', title: 'تقرير الإرساليات — خط زمني (30 يوم)',
-      subtitle: `${rows.length} يوم`, columns, data: rows,
-      fileName: `submissions_timeline_${new Date().toISOString().split('T')[0]}`,
-    })
+    exportTimelineStyledExcel(chartData)
   })
 
   const handleExportRoles = () => exportReport('roles', () => {
     if (!roleDistribution) return
-    const columns: ExportColumn[] = [
-      { header: 'الدور', key: 'role', width: 20 }, { header: 'العدد', key: 'count', width: 10 },
-      { header: 'النسبة', key: 'pct', width: 10 },
-    ]
-    const total = roleDistribution.reduce((s, r) => s + r.value, 0)
-    const rows = roleDistribution.map(r => ({
-      role: r.name, count: r.value,
-      pct: total > 0 ? `${((r.value / total) * 100).toFixed(1)}%` : '0%',
-    }))
-    exportToExcel({
-      sheetName: 'المستخدمين', title: 'توزيع المستخدمين حسب الأدوار',
-      subtitle: `${total} مستخدم`, columns, data: rows,
-      fileName: `users_roles_${new Date().toISOString().split('T')[0]}`,
+    exportRolesStyledExcel(roleDistribution.map(r => ({ name: r.name, value: r.value })))
     })
   })
 

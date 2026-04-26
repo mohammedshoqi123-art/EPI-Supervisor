@@ -1,41 +1,64 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  Public Dashboard — لوحة تحكم عامة بدون تسجيل دخول
- *  Interactive, beautiful, no auth required
+ *  Public Dashboard — لوحة معلومات التحصين الصحي الموسع
+ *  Professional, interactive, mobile-first, no auth required
  * ═══════════════════════════════════════════════════════════════
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Activity, TrendingUp, CheckCircle2, Clock, MapPin,
   FileText, BarChart3, Calendar, RefreshCw, Globe, Users,
   ArrowUpRight, ChevronLeft, Layers, Target, Zap, Eye,
+  Shield, Heart, Syringe, Baby, ChevronDown, ExternalLink,
+  Sun, Moon, Star, Award, TrendingDown,
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 
-// ─── Colors ─────────────────────────────────────────────────
-const COLORS = {
-  primary: '#1565C0',
-  primaryDark: '#0D47A1',
-  primaryLight: '#42A5F5',
-  accent: '#E53935',
-  success: '#2E7D32',
-  warning: '#F57F17',
-  info: '#0277BD',
-  bg: '#F8FAFC',
-  card: '#FFFFFF',
-  text: '#1E293B',
-  textMuted: '#64748B',
-  border: '#E2E8F0',
+// ─── Theme ──────────────────────────────────────────────────
+const T = {
+  // Primary palette
+  blue: '#2563EB',
+  blueDark: '#1D4ED8',
+  blueDeep: '#1E3A8A',
+  blueLight: '#3B82F6',
+  bluePale: '#EFF6FF',
+  blue50: '#DBEAFE',
+
+  // Semantic
+  emerald: '#059669',
+  emeraldLight: '#D1FAE5',
+  emeraldPale: '#ECFDF5',
+  amber: '#D97706',
+  amberLight: '#FEF3C7',
+  amberPale: '#FFFBEB',
+  rose: '#E11D48',
+  roseLight: '#FFE4E6',
+  rosePale: '#FFF1F2',
+  violet: '#7C3AED',
+  violetLight: '#EDE9FE',
+  cyan: '#0891B2',
+  cyanLight: '#CFFAFE',
+
+  // Neutral
+  slate900: '#0F172A',
+  slate800: '#1E293B',
+  slate700: '#334155',
+  slate600: '#475569',
+  slate500: '#64748B',
+  slate400: '#94A3B8',
+  slate300: '#CBD5E1',
+  slate200: '#E2E8F0',
+  slate100: '#F1F5F9',
+  slate50: '#F8FAFC',
+  white: '#FFFFFF',
 }
 
-const CHART_COLORS = ['#1565C0', '#2E7D32', '#F57F17', '#E53935', '#7C3AED', '#0891B2', '#DB2777', '#059669']
-
-const GOV_SHORT_NAMES: Record<string, string> = {
+const GOV_SHORT: Record<string, string> = {
   'أمانة العاصمة': 'عـمان',
   'محافظة صنعاء': 'صنعاء',
   'محافظة عدن': 'عدن',
@@ -58,7 +81,6 @@ const GOV_SHORT_NAMES: Record<string, string> = {
   'محافظة سقطرى': 'سقطرى',
   'محافظة عمران': 'عمران',
   'محافظة الضالع': 'الضالع',
-  'محافظة سيئون': 'سيئون',
 }
 
 // ─── Types ──────────────────────────────────────────────────
@@ -98,77 +120,131 @@ interface DashboardData {
   }>
 }
 
-// ─── Fetch from Edge Function ───────────────────────────────
-async function fetchPublicDashboard(days = 30): Promise<DashboardData> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-
-  const res = await fetch(
-    `${supabaseUrl}/functions/v1/public-dashboard?days=${days}`,
-    {
-      headers: {
-        'apikey': supabaseAnonKey,
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-      },
-    },
-  )
-
+// ─── Fetch ──────────────────────────────────────────────────
+async function fetchDashboard(days = 30): Promise<DashboardData> {
+  const url = import.meta.env.VITE_SUPABASE_URL || ''
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+  const res = await fetch(`${url}/functions/v1/public-dashboard?days=${days}`, {
+    headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
+  })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
-// ─── Stat Card ──────────────────────────────────────────────
-function StatCard({
-  icon: Icon, label, value, sub, color, trend,
+// ═════════════════════════════════════════════════════════════
+//  COMPONENTS
+// ═════════════════════════════════════════════════════════════
+
+// ─── Animated Counter ───────────────────────────────────────
+function Counter({ value, duration = 1200 }: { value: number; duration?: number }) {
+  const [display, setDisplay] = useState(0)
+  const ref = useRef<number>(0)
+
+  useEffect(() => {
+    const start = ref.current
+    const diff = value - start
+    const startTime = performance.now()
+    const step = (now: number) => {
+      const elapsed = now - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      const ease = 1 - Math.pow(1 - progress, 3)
+      const current = Math.round(start + diff * ease)
+      setDisplay(current)
+      ref.current = current
+      if (progress < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }, [value, duration])
+
+  return <>{display.toLocaleString('ar-SA')}</>
+}
+
+// ─── KPI Card ───────────────────────────────────────────────
+function KPICard({
+  icon: Icon, label, value, sub, color, bg, delay = 0,
 }: {
   icon: any; label: string; value: string | number; sub?: string
-  color: string; trend?: { value: number; label: string }
+  color: string; bg: string; delay?: number
 }) {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setVisible(true), delay); return () => clearTimeout(t) }, [delay])
+
   return (
-    <div className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200/60 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
-      <div className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-[0.07] -mr-6 -mt-6"
-        style={{ background: color }} />
-      <div className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-sm"
-              style={{ background: `${color}15`, color }}>
-              <Icon className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{label}</p>
-              <p className="text-2xl font-black text-slate-800 mt-0.5 tabular-nums">{value}</p>
-            </div>
+    <div className={`relative overflow-hidden rounded-2xl transition-all duration-500 ${
+      visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+    }`}
+      style={{ background: T.white, border: `1px solid ${T.slate200}` }}>
+      {/* Accent bar */}
+      <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ background: color }} />
+
+      <div className="p-4 sm:p-5 pt-5 sm:pt-6">
+        <div className="flex items-start justify-between mb-3">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center"
+            style={{ background: bg }}>
+            <Icon className="w-5 h-5 sm:w-5.5 sm:h-5.5" style={{ color }} />
           </div>
-          {trend && (
-            <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${
-              trend.value >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
-            }`}>
-              <ArrowUpRight className={`w-3 h-3 ${trend.value < 0 ? 'rotate-90' : ''}`} />
-              {trend.value >= 0 ? '+' : ''}{trend.value}%
-            </div>
-          )}
         </div>
-        {sub && <p className="text-[11px] text-slate-400 mt-2">{sub}</p>}
+        <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-widest mb-1"
+          style={{ color: T.slate400 }}>
+          {label}
+        </p>
+        <p className="text-2xl sm:text-3xl font-black tabular-nums" style={{ color: T.slate900 }}>
+          {typeof value === 'number' ? <Counter value={value} /> : value}
+        </p>
+        {sub && (
+          <p className="text-[10px] sm:text-[11px] font-medium mt-1.5" style={{ color: T.slate400 }}>
+            {sub}
+          </p>
+        )}
       </div>
     </div>
   )
 }
 
+// ─── Section Header ─────────────────────────────────────────
+function SectionHeader({ icon, title, subtitle }: { icon: string; title: string; subtitle?: string }) {
+  return (
+    <div className="mb-4 sm:mb-5">
+      <div className="flex items-center gap-2.5">
+        <span className="text-lg sm:text-xl">{icon}</span>
+        <div>
+          <h2 className="text-sm sm:text-base font-bold" style={{ color: T.slate800 }}>{title}</h2>
+          {subtitle && (
+            <p className="text-[10px] sm:text-[11px] font-medium mt-0.5" style={{ color: T.slate400 }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Chart Card ─────────────────────────────────────────────
+function ChartCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl transition-all duration-300 ${className}`}
+      style={{ background: T.white, border: `1px solid ${T.slate200}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+      {children}
+    </div>
+  )
+}
+
 // ─── Custom Tooltip ─────────────────────────────────────────
-function ChartTooltip({ active, payload, label }: any) {
+function Tip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl shadow-xl p-3 min-w-[120px]">
-      <p className="text-[11px] font-semibold text-slate-500 mb-1.5">{label}</p>
-      {payload.map((entry: any, i: number) => (
-        <div key={i} className="flex items-center justify-between gap-4 text-xs">
+    <div className="rounded-xl p-3 shadow-xl backdrop-blur-md"
+      style={{ background: 'rgba(255,255,255,0.96)', border: `1px solid ${T.slate200}` }}>
+      <p className="text-[11px] font-bold mb-1.5" style={{ color: T.slate500 }}>{label}</p>
+      {payload.map((e: any, i: number) => (
+        <div key={i} className="flex items-center justify-between gap-5 text-xs">
           <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-            <span className="text-slate-500">{entry.name}</span>
+            <div className="w-2 h-2 rounded-full" style={{ background: e.color }} />
+            <span style={{ color: T.slate500 }}>{e.name}</span>
           </div>
-          <span className="font-bold tabular-nums" style={{ color: entry.color }}>
-            {entry.value?.toLocaleString('ar-SA')}
+          <span className="font-black tabular-nums" style={{ color: e.color }}>
+            {e.value?.toLocaleString('ar-SA')}
           </span>
         </div>
       ))}
@@ -176,61 +252,76 @@ function ChartTooltip({ active, payload, label }: any) {
   )
 }
 
-// ─── Period Selector ────────────────────────────────────────
+// ─── Progress Bar ───────────────────────────────────────────
+function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: T.slate100 }}>
+        <div className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="text-[11px] font-bold tabular-nums w-9 text-left" style={{ color }}>
+        {pct}%
+      </span>
+    </div>
+  )
+}
+
+// ─── Period Chips ───────────────────────────────────────────
 const PERIODS = [
-  { days: 7, label: '7 أيام' },
-  { days: 14, label: '14 يوم' },
-  { days: 30, label: '30 يوم' },
-  { days: 90, label: '3 أشهر' },
+  { days: 7, label: '٧ أيام', icon: '📅' },
+  { days: 14, label: '١٤ يوم', icon: '📆' },
+  { days: 30, label: '٣٠ يوم', icon: '🗓️' },
+  { days: 90, label: '٣ أشهر', icon: '📊' },
 ]
 
-// ═══ Main Component ═══
+// ═════════════════════════════════════════════════════════════
+//  MAIN PAGE
+// ═════════════════════════════════════════════════════════════
 export default function PublicDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [days, setDays] = useState(30)
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [refreshing, setRefreshing] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
     setError(null)
     try {
-      const result = await fetchPublicDashboard(days)
-      if (result.ok) {
-        setData(result)
-        setLastRefresh(new Date())
-      } else {
-        setError('فشل تحميل البيانات')
-      }
+      const result = await fetchDashboard(days)
+      if (result.ok) setData(result)
+      else setError('فشل تحميل البيانات')
     } catch (e: any) {
       setError(e.message || 'خطأ في الاتصال')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [days])
 
   useEffect(() => { load() }, [load])
-
-  // Auto-refresh every 2 min
   useEffect(() => {
-    const timer = setInterval(load, 120_000)
-    return () => clearInterval(timer)
+    const t = setInterval(() => load(true), 120_000)
+    return () => clearInterval(t)
   }, [load])
 
-  const govChartData = useMemo(() => {
+  // ─── Chart Data ───
+  const govData = useMemo(() => {
     if (!data) return []
     return data.by_governorate
       .filter(g => g.total > 0)
       .slice(0, 15)
       .map(g => ({
-        name: GOV_SHORT_NAMES[g.name_ar] || g.name_ar.replace('محافظة ', '').replace('أمانة ', ''),
+        name: GOV_SHORT[g.name_ar] || g.name_ar.replace('محافظة ', '').replace('أمانة ', ''),
         الإرساليات: g.total,
         المرسلة: g.submitted,
       }))
   }, [data])
 
-  const dailyChartData = useMemo(() => {
+  const dailyData = useMemo(() => {
     if (!data) return []
     return data.by_day.map(d => ({
       day: new Date(d.day).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' }),
@@ -240,47 +331,50 @@ export default function PublicDashboardPage() {
     }))
   }, [data])
 
-  const statusPie = useMemo(() => {
+  const pieData = useMemo(() => {
     if (!data) return []
     return [
-      { name: 'مرسلة', value: data.kpis.submitted, color: COLORS.success },
-      { name: 'مسودة', value: data.kpis.draft, color: COLORS.warning },
+      { name: 'مرسلة', value: data.kpis.submitted, color: T.emerald },
+      { name: 'مسودة', value: data.kpis.draft, color: T.amber },
     ]
   }, [data])
 
-  const formPie = useMemo(() => {
-    if (!data) return []
-    return data.by_form.slice(0, 6).map((f, i) => ({
-      name: f.title_ar.length > 20 ? f.title_ar.slice(0, 20) + '…' : f.title_ar,
-      value: f.total,
-      color: CHART_COLORS[i % CHART_COLORS.length],
-    }))
-  }, [data])
-
-  // ─── Loading State ───
+  // ─── Loading ───
   if (loading && !data) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6"
+        style={{ background: `linear-gradient(135deg, ${T.bluePale} 0%, ${T.white} 50%, ${T.emeraldPale} 100%)` }}>
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center animate-pulse"
+            style={{ background: `linear-gradient(135deg, ${T.blue}, ${T.blueDark})` }}>
+            <Syringe className="w-8 h-8 text-white" />
+          </div>
+          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full animate-ping"
+            style={{ background: T.emerald, opacity: 0.4 }} />
+        </div>
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
-          <p className="mt-4 text-slate-500 font-medium">جاري تحميل البيانات…</p>
+          <p className="text-base font-bold" style={{ color: T.slate700 }}>جاري تحميل البيانات</p>
+          <p className="text-xs mt-1" style={{ color: T.slate400 }}>لوحة معلومات التحصين الصحي الموسع</p>
         </div>
       </div>
     )
   }
 
-  // ─── Error State ───
+  // ─── Error ───
   if (error && !data) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-8">
-          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Zap className="w-8 h-8 text-red-400" />
+      <div className="min-h-screen flex items-center justify-center p-6"
+        style={{ background: `linear-gradient(135deg, ${T.bluePale} 0%, ${T.white} 50%, ${T.rosePale} 100%)` }}>
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+            style={{ background: T.roseLight }}>
+            <Zap className="w-8 h-8" style={{ color: T.rose }} />
           </div>
-          <h2 className="text-xl font-bold text-slate-700 mb-2">خطأ في التحميل</h2>
-          <p className="text-slate-500 mb-4">{error}</p>
-          <button onClick={load}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors">
+          <h2 className="text-lg font-bold mb-2" style={{ color: T.slate800 }}>خطأ في التحميل</h2>
+          <p className="text-sm mb-6" style={{ color: T.slate500 }}>{error}</p>
+          <button onClick={() => load()}
+            className="px-6 py-3 rounded-xl text-white text-sm font-bold transition-all hover:scale-105 active:scale-95"
+            style={{ background: `linear-gradient(135deg, ${T.blue}, ${T.blueDark})` }}>
             إعادة المحاولة
           </button>
         </div>
@@ -289,230 +383,252 @@ export default function PublicDashboardPage() {
   }
 
   if (!data) return null
-
   const { kpis } = data
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
-      {/* ═══ Header ═══ */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center shadow-lg">
-                <Globe className="w-5 h-5 text-white" />
+    <div className="min-h-screen" style={{ background: T.slate50 }}>
+
+      {/* ═══════════════════════════════════════
+          HEADER
+      ═══════════════════════════════════════ */}
+      <header className="sticky top-0 z-50 backdrop-blur-xl"
+        style={{ background: 'rgba(255,255,255,0.85)', borderBottom: `1px solid ${T.slate200}` }}>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            {/* Logo + Title */}
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: `linear-gradient(135deg, ${T.blue}, ${T.blueDark})` }}>
+                <Syringe className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-white" />
               </div>
-              <div>
-                <h1 className="text-lg font-black text-slate-800">
-                  لوحة معلومات التحصين الصحي الموسع
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base font-extrabold truncate" style={{ color: T.slate900 }}>
+                  التحصين الصحي الموسع
                 </h1>
-                <p className="text-[11px] text-slate-400 font-medium">
+                <p className="text-[9px] sm:text-[10px] font-medium hidden sm:block" style={{ color: T.slate400 }}>
                   EPI Supervisor — Yemen National Immunization Program
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* Period selector */}
-              <div className="hidden sm:flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-                {PERIODS.map(p => (
-                  <button key={p.days} onClick={() => setDays(p.days)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      days === p.days
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-slate-400 hover:text-slate-600'
-                    }`}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-
+            {/* Actions */}
+            <div className="flex items-center gap-2">
               {/* Refresh */}
-              <button onClick={load} disabled={loading}
-                className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50">
-                <RefreshCw className={`w-4 h-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+              <button onClick={() => load(true)} disabled={refreshing}
+                className="w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
+                style={{ background: T.slate100 }}>
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}
+                  style={{ color: T.slate500 }} />
               </button>
 
-              {/* Login link */}
+              {/* Login */}
               <Link to="/login"
-                className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm">
+                className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold transition-all hover:scale-105 active:scale-95"
+                style={{ background: `linear-gradient(135deg, ${T.blue}, ${T.blueDark})` }}>
                 <Eye className="w-3.5 h-3.5" />
-                تسجيل الدخول
+                دخول
               </Link>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 pb-8">
 
-        {/* ═══ KPIs ═══ */}
-        <section>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard icon={FileText} label="إجمالي الإرساليات"
-              value={kpis.total_submissions.toLocaleString('ar-SA')}
-              color={COLORS.primary}
-              sub={`${days} يوم الماضية`} />
-            <StatCard icon={Zap} label="إرساليات اليوم"
-              value={kpis.today.toLocaleString('ar-SA')}
-              color={COLORS.info}
-              sub={`${kpis.this_week.toLocaleString('ar-SA')} هذا الأسبوع`} />
-            <StatCard icon={CheckCircle2} label="نسبة الإنجاز"
-              value={`${kpis.completion_rate}%`}
-              color={COLORS.success}
-              sub={`${kpis.submitted.toLocaleString('ar-SA')} مرسلة`} />
-            <StatCard icon={MapPin} label="التغطية"
-              value={`${kpis.governorates} محافظة`}
-              color="#7C3AED"
-              sub={`${kpis.districts} مديرية`} />
+        {/* ═══════════════════════════════════════
+            PERIOD SELECTOR
+        ═══════════════════════════════════════ */}
+        <div className="flex items-center gap-2 py-4 sm:py-5 overflow-x-auto no-scrollbar">
+          {PERIODS.map(p => (
+            <button key={p.days} onClick={() => setDays(p.days)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                days === p.days ? 'text-white shadow-lg scale-105' : 'hover:scale-105'
+              }`}
+              style={{
+                background: days === p.days
+                  ? `linear-gradient(135deg, ${T.blue}, ${T.blueDark})`
+                  : T.white,
+                color: days === p.days ? T.white : T.slate500,
+                border: days === p.days ? 'none' : `1px solid ${T.slate200}`,
+              }}>
+              <span>{p.icon}</span>
+              {p.label}
+            </button>
+          ))}
+          <div className="flex-1" />
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-medium"
+            style={{ background: T.emeraldLight, color: T.emerald }}>
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: T.emerald }} />
+            مباشر
           </div>
-        </section>
+        </div>
 
-        {/* ═══ Charts Row ═══ */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* ═══════════════════════════════════════
+            KPI CARDS
+        ═══════════════════════════════════════ */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          <KPICard icon={FileText} label="إجمالي الإرساليات"
+            value={kpis.total_submissions} sub={`آخر ${days} يوم`}
+            color={T.blue} bg={T.bluePale} delay={0} />
+          <KPICard icon={Zap} label="إرساليات اليوم"
+            value={kpis.today} sub={`${kpis.this_week.toLocaleString('ar-SA')} هذا الأسبوع`}
+            color={T.cyan} bg={T.cyanLight} delay={80} />
+          <KPICard icon={CheckCircle2} label="نسبة الإنجاز"
+            value={`${kpis.completion_rate}%`} sub={`${kpis.submitted.toLocaleString('ar-SA')} مرسلة`}
+            color={T.emerald} bg={T.emeraldPale} delay={160} />
+          <KPICard icon={MapPin} label="التغطية الجغرافية"
+            value={`${kpis.governorates}`} sub={`${kpis.districts} مديرية`}
+            color={T.violet} bg={T.violetLight} delay={240} />
+        </div>
 
-          {/* Timeline Chart */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-700">📈 الإرساليات يومياً</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">آخر {days} يوم</p>
-              </div>
-            </div>
-            <div className="h-[280px]">
+        {/* ═══════════════════════════════════════
+            CHARTS ROW
+        ═══════════════════════════════════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
+
+          {/* ─── Area Chart ─── */}
+          <ChartCard className="lg:col-span-2 p-4 sm:p-6">
+            <SectionHeader icon="📈" title="الإرساليات يومياً" subtitle={`آخر ${days} يوم`} />
+            <div className="h-[220px] sm:h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dailyChartData}>
+                <AreaChart data={dailyData}>
                   <defs>
-                    <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={COLORS.primary} stopOpacity={0.2} />
-                      <stop offset="100%" stopColor={COLORS.primary} stopOpacity={0} />
+                    <linearGradient id="gT" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={T.blue} stopOpacity={0.15} />
+                      <stop offset="100%" stopColor={T.blue} stopOpacity={0} />
                     </linearGradient>
-                    <linearGradient id="gradSubmitted" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={COLORS.success} stopOpacity={0.2} />
-                      <stop offset="100%" stopColor={COLORS.success} stopOpacity={0} />
+                    <linearGradient id="gS" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={T.emerald} stopOpacity={0.15} />
+                      <stop offset="100%" stopColor={T.emerald} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#94A3B8' }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} tickLine={false} axisLine={false} width={35} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend verticalAlign="top" height={28}
-                    formatter={(value: string) => <span className="text-[11px] text-slate-500">{value}</span>} />
-                  <Area type="monotone" dataKey="الإرساليات" stroke={COLORS.primary} fill="url(#gradTotal)"
-                    strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: COLORS.primary }} />
-                  <Area type="monotone" dataKey="المرسلة" stroke={COLORS.success} fill="url(#gradSubmitted)"
-                    strokeWidth={2} dot={false} activeDot={{ r: 4, fill: COLORS.success }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.slate100} vertical={false} />
+                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: T.slate400 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: T.slate400 }} tickLine={false} axisLine={false} width={30} />
+                  <Tooltip content={<Tip />} />
+                  <Legend verticalAlign="top" height={32}
+                    formatter={(v: string) => <span className="text-[11px] font-medium" style={{ color: T.slate500 }}>{v}</span>} />
+                  <Area type="monotone" dataKey="الإرساليات" stroke={T.blue} fill="url(#gT)"
+                    strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: T.blue, stroke: T.white, strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="المرسلة" stroke={T.emerald} fill="url(#gS)"
+                    strokeWidth={2} dot={false} activeDot={{ r: 4, fill: T.emerald, stroke: T.white, strokeWidth: 2 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </ChartCard>
 
-          {/* Status Pie */}
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-            <h3 className="text-sm font-bold text-slate-700 mb-1">🎯 توزيع الحالات</h3>
-            <p className="text-[11px] text-slate-400 mb-4">مرسلة vs مسودة</p>
-            <div className="h-[200px]">
+          {/* ─── Donut Chart ─── */}
+          <ChartCard className="p-4 sm:p-6">
+            <SectionHeader icon="🎯" title="توزيع الحالات" subtitle="مرسلة vs مسودة" />
+            <div className="h-[180px] sm:h-[200px] relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={statusPie} cx="50%" cy="50%" innerRadius={55} outerRadius={80}
-                    paddingAngle={4} dataKey="value" stroke="none">
-                    {statusPie.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
+                  <Pie data={pieData} cx="50%" cy="50%"
+                    innerRadius="58%" outerRadius="82%"
+                    paddingAngle={3} dataKey="value" stroke="none">
+                    {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
                   </Pie>
-                  <Tooltip content={<ChartTooltip />} />
+                  <Tooltip content={<Tip />} />
                 </PieChart>
               </ResponsiveContainer>
+              {/* Center text */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center">
+                  <p className="text-2xl font-black tabular-nums" style={{ color: T.slate800 }}>
+                    {kpis.total_submissions.toLocaleString('ar-SA')}
+                  </p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: T.slate400 }}>
+                    إجمالي
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-center gap-4 mt-2">
-              {statusPie.map((entry, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-xs">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: entry.color }} />
-                  <span className="text-slate-500 font-medium">{entry.name}</span>
-                  <span className="font-bold text-slate-700">{entry.value.toLocaleString('ar-SA')}</span>
+            {/* Legend */}
+            <div className="flex justify-center gap-5 mt-3">
+              {pieData.map((e, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ background: e.color }} />
+                  <span className="text-xs font-medium" style={{ color: T.slate600 }}>{e.name}</span>
+                  <span className="text-xs font-black tabular-nums" style={{ color: T.slate800 }}>
+                    {e.value.toLocaleString('ar-SA')}
+                  </span>
                 </div>
               ))}
             </div>
-          </div>
-        </section>
+          </ChartCard>
+        </div>
 
-        {/* ═══ Governorate Bar Chart ═══ */}
-        <section className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-700">🏛️ الإرساليات حسب المحافظة</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">أعلى المحافظات نشاطاً</p>
-            </div>
-          </div>
-          <div className="h-[320px]">
+        {/* ═══════════════════════════════════════
+            GOVERNORATE CHART
+        ═══════════════════════════════════════ */}
+        <ChartCard className="p-4 sm:p-6 mb-6 sm:mb-8">
+          <SectionHeader icon="🏛️" title="الإرساليات حسب المحافظة" subtitle="أعلى المحافظات نشاطاً" />
+          <div className="h-[280px] sm:h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={govChartData} layout="vertical" margin={{ left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 10, fill: '#94A3B8' }} tickLine={false} axisLine={false} />
-                <YAxis dataKey="name" type="category" width={75} tick={{ fontSize: 11, fill: '#475569', fontWeight: 600 }}
+              <BarChart data={govData} layout="vertical" margin={{ left: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={T.slate100} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: T.slate400 }} tickLine={false} axisLine={false} />
+                <YAxis dataKey="name" type="category" width={65}
+                  tick={{ fontSize: 11, fill: T.slate600, fontWeight: 600 }}
                   tickLine={false} axisLine={false} />
-                <Tooltip content={<ChartTooltip />} />
-                <Legend verticalAlign="top" height={28}
-                  formatter={(value: string) => <span className="text-[11px] text-slate-500">{value}</span>} />
-                <Bar dataKey="الإرساليات" fill={COLORS.primary} radius={[0, 6, 6, 0]} barSize={18} />
-                <Bar dataKey="المرسلة" fill={COLORS.success} radius={[0, 6, 6, 0]} barSize={18} />
+                <Tooltip content={<Tip />} />
+                <Legend verticalAlign="top" height={32}
+                  formatter={(v: string) => <span className="text-[11px] font-medium" style={{ color: T.slate500 }}>{v}</span>} />
+                <Bar dataKey="الإرساليات" fill={T.blue} radius={[0, 6, 6, 0]} barSize={16} />
+                <Bar dataKey="المرسلة" fill={T.emerald} radius={[0, 6, 6, 0]} barSize={16} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </section>
+        </ChartCard>
 
-        {/* ═══ Forms Table ═══ */}
-        <section className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-slate-700 mb-1">📋 الاستمارات</h3>
-          <p className="text-[11px] text-slate-400 mb-4">عدد الإرساليات لكل استمارة</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        {/* ═══════════════════════════════════════
+            FORMS TABLE
+        ═══════════════════════════════════════ */}
+        <ChartCard className="p-4 sm:p-6 mb-6 sm:mb-8">
+          <SectionHeader icon="📋" title="الاستمارات" subtitle="عدد الإرساليات لكل استمارة" />
+          <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+            <table className="w-full text-sm min-w-[500px]">
               <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-right py-3 px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">#</th>
-                  <th className="text-right py-3 px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">الاستمارة</th>
-                  <th className="text-right py-3 px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">النوع</th>
-                  <th className="text-center py-3 px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">الإرساليات</th>
-                  <th className="text-center py-3 px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">المرسلة</th>
-                  <th className="text-center py-3 px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">النسبة</th>
+                <tr>
+                  {['#', 'الاستمارة', 'النوع', 'الإرساليات', 'المرسلة', 'النسبة'].map(h => (
+                    <th key={h} className={`py-3 px-2 sm:px-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider ${
+                      h === '#' || h === 'الإرساليات' || h === 'المرسلة' || h === 'النسبة' ? 'text-center' : 'text-right'
+                    }`} style={{ color: T.slate400, borderBottom: `1px solid ${T.slate100}` }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {data.by_form.map((form, i) => {
-                  const rate = form.total > 0 ? Math.round((form.submitted / form.total) * 100) : 0
+                {data.by_form.map((f, i) => {
+                  const rate = f.total > 0 ? Math.round((f.submitted / f.total) * 100) : 0
+                  const rateColor = rate >= 80 ? T.emerald : rate >= 50 ? T.amber : T.rose
                   return (
-                    <tr key={form.form_id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                      <td className="py-3 px-3 text-slate-400 font-medium">{i + 1}</td>
-                      <td className="py-3 px-3 font-semibold text-slate-700">{form.title_ar}</td>
-                      <td className="py-3 px-3">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          form.campaign_type === 'polio_campaign'
-                            ? 'bg-blue-50 text-blue-600'
-                            : 'bg-emerald-50 text-emerald-600'
-                        }`}>
-                          {form.campaign_type === 'polio_campaign' ? 'شلل أطفال' : 'إيصالي تكاملي'}
+                    <tr key={f.form_id} className="transition-colors hover:bg-slate-50/80"
+                      style={{ borderBottom: `1px solid ${T.slate50}` }}>
+                      <td className="py-3 px-2 sm:px-3 text-center text-xs font-medium" style={{ color: T.slate400 }}>
+                        {i + 1}
+                      </td>
+                      <td className="py-3 px-2 sm:px-3 font-semibold text-xs sm:text-sm" style={{ color: T.slate700 }}>
+                        {f.title_ar}
+                      </td>
+                      <td className="py-3 px-2 sm:px-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold ${
+                          f.campaign_type === 'polio_campaign' ? 'text-blue-600' : 'text-emerald-600'
+                        }`} style={{
+                          background: f.campaign_type === 'polio_campaign' ? T.bluePale : T.emeraldPale,
+                        }}>
+                          {f.campaign_type === 'polio_campaign' ? '💉 شلل أطفال' : '🔄 إيصالي'}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-center font-bold text-slate-700 tabular-nums">
-                        {form.total.toLocaleString('ar-SA')}
+                      <td className="py-3 px-2 sm:px-3 text-center font-bold tabular-nums text-xs sm:text-sm" style={{ color: T.slate700 }}>
+                        {f.total.toLocaleString('ar-SA')}
                       </td>
-                      <td className="py-3 px-3 text-center font-bold text-emerald-600 tabular-nums">
-                        {form.submitted.toLocaleString('ar-SA')}
+                      <td className="py-3 px-2 sm:px-3 text-center font-bold tabular-nums text-xs sm:text-sm" style={{ color: T.emerald }}>
+                        {f.submitted.toLocaleString('ar-SA')}
                       </td>
-                      <td className="py-3 px-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${rate}%`,
-                                background: rate >= 70 ? COLORS.success : rate >= 40 ? COLORS.warning : COLORS.accent,
-                              }} />
-                          </div>
-                          <span className="text-[11px] font-bold tabular-nums"
-                            style={{ color: rate >= 70 ? COLORS.success : rate >= 40 ? COLORS.warning : COLORS.accent }}>
-                            {rate}%
-                          </span>
-                        </div>
+                      <td className="py-3 px-2 sm:px-3">
+                        <ProgressBar value={f.submitted} max={f.total} color={rateColor} />
                       </td>
                     </tr>
                   )
@@ -520,18 +636,108 @@ export default function PublicDashboardPage() {
               </tbody>
             </table>
           </div>
-        </section>
+        </ChartCard>
 
-        {/* ═══ Footer ═══ */}
-        <footer className="text-center py-6 text-[11px] text-slate-400 space-y-1">
-          <p>لوحة معلومات التحصين الصحي الموسع — اليمن</p>
-          <p>
-            آخر تحديث: {new Date(data.generated_at).toLocaleString('ar-SA')}
-            {' • '}
-            يتم التحديث تلقائياً كل دقيقتين
-          </p>
+        {/* ═══════════════════════════════════════
+            GOVERNORATE CARDS (Mobile-friendly)
+        ═══════════════════════════════════════ */}
+        <SectionHeader icon="🗺️" title="أداء المحافظات" subtitle="إجمالي الإرساليات حسب المحافظة" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-6 sm:mb-8">
+          {data.by_governorate
+            .filter(g => g.total > 0)
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 12)
+            .map((g, i) => {
+              const rate = g.total > 0 ? Math.round((g.submitted / g.total) * 100) : 0
+              const name = GOV_SHORT[g.name_ar] || g.name_ar.replace('محافظة ', '').replace('أمانة ', '')
+              const colors = [
+                { bg: T.bluePale, text: T.blue, accent: T.blue },
+                { bg: T.emeraldPale, text: T.emerald, accent: T.emerald },
+                { bg: T.amberPale, text: T.amber, accent: T.amber },
+                { bg: T.violetLight, text: T.violet, accent: T.violet },
+              ]
+              const c = colors[i % colors.length]
+              return (
+                <div key={g.governorate_id}
+                  className="rounded-xl p-3.5 sm:p-4 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ background: T.white, border: `1px solid ${T.slate200}` }}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black"
+                      style={{ background: c.bg, color: c.text }}>
+                      {i + 1}
+                    </div>
+                    <span className="text-xs sm:text-sm font-bold truncate" style={{ color: T.slate800 }}>
+                      {name}
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between mb-2">
+                    <div>
+                      <p className="text-xl sm:text-2xl font-black tabular-nums" style={{ color: T.slate900 }}>
+                        {g.total.toLocaleString('ar-SA')}
+                      </p>
+                      <p className="text-[9px] font-medium" style={{ color: T.slate400 }}>إرسالية</p>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs font-bold tabular-nums" style={{ color: T.emerald }}>
+                        {g.submitted.toLocaleString('ar-SA')}
+                      </p>
+                      <p className="text-[9px] font-medium" style={{ color: T.slate400 }}>مرسلة</p>
+                    </div>
+                  </div>
+                  <ProgressBar value={g.submitted} max={g.total} color={c.accent} />
+                </div>
+              )
+            })}
+        </div>
+
+        {/* ═══════════════════════════════════════
+            FOOTER
+        ═══════════════════════════════════════ */}
+        <footer className="text-center py-8 space-y-3">
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, ${T.blue}, ${T.blueDark})` }}>
+              <Syringe className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-bold" style={{ color: T.slate600 }}>
+              برنامج التحصين الصحي الموسع — اليمن
+            </span>
+          </div>
+          <div className="flex items-center justify-center gap-3 text-[10px]"
+            style={{ color: T.slate400 }}>
+            <span>آخر تحديث: {new Date(data.generated_at).toLocaleString('ar-SA')}</span>
+            <span>•</span>
+            <span>يتم التحديث كل دقيقتين</span>
+          </div>
+          <div className="flex items-center justify-center gap-1.5 text-[10px]"
+            style={{ color: T.slate300 }}>
+            <Heart className="w-3 h-3" />
+            <span>صُمم لخدمة صحة الأطفال اليمنيين</span>
+          </div>
         </footer>
       </main>
+
+      {/* ═══ Mobile Login FAB ═══ */}
+      <Link to="/login"
+        className="sm:hidden fixed bottom-4 left-4 right-4 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white text-sm font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-95 z-50"
+        style={{ background: `linear-gradient(135deg, ${T.blue}, ${T.blueDark})`, boxShadow: `0 8px 30px ${T.blue}40` }}>
+        <Eye className="w-4 h-4" />
+        تسجيل الدخول للوحة التحكم
+      </Link>
+
+      {/* ═══ Scrollbar & No-scrollbar styles ═══ */}
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        * { scrollbar-width: thin; scrollbar-color: ${T.slate300} transparent; }
+        *::-webkit-scrollbar { width: 6px; height: 6px; }
+        *::-webkit-scrollbar-track { background: transparent; }
+        *::-webkit-scrollbar-thumb { background: ${T.slate300}; border-radius: 3px; }
+        *::-webkit-scrollbar-thumb:hover { background: ${T.slate400}; }
+        @media (max-width: 640px) {
+          body { padding-bottom: 70px; }
+        }
+      `}</style>
     </div>
   )
 }

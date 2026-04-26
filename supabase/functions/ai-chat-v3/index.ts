@@ -3,25 +3,24 @@
 //
 // v6.1 (2026-04-27):
 // 🔒 CONFIRMATION LAYER — كل العمليات الكتابية تحتاج تأكيد صريح
-// 🔒 Write tools: update, notification, sql, export, scheduled_report, workflow
-// 🔒 Batch operations need explicit confirmation with affected count
-// ✅ exec_sql() PostgreSQL function created (migration 032)
-// ✅ Tool descriptions updated with confirmation warnings
+// 📝 WRITE AUDIT LOG — تسجيل كل عمليات الكتابة مع accountability
+// 🧠 SMART SYSTEM PROMPT — تحميل ديناميكي حسب Intent (يوفر ~40% tokens)
+// 🔀 COMPOUND INTENT — يفهم أسئلة مركبة (عدة intents بسؤال واحد)
+// 🔒 exec_sql() — SELECT-only مع timeout + row limit + keyword block
+// ✅ Workflow منفصل — functions و migrations independently
 //
 // v6 (2026-04-23):
-// ⚡ RAG/Embeddings/Knowledge Base REMOVED — moved to مستشار التحصين
+// ⚡ RAG/Embeddings REMOVED — moved to مستشار التحصين
 // ⚡ System data only: forms, submissions, analytics, users
-// ⚡ Lightweight system prompt — no vaccination schedule
-// ⚡ Faster response times — no embedding generation
 //
 // v5 legacy:
-// 🔒 F1. SQL Injection eliminated — all queries use Supabase Query Builder
-// ⚡ F5. Conversation summary throttled — every 8 messages, not every call
-// ⚡ F6. Model config cache 5min → 2min
-// 🔒 F7. Prompt injection guard — sanitize user input
-// 🚀 D1. Multi-step function calling — up to 5 tool rounds
-// 🚀 D5. Response caching — 15min TTL for repeated queries
-// 🚀 D7. ReAct Agent pattern — reasoning + acting loop
+// 🔒 F1. SQL Injection eliminated — Supabase Query Builder
+// ⚡ F5. Conversation summary every 8 messages
+// ⚡ F6. Model config cache 2min
+// 🔒 F7. Prompt injection guard
+// 🚀 D1. Multi-step function calling (5 rounds)
+// 🚀 D5. Response caching (15min TTL)
+// 🚀 D7. ReAct Agent pattern
 // ═══════════════════════════════════════════════════════════
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
@@ -181,6 +180,7 @@ function buildDynamicSystemPrompt(
   liveData: string,
   dbResult: string,
   conversationSummary: string,
+  intent?: string,
 ): string {
   const roleConfig = ROLE_CONFIGS[profile.role] || ROLE_CONFIGS.data_entry
   const now = new Date()
@@ -188,87 +188,92 @@ function buildDynamicSystemPrompt(
   const timeOfDay = hour < 12 ? 'صباحاً' : hour < 17 ? 'بعد الظهر' : 'مساءً'
   const dayName = now.toLocaleDateString('ar-SA', { weekday: 'long' })
 
-  let sys = `أنت "EPI Copilot" — مساعد ذكي متقدم لإدارة منصة مشرف التحصين الصحي الموسع (EPI).
-أنت copilot حقيقي مثل GitHub Copilot أو ChatGPT — تفهم السياق، تحلل البيانات، وتتصرف بذكاء.
+  // ═══ BASE PROMPT — دائماً (~200 token) ═══
+  let sys = `أنت "EPI Copilot" — مساعد ذكي لإدارة منصة مشرف التحصين (EPI).
+أنت copilot يفهم السياق، يحلل البيانات، وي_EXECUTE بذكاء.
 
 == هويتك ==
-• أنت ${roleConfig.title} ومحلل بيانات ميدانية خبير
-• تقدم رؤى عملية مبنية على أرقام حقيقية من النظام
+• ${roleConfig.title} ومحلل بيانات ميدانية
 • مستوى التحليل: ${roleConfig.depth}
-• مجال التركيز: ${roleConfig.focus}
 • الصلاحيات: ${roleConfig.permissions}
-• أنت لست مجرد شات بوت — أنت copilot يفهم السياق العملي ويستطيع تنفيذ العمليات
-• لديك صلاحية القراءة والكتابة — يمكنك تحديث الإرساليات، إرسال الإشعارات، تصدير البيانات، إنشاء تقارير مجدولة
 
-== معلومات المستخدم ==
-• الاسم: ${profile.full_name}
-• الدور: ${profile.role}
-• المحافظة: ${profile.governorate_name || 'غير محدد'}
-
-== الوقت الحالي ==
-• ${dayName} ${timeOfDay}
-• التاريخ: ${now.toISOString().split('T')[0]}
+== المستخدم ==
+• ${profile.full_name} | ${profile.role} | ${profile.governorate_name || 'كل المحافظات'}
+• ${dayName} ${timeOfDay} | ${now.toISOString().split('T')[0]}
 
 == النظام ==
 • 22 محافظة يمنية، ~330 مديرية
-• حملات نشطة: شلل الأطفال (polio_campaign) + نشاط إيصالي تكاملي (integrated_activity)
+• حملات: شلل الأطفال (polio_campaign) + إيصالي تكاملي (integrated_activity)
 • 5 أدوار: admin, central, governorate, district, data_entry
-• النماذج تُجمع حسب الحملة — كل حملة لها استماراتها وحقولها
-
-== المعرفة الصحية (EPI) ==
-لقاحات برنامج التحصين اليمني:
-• BCG (السل) — عند الولادة
-• OPV (شلل الأطفال) — جرعات: OPV0 عند الولادة، OPV1/OPV2/OPV3 في 6/10/14 أسبوع
-• Penta (الخماسي: DPT+HepB+Hib) — Penta1/2/3 في 6/10/14 أسبوع
-• PCV (الرئة) — PCV1/2/3 في 6/10/14 أسبوع
-• MR (الحصبة) — MR1 في 9 أشهر، MR2 في 18 شهر
-• Vitamin A — جرعات في 6 شهر و 12 شهر
-
-المؤشرات الرئيسية:
-• Dropout = (Penta1 - Penta3) / Penta1 × 100 — المقبول أقل من 10%
-• Coverage = Penta3 / Target × 100 — المستهدف 95%+
-• MR1 vs MR2 — فجوة بين الجرعتين
-• مقارنة: OPV3 vs Penta3 (يجب أن يكونوا متساويين)
-
-== أسلوب العمل (ReAct Agent) ==
-عندما تحتاج لجمع بيانات من مصادر متعددة:
-1. فكّر (Thought): أي معلومات تحتاجها؟ أي أدوات أستخدم؟
-2. اعمل (Action): استخدم الأداة المناسبة
-3. لاحظ (Observation): حلل النتائج
-4. كرّر حتى تجمع كل المعلومات المطلوبة
-5. أجِب (Final Answer): رد شامل مدعوم بأرقام حقيقية
 
 == أسلوب الإجابة ==
-• ابدأ بالخلاصة العملية مباشرة — لا مقدمات.
-• استخدم أرقام حقيقية من الأدوات — لا تختلق أرقاماً أبداً.
-• لو السؤال يحتاج عدة أدوات، استخدمها كلها قبل الإجابة.
-• صِغ التحليل كأنك تكتب تقرير لمدير: واضح، مدعوم بأرقام، مع توصيات.
-• استخدم: 📊 إحصائيات | ⚠️ تحذيرات | ✅ إيجابي | 💡 توصيات | 🚨 عاجل | 📈 صاعد | 📉 هابط
-• إذا لا توجد بيانات، قل ذلك واضحاً واقترح من أين تحصل عليها.
-• تكيف مع الدور:
-  - ${profile.role === 'admin' ? 'محلل استراتيجي — أعطِ تحليلاً عميقاً مع توصيات استراتيجية وتوقعات' : ''}
-  - ${profile.role === 'central' ? 'مستشار ميداني — ركز على المقارنات بين المحافظات والفجوات' : ''}
-  - ${profile.role === 'governorate' ? 'مسؤول محافظتك — ركز على أداء مديرياتك ومقارنتك بالمحافظات الأخرى' : ''}
-  - ${profile.role === 'district' ? 'مسؤول مديريتك — ركز على إدخالاتك وأداء فريقك' : ''}
-  - ${profile.role === 'data_entry' ? 'مساعد عملي — أعطِ إرشادات مختصرة وحل المشاكل بسرعة' : ''}
-• لديك صلاحية لكل البيانات — لا تتردد في استخدام كل الأدوات.
+• ابدأ بالخلاصة مباشرة — لا مقدمات
+• استخدم أرقام حقيقية من الأدوات — لا تختلق أرقاماً أبداً
+• صِغ التحليل كتقرير لمدير: واضح + أرقام + توصيات
+• رموز: 📊 إحصائيات | ⚠️ تحذيرات | ✅ إيجابي | 💡 توصيات | 🚨 عاجل
 
-== قواعد العمليات الكتابية (مهم جداً) ==
-• أدوات الكتابة: update_submission_status, create_notification, execute_sql, bulk_export, create_scheduled_report, workflow_chain
-• عند استدعاء أي أداة كتابية: الأداة سترد بـ needs_confirmation=true أولاً
-• أنت تعرض للمستخدم ملخص العملية وتطلب تأكيداً صريحاً (نعم/تأكيد/موافق)
-• بعد تأكيد المستخدم: أعد استدعاء نفس الأداة مع "_confirmed": true
-• ⚠️ لا تنفذ أي عملية كتابية بدون تأكيد صريح من المستخدم
-• ⚠️ العمليات الجماعية (batch) تحتاج تأكيد مزدوج — وضّح العدد المتأثر`
+== أسلوب العمل (ReAct) ==
+1. فكّر → 2. اعمل (أداة) → 3. لاحظ → 4. كرّر → 5. أجِب
 
+== قواعد الكتابية (مهم) ==
+• أدوات الكتابة تحتاج تأكيد: needs_confirmation → تأكيد المستخدم → _confirmed:true
+• ⚠️ لا تنفذ بدون تأكيد صريح. العمليات الجماعية: وضّح العدد المتأثر.`
+
+  // ═══ ROLE-SPECIFIC — حسب الدور (~50 token) ═══
+  const roleGuidance: Record<string, string> = {
+    admin: 'أنت محلل استراتيجي — أعطِ تحليلاً عميقاً مع توصيات وتوقعات.',
+    central: 'مستشار ميداني — ركز على المقارنات بين المحافظات والفجوات.',
+    governorate: `مسؤول محافظتك (${profile.governorate_name || '?'}) — ركز على مديرياتك ومقارنتك بالآخرين.`,
+    district: 'مسؤول مديريتك — ركز على إدخالاتك وأداء فريقك.',
+    data_entry: 'مساعد عملي — أعطِ إرشادات مختصرة وحل المشاكل بسرعة.',
+  }
+  if (roleGuidance[profile.role]) {
+    sys += `\n• ${roleGuidance[profile.role]}`
+  }
+
+  // ═══ INTENT-SPECIFIC — حسب السؤال (~100-200 token بس لما يحتاج) ═══
+  const healthIntents = ['query_health', 'analyze_trend', 'forecast']
+  const govIntents = ['query_governorates', 'compare_data', 'proactive']
+  const reportIntents = ['generate_report', 'export_data']
+
+  if (intent && healthIntents.includes(intent)) {
+    sys += `
+
+== معرفة EPI ==
+• BCG (السل) — عند الولادة | OPV0/1/2/3 — ولادة/6/10/14 أسبوع
+• Penta1/2/3 + PCV1/2/3 — 6/10/14 أسبوع | MR1=9 شهر، MR2=18 شهر
+• Dropout = (Penta1-Penta3)/Penta1×100 — المقبول <10%
+• Coverage = Penta3/Target×100 — المستهدف 95%+
+• OPV3 ≈ Penta3 (يجب متساويين) | MR1 vs MR2 = فجوة`
+  }
+
+  if (intent && govIntents.includes(intent)) {
+    sys += `
+
+== تحليل المحافظات ==
+• 15 محافظة نشطة فقط (أبين، البيضاء، الجوف، الحديدة، الضالع، المكلا، المهرة، حضرموت، إب، لحج، مأرب، ريمة، صنعاء، تعز، عمران)
+• قارن أداء المحافظات حسب: عدد الإرساليات، نسبة القبول، التغطية
+• المحافظات الضعيفة: <10 إرساليات/أسبوع تحتاج تدخل عاجل`
+  }
+
+  if (intent && reportIntents.includes(intent)) {
+    sys += `
+
+== التقارير ==
+• أنواع: يومي/أسبوعي/شهري/حسب المحافظة/حسب الحملة
+• اعرض: ملخص أرقام + اتجاه + أفضل/أسوأ + توصيات
+• استخدم الأدوات: get_submissions, get_governorate_performance, export_report`
+  }
+
+  // ═══ DYNAMIC DATA — بيانات حية ═══
   if (conversationSummary) {
-    sys += `\n\n== ذاكرة المحادثة السابقة ==\n${conversationSummary}`
+    sys += `\n\n== ذاكرة المحادثة ==\n${conversationSummary}`
   }
   if (liveData) {
-    sys += `\n\n== بيانات النظام الحية ==\n${liveData}`
+    sys += `\n\n== بيانات حية ==\n${liveData}`
   }
   if (dbResult) {
-    sys += `\n\n== نتائج من قاعدة البيانات ==\n${dbResult}`
+    sys += `\n\n== نتائج DB ==\n${dbResult}`
   }
 
   return sys
@@ -311,6 +316,18 @@ function classifyIntentLocal(text: string): { intent: string; confidence: number
   }
 
   return { intent: bestIntent, confidence: bestScore }
+}
+
+// Compound intent: detect multiple intents in one message
+// e.g. "كم إرسالية وشلون أصلح المرفوض" → ['query_submissions', 'ask_guide']
+function classifyCompoundIntents(text: string): string[] {
+  const intents: string[] = []
+  for (const [intent, pattern] of INTENT_RULES) {
+    if (pattern.test(text)) {
+      intents.push(intent)
+    }
+  }
+  return intents.length > 0 ? intents : ['general_question']
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -712,6 +729,40 @@ const TOOLS = [
     },
   },
 ]
+
+// ═══════════════════════════════════════════════════════════
+// WRITE AUDIT LOG — تسجيل كل العمليات الكتابية
+// ═══════════════════════════════════════════════════════════
+
+async function logWriteOperation(
+  supa: any,
+  userId: string,
+  toolName: string,
+  args: Record<string, any>,
+  result: any,
+  confirmed: boolean,
+): Promise<void> {
+  try {
+    // Strip _confirmed from logged args for cleanliness
+    const cleanArgs = { ...args }
+    delete cleanArgs._confirmed
+
+    const affectedCount = result?.updated_count || result?.sent_to || result?.affected_count || (result?.success ? 1 : 0)
+
+    await supa.from('ai_write_audit').insert({
+      user_id: userId,
+      tool_name: toolName,
+      action_description: describeWriteAction(toolName, args),
+      args: cleanArgs,
+      result: result ? { success: result.success, message: result.message, error: result.error } : null,
+      affected_count: affectedCount,
+      confirmed_by_user: confirmed,
+    })
+  } catch (e) {
+    console.error('[AUDIT] Failed to log write operation:', e)
+    // Non-critical — don't block the operation
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 // WRITE TOOLS — أدوات تحتاج تأكيد قبل التنفيذ
@@ -1818,13 +1869,20 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
   }
 }
 
-async function executeToolCalls(supa: any, toolCalls: any[]): Promise<any[]> {
+async function executeToolCalls(supa: any, toolCalls: any[], userId?: string): Promise<any[]> {
   const results = []
   for (const tc of toolCalls) {
     const fnName = tc.function?.name
     const fnArgs = JSON.parse(tc.function?.arguments || '{}')
     console.log(`[Tool Call] ${fnName}(${JSON.stringify(fnArgs)})`)
     const result = await executeFunction(supa, fnName, fnArgs)
+
+    // ═══ Audit log for write operations ═══
+    if (WRITE_TOOLS.has(fnName) && userId) {
+      const isConfirmed = fnArgs._confirmed === true
+      logWriteOperation(supa, userId, fnName, fnArgs, result, isConfirmed).catch(() => {})
+    }
+
     results.push({
       tool_call_id: tc.id,
       role: 'tool',
@@ -2102,7 +2160,7 @@ async function multiStepToolCalling(
   msgs: any[],
   groqKey: string,
   supa: any,
-  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number }
+  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string }
 ): Promise<{ content: string; toolCallsUsed: string[]; totalTokens: number } | null> {
   const maxSteps = opts.maxSteps ?? 3
   const toolCallsUsed: string[] = []
@@ -2119,7 +2177,7 @@ async function multiStepToolCalling(
     if (!result) return null
 
     if (result.type === 'tool_calls') {
-      const toolResults = await executeToolCalls(supa, result.tool_calls)
+      const toolResults = await executeToolCalls(supa, result.tool_calls, opts.userId)
       msgs.push({ role: 'assistant', content: null, tool_calls: result.tool_calls })
       msgs.push(...toolResults)
       toolCallsUsed.push(...result.tool_calls.map((tc: any) => tc.function?.name))
@@ -2389,8 +2447,11 @@ serve(async (req) => {
       }
     }
 
-    // ═══ STEP 1: Intent Classification
+    // ═══ STEP 1: Intent Classification (supports compound intents)
     const { intent, confidence } = message ? classifyIntentLocal(message) : { intent: 'general_question', confidence: 0 }
+    const compoundIntents = message ? classifyCompoundIntents(message) : ['general_question']
+    // Use the first compound intent for system prompt knowledge loading
+    const primaryKnowledgeIntent = compoundIntents[0] || intent
 
     // ═══ STEP 1.5: Response Cache Check (D5)
     if (message && intent !== 'general_question') {
@@ -2414,11 +2475,10 @@ serve(async (req) => {
     // ═══ STEP 3: Conversation memory
     const conversationSummary = groqKey ? await getConversationSummary(supabase, auth.userId).catch(() => '') : ''
 
-    // ═══ STEP 4: Build system prompt (with D7 Agent addition for complex queries)
-    const isComplexQuery = confidence < 0.6 || ['analyze_trend', 'compare_data', 'query_governorates', 'proactive', 'forecast'].includes(intent)
+    // ═══ STEP 4: Build system prompt — dynamic based on intent (saves ~40% tokens)
     const systemPrompt = buildDynamicSystemPrompt(
       profile || { id: auth.userId, role: 'data_entry', full_name: 'مستخدم', governorate_id: null, district_id: null, governorate_name: null },
-      liveData, '', conversationSummary,
+      liveData, '', conversationSummary, primaryKnowledgeIntent,
     )
 
     // ═══ STEP 6: Build messages
@@ -2455,6 +2515,7 @@ serve(async (req) => {
         maxTokens: dbMaxTokens,
         temperature: dbTemperature,
         maxSteps: 5,
+        userId: auth.userId,
       })
 
       if (multiStepResult) {
@@ -2479,6 +2540,7 @@ serve(async (req) => {
           model: dbModelId,
           intent,
           confidence,
+          intents: compoundIntents.length > 1 ? compoundIntents : undefined,
           messageId: crypto.randomUUID(),
           toolsUsed: multiStepResult.toolCallsUsed,
         }, 200, origin)

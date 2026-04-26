@@ -43,17 +43,19 @@ const ROLE_ICONS: Record<string, string> = {
 }
 
 // ─── "إشراف عام" check ─────────────────────────────────────
-// مدير عام / مدير رعاية / مشرف التحصين بالمحافظة → إشراف عام
-// المركزي (central) → يظهر كـ "مركزي" مو إشراف عام
+// فقط 3 أدوار:
+// 1. المدير العام لمكتب الصحة والسكان بالمحافظة
+// 2. مدير الرعاية بالمحافظة
+// 3. مشرف التحصين بالمحافظة (role=governorate)
 
 function isGeneralSupervisor(name: string, role: string): boolean {
-  // مشرف التحصين بالمحافظة = إشراف عام
+  // مشرف التحصين بالمحافظة = إشراف عام دائماً
   if (role === 'governorate') return true
-  // مدير النظام = إشراف عام
-  if (role === 'admin') return true
-  // مسؤول مركزي بصفة مدير عام أو مدير رعاية = إشراف عام
-  const keywords = ['مدير عام', 'مدير الرعاية', 'مدير عام لمكتب', 'نائب مدير', 'مساعد مدير']
-  return keywords.some(kw => name.includes(kw))
+  // المدير العام لمكتب الصحة والسكان بالمحافظة
+  if (name.includes('مدير عام')) return true
+  // مدير الرعاية بالمحافظة
+  if (name.includes('مدير الرعاية')) return true
+  return false
 }
 
 // ─── Date Helpers ───────────────────────────────────────────
@@ -562,6 +564,59 @@ export async function generateDailySupervisorEvaluation(options?: {
           </div>
         `
       }).join('')}
+
+      <!-- ═══ ملخص المحافظات ═══ -->
+      ${buildSectionTitle('📊', 'ملخص المحافظات')}
+      ${buildTable(
+        ['المحافظة', 'المشرفين', 'نشط', 'غير نشط', 'إشراف عام', 'المديريات', 'الاستمارات', 'نسبة النشاط'],
+        [...govGroups.values()].map(group => {
+          const active = group.allUsers.filter(u => u.totalToday > 0 && !u.isGenSupervisor).length
+          const inactive = group.allUsers.filter(u => u.totalToday === 0 && !u.isGenSupervisor).length
+          const gen = group.allUsers.filter(u => u.isGenSupervisor).length
+          const forms = group.allUsers.reduce((s, u) => s + u.totalToday, 0)
+          const total = group.allUsers.length
+          const rate = total > 0 ? Math.round((active / Math.max(total - gen, 1)) * 100) : 0
+          return [
+            escapeHtml(group.gov.name_ar),
+            `${total}`,
+            `<span style="color:${BRAND.success};font-weight:700">${active}</span>`,
+            `<span style="color:${inactive > 0 ? BRAND.accent : BRAND.textMuted}">${inactive}</span>`,
+            `${gen}`,
+            `${group.districts.size}`,
+            `${forms}`,
+            `<span style="color:${rate >= 70 ? BRAND.success : rate >= 40 ? BRAND.warning : BRAND.accent};font-weight:700">${rate}%</span>`,
+          ]
+        })
+      )}
+
+      <!-- ═══ ملخص المديريات ═══ -->
+      ${buildSectionTitle('📍', 'ملخص المديريات')}
+      ${(() => {
+        // جمع كل المديريات من كل المحافظات
+        const allDistRows: string[][] = []
+        for (const group of govGroups.values()) {
+          for (const [distKey, distUsers] of group.districts.entries()) {
+            const distName = distUsers[0]?.distName || 'غير محدد'
+            const active = distUsers.filter(u => u.totalToday > 0).length
+            const inactive = distUsers.filter(u => u.totalToday === 0).length
+            const forms = distUsers.reduce((s, u) => s + u.totalToday, 0)
+            const rate = distUsers.length > 0 ? Math.round((active / distUsers.length) * 100) : 0
+            allDistRows.push([
+              escapeHtml(group.gov.name_ar),
+              escapeHtml(distName),
+              `${distUsers.length}`,
+              `<span style="color:${BRAND.success};font-weight:700">${active}</span>`,
+              `<span style="color:${inactive > 0 ? BRAND.accent : BRAND.textMuted}">${inactive}</span>`,
+              `${forms}`,
+              `<span style="color:${rate >= 70 ? BRAND.success : rate >= 40 ? BRAND.warning : BRAND.accent};font-weight:700">${rate}%</span>`,
+            ])
+          }
+        }
+        return buildTable(
+          ['المحافظة', 'المديرية', 'المشرفين', 'نشط', 'غير نشط', 'الاستمارات', 'النشاط'],
+          allDistRows.sort((a, b) => parseInt(b[5]) - parseInt(a[5]))
+        )
+      })()}
 
       ${buildFooter()}
     </body>

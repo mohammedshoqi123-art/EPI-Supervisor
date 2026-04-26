@@ -6,7 +6,7 @@ import { getCampaignFormIds } from './campaign'
 // ==================== SUBMISSIONS ====================
 
 export function useSubmissions(filters?: {
-  status?: SubmissionStatus; formId?: string; governorateId?: string; search?: string
+  status?: SubmissionStatus; formId?: string; governorateId?: string; role?: string; search?: string
   page?: number; pageSize?: number; campaignType?: string
 }) {
   return useQuery({
@@ -25,6 +25,17 @@ export function useSubmissions(filters?: {
       if (filters?.status) query = query.eq('status', filters.status)
       if (filters?.formId) query = query.eq('form_id', filters.formId)
       if (filters?.governorateId) query = query.eq('governorate_id', filters.governorateId)
+
+      // Role filter — filter by submitter's role via profiles join
+      if (filters?.role && filters.role !== 'all') {
+        query = query.eq('profiles.role', filters.role)
+      }
+
+      // Search by submitter name or email
+      if (filters?.search) {
+        const s = filters.search
+        query = query.or(`profiles.full_name.ilike.%${s}%,profiles.email.ilike.%${s}%`)
+      }
 
       // Campaign filter via form_id
       if (filters?.campaignType && filters.campaignType !== 'all') {

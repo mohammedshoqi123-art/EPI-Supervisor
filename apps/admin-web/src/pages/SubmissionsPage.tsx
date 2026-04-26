@@ -62,6 +62,7 @@ export default function SubmissionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [formFilter, setFormFilter] = useState<string>('all')
   const [govFilter, setGovFilter] = useState<string>('all')
+  const [roleFilter, setRoleFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null)
@@ -80,6 +81,7 @@ export default function SubmissionsPage() {
     status: statusFilter !== 'all' ? (statusFilter as SubmissionStatus) : undefined,
     formId: formFilter !== 'all' ? formFilter : undefined,
     governorateId: govFilter !== 'all' ? govFilter : undefined,
+    role: roleFilter !== 'all' ? roleFilter : undefined,
     search: search || undefined,
     page,
     pageSize: 20,
@@ -155,6 +157,7 @@ export default function SubmissionsPage() {
     setStatusFilter('all')
     setFormFilter('all')
     setGovFilter('all')
+    setRoleFilter('all')
     setSearch('')
     setPage(1)
   }
@@ -193,7 +196,7 @@ export default function SubmissionsPage() {
     }
   }
 
-  const hasFilters = statusFilter !== 'all' || formFilter !== 'all' || govFilter !== 'all' || search
+  const hasFilters = statusFilter !== 'all' || formFilter !== 'all' || govFilter !== 'all' || roleFilter !== 'all' || search
 
   // ─── Approve All Filtered Submissions ─────────────────────
   const handleApproveAll = async () => {
@@ -247,7 +250,7 @@ export default function SubmissionsPage() {
               <div className="relative flex-1 min-w-[180px]">
                 <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <Input
-                  placeholder="بحث بالاسم أو البريد..."
+                  placeholder="بحث بالاسم..."
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                   className="h-8 text-xs pr-8"
@@ -285,6 +288,20 @@ export default function SubmissionsPage() {
                 <SelectContent>
                   <SelectItem value="all">كل المحافظات</SelectItem>
                   {governorates?.map((g) => <SelectItem key={g.id} value={g.id}>{g.name_ar}</SelectItem>)}
+                </SelectContent>
+              </Select>
+
+              <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1) }}>
+                <SelectTrigger className="w-full sm:w-36 h-8 text-xs">
+                  <SelectValue placeholder="الصفة" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الصفات</SelectItem>
+                  <SelectItem value="admin">مدير النظام</SelectItem>
+                  <SelectItem value="central">مشرف مركزي</SelectItem>
+                  <SelectItem value="governorate">مشرف محافظة</SelectItem>
+                  <SelectItem value="district">مشرف مديرية</SelectItem>
+                  <SelectItem value="data_entry">مدخل بيانات</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -393,6 +410,7 @@ export default function SubmissionsPage() {
                       <TableHead className="text-xs">النموذج</TableHead>
                       <TableHead className="text-xs">المُرسل</TableHead>
                       <TableHead className="text-xs">الحالة</TableHead>
+                      <TableHead className="text-xs hidden lg:table-cell">الصفة</TableHead>
                       <TableHead className="text-xs hidden md:table-cell">التاريخ</TableHead>
                       <TableHead className="w-10 text-xs">...</TableHead>
                     </TableRow>
@@ -428,6 +446,15 @@ export default function SubmissionsPage() {
                             {STATUS_LABELS[sub.status as SubmissionStatus]}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-xs hidden lg:table-cell">
+                          <Badge variant="outline" className="text-[10px]">
+                            {sub.profiles?.role === 'admin' ? 'مدير' :
+                             sub.profiles?.role === 'central' ? 'مركزي' :
+                             sub.profiles?.role === 'governorate' ? 'محافظة' :
+                             sub.profiles?.role === 'district' ? 'مديرية' :
+                             sub.profiles?.role === 'data_entry' ? 'إدخال' : sub.profiles?.role || '—'}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                           {formatRelativeTime(sub.created_at)}
                         </TableCell>
@@ -440,7 +467,7 @@ export default function SubmissionsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => setSelectedSubmission(sub)}>
-                                <Eye className="w-3.5 h-3.5 ml-2" /> عرض
+                                <Eye className="w-3.5 h-3.5 ml-2" /> عرض / تعديل
                               </DropdownMenuItem>
                               {canDelete && (
                                 <DropdownMenuItem onClick={() => setDeleteTarget(sub)} className="text-destructive">

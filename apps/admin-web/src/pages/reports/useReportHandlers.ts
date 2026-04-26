@@ -207,7 +207,6 @@ export function useReportHandlers() {
   const handleExportRoles = () => exportReport('roles', () => {
     if (!roleDistribution) return
     exportRolesStyledExcel(roleDistribution.map(r => ({ name: r.name, value: r.value })))
-    })
   })
 
   const handleExportAudit = () => exportReport('audit', () => {

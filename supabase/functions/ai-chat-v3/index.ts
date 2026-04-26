@@ -1,5 +1,12 @@
 // ═══════════════════════════════════════════════════════════
-// EPI Supervisor — System Assistant v6 (Lightweight)
+// EPI Supervisor — System Assistant v6.1
+//
+// v6.1 (2026-04-27):
+// 🔒 CONFIRMATION LAYER — كل العمليات الكتابية تحتاج تأكيد صريح
+// 🔒 Write tools: update, notification, sql, export, scheduled_report, workflow
+// 🔒 Batch operations need explicit confirmation with affected count
+// ✅ exec_sql() PostgreSQL function created (migration 032)
+// ✅ Tool descriptions updated with confirmation warnings
 //
 // v6 (2026-04-23):
 // ⚡ RAG/Embeddings/Knowledge Base REMOVED — moved to مستشار التحصين
@@ -12,7 +19,7 @@
 // ⚡ F5. Conversation summary throttled — every 8 messages, not every call
 // ⚡ F6. Model config cache 5min → 2min
 // 🔒 F7. Prompt injection guard — sanitize user input
-// 🚀 D1. Multi-step function calling — up to 3 tool rounds
+// 🚀 D1. Multi-step function calling — up to 5 tool rounds
 // 🚀 D5. Response caching — 15min TTL for repeated queries
 // 🚀 D7. ReAct Agent pattern — reasoning + acting loop
 // ═══════════════════════════════════════════════════════════
@@ -244,7 +251,15 @@ function buildDynamicSystemPrompt(
   - ${profile.role === 'governorate' ? 'مسؤول محافظتك — ركز على أداء مديرياتك ومقارنتك بالمحافظات الأخرى' : ''}
   - ${profile.role === 'district' ? 'مسؤول مديريتك — ركز على إدخالاتك وأداء فريقك' : ''}
   - ${profile.role === 'data_entry' ? 'مساعد عملي — أعطِ إرشادات مختصرة وحل المشاكل بسرعة' : ''}
-• لديك صلاحية لكل البيانات — لا تتردد في استخدام كل الأدوات.`
+• لديك صلاحية لكل البيانات — لا تتردد في استخدام كل الأدوات.
+
+== قواعد العمليات الكتابية (مهم جداً) ==
+• أدوات الكتابة: update_submission_status, create_notification, execute_sql, bulk_export, create_scheduled_report, workflow_chain
+• عند استدعاء أي أداة كتابية: الأداة سترد بـ needs_confirmation=true أولاً
+• أنت تعرض للمستخدم ملخص العملية وتطلب تأكيداً صريحاً (نعم/تأكيد/موافق)
+• بعد تأكيد المستخدم: أعد استدعاء نفس الأداة مع "_confirmed": true
+• ⚠️ لا تنفذ أي عملية كتابية بدون تأكيد صريح من المستخدم
+• ⚠️ العمليات الجماعية (batch) تحتاج تأكيد مزدوج — وضّح العدد المتأثر`
 
   if (conversationSummary) {
     sys += `\n\n== ذاكرة المحادثة السابقة ==\n${conversationSummary}`
@@ -578,7 +593,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'update_submission_status',
-      description: 'تغيير حالة إرسالية (موافق/مرفوض/مسودة). يمكن تغيير حالة واحدة أو مجموعة.',
+      description: 'تغيير حالة إرسالية (موافق/مرفوض/مسودة). يمكن تغيير حالة واحدة أو مجموعة. ⚠️ تحتاج تأكيد — سترد بـ needs_confirmation أولاً.',
       parameters: {
         type: 'object',
         properties: {
@@ -596,7 +611,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'create_notification',
-      description: 'إرسال إشعار/تنبيه لمستخدم أو مجموعة مستخدمين.',
+      description: 'إرسال إشعار/تنبيه لمستخدم أو مجموعة مستخدمين. ⚠️ تحتاج تأكيد.',
       parameters: {
         type: 'object',
         properties: {
@@ -614,7 +629,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'execute_sql',
-      description: 'تنفيذ استعلام SQL للقراءة فقط (SELECT). لاستعلامات مخصصة معقدة لا تغطيها الأدوات الأخرى. ممنوع DELETE/UPDATE/INSERT/DROP.',
+      description: 'تنفيذ استعلام SQL للقراءة فقط (SELECT). لاستعلامات مخصصة معقدة لا تغطيها الأدوات الأخرى. ممنوع DELETE/UPDATE/INSERT/DROP. ⚠️ تحتاج تأكيد.',
       parameters: {
         type: 'object',
         properties: {
@@ -648,7 +663,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'bulk_export',
-      description: 'تصدير بيانات كاملة بصيغة JSON للتحميل. يدعم الإرساليات، المستخدمين، النواقص.',
+      description: 'تصدير بيانات كاملة بصيغة JSON/CSV للتحميل. يدعم الإرساليات، المستخدمين، النواقص. ⚠️ تحتاج تأكيد.',
       parameters: {
         type: 'object',
         properties: {
@@ -667,7 +682,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'create_scheduled_report',
-      description: 'إنشاء تقرير مجدول — يُرسل تلقائياً كل يوم/أسبوع/شهر.',
+      description: 'إنشاء تقرير مجدول — يُرسل تلقائياً كل يوم/أسبوع/شهر. ⚠️ تحتاج تأكيد.',
       parameters: {
         type: 'object',
         properties: {
@@ -685,7 +700,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'workflow_chain',
-      description: 'تنفيذ سلسلة عمليات متتالية (workflow). مثلاً: حلل → أرسل إشعار → صدّر.',
+      description: 'تنفيذ سلسلة عمليات متتالية (workflow). مثلاً: حلل → أرسل إشعار → صدّر. ⚠️ تحتاج تأكيد — عمليات متعددة.',
       parameters: {
         type: 'object',
         properties: {
@@ -697,6 +712,70 @@ const TOOLS = [
     },
   },
 ]
+
+// ═══════════════════════════════════════════════════════════
+// WRITE TOOLS — أدوات تحتاج تأكيد قبل التنفيذ
+// ═══════════════════════════════════════════════════════════
+const WRITE_TOOLS = new Set([
+  'update_submission_status',
+  'create_notification',
+  'execute_sql',
+  'bulk_export',
+  'create_scheduled_report',
+  'workflow_chain',
+])
+
+// Status labels for Arabic display
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'مسودة',
+  submitted: 'مُرسل',
+  approved: 'مقبول',
+  rejected: 'مرفوض',
+}
+
+function describeWriteAction(name: string, args: Record<string, any>): string {
+  switch (name) {
+    case 'update_submission_status': {
+      const status = STATUS_LABELS[args.status] || args.status
+      if (args.batch_governorate) {
+        return `تحديث كل إرساليات محافظة "${args.batch_governorate}" إلى "${status}" (جماعي)`
+      }
+      return `تحديث الإرسالية ${args.submission_id?.slice(0, 8) || '?'} إلى "${status}"`
+    }
+    case 'create_notification':
+      return `إرسال إشعار "${args.title}" إلى ${args.target_role || 'الكل'}`
+    case 'execute_sql':
+      return `تنفيذ استعلام SQL: ${args.query?.slice(0, 80)}...`
+    case 'bulk_export':
+      return `تصدير ${args.data_type} بصيغة ${args.format || 'json'}`
+    case 'create_scheduled_report':
+      return `إنشاء تقرير مجدول "${args.name}" (${args.report_type})`
+    case 'workflow_chain':
+      return `تنفيذ workflow بـ ${args.steps?.length || 0} خطوات`
+    default:
+      return `تنفيذ عملية كتابية: ${name}`
+  }
+}
+
+function requireConfirmation(name: string, args: Record<string, any>): any | null {
+  if (!WRITE_TOOLS.has(name)) return null
+  if (args._confirmed === true) return null
+
+  const description = describeWriteAction(name, args)
+  const isBatch = name === 'update_submission_status' && args.batch_governorate
+
+  return {
+    needs_confirmation: true,
+    tool: name,
+    action_description: description,
+    is_batch_operation: isBatch,
+    warning: isBatch
+      ? '⚠️ عملية جماعية — ستُعدّل عدة سجلات. تأكّد قبل المتابعة.'
+      : null,
+    message: `🔒 هذه العملية تحتاج تأكيدك:\n\n**${description}**\n\n${isBatch ? '⚠️ **عملية جماعية** — ستُعدّل عدة سجلات.\n\n' : ''}هل تريد المتابعة؟ أرسل "تأكيد" أو "نعم" للمتابعة.`,
+    confirm_instruction: 'أعد استدعاء نفس الأداة مع إضافة "_confirmed": true',
+  }
+}
 
 async function executeFunction(supa: any, name: string, args: Record<string, any>): Promise<any> {
   const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
@@ -720,6 +799,10 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
     polio_campaign: 'شلل الأطفال',
     integrated_activity: 'النشاط الإيصالي التكاملي',
   }
+
+  // ═══ CONFIRMATION GATE — كل عملية كتابية تحتاج تأكيد ═══
+  const confirmationRequired = requireConfirmation(name, args)
+  if (confirmationRequired) return confirmationRequired
 
   try {
     switch (name) {
@@ -2062,18 +2145,8 @@ async function multiStepToolCalling(
 }
 
 // ═══════════════════════════════════════════════════════════
-// D7: REACT AGENT PATTERN
+// D7: REACT AGENT PATTERN (integrated into system prompt)
 // ═══════════════════════════════════════════════════════════
-
-const AGENT_SYSTEM_ADDITION = `
-== أسلوب العمل (ReAct Agent) ==
-عندما تحتاج لجمع بيانات من مصادر متعددة:
-1. فكّر (Thought): أي معلومات تحتاجها؟
-2. اعمل (Action): استخدم الأداة المناسبة
-3. لاحظ (Observation): حلل النتائج
-4. كرّر حتى تجمع كل المعلومات المطلوبة
-5. أجِب (Final Answer): رد شامل مدعوم بأرقام حقيقية
-`
 
 // ═══════════════════════════════════════════════════════════
 // LLM CALLERS

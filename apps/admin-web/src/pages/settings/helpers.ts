@@ -1,5 +1,8 @@
 import { Users, FileText, ClipboardList, PackageX, Globe } from 'lucide-react'
 
+// Re-export SettingsState from useSettings for convenience
+export type { SettingsState } from './useSettings'
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface SettingSection {

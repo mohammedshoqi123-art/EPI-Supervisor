@@ -29,7 +29,7 @@ import { useCampaign } from '@/lib/campaign-context'
 import {
   YEMEN_MAP_GOVS, getPerformanceTier, getPerformanceColor, getPerformanceLabel, getPerformanceBg,
   getQuickFilterDates, QUICK_FILTER_LABELS,
-  type PerformanceTier, type QuickFilter, type SortField,
+  type PerformanceTier, type QuickFilter, type SortField, type SortDir,
 } from './governorates/helpers'
 
 // ─── Enriched governorate type ───
@@ -178,7 +178,7 @@ export default function GovernoratesPage() {
 
   const handleSort = useCallback((field: SortField) => {
     if (sortField === field) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+      setSortDir((d: SortDir) => d === 'asc' ? 'desc' : 'asc')
     } else {
       setSortField(field)
       setSortDir('desc')

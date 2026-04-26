@@ -75,3 +75,4 @@ export const QUICK_FILTER_LABELS: Record<QuickFilter, string> = {
 
 // ─── Sort options for comparison table ───
 export type SortField = 'name_ar' | 'submissions' | 'completion_rate' | 'active_users' | 'last_submission'
+export type SortDir = 'asc' | 'desc'

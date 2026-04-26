@@ -93,7 +93,7 @@ export default function FormsPage() {
               <FormCard
                 key={form.id}
                 form={form}
-                submissionCount={submissionCounts?.[form.id]}
+                submissionCount={submissionCounts?.[form.id]?.total}
                 onEdit={canManageForms ? () => setEditForm(form) : undefined}
                 onDelete={canManageForms ? () => setDeleteForm(form) : undefined}
                 onData={() => setDataForm(form)}

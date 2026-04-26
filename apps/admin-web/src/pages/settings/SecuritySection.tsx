@@ -30,7 +30,7 @@ export function SecuritySection({ state, update }: Props) {
   }
 
   const handleRemoveIP = (id: string) => {
-    update('ipWhitelist', state.ipWhitelist.filter(ip => ip.id !== id))
+    update('ipWhitelist', state.ipWhitelist.filter((ip: IPEntry) => ip.id !== id))
   }
 
   return (
@@ -146,7 +146,7 @@ export function SecuritySection({ state, update }: Props) {
             </div>
             {state.ipWhitelist.length > 0 && (
               <div className="space-y-2">
-                {state.ipWhitelist.map(ip => (
+                {state.ipWhitelist.map((ip: IPEntry) => (
                   <div key={ip.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="font-mono text-[10px]">{ip.address}</Badge>

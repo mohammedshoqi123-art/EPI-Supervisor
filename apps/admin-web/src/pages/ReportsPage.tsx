@@ -30,6 +30,7 @@ import { SectionErrorBoundary } from '@/components/ui/section-error-boundary'
 import { ComparisonReport } from '@/components/reports/ComparisonReport'
 import { AnalyticsFilterBar, DrillDownDialog, ChartCard, FullscreenChart } from '@/components/reports/InteractiveAnalytics'
 import { useReportHandlers, canExportAll, canExportGovernorate, CHART_COLORS } from './reports'
+import { generateMonthlyPerformancePPTX, generateWeeklyBulletinPPTX, generateCampaignPerformancePPTX } from '@/lib/pptx-index'
 
 // ═══════════════════════════════════════════════════════════════
 // Main Reports Page
@@ -407,7 +408,7 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-0">
-                    {h.auditData.data.slice(0, 8).map((log: any, i: number) => {
+                    {h.auditData?.data?.slice(0, 8).map((log: any, i: number) => {
                       const actionIcons: Record<string, { icon: React.ElementType; color: string }> = {
                         create: { icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50' },
                         update: { icon: Activity, color: 'text-blue-600 bg-blue-50' },
@@ -426,7 +427,7 @@ export default function ReportsPage() {
                       else timeLabel = `منذ ${Math.floor(timeDiff / 86400000)} يوم`
 
                       return (
-                        <div key={log.id} className={cn('flex items-center gap-3 py-3 px-2 rounded-lg hover:bg-muted/50 transition-colors', i < h.auditData.data.length - 1 && 'border-b')}>
+                        <div key={log.id} className={cn('flex items-center gap-3 py-3 px-2 rounded-lg hover:bg-muted/50 transition-colors', i < (h.auditData?.data?.length ?? 0) - 1 && 'border-b')}>
                           <div className={cn('p-2 rounded-lg', actionInfo.color)}>
                             <ActionIcon className="w-4 h-4" />
                           </div>

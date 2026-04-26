@@ -314,6 +314,7 @@ export function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
 
       {showFieldDialog && currentSection && (
         <FieldEditorDialog
+          key={editingField ? `edit-${(editingField as any)._fieldIdx}` : 'add-new'}
           open={showFieldDialog}
           onOpenChange={setShowFieldDialog}
           field={editingField}

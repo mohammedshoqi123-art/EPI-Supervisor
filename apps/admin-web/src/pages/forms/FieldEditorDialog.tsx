@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,9 @@ export function FieldEditorDialog({ open, onOpenChange, field, existingKeys, onS
   existingKeys: string[]
   onSave: (field: FormField) => void
 }) {
+  const isEditing = !!(field as any)?._fieldIdx
+  const originalKey = field?.key || ''
+
   const [key, setKey] = useState(field?.key || '')
   const [labelAr, setLabelAr] = useState(field?.label_ar || '')
   const [type, setType] = useState<FormFieldType>(field?.type || 'text')
@@ -23,6 +26,18 @@ export function FieldEditorDialog({ open, onOpenChange, field, existingKeys, onS
   const [options, setOptions] = useState(field?.options?.join('\n') || '')
   const [defaultValue, setDefaultValue] = useState(field?.default || '')
   const { toast } = useToast()
+
+  // Reset state when field changes (dialog reopens for different field)
+  useEffect(() => {
+    if (open) {
+      setKey(field?.key || '')
+      setLabelAr(field?.label_ar || '')
+      setType(field?.type || 'text')
+      setRequired(field?.required || false)
+      setOptions(field?.options?.join('\n') || '')
+      setDefaultValue(field?.default || '')
+    }
+  }, [open, field])
 
   const handleSave = () => {
     if (!key.trim()) {
@@ -33,7 +48,7 @@ export function FieldEditorDialog({ open, onOpenChange, field, existingKeys, onS
       toast({ title: 'خطأ', description: 'عنوان الحقل مطلوب', variant: 'destructive' })
       return
     }
-    const isDuplicate = existingKeys.includes(key) && key !== field?.key
+    const isDuplicate = existingKeys.includes(key) && key !== originalKey
     if (isDuplicate) {
       toast({ title: 'خطأ', description: 'مفتاح الحقل مكرر', variant: 'destructive' })
       return

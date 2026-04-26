@@ -1,22 +1,25 @@
 // ═══════════════════════════════════════════════════════════
-// EPI Supervisor — System Assistant v6.1
+// EPI Supervisor — System Assistant v6.2
+//
+// v6.2 (2026-04-27):
+// 🔴 STREAMING MULTI-STEP — Real-time tool call progress via SSE
+// 👋 GREETING HANDLER — ردود فورية بدون LLM (يوفر tokens)
+// 🏥 SYSTEM HEALTH SCORE — نقاط صحة النظام (0-100) + mode=health
+// 🔀 COMPOUND INTENT — يفهم أسئلة مركبة
+// 📝 WRITE AUDIT LOG — accountability للكتابة
+// 🧠 SMART SYSTEM PROMPT — تحميل ديناميكي حسب Intent
+// ❌ BETTER ERRORS — رسائل خطأ واضحة مع fallback data
 //
 // v6.1 (2026-04-27):
 // 🔒 CONFIRMATION LAYER — كل العمليات الكتابية تحتاج تأكيد صريح
-// 📝 WRITE AUDIT LOG — تسجيل كل عمليات الكتابة مع accountability
-// 🧠 SMART SYSTEM PROMPT — تحميل ديناميكي حسب Intent (يوفر ~40% tokens)
-// 🔀 COMPOUND INTENT — يفهم أسئلة مركبة (عدة intents بسؤال واحد)
-// 🔒 exec_sql() — SELECT-only مع timeout + row limit + keyword block
-// ✅ Workflow منفصل — functions و migrations independently
+// 🔒 exec_sql() — SELECT-only مع timeout + row limit
 //
 // v6 (2026-04-23):
 // ⚡ RAG/Embeddings REMOVED — moved to مستشار التحصين
-// ⚡ System data only: forms, submissions, analytics, users
 //
 // v5 legacy:
-// 🔒 F1. SQL Injection eliminated — Supabase Query Builder
+// 🔒 F1. SQL Injection eliminated
 // ⚡ F5. Conversation summary every 8 messages
-// ⚡ F6. Model config cache 2min
 // 🔒 F7. Prompt injection guard
 // 🚀 D1. Multi-step function calling (5 rounds)
 // 🚀 D5. Response caching (15min TTL)
@@ -728,6 +731,15 @@ const TOOLS = [
       },
     },
   },
+  // ═══ SYSTEM HEALTH TOOL ═══
+  {
+    type: 'function',
+    function: {
+      name: 'get_system_health',
+      description: 'نقاط صحة النظام — يعطيك تقييم فوري (0-100) مع التفاصيل: إرساليات اليوم، بانتظار المراجعة، نواقص حرجة، نشاط المحافظات.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
 ]
 
 // ═══════════════════════════════════════════════════════════
@@ -1306,6 +1318,10 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
             submissions: count,
           })),
         }
+      }
+
+      case 'get_system_health': {
+        return await getSystemHealthScore(supa)
       }
 
       case 'get_critical_alerts': {
@@ -2081,6 +2097,149 @@ function sanitizeUserMessage(msg: string): { safe: boolean; sanitized: string } 
 }
 
 // ═══════════════════════════════════════════════════════════
+// GREETING HANDLER — ردود فورية بدون LLM (يوفر tokens + وقت)
+// ═══════════════════════════════════════════════════════════
+
+const GREETING_PATTERNS = /^(مرحبا?|هلا|السلام عليكم|صباح الخير|مساء الخير|هاي|هلو|أهلا|يا هلا|嗨|hello|hi|hey|good morning|good evening)\s*[!؟.!]*\s*$/i
+
+const QUICK_QUESTIONS: Record<string, (name: string) => string> = {
+  'من أنت': (n) => `أنا **EPI Copilot** — مساعدك الذكي لإدارة منصة مشرف التحصين. أقدر أحلل البيانات، أعطيك تقارير، وأجاوب على أسئلتك عن النظام.`,
+  'ايش تسوي': (n) => `أساعدك في:\n📊 تحليل إرساليات الحملات\n📈 مقارنة أداء المحافظات\n⚠️ تنبيهات النواقص\n📋 إنشاء تقارير\n💉 معلومات التحصين`,
+  'وش تقدر تسوي': (n) => `أقدر أساعدك في:\n📊 تحليل إرساليات الحملات\n📈 مقارنة أداء المحافظات\n⚠️ تنبيهات النواقص\n📋 إنشاء تقارير\n💉 معلومات التحصين`,
+  'help': (n) => `أنا EPI Copilot — اسألني عن:\n• إحصائيات الإرساليات\n• أداء المحافظات\n• النواقص والتنبيهات\n• جودة البيانات\n• تقارير مخصصة`,
+}
+
+function detectGreeting(msg: string, profile: any): string | null {
+  const trimmed = msg.trim()
+
+  // Pure greeting
+  if (GREETING_PATTERNS.test(trimmed)) {
+    const name = profile?.full_name?.split(' ')[0] || ''
+    const hour = new Date().getHours()
+    const timeGreet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء الخير'
+    const greetings = [
+      `${timeGreet} ${name}! 👋 أنا EPI Copilot — جاهز أساعدك. اسألني عن أي شي بالنظام.`,
+      `هلا ${name}! 👋 كيف أقدر أساعدك اليوم؟`,
+      `أهلاً ${name}! 📊 تبي تقرير ولا تحليل بيانات؟`,
+    ]
+    return greetings[Math.floor(Math.random() * greetings.length)]
+  }
+
+  // Quick questions (exact match or close)
+  for (const [pattern, handler] of Object.entries(QUICK_QUESTIONS)) {
+    if (trimmed.includes(pattern)) {
+      return handler(profile?.full_name?.split(' ')[0] || '')
+    }
+  }
+
+  // Very short messages that are likely greetings (1-3 chars)
+  if (trimmed.length <= 3 && /^[\p{L}\s]+$/u.test(trimmed)) {
+    const name = profile?.full_name?.split(' ')[0] || ''
+    return `هلا ${name}! 👋 أنا EPI Copilot — اسألني عن إحصائيات، تقارير، أو أي شي بالنظام.`
+  }
+
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════
+// SYSTEM HEALTH SCORE — نقاط صحة النظام
+// ═══════════════════════════════════════════════════════════
+
+async function getSystemHealthScore(supa: any): Promise<any> {
+  const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
+    return Promise.race([promise, new Promise<null>((r) => setTimeout(() => r(null), ms))]) as Promise<T | null>
+  }
+
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString()
+
+    const [todaySubs, pendingSubs, criticalShortages, activeUsers, recentSubs] = await Promise.all([
+      withTimeout(
+        supa.from('form_submissions').select('id', { count: 'exact', head: true })
+          .is('deleted_at', null).gte('created_at', `${today}T00:00:00Z`), 5_000
+      ),
+      withTimeout(
+        supa.from('form_submissions').select('id', { count: 'exact', head: true })
+          .is('deleted_at', null).eq('status', 'submitted'), 5_000
+      ),
+      withTimeout(
+        supa.from('supply_shortages').select('id', { count: 'exact', head: true })
+          .is('deleted_at', null).eq('is_resolved', false).eq('severity', 'critical'), 5_000
+      ),
+      withTimeout(
+        supa.from('profiles').select('id', { count: 'exact', head: true })
+          .eq('is_active', true), 5_000
+      ),
+      withTimeout(
+        supa.from('form_submissions').select('governorate_id')
+          .is('deleted_at', null).gte('created_at', threeDaysAgo).limit(5000), 8_000
+      ),
+    ])
+
+    const todayCount = todaySubs?.count || 0
+    const pendingCount = pendingSubs?.count || 0
+    const criticalCount = criticalShortages?.count || 0
+    const userCount = activeUsers?.count || 0
+
+    // Governorate activity
+    const activeGovs = new Set(recentSubs?.map((r: any) => r.governorate_id).filter(Boolean))
+    const { data: allGovs } = await supa.from('governorates').select('id').eq('is_active', true)
+    const totalGovs = allGovs?.length || 15
+    const govActivityRate = Math.round((activeGovs.size / totalGovs) * 100)
+
+    // Health score (0-100)
+    let score = 100
+    let status = '🟢 ممتاز'
+    const issues: string[] = []
+
+    if (todayCount === 0) {
+      score -= 30
+      issues.push('لا إرساليات اليوم')
+    } else if (todayCount < 10) {
+      score -= 15
+      issues.push(`إرسالات قليلة: ${todayCount}`)
+    }
+
+    if (pendingCount > 50) {
+      score -= 20
+      issues.push(`${pendingCount} إرسالية بانتظار المراجعة`)
+    } else if (pendingCount > 20) {
+      score -= 10
+    }
+
+    if (criticalCount > 0) {
+      score -= 25
+      issues.push(`${criticalCount} نقص حرج`)
+    }
+
+    if (govActivityRate < 50) {
+      score -= 15
+      issues.push(`${govActivityRate}% نشاط المحافظات`)
+    }
+
+    if (score < 60) status = '🔴 يحتاج تدخل'
+    else if (score < 80) status = '🟡 مقبول'
+    else if (score < 90) status = '🟢 جيد'
+
+    return {
+      score: Math.max(0, score),
+      status,
+      today_submissions: todayCount,
+      pending_review: pendingCount,
+      critical_shortages: criticalCount,
+      active_users: userCount,
+      governorate_activity: govActivityRate + '%',
+      active_governorates: activeGovs.size,
+      total_governorates: totalGovs,
+      issues: issues.length > 0 ? issues : ['كل شي تمام ✅'],
+    }
+  } catch (e) {
+    return { score: 0, status: '❌ خطأ في الحساب', error: String(e) }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // D5: RESPONSE CACHING
 // ═══════════════════════════════════════════════════════════
 
@@ -2200,6 +2359,156 @@ async function multiStepToolCalling(
     return { content: final.content, toolCallsUsed, totalTokens: totalTokens + (final.usage?.total_tokens || 0) }
   }
   return null
+}
+
+// ═══════════════════════════════════════════════════════════
+// STREAMING MULTI-STEP — Real-time progress via SSE
+// ═══════════════════════════════════════════════════════════
+
+async function multiStepToolCallingStream(
+  msgs: any[],
+  groqKey: string,
+  supa: any,
+  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string },
+  origin: string | null,
+): Promise<Response> {
+  const maxSteps = opts.maxSteps ?? 3
+  const toolCallsUsed: string[] = []
+  let totalTokens = 0
+
+  const enc = new TextEncoder()
+  const { readable, writable } = new TransformStream()
+  const writer = writable.getWriter()
+
+  const sendEvent = async (event: any) => {
+    await writer.write(enc.encode(`data: ${JSON.stringify(event)}\n\n`))
+  }
+
+  ;(async () => {
+    try {
+      await sendEvent({ type: 'start', message: 'جاري التحليل...' })
+
+      for (let step = 0; step < maxSteps; step++) {
+        await sendEvent({ type: 'thinking', step: step + 1, maxSteps, message: `الخطوة ${step + 1}/${maxSteps}: جاري التفكير...` })
+
+        const result = await groqChat(msgs, groqKey, {
+          model: opts.model,
+          maxTokens: opts.maxTokens,
+          temperature: opts.temperature,
+          tools: TOOLS,
+        })
+
+        if (!result) {
+          await sendEvent({ type: 'error', message: 'فشل الاتصال بالنموذج' })
+          break
+        }
+
+        if (result.type === 'tool_calls') {
+          // Execute each tool and stream progress
+          for (const tc of result.tool_calls) {
+            const fnName = tc.function?.name
+            const fnArgs = JSON.parse(tc.function?.arguments || '{}')
+
+            await sendEvent({
+              type: 'tool_call',
+              step: step + 1,
+              tool: fnName,
+              message: `جاري تنفيذ: ${fnName}...`,
+              description: describeWriteAction(fnName, fnArgs),
+            })
+
+            const toolResult = await executeFunction(supa, fnName, fnArgs)
+
+            // Audit log
+            if (WRITE_TOOLS.has(fnName) && opts.userId) {
+              logWriteOperation(supa, opts.userId, fnName, fnArgs, toolResult, fnArgs._confirmed === true).catch(() => {})
+            }
+
+            // Stream confirmation requests
+            if (toolResult.needs_confirmation) {
+              await sendEvent({
+                type: 'confirmation_needed',
+                tool: fnName,
+                message: toolResult.message,
+                action: toolResult.action_description,
+              })
+            } else {
+              await sendEvent({
+                type: 'tool_result',
+                step: step + 1,
+                tool: fnName,
+                success: !toolResult.error,
+                summary: toolResult.message || toolResult.error || 'تم',
+              })
+            }
+
+            // Add to conversation
+            const toolCallForMsg = { id: tc.id, type: 'function', function: { name: fnName, arguments: tc.function?.arguments } }
+            msgs.push({ role: 'assistant', content: null, tool_calls: [toolCallForMsg] })
+            msgs.push({
+              tool_call_id: tc.id,
+              role: 'tool',
+              name: fnName,
+              content: JSON.stringify(toolResult),
+            })
+
+            toolCallsUsed.push(fnName)
+          }
+          totalTokens += result.usage?.total_tokens || 0
+
+        } else if (result.type === 'message') {
+          // Final answer
+          totalTokens += result.usage?.total_tokens || 0
+          await sendEvent({
+            type: 'answer',
+            content: result.content,
+            toolsUsed: toolCallsUsed,
+            totalTokens,
+          })
+          await sendEvent({ type: 'done' })
+          await writer.close()
+          return
+        }
+      }
+
+      // Force final synthesis if max steps reached
+      await sendEvent({ type: 'thinking', message: 'جاري تجميع الإجابة النهائية...' })
+      msgs.push({ role: 'user', content: 'قدم الآن الإجابة النهائية بناءً على كل البيانات المجمّعة.' })
+
+      const final = await groqChat(msgs, groqKey, {
+        model: opts.model,
+        maxTokens: opts.maxTokens,
+        temperature: opts.temperature,
+      })
+
+      if (final?.type === 'message') {
+        await sendEvent({
+          type: 'answer',
+          content: final.content,
+          toolsUsed: toolCallsUsed,
+          totalTokens: totalTokens + (final.usage?.total_tokens || 0),
+        })
+      } else {
+        await sendEvent({ type: 'error', message: 'لم أتمكن من توليد إجابة نهائية' })
+      }
+
+      await sendEvent({ type: 'done' })
+    } catch (e) {
+      await sendEvent({ type: 'error', message: String(e) })
+    } finally {
+      try { await writer.close() } catch {}
+    }
+  })()
+
+  return new Response(readable, {
+    status: 200,
+    headers: {
+      ...corsHeaders(origin),
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2439,11 +2748,29 @@ serve(async (req) => {
       }, 200, origin)
     }
 
+    // MODE: System Health — نقاط صحة النظام
+    if (mode === 'health') {
+      const health = await getSystemHealthScore(supabase)
+      return jsonResponse({ health }, 200, origin)
+    }
+
     // ═══ STEP 0: Prompt Injection Guard (F7)
     if (message) {
       const { safe, sanitized } = sanitizeUserMessage(message)
       if (!safe) {
         return jsonResponse({ reply: sanitized, source: 'injection_guard' }, 200, origin)
+      }
+    }
+
+    // ═══ STEP 0.5: Greeting Handler — رد فوري بدون LLM (يوفر tokens)
+    if (message) {
+      const greeting = detectGreeting(message, profile)
+      if (greeting) {
+        return jsonResponse({
+          reply: greeting,
+          source: 'greeting_handler',
+          messageId: crypto.randomUUID(),
+        }, 200, origin)
       }
     }
 
@@ -2509,7 +2836,18 @@ serve(async (req) => {
     const startMs = Date.now()
 
     if (groqKey) {
-      // D1: Use multi-step tool calling (up to 3 rounds)
+      // ═══ STREAMING MODE — Real-time progress via SSE ═══
+      if (stream && modelConfig.streamEnabled) {
+        return await multiStepToolCallingStream(messages, groqKey, supabase, {
+          model: dbModelId || 'llama-3.3-70b-versatile',
+          maxTokens: dbMaxTokens,
+          temperature: dbTemperature,
+          maxSteps: 5,
+          userId: auth.userId,
+        }, origin)
+      }
+
+      // ═══ NON-STREAMING MODE — Standard multi-step ═══
       const multiStepResult = await multiStepToolCalling(messages, groqKey, supabase, {
         model: dbModelId || 'llama-3.3-70b-versatile',
         maxTokens: dbMaxTokens,
@@ -2546,7 +2884,7 @@ serve(async (req) => {
         }, 200, origin)
       }
 
-      // Streaming fallback
+      // ═══ FALLBACK: Simple streaming (no tools) ═══
       if (stream && modelConfig.streamEnabled) {
         const streamResult = await groqChat(messages, groqKey, {
           model: dbModelId || 'llama-3.3-70b-versatile',
@@ -2672,16 +3010,37 @@ serve(async (req) => {
       }
     }
 
-    // Nothing worked
+    // Nothing worked — give helpful error with suggestions
     await logUsage(supabase, 'none', 0, Date.now() - startMs, false, 'All providers failed', 'all_failed')
+
+    // Try to at least give a data-based answer without LLM
+    let fallbackAnswer = ''
+    try {
+      const health = await getSystemHealthScore(supabase)
+      if (health.score > 0) {
+        fallbackAnswer = `📊 **ملخص النظام** (بدون تحليل AI):\n\n` +
+          `• نقاط الصحة: ${health.score}/100 ${health.status}\n` +
+          `• إرساليات اليوم: ${health.today_submissions}\n` +
+          `• بانتظار المراجعة: ${health.pending_review}\n` +
+          `• نواقص حرجة: ${health.critical_shortages}\n` +
+          `• نشاط المحافظات: ${health.governorate_activity}\n\n` +
+          `⚠️ خدمة AI غير متاحة حالياً — البيانات أعلاه من قاعدة البيانات مباشرة.`
+      }
+    } catch {}
+
     return jsonResponse({
-      reply: '⚠️ لم أتمكن من توليد رد. تحقق من إعدادات مزود AI.',
+      reply: fallbackAnswer || '⚠️ خدمة AI غير متاحة حالياً. البيانات متوفرة مباشرة من قاعدة البيانات — اسأل سؤالاً محدداً وسأحاول الإجابة.',
       source: 'all_failed',
+      fallback_used: !!fallbackAnswer,
       debug: { groqKeySet: !!groqKey, mimoKeySet: !!mimoKey, hfKeySet: !!hfToken, orKeySet: !!openrouterKey, zaiKeySet: !!zaiKey, dbProvider },
     }, 200, origin)
 
   } catch (error) {
     console.error('AI error:', error)
-    return jsonResponse({ reply: 'حدث خطأ غير متوقع.', source: 'error' }, 500, origin)
+    return jsonResponse({
+      reply: '❌ حدث خطأ غير متوقع. حاول مرة أخرى أو اسأل سؤالاً أبسط.',
+      source: 'error',
+      error: String(error).slice(0, 200),
+    }, 500, origin)
   }
 })

@@ -7,20 +7,7 @@
 
 import { supabase } from './supabase'
 
-// ─── Brand Colors ───
-const BRAND = {
-  primary: '#1565C0',
-  primaryDark: '#0D47A1',
-  accent: '#E53935',
-  success: '#2E7D32',
-  warning: '#F57F17',
-  info: '#0277BD',
-  bgLight: '#F5F7FA',
-  bgWhite: '#FFFFFF',
-  textDark: '#212121',
-  textMuted: '#616161',
-  border: '#E0E0E0',
-}
+import { BRAND } from './pdf-brand'
 
 // ─── Arabic Date ───
 function formatDateArabic(date: Date): string {
@@ -952,18 +939,27 @@ export async function generateDistrictReport(
 // ═══════════════════════════════════════════════════════════════
 
 // ═══ HTML Capture Mode ═══
-// When captureMode is true, printReport() stores HTML instead of printing
+// When captureMode is true, printReport() stores HTML instead of printing.
+// Uses a generation counter to prevent stale captures from concurrent calls.
 let _captureMode = false
 let _capturedHTML = ''
+let _captureGeneration = 0
 
-/** Enable capture mode — printReport will store HTML instead of printing */
-export function enableCaptureMode(): void {
+/** Enable capture mode — printReport will store HTML instead of printing.
+ *  Returns a generation token to detect stale captures. */
+export function enableCaptureMode(): number {
   _captureMode = true
   _capturedHTML = ''
+  _captureGeneration++
+  return _captureGeneration
 }
 
-/** Disable capture mode and return captured HTML */
-export function disableCaptureMode(): string {
+/** Disable capture mode and return captured HTML.
+ *  If generation doesn't match (another capture started), returns empty string. */
+export function disableCaptureMode(expectedGeneration?: number): string {
+  if (expectedGeneration !== undefined && expectedGeneration !== _captureGeneration) {
+    return '' // Stale capture — another one started
+  }
   _captureMode = false
   const html = _capturedHTML
   _capturedHTML = ''

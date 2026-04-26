@@ -12,19 +12,10 @@ import { supabase } from './supabase'
 
 // ─── Brand Constants ─────────────────────────────────────────
 
-export const PDF_BRAND = {
-  primary: '#1565C0',
-  primaryDark: '#0D47A1',
-  accent: '#E53935',
-  success: '#2E7D32',
-  warning: '#F57F17',
-  info: '#0277BD',
-  bgLight: '#F5F7FA',
-  bgWhite: '#FFFFFF',
-  textDark: '#212121',
-  textMuted: '#616161',
-  border: '#E0E0E0',
-}
+import { BRAND as _BRAND } from './pdf-brand'
+
+/** @deprecated Import BRAND from '@/lib/pdf-brand' instead */
+export const PDF_BRAND = _BRAND
 
 // ─── Types ───────────────────────────────────────────────────
 

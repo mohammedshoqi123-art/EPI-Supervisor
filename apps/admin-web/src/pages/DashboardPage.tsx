@@ -40,13 +40,13 @@ const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#0
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white/95 backdrop-blur-sm border border-gray-200/60 rounded-xl shadow-xl p-3 min-w-[120px]">
-      <p className="text-[11px] font-medium text-gray-500 mb-1.5">{label}</p>
+    <div className="bg-popover/95 backdrop-blur-sm border border-border/60 rounded-xl shadow-xl p-3 min-w-[120px]">
+      <p className="text-[11px] font-medium text-muted-foreground mb-1.5">{label}</p>
       {payload.map((entry: any, i: number) => (
         <div key={i} className="flex items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-            <span className="text-gray-600">{entry.name}</span>
+            <span className="text-muted-foreground">{entry.name}</span>
           </div>
           <span className="font-bold tabular-nums">{entry.value}</span>
         </div>
@@ -759,7 +759,7 @@ export default function DashboardPage() {
                             value={formUsage[0].count > 0 ? (f.count / formUsage[0].count) * 100 : 0}
                             className="h-1.5"
                             indicatorClassName={cn(
-                              i === 0 ? 'bg-blue-500' : i === 1 ? 'bg-emerald-500' : 'bg-gray-400'
+                              i === 0 ? 'bg-blue-500' : i === 1 ? 'bg-emerald-500' : 'bg-muted-foreground/40'
                             )}
                           />
                         </div>

@@ -1,13 +1,13 @@
-import { useState, useMemo, useCallback, useRef } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
   BarChart3, FileSpreadsheet, Download, Calendar, Filter,
   Users, FileStack, MapPin, AlertTriangle, TrendingUp, TrendingDown,
   FileText, Activity, Clock, Zap, RefreshCw,
-  Building2, PackageX, Shield, Eye, ArrowUpRight,
+  PackageX, Shield, ArrowUpRight,
   CheckCircle2, Loader2, PieChart as PieChartIcon, Target,
-  Layers, Send, ClipboardList, Gauge, Star, Sparkles,
-  ChevronRight, ChevronDown, FileDown, Database,
-  ArrowUp, ArrowDown, Info, ScrollText, History, ArrowLeftRight
+  Sparkles, Gauge,
+  FileDown,
+  Info, ScrollText, History, ArrowLeftRight
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,7 @@ import {
   useDashboardStats, useShortages, useFormSubmissionCounts,
   useSubmissionsChart, useRoleDistribution, useAuditLogs
 } from '@/hooks/useApi'
-import { supabase, isConfigured } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { ROLE_LABELS, ROLE_HIERARCHY, type UserRole, type Form } from '@/types/database'
 import { formatNumber, formatDate, cn } from '@/lib/utils'
 import { useCampaign } from '@/lib/campaign-context'
@@ -97,13 +97,13 @@ function canExportGovernorate(role: UserRole): boolean {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white/95 backdrop-blur-sm border border-gray-200/60 rounded-xl shadow-xl p-3 min-w-[140px]">
-      <p className="text-xs font-medium text-gray-500 mb-2">{label}</p>
+    <div className="bg-popover/95 backdrop-blur-sm border border-border/60 rounded-xl shadow-xl p-3 min-w-[140px]">
+      <p className="text-xs font-medium text-muted-foreground mb-2">{label}</p>
       {payload.map((entry: any, i: number) => (
         <div key={i} className="flex items-center justify-between gap-4 text-sm">
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-            <span className="text-gray-600">{entry.name}</span>
+            <span className="text-muted-foreground">{entry.name}</span>
           </div>
           <span className="font-bold tabular-nums">{entry.value}</span>
         </div>
@@ -1085,15 +1085,15 @@ export default function ReportsPage() {
     subtitle: string,
     generator: () => Promise<void>
   ) => {
-    enableCaptureMode()
+    const gen = enableCaptureMode()
     try {
       await generator()
-      const html = disableCaptureMode()
+      const html = disableCaptureMode(gen)
       if (html) {
         openPreview(title, html, subtitle)
       }
     } catch (e) {
-      disableCaptureMode()
+      disableCaptureMode(gen)
       throw e
     }
   }, [openPreview])
@@ -1600,7 +1600,7 @@ export default function ReportsPage() {
                         profiles: 'المستخدمين', form_submissions: 'الإرساليات', forms: 'النماذج',
                         supply_shortages: 'النواقص', notifications: 'الإشعارات',
                       }
-                      const actionInfo = actionIcons[log.action] || { icon: Info, color: 'text-gray-600 bg-gray-50' }
+                      const actionInfo = actionIcons[log.action] || { icon: Info, color: 'text-muted-foreground bg-muted' }
                       const ActionIcon = actionInfo.icon
 
                       const timeDiff = Date.now() - new Date(log.created_at).getTime()

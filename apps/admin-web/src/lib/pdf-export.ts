@@ -27,19 +27,7 @@ interface ReportSection {
   kpis?: { label: string; value: string | number; icon?: string; color?: string }[]
 }
 
-const BRAND = {
-  primary: '#00897B',
-  primaryDark: '#00695C',
-  deepDark: '#004D40',
-  accent: '#E53935',
-  success: '#43A047',
-  warning: '#FF8F00',
-  info: '#1976D2',
-  bgLight: '#F5F7FA',
-  textDark: '#212121',
-  textMuted: '#757575',
-  white: '#FFFFFF',
-}
+import { BRAND_TEAL as BRAND } from './pdf-brand'
 
 function formatDateArabic(date: Date): string {
   const months = [
@@ -181,327 +169,28 @@ function buildCoverPage(options: ReportOptions): string {
   `
 }
 
-export async function generatePDFReport(options: ReportOptions): Promise<void> {
-  const now = new Date()
-  const dateStr = formatDateArabic(now)
-  const sectionsHtml = options.sections.map(buildSection).join('')
-
-  const html = `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(options.title)} — EPI Supervisor</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    @page {
-      size: A4;
-      margin: 15mm;
-    }
-
-    body {
-      font-family: 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, sans-serif;
-      color: ${BRAND.textDark};
-      background: #fff;
-      line-height: 1.6;
-      direction: rtl;
-    }
-
-    /* ═══ Cover Page ═══ */
-    .cover-page {
-      page-break-after: always;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .cover-gradient {
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark}, ${BRAND.deepDark});
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 0;
-    }
-    .cover-content {
-      text-align: center;
-      color: white;
-      padding: 40px;
-      width: 100%;
-    }
-    .logo-circle {
-      width: 90px; height: 90px;
-      border-radius: 50%;
-      background: white;
-      color: ${BRAND.primary};
-      display: flex; align-items: center; justify-content: center;
-      font-size: 28px; font-weight: 900;
-      margin: 0 auto 24px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-      letter-spacing: 1px;
-    }
-    .cover-title {
-      font-size: 32px; font-weight: 700;
-      margin-bottom: 10px;
-      letter-spacing: 0.5px;
-    }
-    .cover-subtitle {
-      font-size: 14px;
-      opacity: 0.8;
-      margin-bottom: 50px;
-      line-height: 1.8;
-    }
-    .cover-report-card {
-      background: white;
-      border-radius: 20px;
-      padding: 32px;
-      margin: 0 auto;
-      max-width: 500px;
-      color: ${BRAND.textDark};
-      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
-    }
-    .report-badge {
-      display: inline-block;
-      background: ${BRAND.primary};
-      color: white;
-      padding: 4px 20px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 18px;
-    }
-    .report-title {
-      font-size: 24px; font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .report-subtitle {
-      font-size: 13px;
-      color: ${BRAND.textMuted};
-    }
-    .cover-divider {
-      height: 1px;
-      background: #E0E0E0;
-      margin: 20px 0;
-    }
-    .cover-meta {
-      display: flex;
-      justify-content: space-around;
-      gap: 16px;
-    }
-    .meta-item { text-align: center; }
-    .meta-value {
-      display: block;
-      font-size: 16px;
-      font-weight: 700;
-      color: ${BRAND.primary};
-    }
-    .meta-label {
-      display: block;
-      font-size: 10px;
-      color: ${BRAND.textMuted};
-      margin-top: 4px;
-    }
-    .cover-footer {
-      margin-top: 40px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 9px;
-      opacity: 0.6;
-    }
-
-    /* ═══ Report Body ═══ */
-    .report-body {
-      padding: 0;
-    }
-
-    /* Header */
-    .report-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 10px;
-      border-bottom: 2px solid ${BRAND.primary};
-      margin-bottom: 24px;
-      font-size: 9px;
-      color: ${BRAND.textMuted};
-    }
-    .report-header .brand {
-      font-weight: 700;
-      color: ${BRAND.primary};
-    }
-
-    /* Sections */
-    .section {
-      margin-bottom: 28px;
-      page-break-inside: avoid;
-    }
-    .section-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 14px;
-      padding: 10px 14px;
-      background: ${BRAND.bgLight};
-      border-radius: 8px;
-      border-right: 4px solid ${BRAND.primary};
-    }
-    .section-icon { font-size: 20px; }
-    .section-header h2 {
-      font-size: 16px;
-      font-weight: 700;
-    }
-
-    /* KPI Grid */
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 12px;
-    }
-    .kpi-card {
-      background: ${BRAND.bgLight};
-      border-radius: 10px;
-      padding: 16px;
-      text-align: center;
-    }
-    .kpi-icon { font-size: 24px; margin-bottom: 6px; }
-    .kpi-value {
-      font-size: 26px;
-      font-weight: 900;
-      color: ${BRAND.textDark};
-    }
-    .kpi-label {
-      font-size: 11px;
-      color: ${BRAND.textMuted};
-      margin-top: 4px;
-    }
-
-    /* Summary Grid */
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 10px;
-    }
-    .summary-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 14px;
-      background: ${BRAND.bgLight};
-      border-radius: 8px;
-    }
-    .summary-label { font-size: 13px; color: ${BRAND.textMuted}; }
-    .summary-value { font-size: 16px; font-weight: 700; }
-
-    /* Tables */
-    .table-wrapper { overflow-x: auto; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-    thead th {
-      background: ${BRAND.primary};
-      color: white;
-      padding: 10px 12px;
-      text-align: right;
-      font-weight: 600;
-      font-size: 11px;
-    }
-    tbody td {
-      padding: 8px 12px;
-      border-bottom: 1px solid #E0E0E0;
-    }
-    tbody tr:nth-child(even) { background: ${BRAND.bgLight}; }
-    tbody tr:hover { background: #E0F2F1; }
-
-    /* Text & List */
-    .text-content {
-      font-size: 13px;
-      line-height: 1.8;
-      color: ${BRAND.textDark};
-    }
-    .report-list {
-      list-style: none;
-      padding: 0;
-    }
-    .report-list li {
-      padding: 8px 12px;
-      border-bottom: 1px solid #eee;
-      font-size: 13px;
-    }
-    .report-list li strong { color: ${BRAND.primary}; }
-
-    .empty-text {
-      text-align: center;
-      color: ${BRAND.textMuted};
-      padding: 30px;
-      font-size: 14px;
-    }
-
-    /* Footer */
-    .page-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 8px 20px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 8px;
-      color: ${BRAND.textMuted};
-      border-top: 1px solid #E0E0E0;
-      background: white;
-    }
-
-    /* Print Styles */
-    @media print {
-      .cover-page { height: auto; min-height: 100vh; }
-      .section { page-break-inside: avoid; }
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    }
-  </style>
-</head>
-<body>
-  ${buildCoverPage(options)}
-
-  <div class="report-body">
-    <div class="report-header">
-      <span>${escapeHtml(options.title)}</span>
-      <span class="brand">EPI Supervisor's</span>
-      <span>${dateStr}</span>
-    </div>
-
-    ${sectionsHtml}
-
-    <div style="text-align: center; padding: 20px; color: ${BRAND.textMuted}; font-size: 10px; border-top: 1px solid #E0E0E0; margin-top: 30px;">
-      <p>EPI Supervisor's — تقرير تم إنشاؤه تلقائياً</p>
-      <p>${dateStr} | ${options.generatedBy || 'لوحة التحكم الإدارية'}</p>
-    </div>
-  </div>
-</body>
-</html>`
-
-  // Use enhanced PDF system (no window.open, no popup blocker issues)
-  const { generateReportHTML, printReport: enhancedPrintReport } = await import('./enhanced-pdf')
-  enhancedPrintReport({
-    title: options.title,
-    subtitle: options.subtitle,
-    period: options.period,
-    generatedBy: options.generatedBy,
-    sections: options.sections.map(s => ({
-      title: s.title,
-      icon: s.icon,
-      type: s.type as any,
-      kpis: s.kpis,
-      items: s.items,
-      columns: s.columns,
-      rows: s.rows,
-      text: s.text,
-    })),
+export function generatePDFReport(options: ReportOptions): void {
+  // Delegate to enhanced-pdf system (no window.open, no popup blocker issues)
+  // Dynamic import keeps the initial bundle small
+  import('./enhanced-pdf').then(({ printReport: enhancedPrintReport }) => {
+    enhancedPrintReport({
+      title: options.title,
+      subtitle: options.subtitle,
+      period: options.period,
+      generatedBy: options.generatedBy,
+      sections: options.sections.map(s => ({
+        title: s.title,
+        icon: s.icon,
+        type: s.type as any,
+        kpis: s.kpis,
+        items: s.items,
+        columns: s.columns,
+        rows: s.rows,
+        text: s.text,
+      })),
+    })
   })
+
 }
 
 // ═══════════════════════════════════════════════════════════════

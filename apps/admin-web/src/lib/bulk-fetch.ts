@@ -12,6 +12,26 @@ import { supabase } from './supabase'
 
 // ─── Types ───────────────────────────────────────────────────
 
+/** Minimal Supabase query builder interface for filter functions.
+ *  Covers the chainable methods used across all filter callbacks.
+ *  Avoids importing internal Postgrest types which may break across versions. */
+interface SupabaseQuery {
+  is: (column: string, value: null) => SupabaseQuery
+  eq: (column: string, value: unknown) => SupabaseQuery
+  neq: (column: string, value: unknown) => SupabaseQuery
+  gte: (column: string, value: unknown) => SupabaseQuery
+  lte: (column: string, value: unknown) => SupabaseQuery
+  gt: (column: string, value: unknown) => SupabaseQuery
+  lt: (column: string, value: unknown) => SupabaseQuery
+  in: (column: string, values: unknown[]) => SupabaseQuery
+  like: (column: string, pattern: string) => SupabaseQuery
+  ilike: (column: string, pattern: string) => SupabaseQuery
+  order: (column: string, opts?: { ascending?: boolean }) => SupabaseQuery
+  limit: (count: number) => SupabaseQuery
+  range: (from: number, to: number) => SupabaseQuery
+  select: (columns: string, opts?: { count?: string; head?: boolean }) => SupabaseQuery
+}
+
 export interface BulkFetchOptions {
   /** Supabase table name */
   table: string
@@ -26,7 +46,7 @@ export interface BulkFetchOptions {
   /** Order direction */
   orderDirection?: 'asc' | 'desc'
   /** Filters to apply (Supabase query builder) */
-  applyFilters?: (query: any) => any
+  applyFilters?: (query: SupabaseQuery) => SupabaseQuery
   /** Callback for progress updates */
   onProgress?: (fetched: number, total: number | null) => void
 }
@@ -84,7 +104,7 @@ export async function bulkFetch<T = Record<string, unknown>>(
 
     // Apply custom filters if provided
     if (options.applyFilters) {
-      query = options.applyFilters(query as any) as typeof query
+      query = options.applyFilters(query as unknown as SupabaseQuery) as unknown as typeof query
     }
 
     const { data, error } = await query
@@ -151,7 +171,7 @@ export async function bulkFetchSubmissions(filters?: {
     `,
     maxRows: 50000,
     pageSize: 1000,
-    applyFilters: (q: any) => {
+    applyFilters: (q: SupabaseQuery) => {
       q = q.is('deleted_at', null)
       if (filters?.formId) q = q.eq('form_id', filters.formId)
       if (filters?.status && filters.status !== 'all') q = q.eq('status', filters.status)
@@ -180,7 +200,7 @@ export async function bulkFetchUsers(filters?: {
     `,
     maxRows: 10000,
     pageSize: 1000,
-    applyFilters: (q: any) => {
+    applyFilters: (q: SupabaseQuery) => {
       q = q.is('deleted_at', null)
       if (filters?.role && filters.role !== 'all') q = q.eq('role', filters.role)
       if (filters?.active !== undefined) q = q.eq('is_active', filters.active)
@@ -208,7 +228,7 @@ export async function bulkFetchShortages(filters?: {
     `,
     maxRows: 10000,
     pageSize: 1000,
-    applyFilters: (q: any) => {
+    applyFilters: (q: SupabaseQuery) => {
       q = q.is('deleted_at', null)
       if (filters?.severity && filters.severity !== 'all') q = q.eq('severity', filters.severity)
       if (filters?.resolved !== undefined) q = q.eq('is_resolved', filters.resolved)
@@ -234,7 +254,7 @@ export async function bulkFetchAuditLogs(filters?: {
     `,
     maxRows: 20000,
     pageSize: 1000,
-    applyFilters: (q: any) => {
+    applyFilters: (q: SupabaseQuery) => {
       if (filters?.action && filters.action !== 'all') q = q.eq('action', filters.action)
       if (filters?.dateFrom) q = q.gte('created_at', filters.dateFrom)
       if (filters?.dateTo) q = q.lte('created_at', filters.dateTo + 'T23:59:59')

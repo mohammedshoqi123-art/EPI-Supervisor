@@ -18,6 +18,15 @@ import * as XLSX from 'xlsx'
 
 // ─── Types ───────────────────────────────────────────────────
 
+/** Local cell style interface — XLSX Community Edition doesn't export CellStyle */
+interface CellStyle {
+  alignment?: { horizontal?: string; vertical?: string; wrapText?: boolean }
+  fill?: { fgColor: { rgb: string } }
+  border?: Record<string, { style: string; color: { rgb: string } }>
+  font?: { bold?: boolean; color?: { rgb: string }; sz?: number; italic?: boolean }
+  numFmt?: string
+}
+
 export interface EnhancedExportColumn {
   header: string
   key: string
@@ -294,7 +303,7 @@ export function exportEnhancedExcel(options: EnhancedExportOptions): void {
       if (!cell) continue
 
       // Base style
-      const style: any = {
+      const style: CellStyle = {
         alignment: {
           horizontal: columns[c].align || 'right',
           vertical: 'center',

@@ -121,11 +121,12 @@ jobs:
   # ─── Build APK ───────────────────────────────────────────
   # NOTE: Admin dashboard deployment handled by deploy-admin.yml
   # to avoid race condition with dual gh-pages pushes
+  # APK BUILD DISABLED — web-only deployment
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
     needs: analyze
-    if: github.ref == 'refs/heads/main'
+    if: false  # APK build disabled
     steps:
       - uses: actions/checkout@v4
 
@@ -190,11 +191,12 @@ jobs:
           retention-days: 30
 
   # ─── Build Flutter Web ───────────────────────────────────
+  # Flutter Web build DISABLED — admin-web only
   build-web-flutter:
     name: Build Flutter Web (Online-Only)
     runs-on: ubuntu-latest
     needs: analyze
-    if: github.ref == 'refs/heads/main'
+    if: false  # Flutter web build disabled
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4

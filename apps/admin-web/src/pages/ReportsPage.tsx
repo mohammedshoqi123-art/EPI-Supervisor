@@ -71,6 +71,7 @@ import {
   generateChallengesReport,
   generateSupervisionFormReport,
   generateSupervisionChallengesReport,
+  generateDailySupervisorEvaluation,
   enableCaptureMode,
   disableCaptureMode,
 } from '@/lib/professional-reports'
@@ -1043,6 +1044,11 @@ export default function ReportsPage() {
       () => generateSupervisionChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }))
   )
 
+  const handleDailySupervisorEvaluation = () => exportReport('daily-supervisor-eval', () =>
+    captureAndPreview('تقييم أداء المشرفين اليومي', 'استمارة الإشراف — النشاط الإيصالي التكاملي',
+      () => generateDailySupervisorEvaluation({ date: dateTo || new Date().toISOString().split('T')[0], governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }))
+  )
+
 
     // ═══════════════════════════════════════
     // تقارير إضافية احترافية
@@ -1144,6 +1150,14 @@ export default function ReportsPage() {
       color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700',
       onClick: handleSupervisionChallengesReport, loading: exportingReport === 'supervision-challenges',
       badge: 'ميداني', format: 'pdf',
+    })
+
+    // تقييم أداء المشرفين اليومي
+    cards.push({
+      icon: Users, title: '📋 تقييم أداء المشرفين اليومي', subtitle: 'اليومي — المركزي + المحافظات + المديريات | الاسم، الصفة، عدد الاستمارات | إشراف عام للمديرين',
+      color: 'text-white', gradient: 'bg-gradient-to-r from-emerald-600 to-teal-700',
+      onClick: handleDailySupervisorEvaluation, loading: exportingReport === 'daily-supervisor-eval',
+      badge: 'يومي', format: 'pdf',
     })
 
     // ═══════════════════════════════════════

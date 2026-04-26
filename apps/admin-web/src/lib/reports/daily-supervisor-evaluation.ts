@@ -43,18 +43,23 @@ const ROLE_ICONS: Record<string, string> = {
 }
 
 // ─── "إشراف عام" check ─────────────────────────────────────
-// فقط 3 أدوار:
-// 1. المدير العام لمكتب الصحة والسكان بالمحافظة
-// 2. مدير الرعاية بالمحافظة
-// 3. مشرف التحصين بالمحافظة (role=governorate)
+// فقط 3 أدوار (بالصفة الوظيفية):
+// 1. المدير العام لمكتب الصحة والسكان بالمحافظة (من الاسم)
+// 2. مدير الرعاية بالمحافظة (من الاسم)
+// 3. مشرف التحصين بالمحافظة (role=governorate — واحد لكل محافظة)
 
 function isGeneralSupervisor(name: string, role: string): boolean {
   // مشرف التحصين بالمحافظة = إشراف عام دائماً
   if (role === 'governorate') return true
+
+  const n = (name || '').trim()
+
   // المدير العام لمكتب الصحة والسكان بالمحافظة
-  if (name.includes('مدير عام')) return true
+  if (n.includes('مدير عام') || n.includes('المدير العام') || n.includes('مدير مكتب الصحة')) return true
+
   // مدير الرعاية بالمحافظة
-  if (name.includes('مدير الرعاية')) return true
+  if (n.includes('مدير الرعاية') || n.includes('رعاية primaria')) return true
+
   return false
 }
 

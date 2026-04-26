@@ -181,15 +181,16 @@ function buildDynamicSystemPrompt(
   const timeOfDay = hour < 12 ? 'صباحاً' : hour < 17 ? 'بعد الظهر' : 'مساءً'
   const dayName = now.toLocaleDateString('ar-SA', { weekday: 'long' })
 
-  let sys = `أنت "مساعد النظام" — مساعد ذكي لإدارة بيانات منصة مشرف EPI.
-تتحدث العربية بطلاقة. مهمتك مساعدة المستخدم في إدارة النماذج والإرساليات والتحليلات والإحصائيات.
+  let sys = `أنت "EPI Copilot" — مساعد ذكي متقدم لإدارة منصة مشرف التحصين الصحي الموسع (EPI).
+أنت copilot حقيقي مثل GitHub Copilot أو ChatGPT — تفهم السياق، تحلل البيانات، وتتصرف بذكاء.
 
 == هويتك ==
-• أنت ${roleConfig.title} ومحلل بيانات ميدانية موثوق
+• أنت ${roleConfig.title} ومحلل بيانات ميدانية خبير
 • تقدم رؤى عملية مبنية على أرقام حقيقية من النظام
 • مستوى التحليل: ${roleConfig.depth}
 • مجال التركيز: ${roleConfig.focus}
 • الصلاحيات: ${roleConfig.permissions}
+• أنت لست مجرد شات بوت — أنت copilot يفهم السياق العملي
 
 == معلومات المستخدم ==
 • الاسم: ${profile.full_name}
@@ -200,22 +201,49 @@ function buildDynamicSystemPrompt(
 • ${dayName} ${timeOfDay}
 • التاريخ: ${now.toISOString().split('T')[0]}
 
-== البيانات الأساسية ==
-• 22 محافظة يمنية
-• حملات: شلل الأطفال (polio_campaign) + نشاط إيصالي تكاملي (integrated_activity)
-• المؤشرات الرئيسية: Penta3 (التغطية), MR1, Dropout
-• 5 أدوار في النظام
+== النظام ==
+• 22 محافظة يمنية، ~330 مديرية
+• حملات نشطة: شلل الأطفال (polio_campaign) + نشاط إيصالي تكاملي (integrated_activity)
+• 5 أدوار: admin, central, governorate, district, data_entry
+• النماذج تُجمع حسب الحملة — كل حملة لها استماراتها وحقولها
+
+== المعرفة الصحية (EPI) ==
+لقاحات برنامج التحصين اليمني:
+• BCG (السل) — عند الولادة
+• OPV (شلل الأطفال) — جرعات: OPV0 عند الولادة، OPV1/OPV2/OPV3 في 6/10/14 أسبوع
+• Penta (الخماسي: DPT+HepB+Hib) — Penta1/2/3 في 6/10/14 أسبوع
+• PCV (الرئة) — PCV1/2/3 في 6/10/14 أسبوع
+• MR (الحصبة) — MR1 في 9 أشهر، MR2 في 18 شهر
+• Vitamin A — جرعات في 6 شهر و 12 شهر
+
+المؤشرات الرئيسية:
+• Dropout = (Penta1 - Penta3) / Penta1 × 100 — المقبول أقل من 10%
+• Coverage = Penta3 / Target × 100 — المستهدف 95%+
+• MR1 vs MR2 — فجوة بين الجرعتين
+• مقارنة: OPV3 vs Penta3 (يجب أن يكونوا متساويين)
+
+== أسلوب العمل (ReAct Agent) ==
+عندما تحتاج لجمع بيانات من مصادر متعددة:
+1. فكّر (Thought): أي معلومات تحتاجها؟ أي أدوات أستخدم؟
+2. اعمل (Action): استخدم الأداة المناسبة
+3. لاحظ (Observation): حلل النتائج
+4. كرّر حتى تجمع كل المعلومات المطلوبة
+5. أجِب (Final Answer): رد شامل مدعوم بأرقام حقيقية
 
 == أسلوب الإجابة ==
-• ابدأ بالخلاصة العملية مباشرة بدون مقدمات طويلة.
-• استخدم أرقام حقيقية من الأدوات المتاحة — لا تختلق أرقا��اً.
-• أنت متخصص في بيانات النظام فقط (نماذج، إرساليات، إحصائيات، مستخدمين، تحليلات).
-• أسئلة التطعيمات واللقاحات والآثار الجانبية → أرسل المستخدم لـ "مستشار التحصين" في تبويب البوت الثاني.
-• استخدم جداول مختصرة، قوائم، رموز (📊⚠️✅💡🚨) لتوضيح البيانات.
-• قدم توصيات عملية ميدانية تدعم أداء العمل.
-• إذا لا توجد بيانات، قل ذلك واقترح مصدرها.
-• تكيف مع دور المستخدم: ${profile.role === 'admin' ? 'محلل استراتيجي — أعطِ تحليلاً عميقاً وتوصيات استراتيجية' : profile.role === 'data_entry' ? 'مساعد عملي مبسط' : 'مستشار ميداني خبير'}
-• لديك صلاحية الوصول لكل النماذج والحقول والإرساليات — لا تتردد في استخدام كل الأدوات المتاحة.`
+• ابدأ بالخلاصة العملية مباشرة — لا مقدمات.
+• استخدم أرقام حقيقية من الأدوات — لا تختلق أرقاماً أبداً.
+• لو السؤال يحتاج عدة أدوات، استخدمها كلها قبل الإجابة.
+• صِغ التحليل كأنك تكتب تقرير لمدير: واضح، مدعوم بأرقام، مع توصيات.
+• استخدم: 📊 إحصائيات | ⚠️ تحذيرات | ✅ إيجابي | 💡 توصيات | 🚨 عاجل | 📈 صاعد | 📉 هابط
+• إذا لا توجد بيانات، قل ذلك واضحاً واقترح من أين تحصل عليها.
+• تكيف مع الدور:
+  - ${profile.role === 'admin' ? 'محلل استراتيجي — أعطِ تحليلاً عميقاً مع توصيات استراتيجية وتوقعات' : ''}
+  - ${profile.role === 'central' ? 'مستشار ميداني — ركز على المقارنات بين المحافظات والفجوات' : ''}
+  - ${profile.role === 'governorate' ? 'مسؤول محافظتك — ركز على أداء مديرياتك ومقارنتك بالمحافظات الأخرى' : ''}
+  - ${profile.role === 'district' ? 'مسؤول مديريتك — ركز على إدخالاتك وأداء فريقك' : ''}
+  - ${profile.role === 'data_entry' ? 'مساعد عملي — أعطِ إرشادات مختصرة وحل المشاكل بسرعة' : ''}
+• لديك صلاحية لكل البيانات — لا تتردد في استخدام كل الأدوات.`
 
   if (conversationSummary) {
     sys += `\n\n== ذاكرة المحادثة السابقة ==\n${conversationSummary}`
@@ -245,6 +273,10 @@ const INTENT_RULES: [string, RegExp][] = [
   ['analyze_trend', /اتجاه|تطور|مقارنة|تحسن|تراجع|تغير|نسبة|تحليل/i],
   ['query_health', /تغطية|تطعيم|لقاح|وصول|انسحاب|penta|opv|bcg|mr|dropout|تحصين/i],
   ['compare_data', /قارن|مقارنة|فرق|versus|ضد/i],
+  ['export_data', /تصدير|صدر|اكسل|excel|csv|ملف|تنزيل|تحميل/i],
+  ['drill_down', /تفاصيل|تعمق|اشرح أكثر|وضح|بالتفصيل/i],
+  ['proactive', /مشاكل|تحذير|تنبيه|ضعيف|يحتاج انتباه|أي مشكلة/i],
+  ['forecast', /تنبؤ|توقع|الأسبوع القادم|الشهر القادم|المستقبل/i],
 ]
 
 function classifyIntentLocal(text: string): { intent: string; confidence: number } {
@@ -491,6 +523,52 @@ const TOOLS = [
           days: { type: 'number', description: 'عدد الأيام (افتراضي 7)' },
         },
         required: ['report_type'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_data_quality',
+      description: 'تحليل جودة البيانات — نسبة الاكتمال، الحقول الفارغة، الإرساليات المرفوضة وأسبابها.',
+      parameters: {
+        type: 'object',
+        properties: {
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+          governorate_name: { type: 'string', description: 'اسم المحافظة' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'compare_governorates',
+      description: 'مقارنة تفصيلية بين محافظتين أو أكثر — الإرساليات، النشاط، التغطية.',
+      parameters: {
+        type: 'object',
+        properties: {
+          governorate_names: { type: 'array', items: { type: 'string' }, description: 'أسماء المحافظات للمقارنة' },
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+          days: { type: 'number', description: 'عدد الأيام' },
+        },
+        required: ['governorate_names'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_weak_governorates',
+      description: 'أضعف المحافظات أداءً — المحافظات التي تحتاج تدخل عاجل (إرساليات قليلة، نشاط ضعيف).',
+      parameters: {
+        type: 'object',
+        properties: {
+          campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'], description: 'نوع الحملة' },
+          threshold: { type: 'number', description: 'الحد الأدنى للإرساليات (افتراضي 10)' },
+        },
+        required: [],
       },
     },
   },
@@ -1054,6 +1132,161 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           approval_rate: data?.length
             ? ((byStatus.approved || 0) / data.length * 100).toFixed(1) + '%'
             : 'N/A',
+        }
+      }
+
+      case 'get_data_quality': {
+        const campaignType = args.campaign_type || 'all'
+        const formIds = await getCampaignFormIds(campaignType)
+
+        let query = supa.from('form_submissions')
+          .select('status, data, form_id, governorate_id')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(2000)
+
+        if (formIds && formIds.length > 0) query = query.in('form_id', formIds)
+        if (args.governorate_name) {
+          const { data: gov } = await supa.from('governorates').select('id').ilike('name_ar', `%${args.governorate_name}%`).limit(1)
+          if (gov?.[0]) query = query.eq('governorate_id', gov[0].id)
+        }
+
+        const { data: subs } = await withTimeout(query, 10_000) ?? {}
+        if (!subs || subs.length === 0) return { error: 'لا توجد بيانات' }
+
+        const total = subs.length
+        const rejected = subs.filter((s: any) => s.status === 'rejected').length
+        const draft = subs.filter((s: any) => s.status === 'draft').length
+        const submitted = subs.filter((s: any) => s.status === 'submitted').length
+        const approved = subs.filter((s: any) => s.status === 'approved').length
+
+        // Analyze data completeness
+        let emptyFields = 0
+        let totalFields = 0
+        for (const sub of subs.slice(0, 500)) {
+          const data = sub.data || {}
+          const keys = Object.keys(data)
+          totalFields += keys.length
+          for (const k of keys) {
+            if (data[k] === null || data[k] === '' || data[k] === undefined) emptyFields++
+          }
+        }
+
+        const completeness = totalFields > 0 ? ((totalFields - emptyFields) / totalFields * 100).toFixed(1) : 'N/A'
+
+        const label = campaignType !== 'all' ? CAMPAIGN_LABELS[campaignType] || campaignType : 'كل الحملات'
+        return {
+          campaign: label,
+          total,
+          by_status: { approved, submitted, draft, rejected },
+          rejection_rate: total > 0 ? (rejected / total * 100).toFixed(1) + '%' : '0%',
+          data_completeness: completeness + '%',
+          empty_fields: emptyFields,
+          total_fields_sampled: totalFields,
+          quality_score: total > 0 ? Math.round(((approved + submitted) / total * 100)) : 0,
+        }
+      }
+
+      case 'compare_governorates': {
+        const { governorate_names, campaign_type, days } = args
+        const campaignType = campaign_type || 'all'
+        const formIds = await getCampaignFormIds(campaignType)
+        const periodDays = days || 30
+        const since = new Date(Date.now() - periodDays * 86400000).toISOString()
+
+        const results = []
+        for (const govName of governorate_names) {
+          const { data: gov } = await supa.from('governorates').select('id, name_ar').ilike('name_ar', `%${govName}%`).limit(1)
+          if (!gov?.[0]) {
+            results.push({ name: govName, error: 'غير موجودة' })
+            continue
+          }
+
+          let subQuery = supa.from('form_submissions')
+            .select('status, created_at')
+            .eq('governorate_id', gov[0].id)
+            .is('deleted_at', null)
+            .gte('created_at', since)
+            .limit(5000)
+
+          if (formIds && formIds.length > 0) subQuery = subQuery.in('form_id', formIds)
+          const { data: subs } = await withTimeout(subQuery, 8_000) ?? {}
+
+          const total = subs?.length || 0
+          const approved = subs?.filter((s: any) => s.status === 'approved').length || 0
+          const submitted = subs?.filter((s: any) => s.status === 'submitted').length || 0
+          const rejected = subs?.filter((s: any) => s.status === 'rejected').length || 0
+
+          // Daily average
+          const daysWithSubs = new Set(subs?.map((s: any) => s.created_at?.split('T')[0]) || []).size
+          const dailyAvg = daysWithSubs > 0 ? (total / daysWithSubs).toFixed(1) : '0'
+
+          results.push({
+            name: gov[0].name_ar,
+            total,
+            approved,
+            submitted,
+            rejected,
+            approval_rate: total > 0 ? (approved / total * 100).toFixed(1) + '%' : 'N/A',
+            daily_avg: dailyAvg,
+            active_days: daysWithSubs,
+          })
+        }
+
+        return {
+          period: `آخر ${periodDays} يوم`,
+          governorates: results.sort((a: any, b: any) => (b.total || 0) - (a.total || 0)),
+        }
+      }
+
+      case 'get_weak_governorates': {
+        const campaignType = args.campaign_type || 'all'
+        const threshold = args.threshold || 10
+        const formIds = await getCampaignFormIds(campaignType)
+
+        const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+
+        const { data: govs } = await withTimeout(
+          supa.from('governorates').select('id, name_ar').eq('is_active', true).is('deleted_at', null), 5_000
+        ) ?? {}
+
+        let subQuery = supa.from('form_submissions')
+          .select('governorate_id, status')
+          .is('deleted_at', null)
+          .gte('created_at', sevenDaysAgo)
+          .limit(10000)
+
+        if (formIds && formIds.length > 0) subQuery = subQuery.in('form_id', formIds)
+        const { data: subs } = await withTimeout(subQuery, 10_000) ?? {}
+
+        const govStats: Record<string, { total: number; approved: number }> = {}
+        for (const s of subs ?? []) {
+          if (!s.governorate_id) continue
+          if (!govStats[s.governorate_id]) govStats[s.governorate_id] = { total: 0, approved: 0 }
+          govStats[s.governorate_id].total++
+          if (s.status === 'approved') govStats[s.governorate_id].approved++
+        }
+
+        const weakGovs = (govs || [])
+          .map((g: any) => ({
+            name: g.name_ar,
+            submissions: govStats[g.id]?.total ?? 0,
+            approved: govStats[g.id]?.approved ?? 0,
+            approval_rate: govStats[g.id]?.total
+              ? ((govStats[g.id].approved / govStats[g.id].total) * 100).toFixed(1) + '%'
+              : 'N/A',
+          }))
+          .filter((g: any) => g.submissions < threshold)
+          .sort((a: any, b: any) => a.submissions - b.submissions)
+
+        return {
+          period: 'آخر 7 أيام',
+          threshold,
+          weak_governorates: weakGovs,
+          total_weak: weakGovs.length,
+          message: weakGovs.length > 0
+            ? `${weakGovs.length} محافظة تحتاج تدخل — أقل من ${threshold} إرساليات في أسبوع`
+            : '✅ كل المحافظات فوق الحد الأدنى',
         }
       }
 
@@ -1673,11 +1906,11 @@ serve(async (req) => {
     const conversationSummary = groqKey ? await getConversationSummary(supabase, auth.userId).catch(() => '') : ''
 
     // ═══ STEP 4: Build system prompt (with D7 Agent addition for complex queries)
-    const isComplexQuery = confidence < 0.6 || ['analyze_trend', 'compare_data', 'query_governorates'].includes(intent)
+    const isComplexQuery = confidence < 0.6 || ['analyze_trend', 'compare_data', 'query_governorates', 'proactive', 'forecast'].includes(intent)
     const systemPrompt = buildDynamicSystemPrompt(
       profile || { id: auth.userId, role: 'data_entry', full_name: 'مستخدم', governorate_id: null, district_id: null, governorate_name: null },
       liveData, '', conversationSummary,
-    ) + (isComplexQuery ? AGENT_SYSTEM_ADDITION : '')
+    )
 
     // ═══ STEP 6: Build messages
     const messages: any[] = [{ role: 'system', content: systemPrompt }]

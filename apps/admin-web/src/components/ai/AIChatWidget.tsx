@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// EPI Copilot — AI Chat Widget (Local-First, No API Required)
+// EPI Copilot — AI Chat Widget (Edge Function + Local Fallback)
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -23,6 +23,7 @@ import { epiBotEngine, FeedbackTracker, NLToSQLEngine, PredictiveEngine } from '
 import { useVoiceInput } from '@/hooks/useVoiceInput'
 import { parseExportRequest, executeExport, QUICK_EXPORTS } from '@/lib/ai-export-engine'
 import { buildSmartReport } from '@/lib/smart-report-builder'
+import { queryAI, type AIMessage } from '@/lib/ai-providers'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -651,16 +652,26 @@ export function AIChatWidget() {
       // Update history for multi-turn
       ctx.history.push({ role: 'user', text, intent: localResult.intent, timestamp: Date.now() })
 
-      // Check if we need to fetch real data
-      let responseText = localResult.text
+      // ═══ TRY EDGE FUNCTION FIRST (Smart AI via Groq) ═══
+      let edgeResponse: string | null = null
+      try {
+        const history: AIMessage[] = messages
+          .filter(m => !m.id.startsWith('err-'))
+          .slice(-8)
+          .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+        const aiResp = await queryAI(text, history)
+        if (aiResp.text && !aiResp.error) {
+          const badge = aiResp.provider === 'groq' ? '🧠' : aiResp.provider === 'openrouter' ? '🔄' : '⚡'
+          edgeResponse = `${badge} ${aiResp.text}`
+        }
+      } catch { /* fall through to local */ }
+
+      let responseText = edgeResponse || localResult.text
+      let actions: CopilotAction[] = edgeResponse
+        ? [{ id: 'nav-insights', label: '🧠 التحليلات', type: 'navigate', payload: '/insights', color: 'bg-purple-50 text-purple-700 border-purple-200' }]
+        : (localResult.actions?.map(a => ({ id: a.id, label: a.label, type: a.type as 'navigate' | 'query', payload: a.payload, color: a.color })) || [])
+
       let chart: ChartData | undefined
-      let actions = localResult.actions?.map(a => ({
-        id: a.id,
-        label: a.label,
-        type: a.type as 'navigate' | 'query',
-        payload: a.payload,
-        color: a.color,
-      })) || []
 
       // ── Export Request Detection ──
       const exportKeywords = ['صدر', 'تصدير', 'تنزيل', 'حفظ', 'اكسل', 'إكسل', 'excel', 'pdf', 'بي دي اف', 'csv']
@@ -712,17 +723,18 @@ export function AIChatWidget() {
         }
       }
 
-      // For data-heavy intents, fetch real data from Supabase
-      if (localResult.intent === 'query_submissions' || text.includes('إرسالي') || text.includes('حالة')) {
-        const stats = await fetchLocalStats()
-        responseText = stats
-      } else if (localResult.intent === 'query_governorates' || text.includes('محافظ')) {
-        const result = await fetchGovernorateStats()
-        responseText = result.text
-        chart = result.chart
-      } else if (localResult.intent === 'query_users' || text.includes('مستخدم') || text.includes('فريق')) {
-        responseText = await fetchUserStats()
-      } else if (localResult.intent === 'create_report' || text.includes('تقرير') || text.includes('ملخص') || text.includes('لخص')) {
+      // ═══ LOCAL FALLBACK — only if Edge Function didn't respond ═══
+      if (!edgeResponse && !isExportRequest) {
+        if (localResult.intent === 'query_submissions' || text.includes('إرسالي') || text.includes('حالة')) {
+          const stats = await fetchLocalStats()
+          responseText = stats
+        } else if (localResult.intent === 'query_governorates' || text.includes('محافظ')) {
+          const result = await fetchGovernorateStats()
+          responseText = result.text
+          chart = result.chart
+        } else if (localResult.intent === 'query_users' || text.includes('مستخدم') || text.includes('فريق')) {
+          responseText = await fetchUserStats()
+        } else if (localResult.intent === 'create_report' || text.includes('تقرير') || text.includes('ملخص') || text.includes('لخص')) {
         // Smart report detection
         const isSmartReport = text.includes('يومي') || text.includes('شامل') || text.includes('اسبوع') || text.includes('أسبوع') ||
           text.includes('محافظ') || text.includes('مقارنة') || text.includes('كامل')
@@ -778,6 +790,7 @@ export function AIChatWidget() {
           responseText = `🤔 ما فهمت بالضبط.${pageHints}\n\nأو جرّب:\n• "كم إرسالية اليوم؟" — إحصائيات\n• "تنبؤ الأسبوع القادم" — توقعات\n• "المستخدمين غير النشطين" — استعلام مباشر\n• "وش تطعيمات طفلي؟" — جدول التطعيم`
         }
       }
+      } // end if (!edgeResponse)
 
       // Add page-aware actions if none
       if (actions.length === 0 && pathname !== '/dashboard') {

@@ -102,7 +102,7 @@ export function useReportHandlers() {
   const [drillDownData, setDrillDownData] = useState<DrillDownData | null>(null)
   const [fullscreenChart, setFullscreenChart] = useState<string | null>(null)
   const [reportSearch, setReportSearch] = useState('')
-  const [reportFormat, setReportFormat] = useState<'all' | 'pdf' | 'excel' | 'pptx'>('all')
+  const [reportFormat, setReportFormat] = useState<'all' | 'pdf' | 'excel' | 'pptx' | 'favorites'>('all')
 
   const filteredForms = useMemo(() => {
     return forms.filter(f => {

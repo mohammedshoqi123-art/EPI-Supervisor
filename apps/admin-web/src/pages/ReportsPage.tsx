@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import {
   BarChart3, FileSpreadsheet, Download, Calendar, Filter,
   Users, FileStack, MapPin, AlertTriangle, TrendingUp, TrendingDown,
@@ -6,7 +6,7 @@ import {
   PackageX, Shield, ArrowUpRight,
   CheckCircle2, PieChart as PieChartIcon, Target,
   Sparkles, Gauge, FileDown, Info, ScrollText, History, ArrowLeftRight,
-  Search, X, FileSearch
+  Search, X, FileSearch, Star
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,6 +38,24 @@ import { generateMonthlyPerformancePPTX, generateWeeklyBulletinPPTX, generateCam
 
 export default function ReportsPage() {
   const h = useReportHandlers()
+
+  // ═══ Favorites State (localStorage) ═══
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('epi-favorite-reports')
+      return raw ? new Set(JSON.parse(raw)) : new Set()
+    } catch { return new Set() }
+  })
+
+  const toggleFavorite = useCallback((title: string) => {
+    setFavorites(prev => {
+      const next = new Set(prev)
+      if (next.has(title)) next.delete(title)
+      else next.add(title)
+      localStorage.setItem('epi-favorite-reports', JSON.stringify([...next]))
+      return next
+    })
+  }, [])
 
   // ═══ Report Cards Definition ═══
   const reportCards = useMemo(() => {
@@ -120,12 +138,17 @@ export default function ReportsPage() {
     cards.push({ icon: Activity, title: '📅 PPTX — النشرة الأسبوعية', subtitle: 'عرض PowerPoint — ملخص الأسبوع، النشاط اليومي، ترتيب المحافظات، التنبيهات', color: 'text-white', gradient: 'bg-gradient-to-r from-orange-600 to-red-500', onClick: () => h.exportReport('pptx-weekly', async () => { await generateWeeklyBulletinPPTX() }), loading: h.exportingReport === 'pptx-weekly', badge: 'أسبوعي', format: 'pptx' })
     cards.push({ icon: Target, title: '💉 PPTX — أداء الحملات', subtitle: 'عرض PowerPoint — شلل أطفال vs الإيصالي، معدل التسريب، التغطية، تأثير النواقص', color: 'text-white', gradient: 'bg-gradient-to-r from-rose-500 to-pink-600', onClick: () => h.exportReport('pptx-campaign', async () => { await generateCampaignPerformancePPTX() }), loading: h.exportingReport === 'pptx-campaign', badge: 'حملات', format: 'pptx' })
 
-    return cards
-  }, [h.userRole, h.stats, h.govStats, h.chartData, h.roleDistribution, h.exportingReport, h.dateFrom, h.dateTo, h.selectedGovFilter, h.campaign, h.governorates, h.forms])
+    return cards.map(c => ({
+      ...c,
+      favorite: favorites.has(c.title),
+      onToggleFavorite: () => toggleFavorite(c.title),
+    }))
+  }, [h.userRole, h.stats, h.govStats, h.chartData, h.roleDistribution, h.exportingReport, h.dateFrom, h.dateTo, h.selectedGovFilter, h.campaign, h.governorates, h.forms, favorites, toggleFavorite])
 
   const filteredReportCards = useMemo(() => {
     let result = reportCards
-    if (h.reportFormat !== 'all') result = result.filter(card => card.format === h.reportFormat)
+    if (h.reportFormat === 'favorites') result = result.filter(card => card.favorite)
+    else if (h.reportFormat !== 'all') result = result.filter(card => card.format === h.reportFormat)
     if (h.reportSearch.trim()) {
       const q = h.reportSearch.trim().toLowerCase()
       result = result.filter(card => card.title.toLowerCase().includes(q) || card.subtitle.toLowerCase().includes(q) || (card.badge && card.badge.toLowerCase().includes(q)))
@@ -134,11 +157,12 @@ export default function ReportsPage() {
   }, [reportCards, h.reportSearch, h.reportFormat])
 
   const formatCounts = useMemo(() => {
-    const counts = { all: reportCards.length, pdf: 0, excel: 0, pptx: 0 }
+    const counts = { all: reportCards.length, pdf: 0, excel: 0, pptx: 0, favorites: 0 }
     reportCards.forEach(card => {
       if (card.format === 'pdf') counts.pdf++
       else if (card.format === 'excel') counts.excel++
       else if (card.format === 'pptx') counts.pptx++
+      if (card.favorite) counts.favorites++
     })
     return counts
   }, [reportCards])
@@ -479,6 +503,7 @@ export default function ReportsPage() {
             <div className="flex items-center gap-2 flex-wrap">
               {[
                 { key: 'all' as const, label: 'الكل', icon: FileStack, color: 'bg-primary text-primary-foreground' },
+                { key: 'favorites' as const, label: 'المفضلة', icon: Star, color: 'bg-amber-500 text-white' },
                 { key: 'excel' as const, label: 'Excel / CSV', icon: FileSpreadsheet, color: 'bg-emerald-600 text-white' },
                 { key: 'pdf' as const, label: 'PDF', icon: FileText, color: 'bg-red-600 text-white' },
                 { key: 'pptx' as const, label: 'PowerPoint', icon: BarChart3, color: 'bg-orange-600 text-white' },

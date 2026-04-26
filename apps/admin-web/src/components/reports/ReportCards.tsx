@@ -7,7 +7,7 @@
 
 import {
   TrendingUp, TrendingDown, ArrowUpRight,
-  FileSpreadsheet, Download, Loader2
+  FileSpreadsheet, Download, Loader2, Star
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,6 +51,8 @@ export interface ReportCardProps {
   loading?: boolean
   badge?: string
   format?: ReportFormat
+  favorite?: boolean
+  onToggleFavorite?: () => void
 }
 
 const FORMAT_BADGES: Record<ReportFormat, { label: string; color: string; bg: string }> = {
@@ -59,7 +61,7 @@ const FORMAT_BADGES: Record<ReportFormat, { label: string; color: string; bg: st
   pptx: { label: 'PPTX', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200' },
 }
 
-export function ReportCard({ icon: Icon, title, subtitle, value, trend, color, gradient, onClick, loading, badge, format }: ReportCardProps) {
+export function ReportCard({ icon: Icon, title, subtitle, value, trend, color, gradient, onClick, loading, badge, format, favorite, onToggleFavorite }: ReportCardProps) {
   return (
     <Card
       className="group hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 border-0 shadow-lg cursor-pointer relative overflow-hidden"
@@ -67,6 +69,17 @@ export function ReportCard({ icon: Icon, title, subtitle, value, trend, color, g
     >
       <div className={cn('absolute top-0 left-0 right-0 h-1', gradient)} />
       <div className={cn('absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-0 group-hover:opacity-10 transition-opacity duration-500', color.replace('text-', 'bg-'))} />
+
+      {/* Favorite button */}
+      {onToggleFavorite && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleFavorite() }}
+          className="absolute top-3 left-3 z-10 p-1 rounded-full transition-all hover:scale-125"
+          title={favorite ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}
+        >
+          <Star className={cn('w-4 h-4 transition-colors', favorite ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30 hover:text-amber-400')} />
+        </button>
+      )}
 
       <CardContent className="p-5 relative">
         <div className="flex items-start justify-between mb-4">

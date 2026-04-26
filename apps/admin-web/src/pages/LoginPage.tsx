@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Eye, EyeOff, AlertCircle, Shield, Lock } from 'lucide-react'
+import { Eye, EyeOff, AlertCircle, Shield, Lock, Globe } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -78,6 +79,15 @@ export default function LoginPage() {
           <div className="inline-flex items-center gap-1.5 mt-4 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-400/20">
             <Shield className="w-3.5 h-3.5 text-emerald-400" />
             <span className="text-xs font-medium text-emerald-300">اتصال آمن ومشفّر</span>
+          </div>
+
+          {/* Public Dashboard link */}
+          <div className="mt-4">
+            <Link to="/public"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-sm font-medium hover:bg-white/20 transition-all backdrop-blur-sm">
+              <Globe className="w-4 h-4" />
+              لوحة المعلومات العامة
+            </Link>
           </div>
         </div>
 

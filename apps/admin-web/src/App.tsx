@@ -25,6 +25,7 @@ const ReferencesPage = lazy(() => import('@/pages/ReferencesPage'))
 const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
 const ShortagesPage = lazy(() => import('@/pages/ShortagesPage'))
 const ScheduledReportsPage = lazy(() => import('@/pages/ScheduledReportsPage'))
+const PublicDashboardPage = lazy(() => import('@/pages/PublicDashboardPage'))
 
 function PageLoader() {
   return (
@@ -44,7 +45,8 @@ export default function App() {
     <ErrorBoundary>
     <TooltipProvider>
       <Routes>
-        {/* Public route — Login */}
+        {/* Public routes — no auth required */}
+        <Route path="/public" element={<Suspense fallback={<PageLoader />}><PublicDashboardPage /></Suspense>} />
         <Route path="/login" element={<LoginPage />} />
 
         {/* ═══════════════════════════════════════════════════════

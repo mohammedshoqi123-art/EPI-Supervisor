@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPI Copilot v7.0 — تقرير شامل</title>
+<style>
+  @page { size: A4; margin: 2cm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; line-height: 1.8; color: #1a1a2e; background: #fff; padding: 40px; max-width: 900px; margin: 0 auto; }
+  .cover { text-align: center; padding: 60px 0; border-bottom: 3px solid #1565C0; margin-bottom: 40px; }
+  .cover h1 { font-size: 36px; color: #1565C0; margin-bottom: 10px; }
+  .cover h2 { font-size: 20px; color: #666; font-weight: normal; }
+  .cover .version { display: inline-block; background: #1565C0; color: #fff; padding: 5px 20px; border-radius: 20px; margin-top: 15px; font-size: 14px; }
+  .cover .date { color: #999; margin-top: 10px; font-size: 14px; }
+  h1 { font-size: 28px; color: #1565C0; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin: 40px 0 20px; }
+  h2 { font-size: 22px; color: #2E7D32; margin: 30px 0 15px; }
+  h3 { font-size: 18px; color: #E65100; margin: 20px 0 10px; }
+  p { margin: 10px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px; }
+  th { background: #1565C0; color: #fff; padding: 10px; text-align: right; }
+  td { padding: 10px; border-bottom: 1px solid #e0e0e0; }
+  tr:nth-child(even) { background: #f5f5f5; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .badge-green { background: #E8F5E9; color: #2E7D32; }
+  .badge-blue { background: #E3F2FD; color: #1565C0; }
+  .badge-orange { background: #FFF3E0; color: #E65100; }
+  .badge-red { background: #FFEBEE; color: #C62828; }
+  .badge-purple { background: #F3E5F5; color: #7B1FA2; }
+  code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #C62828; }
+  pre { background: #263238; color: #EEFFFF; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px; margin: 10px 0; direction: ltr; text-align: left; }
+  .card { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 15px 0; }
+  .card h3 { margin-top: 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+  .stat { text-align: center; padding: 20px; background: linear-gradient(135deg, #1565C0, #1976D2); color: #fff; border-radius: 8px; }
+  .stat .number { font-size: 36px; font-weight: bold; }
+  .stat .label { font-size: 14px; opacity: 0.9; }
+  .flow { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 10px 0; font-size: 14px; }
+  .flow .step { display: flex; align-items: center; margin: 8px 0; }
+  .flow .step-num { background: #1565C0; color: #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; margin-left: 10px; flex-shrink: 0; }
+  .toc { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+  .toc a { color: #1565C0; text-decoration: none; display: block; padding: 5px 0; }
+  .toc a:hover { text-decoration: underline; }
+  .page-break { page-break-before: always; }
+  .footer { text-align: center; color: #999; font-size: 12px; margin-top: 60px; padding-top: 20px; border-top: 1px solid #e0e0e0; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <h1>🏥 EPI Copilot v7.0</h1>
+  <h2>نظام الذكاء الاصطناعي المدمج — تقرير شامل</h2>
+  <div class="version">v7.0 — Modular Architecture</div>
+  <div class="date">تاريخ التقرير: 27 أبريل 2026 | المشروع: EPI-Supervisor</div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h3>📑 فهرس المحتويات</h3>
+  <a href="#overview">1. نظرة عامة</a>
+  <a href="#architecture">2. الهيكل المعماري</a>
+  <a href="#tools">3. الأدوات (28 أداة)</a>
+  <a href="#security">4. الأمان</a>
+  <a href="#intelligence">5. الذكاء والتعلم</a>
+  <a href="#api">6. واجهة البرمجة (API)</a>
+  <a href="#commands">7. الأوامر والخدمات</a>
+  <a href="#endpoints">8. نقاط الوصول (Endpoints)</a>
+  <a href="#database">9. قاعدة البيانات</a>
+  <a href="#deployment">10. النشر والتشغيل</a>
+  <a href="#changelog">11. سجل التغييرات</a>
+</div>
+
+<!-- 1. OVERVIEW -->
+<h1 id="overview">1. نظرة عامة</h1>
+
+<p>EPI Copilot هو نظام ذكاء اصطناعي مدمج داخل منصة مشرف التحصين الصحي الموسع (EPI Supervisor). يعمل كـ <strong>Copilot ذكي</strong> يفهم بيانات النظام ويحللها ويقدم تقارير وتوصيات بناءً على بيانات حية من قاعدة البيانات.</p>
+
+<div class="grid">
+  <div class="stat">
+    <div class="number">28</div>
+    <div class="label">أداة متاحة</div>
+  </div>
+  <div class="stat">
+    <div class="number">18</div>
+    <div class="label">نمط نية (Intent)</div>
+  </div>
+  <div class="stat">
+    <div class="number">5</div>
+    <div class="label">مزود LLM</div>
+  </div>
+  <div class="stat">
+    <div class="number">17</div>
+    <div class="label">Edge Function</div>
+  </div>
+</div>
+
+<h2>المشغلات (LLM Providers)</h2>
+<table>
+  <tr><th>الأولوية</th><th>المزود</th><th>النموذج</th><th>الحالة</th></tr>
+  <tr><td>1 (أساسي)</td><td>Groq</td><td>llama-3.3-70b-versatile</td><td><span class="badge badge-green">نشط</span></td></tr>
+  <tr><td>2 (Fallback)</td><td>HuggingFace</td><td>Meta-Llama-3-8B-Instruct</td><td><span class="badge badge-blue">احتياطي</span></td></tr>
+  <tr><td>3 (Fallback)</td><td>OpenRouter</td><td>DeepSeek V3</td><td><span class="badge badge-blue">احتياطي</span></td></tr>
+  <tr><td>4 (Fallback)</td><td>ZAI</td><td>GLM-4-Flash</td><td><span class="badge badge-blue">احتياطي</span></td></tr>
+  <tr><td>5 (Fallback)</td><td>MiMo (Xiaomi)</td><td>mimo-v2-pro</td><td><span class="badge badge-blue">احتياطي</span></td></tr>
+</table>
+
+<!-- 2. ARCHITECTURE -->
+<h1 id="architecture" class="page-break">2. الهيكل المعماري</h1>
+
+<h2>هيكل الملفات (Modular v7.0)</h2>
+<pre>
+ai-chat-v3/
+├── index.ts              (776 سطر — المعالج الرئيسي)
+├── utils/
+│   ├── types.ts          (185 — أنواع TypeScript)
+│   ├── helpers.ts        (133 — أدوات مشتركة)
+│   ├── guard.ts          (27 — حماية الحقن)
+│   └── greeting.ts       (46 — معالج التحيات)
+├── tools/
+│   ├── confirmation.ts   (58 — تأكيد الكتابة)
+│   └── audit.ts          (33 — تسجيل العمليات)
+├── llm/
+│   └── providers.ts      (168 — مزودي LLM)
+├── prompts/
+│   ├── system.ts         (78 — بناء النظام)
+│   ├── intents.ts        (66 — تصنيف النوايا)
+│   ├── roles.ts          (83 — إعدادات الأدوار)
+│   └── knowledge.ts      (41 — معرفة EPI)
+└── _shared/
+    ├── auth.ts           (مصادقة JWT)
+    └── cors.ts           (إدارة Origins)
+</pre>
+
+<h2>تدفق المعالجة</h2>
+<div class="flow">
+  <div class="step"><span class="step-num">1</span> طلب المستخدم → فحص الأمان (Injection Guard)</div>
+  <div class="step"><span class="step-num">2</span> كشف التحيات → رد فوري (بدون LLM)</div>
+  <div class="step"><span class="step-num">3</span> تصنيف النية (Intent) → تحديد المعرفة المطلوبة</div>
+  <div class="step"><span class="step-num">4</span> فحص الكاش → رد مخزن (إن وجد)</div>
+  <div class="step"><span class="step-num">5</span> جلب البيانات الحية + ذاكرة المحادثة</div>
+  <div class="step"><span class="step-num">6</span> بناء System Prompt (ديناميكي حسب النية)</div>
+  <div class="step"><span class="step-num">7</span> Multi-step Tool Calling (حتى 5 جولات)</div>
+  <div class="step"><span class="step-num">8</span> تأكيد الكتابة (إن لزم) → تنفيذ → تسجيل</div>
+  <div class="step"><span class="step-num">9</span> إرجاع الرد + تحديث الكاش + ذاكرة المحادثة</div>
+</div>
+
+<!-- 3. TOOLS -->
+<h1 id="tools" class="page-break">3. الأدوات (28 أداة)</h1>
+
+<h2>🔵 أدوات القراءة (19 أداة)</h2>
+<table>
+  <tr><th>الأداة</th><th>الوصف</th><th>المعاملات</th></tr>
+  <tr><td><code>get_submissions</code></td><td>إحصائيات الإرساليات</td><td>status, governorate, days, campaign_type</td></tr>
+  <tr><td><code>get_shortages</code></td><td>إحصائيات النواقص</td><td>severity, governorate, resolved, campaign</td></tr>
+  <tr><td><code>get_analytics</code></td><td>إحصائيات لوحة التحكم</td><td>—</td></tr>
+  <tr><td><code>get_governorate_performance</code></td><td>ترتيب المحافظات</td><td>campaign_type</td></tr>
+  <tr><td><code>get_users_summary</code></td><td>ملخص المستخدمين</td><td>—</td></tr>
+  <tr><td><code>get_submission_trend</code></td><td>اتجاه الإرساليات (30 يوم)</td><td>campaign_type</td></tr>
+  <tr><td><code>get_submission_details</code></td><td>تفاصيل إرسالية</td><td>submission_id, limit, status</td></tr>
+  <tr><td><code>get_form_schemas</code></td><td>تعريفات النماذج</td><td>campaign_type</td></tr>
+  <tr><td><code>aggregate_form_data</code></td><td>تبيان حقول النماذج</td><td>form_id, field_key, aggregation</td></tr>
+  <tr><td><code>get_form_field_values</code></td><td>قيم حقل محدد</td><td>form_id, field_key, days</td></tr>
+  <tr><td><code>search_submissions</code></td><td>بحث في الإرساليات</td><td>field_key, field_value</td></tr>
+  <tr><td><code>compare_periods</code></td><td>مقارنة فترتين</td><td>current_days, previous_days</td></tr>
+  <tr><td><code>get_user_activity</code></td><td>نشاط المستخدمين</td><td>days, limit</td></tr>
+  <tr><td><code>get_critical_alerts</code></td><td>تنبيهات حرجة</td><td>campaign_type</td></tr>
+  <tr><td><code>export_report</code></td><td>إنشاء تقرير</td><td>report_type, campaign, governorate</td></tr>
+  <tr><td><code>get_data_quality</code></td><td>جودة البيانات</td><td>campaign_type, governorate</td></tr>
+  <tr><td><code>compare_governorates</code></td><td>مقارنة محافظات</td><td>governorate_names[], campaign</td></tr>
+  <tr><td><code>get_weak_governorates</code></td><td>أضعف المحافظات</td><td>campaign_type, threshold</td></tr>
+  <tr><td><code>get_system_health</code></td><td>نقاط صحة النظام (0-100)</td><td>—</td></tr>
+</table>
+
+<h2>🔴 أدوات الكتابة (7 أدوات — تحتاج تأكيد)</h2>
+<table>
+  <tr><th>الأداة</th><th>الوصف</th><th>المعاملات</th></tr>
+  <tr><td><code>update_submission_status</code></td><td>تغيير حالة إرسالية/جماعي</td><td>submission_id, status, batch_governorate</td></tr>
+  <tr><td><code>create_notification</code></td><td>إرسال إشعار</td><td>title, body, target_role, priority</td></tr>
+  <tr><td><code>execute_sql</code></td><td>استعلام SQL (SELECT فقط)</td><td>query, description</td></tr>
+  <tr><td><code>generate_chart</code></td><td>توليد بيانات رسم بياني</td><td>chart_type, data_source</td></tr>
+  <tr><td><code>bulk_export</code></td><td>تصدير بيانات</td><td>data_type, format, governorate</td></tr>
+  <tr><td><code>create_scheduled_report</code></td><td>تقرير مجدول</td><td>name, report_type, schedule</td></tr>
+  <tr><td><code>workflow_chain</code></td><td>سلسلة عمليات</td><td>steps[], description</td></tr>
+</table>
+
+<h2>⚙️ أدوات النظام (2 أداة — Admin فقط)</h2>
+<table>
+  <tr><th>الأداة</th><th>الوصف</th></tr>
+  <tr><td><code>get_system_health</code></td><td>نقاط صحة النظام 0-100 مع التفاصيل</td></tr>
+  <tr><td><code>get_ai_usage</code></td><td>إحصائيات استخدام AI (طلبات، توكنات، رضا)</td></tr>
+</table>
+
+<!-- 4. SECURITY -->
+<h1 id="security" class="page-break">4. الأمان</h1>
+
+<h2>طبقات الحماية (8 طبقات)</h2>
+<table>
+  <tr><th>#</th><th>الطبقة</th><th>الوصف</th><th>الحالة</th></tr>
+  <tr><td>1</td><td>Confirmation Layer</td><td>كل عملية كتابة تحتاج تأكيد صريح من المستخدم</td><td><span class="badge badge-green">مفعّل</span></td></tr>
+  <tr><td>2</td><td>Write Audit Log</td><td>تسجيل كل عمليات الكتابة مع المستخدم والنتيجة</td><td><span class="badge badge-green">مفعّل</span></td></tr>
+  <tr><td>3</td><td>exec_sql Security</td><td>SELECT فقط + 5 ثواني timeout + 500 صف limit</td><td><span class="badge badge-green">مفعّل</span></td></tr>
+  <tr><td>4</td><td>Batch Guard</td><td>العمليات الجماعية تعرض العدد وتحتاج تأكيد</td><td><span class="badge badge-green">مفعّل</span></td></tr>
+  <tr><td>5</td><td>Injection Guard</td><td>كشف prompt injection (8 أنماط)</td><td><span class="badge badge-green">مفعّل</span></td></tr>
+  <tr><td>6</td><td>Rate Limiting</td><td>25 طلب/دقيقة per user</td><td><span class="badge badge-green">مفعّل</span></td></tr>
+  <tr><td>7</td><td>CORS Fail-Closed</td><td> Origins غير مسموحة → محظورة افتراضياً</td><td><span class="badge badge-green">مفعّل</span></td></tr>
+  <tr><td>8</td><td>JWT Validation</td><td>مصادقة Supabase بدون fallback</td><td><span class="badge badge-green">مفعّل</span></td></tr>
+</table>
+
+<h2>جدول Audit Log</h2>
+<pre>
+ai_write_audit
+├── id              UUID (Primary Key)
+├── user_id         UUID (→ auth.users)
+├── tool_name       TEXT (اسم الأداة)
+├── action_description TEXT (وصف العملية)
+├── args            JSONB (المعاملات)
+├── result          JSONB (النتيجة)
+├── affected_count  INTEGER (عدد السجلات المتأثرة)
+├── confirmed_by_user BOOLEAN (تم التأكيد)
+└── created_at      TIMESTAMPTZ
+</pre>
+
+<!-- 5. INTELLIGENCE -->
+<h1 id="intelligence" class="page-break">5. الذكاء والتعلم</h1>
+
+<h2>تصنيف النوايا (18 نمط)</h2>
+<table>
+  <tr><th>النية</th><th>الكلمات المفتاحية</th></tr>
+  <tr><td><span class="badge badge-blue">query_submissions</span></td><td>إرساليات، إرسال، استمارة، كم عدد</td></tr>
+  <tr><td><span class="badge badge-blue">query_shortages</span></td><td>نقص، نواقص، احتياج، مفقود</td></tr>
+  <tr><td><span class="badge badge-blue">query_analytics</span></td><td>إحصائيات، أرقام، لوحة، ملخص</td></tr>
+  <tr><td><span class="badge badge-blue">generate_report</span></td><td>تقرير، إنشاء تقرير، أنشئ</td></tr>
+  <tr><td><span class="badge badge-blue">query_governorates</span></td><td>محافظة، محافظات، مناطق</td></tr>
+  <tr><td><span class="badge badge-blue">query_users</span></td><td>مستخدم، فريق، مشرف، صلاحيات</td></tr>
+  <tr><td><span class="badge badge-blue">ask_guide</span></td><td>كيف، شرح، دليل، تعليمات</td></tr>
+  <tr><td><span class="badge badge-blue">analyze_trend</span></td><td>اتجاه، تطور، مقارنة، تحسن</td></tr>
+  <tr><td><span class="badge badge-blue">query_health</span></td><td>تغطية، تطعيم، لقاح، dropout</td></tr>
+  <tr><td><span class="badge badge-blue">compare_data</span></td><td>قارن، مقارنة، فرق</td></tr>
+  <tr><td><span class="badge badge-blue">export_data</span></td><td>تصدير، اكسل، csv، تنزيل</td></tr>
+  <tr><td><span class="badge badge-blue">drill_down</span></td><td>تفاصيل، تعمق، بالتفصيل</td></tr>
+  <tr><td><span class="badge badge-blue">proactive</span></td><td>مشاكل، تحذير، تنبيه، ضعيف</td></tr>
+  <tr><td><span class="badge badge-blue">forecast</span></td><td>تنبؤ، توقع، المستقبل</td></tr>
+  <tr><td><span class="badge badge-blue">system_health</span></td><td>صحة النظام، حالة النظام</td></tr>
+  <tr><td><span class="badge badge-blue">data_quality</span></td><td>جودة البيانات، نسبة الرفض</td></tr>
+  <tr><td><span class="badge badge-blue">user_activity</span></td><td>نشاط المستخدمين، أكثر نشاط</td></tr>
+  <tr><td><span class="badge badge-blue">campaign_analysis</span></td><td>حملة، شلل أطفال، إيصالي</td></tr>
+</table>
+
+<h2>الذكاءات المدمجة</h2>
+<table>
+  <tr><th>الذكاء</th><th>الوصف</th><th>التوفير</th></tr>
+  <tr><td>Smart Prompt</td><td>تحميل معرفة EPI حسب النية فقط</td><td>~40% توكنات</td></tr>
+  <tr><td>Compound Intent</td><td>فهم أسئلة مركبة (عدة نوايا)</td><td>دقة أعلى</td></tr>
+  <tr><td>Feedback Learning</td><td>تعلم من تقييمات المستخدم 👍/👎</td><td>تحسن تراكمي</td></tr>
+  <tr><td>Greeting Handler</td><td>رد فوري بدون LLM</td><td>توكنات + وقت</td></tr>
+  <tr><td>Response Cache</td><td>تخزين الردود (15 دقيقة)</td><td>استجابة أسرع</td></tr>
+  <tr><td>Fallback Data</td><td>بيانات خام عند فشل LLM</td><td>متاحة دائماً</td></tr>
+</table>
+
+<h2>التأكيد (Confirmation Flow)</h2>
+<div class="flow">
+  <div class="step"><span class="step-num">1</span> المستخدم: "اعتمد كل إرساليات تعز"</div>
+  <div class="step"><span class="step-num">2</span> AI يستدعي update_submission_status → يرجع needs_confirmation</div>
+  <div class="step"><span class="step-num">3</span> AI يقول: "🔒 هل تريد تأكيد تحديث 47 إرسالية؟"</div>
+  <div class="step"><span class="step-num">4</span> المستخدم: "نعم"</div>
+  <div class="step"><span class="step-num">5</span> AI يستدعي نفس الأداة مع _confirmed=true → ينفذ</div>
+  <div class="step"><span class="step-num">6</span> 📝 Audit Log يسجل العملية</div>
+</div>
+
+<!-- 6. API -->
+<h1 id="api" class="page-break">6. واجهة البرمجة (API)</h1>
+
+<h2>الطلب (Request)</h2>
+<pre>
+POST /functions/v1/ai-chat-v3
+Headers:
+  Authorization: Bearer &lt;user-jwt&gt;
+  Content-Type: application/json
+
+Body:
+{
+  "message": "نص السؤال",           // مطلوب (أو template)
+  "history": [...],                  // اختياري — تاريخ المحادثة
+  "mode": "chat",                    // اختياري — chat|suggestions|health|usage|feedback|model_status
+  "template": "daily",               // اختياري — قالب تقرير
+  "stream": false,                   // اختياري — SSE streaming
+  "feedback": {                      // اختياري — mode=feedback
+    "rating": "up",
+    "comment": "ملاحظة",
+    "intent": "query_submissions"
+  },
+  "message_id": "uuid"               // مطلوب مع feedback
+}
+</pre>
+
+<h2>الرد (Response)</h2>
+<pre>
+{
+  "reply": "نص الرد من AI",
+  "source": "groq_multi_step",       // groq|huggingface|openrouter|zai|mimo|response_cache|greeting_handler
+  "model": "llama-3.3-70b-versatile",
+  "intent": "query_submissions",
+  "confidence": 0.85,
+  "intents": ["query_submissions", "analyze_trend"],  // اختياري — أسئلة مركبة
+  "messageId": "uuid",
+  "toolsUsed": ["get_submissions", "get_governorate_performance"]
+}
+</pre>
+
+<!-- 7. COMMANDS -->
+<h1 id="commands" class="page-break">7. الأوامر والخدمات</h1>
+
+<h2>أوامر المحادثة (Chat Commands)</h2>
+<table>
+  <tr><th>الأمر</th><th>الوصف</th><th>مثال</th></tr>
+  <tr><td>سؤال حر</td><td>اسأل أي شي بالنظام</td><td>"كم إرسالية اليوم؟"</td></tr>
+  <tr><td>تقرير</td><td>طلب تقرير مفصل</td><td>"أعطني تقرير أسبوعي"</td></tr>
+  <tr><td>مقارنة</td><td>مقارنة بين محافظات</td><td>"قارن تعز وصنعاء"</td></tr>
+  <tr><td>تحليل</td><td>تحليل اتجاهات</td><td>"حلل اتجاه الإرساليات"</td></tr>
+  <tr><td>تحذير</td><td>البحث عن مشاكل</td><td>"أي مشاكل بالنظام؟"</td></tr>
+  <tr><td>تصدير</td><td>تصدير بيانات</td><td>"صدّر إرساليات تعز CSV"</td></tr>
+  <tr><td>إشعار</td><td>إرسال إشعار</td><td>"أرسل إشعار للمشرفين"</td></tr>
+  <tr><td>حالة</td><td>حالة النظام</td><td>"كيف صحة النظام؟"</td></tr>
+</table>
+
+<h2>أوامر المدير (Admin Only)</h2>
+<table>
+  <tr><th>الأمر</th><th>الوصف</th></tr>
+  <tr><td><code>mode=usage</code></td><td>لوحة إحصائيات AI (طلبات، توكنات، رضا)</td></tr>
+  <tr><td><code>mode=health</code></td><td>نقاط صحة النظام 0-100</td></tr>
+  <tr><td><code>mode=model_status</code></td><td>حالة نماذج AI المتاحة</td></tr>
+  <tr><td><code>get_ai_usage</code></td><td>إحصائيات استخدام AI من المحادثة</td></tr>
+</table>
+
+<h2>الخدمات التلقائية</h2>
+<table>
+  <tr><th>الخدمة</th><th>الوصف</th><th>التكرار</th></tr>
+  <tr><td>Greeting Handler</td><td>رد فوري على التحيات</td><td>فوري</td></tr>
+  <tr><td>Response Cache</td><td>تخزين الردود المتكررة</td><td>15 دقيقة TTL</td></tr>
+  <tr><td>Conversation Memory</td><td>ملخص المحادثة</td><td>كل 8 رسائل</td></tr>
+  <tr><td>Feedback Learning</td><td>تحسين من التقييمات</td><td>تراكمي</td></tr>
+  <tr><td>Health Score</td><td>نقاط صحة النظام</td><td>عند الطلب</td></tr>
+</table>
+
+<!-- 8. ENDPOINTS -->
+<h1 id="endpoints" class="page-break">8. نقاط الوصول (Endpoints)</h1>
+
+<h2>Edge Functions (17 function)</h2>
+<table>
+  <tr><th>الدالة</th><th>الرابط</th><th>الوصف</th></tr>
+  <tr><td><code>ai-chat-v3</code></td><td>/functions/v1/ai-chat-v3</td><td>الذكاء الاصطناعي الرئيسي</td></tr>
+  <tr><td><code>get-dashboard-stats</code></td><td>/functions/v1/get-dashboard-stats</td><td>إحصائيات لوحة التحكم</td></tr>
+  <tr><td><code>get-analytics</code></td><td>/functions/v1/get-analytics</td><td>تحليلات متقدمة</td></tr>
+  <tr><td><code>get-forms</code></td><td>/functions/v1/get-forms</td><td>جلب النماذج</td></tr>
+  <tr><td><code>submit-form</code></td><td>/functions/v1/submit-form</td><td>إرسال نموذج</td></tr>
+  <tr><td><code>get-admin-dashboard</code></td><td>/functions/v1/get-admin-dashboard</td><td>لوحة المدير</td></tr>
+  <tr><td><code>get-advanced-reports</code></td><td>/functions/v1/get-advanced-reports</td><td>تقارير متقدمة</td></tr>
+  <tr><td><code>get-governorate-report</code></td><td>/functions/v1/get-governorate-report</td><td>تقرير المحافظة</td></tr>
+  <tr><td><code>manage-data</code></td><td>/functions/v1/manage-data</td><td>إدارة البيانات</td></tr>
+  <tr><td><code>manage-notifications</code></td><td>/functions/v1/manage-notifications</td><td>إدارة الإشعارات</td></tr>
+  <tr><td><code>export-data</code></td><td>/functions/v1/export-data</td><td>تصدير البيانات</td></tr>
+  <tr><td><code>admin-actions</code></td><td>/functions/v1/admin-actions</td><td>إجراءات المدير</td></tr>
+  <tr><td><code>create-admin</code></td><td>/functions/v1/create-admin</td><td>إنشاء مدير</td></tr>
+  <tr><td><code>generate-scheduled-report</code></td><td>/functions/v1/generate-scheduled-report</td><td>تقارير مجدولة</td></tr>
+  <tr><td><code>sync-offline</code></td><td>/functions/v1/sync-offline</td><td>مزامنة أوفلاين</td></tr>
+  <tr><td><code>system-monitor</code></td><td>/functions/v1/system-monitor</td><td>مراقب النظام</td></tr>
+  <tr><td><code>public-dashboard</code></td><td>/functions/v1/public-dashboard</td><td>لوحة عامة (بدون مصادقة)</td></tr>
+</table>
+
+<h2>النماذج الجاهزة (Templates)</h2>
+<table>
+  <tr><th>القالب</th><th>الأمر</th><th>الوصف</th></tr>
+  <tr><td><code>daily</code></td><td>template=daily</td><td>تقرير يومي مختص</td></tr>
+  <tr><td><code>weekly</code></td><td>template=weekly</td><td>تحليل الأسبوع</td></tr>
+  <tr><td><code>governorate</code></td><td>template=governorate</td><td>أداء المحافظات</td></tr>
+  <tr><td><code>shortages</code></td><td>template=shortages</td><td>تحليل النواقص</td></tr>
+  <tr><td><code>quality</code></td><td>template=quality</td><td>جودة البيانات</td></tr>
+  <tr><td><code>coverage</code></td><td>template=coverage</td><td>تحليل التغطية</td></tr>
+  <tr><td><code>polio</code></td><td>template=polio</td><td>حملات الشلل</td></tr>
+</table>
+
+<!-- 9. DATABASE -->
+<h1 id="database" class="page-break">9. قاعدة البيانات</h1>
+
+<h2>الجداول المستخدمة</h2>
+<table>
+  <tr><th>الجدول</th><th>الاستخدام</th></tr>
+  <tr><td><code>ai_write_audit</code></td><td>تسجيل عمليات الكتابة (جديد)</td></tr>
+  <tr><td><code>ai_response_cache</code></td><td>تخزين الردود المؤقتة</td></tr>
+  <tr><td><code>ai_conversations</code></td><td>ذاكرة المحادثة (ملخصات)</td></tr>
+  <tr><td><code>ai_feedback</code></td><td>تقييمات المستخدمين</td></tr>
+  <tr><td><code>ai_model_usage</code></td><td>إحصائيات الاستخدام</td></tr>
+  <tr><td><code>ai_models</code></td><td>إعدادات نماذج AI</td></tr>
+  <tr><td><code>form_submissions</code></td><td>إرساليات النماذج</td></tr>
+  <tr><td><code>profiles</code></td><td>ملفات المستخدمين</td></tr>
+  <tr><td><code>governorates</code></td><td>المحافظات (15 نشطة)</td></tr>
+  <tr><td><code>districts</code></td><td>المديريات</td></tr>
+  <tr><td><code>forms</code></td><td>تعريفات النماذج</td></tr>
+  <tr><td><code>notifications</code></td><td>الإشعارات</td></tr>
+  <tr><td><code>scheduled_reports</code></td><td>التقارير المجدولة</td></tr>
+  <tr><td><code>supply_shortages</code></td><td>النواقص الميدانية</td></tr>
+</table>
+
+<h2>الدوال (Functions)</h2>
+<table>
+  <tr><th>الدالة</th><th>الوصف</th></tr>
+  <tr><td><code>exec_sql(TEXT)</code></td><td>استعلام SELECT آمن (500 صف، 5 ثواني)</td></tr>
+  <tr><td><code>user_role()</code></td><td>دور المستخدم الحالي</td></tr>
+  <tr><td><code>log_ai_usage()</code></td><td>تسجيل استخدام AI</td></tr>
+  <tr><td><code>check_and_increment_rate_limit()</code></td><td>فحص Rate Limiting</td></tr>
+</table>
+
+<!-- 10. DEPLOYMENT -->
+<h1 id="deployment" class="page-break">10. النشر والتشغيل</h1>
+
+<h2>المعلومات</h2>
+<table>
+  <tr><th>العنصر</th><th>القيمة</th></tr>
+  <tr><td>Supabase Project</td><td>yinoyjmzzrxrpuxbzwwm</td></tr>
+  <tr><td>Region</td><td>ap-southeast-2 (Sydney)</td></tr>
+  <tr><td>Database</td><td>PostgreSQL 17.6.1</td></tr>
+  <tr><td>GitHub Repo</td><td>mohammedshoqi123-art/EPI-Supervisor</td></tr>
+  <tr><td>Branch</td><td>main</td></tr>
+</table>
+
+<h2>أوامر النشر</h2>
+<pre>
+# رفع الكود
+git push origin main
+
+# نشر Edge Functions
+supabase functions deploy --no-verify-jwt
+
+# نشر دالة واحدة
+supabase functions deploy ai-chat-v3 --no-verify-jwt
+
+# تطبيق Migrations
+supabase db push --include-all
+
+# رفع Migration واحد
+# (طبق يدوياً عبر Supabase Dashboard → SQL Editor)
+</pre>
+
+<h2>المتغيرات المطلوبة (Edge Function Secrets)</h2>
+<table>
+  <tr><th>المتغير</th><th>الوصف</th></tr>
+  <tr><td><code>GROQ_API_KEY</code></td><td>مفتاح Groq API (أساسي)</td></tr>
+  <tr><td><code>HF_API_TOKEN</code></td><td>مفتاح HuggingFace (احتياطي)</td></tr>
+  <tr><td><code>OPENROUTER_API_KEY</code></td><td>مفتاح OpenRouter (احتياطي)</td></tr>
+  <tr><td><code>ZAI_API_KEY</code></td><td>مفتاح ZAI/GLM (احتياطي)</td></tr>
+  <tr><td><code>MIMO_API_KEY</code></td><td>مفتاح MiMo (احتياطي)</td></tr>
+  <tr><td><code>ALLOWED_ORIGINS</code></td><td>Origins المسموحة (مفصولة بفاصلة)</td></tr>
+</table>
+
+<!-- 11. CHANGELOG -->
+<h1 id="changelog" class="page-break">11. سجل التغييرات</h1>
+
+<table>
+  <tr><th>الإصدار</th><th>التاريخ</th><th>التغييرات</th></tr>
+  <tr><td><span class="badge badge-green">v7.0</span></td><td>27 أبريل 2026</td><td>
+    <strong>Refactor:</strong> هيكل معماري modular (10 ملفات)<br>
+    <strong>كود:</strong> index.ts من 3,266 إلى 776 سطر (-76%)<br>
+    <strong>TypeScript:</strong> أنواع كاملة لجميع الواجهات
+  </td></tr>
+  <tr><td><span class="badge badge-green">v6.3</span></td><td>27 أبريل 2026</td><td>
+    <strong>Feedback Learning:</strong> يتعلم من 👍/👎<br>
+    <strong>Admin Dashboard:</strong> mode=usage + mode=health<br>
+    <strong>Intents:</strong> 4 نماذج جديدة (18 إجمالي)
+  </td></tr>
+  <tr><td><span class="badge badge-green">v6.2</span></td><td>27 أبريل 2026</td><td>
+    <strong>Streaming:</strong> Multi-step SSE real-time<br>
+    <strong>Health Score:</strong> نقاط صحة النظام 0-100<br>
+    <strong>Greeting:</strong> ردود فورية بدون LLM<br>
+    <strong>Errors:</strong> رسائل خطأ واضحة مع fallback data
+  </td></tr>
+  <tr><td><span class="badge badge-green">v6.1</span></td><td>27 أبريل 2026</td><td>
+    <strong>Confirmation:</strong> كل كتابة تحتاج تأكيد<br>
+    <strong>Audit Log:</strong> جدول ai_write_audit<br>
+    <strong>Smart Prompt:</strong> تحميل ديناميكي (~40% توفير)<br>
+    <strong>exec_sql:</strong> PostgreSQL function آمنة
+  </td></tr>
+  <tr><td><span class="badge badge-blue">v6.0</span></td><td>23 أبريل 2026</td><td>
+    <strong>RAG:</strong> إزالة embeddings (نقل لمستشار التحصين)<br>
+    <strong>خفيف:</strong> System prompt أصغر + أسرع
+  </td></tr>
+</table>
+
+<div class="footer">
+  <p>EPI Copilot v7.0 — تقرير تلقائي | 27 أبريل 2026</p>
+  <p>EPI Supervisor — منصة مشرف التحصين الصحي الموسع</p>
+</div>
+
+</body>
+</html>

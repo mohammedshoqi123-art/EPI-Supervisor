@@ -31,7 +31,7 @@ import { SectionErrorBoundary } from '@/components/ui/section-error-boundary'
 import { ComparisonReport } from '@/components/reports/ComparisonReport'
 import { AnalyticsFilterBar, DrillDownDialog, ChartCard, FullscreenChart } from '@/components/reports/InteractiveAnalytics'
 import { useReportHandlers, canExportAll, canExportGovernorate, CHART_COLORS } from './reports'
-import { generateMonthlyPerformancePPTX, generateWeeklyBulletinPPTX, generateCampaignPerformancePPTX } from '@/lib/pptx-index'
+import { generateMonthlyPerformancePPTX, generateWeeklyBulletinPPTX, generateCampaignPerformancePPTX, generateMasterSupervisorPPTX } from '@/lib/pptx-index'
 
 // ═══════════════════════════════════════════════════════════════
 // Main Reports Page
@@ -155,6 +155,7 @@ export default function ReportsPage() {
     }
     cards.push({ icon: Activity, title: '📅 PPTX — النشرة الأسبوعية', subtitle: 'عرض PowerPoint — ملخص الأسبوع، النشاط اليومي، ترتيب المحافظات، التنبيهات', color: 'text-white', gradient: 'bg-gradient-to-r from-orange-600 to-red-500', onClick: () => h.exportReport('pptx-weekly', async () => { await generateWeeklyBulletinPPTX() }), loading: h.exportingReport === 'pptx-weekly', badge: 'أسبوعي', format: 'pptx' })
     cards.push({ icon: Target, title: '💉 PPTX — أداء الحملات', subtitle: 'عرض PowerPoint — شلل أطفال vs الإيصالي، معدل التسريب، التغطية، تأثير النواقص', color: 'text-white', gradient: 'bg-gradient-to-r from-rose-500 to-pink-600', onClick: () => h.exportReport('pptx-campaign', async () => { await generateCampaignPerformancePPTX() }), loading: h.exportingReport === 'pptx-campaign', badge: 'حملات', format: 'pptx' })
+    cards.push({ icon: Sparkles, title: '🏆 PPTX — التقرير الشامل المدمج', subtitle: 'عرض PowerPoint احترافي — تقييم الأداء + تحليل نعم/لا + التحديات | 8 شرائح', color: 'text-white', gradient: 'bg-gradient-to-r from-amber-600 to-red-600', onClick: () => h.exportReport('pptx-master', async () => { await generateMasterSupervisorPPTX() }), loading: h.exportingReport === 'pptx-master', badge: '🏆 مدمج', format: 'pptx' })
 
     return cards.map(c => ({
       ...c,

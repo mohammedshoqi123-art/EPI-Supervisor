@@ -33,7 +33,7 @@ import {
 import { useReportPreview } from '@/components/reports/ReportPreview'
 import { useExportProgress } from '@/components/reports/ExportProgress'
 import { bulkFetchSubmissions, bulkFetchUsers, bulkFetchShortages } from '@/lib/bulk-fetch'
-import { generateMonthlyPerformancePPTX, generateWeeklyBulletinPPTX, generateCampaignPerformancePPTX } from '@/lib/pptx-index'
+import { generateMonthlyPerformancePPTX, generateWeeklyBulletinPPTX, generateCampaignPerformancePPTX, generateMasterSupervisorPPTX } from '@/lib/pptx-index'
 import type { AnalyticsFilter, DrillDownData } from '@/components/reports/InteractiveAnalytics'
 import {
   generateCentralReport,

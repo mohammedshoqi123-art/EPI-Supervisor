@@ -2,7 +2,7 @@
 // EPI Copilot — Shared Utility Functions
 // ═══════════════════════════════════════════════════════════
 
-import { corsHeaders } from '../_shared/cors.ts'
+import { corsHeaders } from '../../_shared/cors.ts'
 
 // ═══ Timeout wrapper — يمنع التعليق ═══
 export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {

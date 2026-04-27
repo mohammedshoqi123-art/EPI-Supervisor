@@ -298,9 +298,13 @@ const INTENT_RULES: [string, RegExp][] = [
   ['query_health', /تغطية|تطعيم|لقاح|وصول|انسحاب|penta|opv|bcg|mr|dropout|تحصين/i],
   ['compare_data', /قارن|مقارنة|فرق|versus|ضد/i],
   ['export_data', /تصدير|صدر|اكسل|excel|csv|ملف|تنزيل|تحميل/i],
-  ['drill_down', /تفاصيل|تعمق|اشرح أكثر|وضح|بالتفصيل/i],
+  ['drill_down', /تفاصيل|تعمق|اكثر|اكثر|وضح|بالتفصيل/i],
   ['proactive', /مشاكل|تحذير|تنبيه|ضعيف|يحتاج انتباه|أي مشكلة/i],
   ['forecast', /تنبؤ|توقع|الأسبوع القادم|الشهر القادم|المستقبل/i],
+  ['system_health', /صحة النظام|حالة النظام|كل شي تمام|فيه مشاكل|status/i],
+  ['data_quality', /جودة البيانات|نسبة الرفض|مرفوض|اكتمال|فارغ/i],
+  ['user_activity', /نشاط المستخدمين|أكثر نشاط|غير نشاط|مَن يرسل/i],
+  ['campaign_analysis', /حملة|شلل أطفال|إيصالي|تكاملي|الحملات/i],
 ]
 
 function classifyIntentLocal(text: string): { intent: string; confidence: number } {
@@ -737,6 +741,14 @@ const TOOLS = [
     function: {
       name: 'get_system_health',
       description: 'نقاط صحة النظام — يعطيك تقييم فوري (0-100) مع التفاصيل: إرساليات اليوم، بانتظار المراجعة، نواقص حرجة، نشاط المحافظات.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_ai_usage',
+      description: 'إحصائيات استخدام AI — عدد الطلبات، التوكينات، معدل الرضا، العمليات الكتابية. (Admin only)',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -1322,6 +1334,68 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
 
       case 'get_system_health': {
         return await getSystemHealthScore(supa)
+      }
+
+      case 'get_ai_usage': {
+        // Admin only
+        const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+
+        const [weekUsage, recentFeedback, writeAudits] = await Promise.all([
+          withTimeout(
+            supa.from('ai_model_usage').select('tokens_used, success, response_source, created_at')
+              .gte('created_at', sevenDaysAgo).limit(2000), 8_000
+          ),
+          withTimeout(
+            supa.from('ai_feedback').select('rating, metadata')
+              .gte('created_at', sevenDaysAgo).limit(100), 5_000
+          ),
+          withTimeout(
+            supa.from('ai_write_audit').select('tool_name, confirmed_by_user, affected_count')
+              .gte('created_at', sevenDaysAgo).limit(50), 5_000
+          ),
+        ])
+
+        const usageData = weekUsage?.data || []
+        const feedbacks = recentFeedback?.data || []
+        const writes = writeAudits?.data || []
+
+        const thumbsUp = feedbacks.filter((f: any) => f.rating === 'up').length
+        const thumbsDown = feedbacks.filter((f: any) => f.rating === 'down').length
+        const satisfaction = (thumbsUp + thumbsDown) > 0
+          ? Math.round((thumbsUp / (thumbsUp + thumbsDown)) * 100) : null
+
+        // By source
+        const bySource: Record<string, number> = {}
+        usageData.forEach((u: any) => {
+          const src = u.response_source || 'unknown'
+          bySource[src] = (bySource[src] || 0) + 1
+        })
+
+        return {
+          period: 'آخر 7 أيام',
+          requests: {
+            total: usageData.length,
+            successful: usageData.filter((u: any) => u.success).length,
+            by_source: bySource,
+          },
+          tokens: {
+            total: usageData.reduce((s: number, u: any) => s + (u.tokens_used || 0), 0),
+            avg_per_request: usageData.length > 0
+              ? Math.round(usageData.reduce((s: number, u: any) => s + (u.tokens_used || 0), 0) / usageData.length)
+              : 0,
+          },
+          feedback: {
+            total: feedbacks.length,
+            thumbs_up: thumbsUp,
+            thumbs_down: thumbsDown,
+            satisfaction: satisfaction !== null ? satisfaction + '%' : 'N/A',
+          },
+          write_operations: {
+            total: writes.length,
+            confirmed: writes.filter((w: any) => w.confirmed_by_user).length,
+            total_affected_records: writes.reduce((s: number, w: any) => s + (w.affected_count || 0), 0),
+          },
+        }
       }
 
       case 'get_critical_alerts': {
@@ -2054,17 +2128,51 @@ async function updateConversationSummary(supa: any, userId: string, messages: an
 // IMPROVEMENT 6: USER FEEDBACK
 // ═══════════════════════════════════════════════════════════
 
-async function logFeedback(supa: any, userId: string, messageId: string, rating: 'up' | 'down', feedback?: string) {
+async function logFeedback(supa: any, userId: string, messageId: string, rating: 'up' | 'down', feedback?: string, context?: { intent?: string; message?: string }) {
   try {
     await supa.from('ai_feedback').insert({
       user_id: userId,
       message_id: messageId,
       rating,
       feedback: feedback || null,
+      metadata: {
+        intent: context?.intent || null,
+        original_message: context?.message?.slice(0, 200) || null,
+      },
       created_at: new Date().toISOString(),
     })
   } catch (e) {
     console.error('Feedback logging failed:', e)
+  }
+}
+
+// Get recent feedback patterns to improve responses
+async function getFeedbackContext(supa: any, userId: string, intent: string): Promise<string> {
+  try {
+    const { data: recentDowns } = await supa
+      .from('ai_feedback')
+      .select('feedback, metadata')
+      .eq('user_id', userId)
+      .eq('rating', 'down')
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    if (!recentDowns || recentDowns.length === 0) return ''
+
+    // Filter by intent from metadata
+    const intentDowns = recentDowns.filter((f: any) => f.metadata?.intent === intent)
+    if (intentDowns.length === 0) return ''
+
+    const tips = intentDowns
+      .filter((f: any) => f.feedback)
+      .map((f: any) => f.feedback)
+      .slice(0, 2)
+
+    if (tips.length === 0) return ''
+
+    return `\n⚠️ ملاحظات سابقة من المستخدم لهذا النوع من الأسئلة: ${tips.join('; ')}. حاول تحسين إجابتك.`
+  } catch {
+    return ''
   }
 }
 
@@ -2681,9 +2789,12 @@ serve(async (req) => {
     const body = await req.json()
     const { message, history = [], context, mode, template, stream = false, feedback, message_id } = body
 
-    // IMPROVEMENT 6: HANDLE FEEDBACK
+    // IMPROVEMENT 6: HANDLE FEEDBACK — with context for learning
     if (mode === 'feedback' && feedback && message_id) {
-      await logFeedback(supabase, auth.userId, message_id, feedback.rating, feedback.comment)
+      await logFeedback(supabase, auth.userId, message_id, feedback.rating, feedback.comment, {
+        intent: feedback.intent,
+        message: feedback.original_message,
+      })
       return jsonResponse({ success: true }, 200, origin)
     }
 
@@ -2754,6 +2865,114 @@ serve(async (req) => {
       return jsonResponse({ health }, 200, origin)
     }
 
+    // MODE: AI Usage Dashboard — إحصائيات الاستخدام (Admin only)
+    if (mode === 'usage' && profile?.role === 'admin') {
+      const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
+        return Promise.race([promise, new Promise<null>((r) => setTimeout(() => r(null), ms))]) as Promise<T | null>
+      }
+
+      const [todayUsage, weekUsage, topUsers, recentFeedback, writeAudits] = await Promise.all([
+        withTimeout(
+          supa.from('ai_model_usage').select('tokens_used, success, response_source')
+            .gte('created_at', new Date(Date.now() - 86400000).toISOString()), 5_000
+        ),
+        withTimeout(
+          supa.from('ai_model_usage').select('tokens_used, success, created_at')
+            .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()), 5_000
+        ),
+        withTimeout(
+          supa.from('ai_model_usage').select('user_id, tokens_used')
+            .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+            .limit(1000), 8_000
+        ),
+        withTimeout(
+          supa.from('ai_feedback').select('rating, metadata, created_at')
+            .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+            .order('created_at', { ascending: false })
+            .limit(50), 5_000
+        ),
+        withTimeout(
+          supa.from('ai_write_audit').select('tool_name, confirmed_by_user, affected_count, created_at')
+            .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+            .order('created_at', { ascending: false })
+            .limit(20), 5_000
+        ),
+      ])
+
+      const todayData = todayUsage?.data || []
+      const weekData = weekUsage?.data || []
+
+      // Token usage by source
+      const bySource: Record<string, number> = {}
+      todayData.forEach((u: any) => {
+        const src = u.response_source || 'unknown'
+        bySource[src] = (bySource[src] || 0) + (u.tokens_used || 0)
+      })
+
+      // Feedback stats
+      const feedbacks = recentFeedback?.data || []
+      const thumbsUp = feedbacks.filter((f: any) => f.rating === 'up').length
+      const thumbsDown = feedbacks.filter((f: any) => f.rating === 'down').length
+      const satisfactionRate = (thumbsUp + thumbsDown) > 0
+        ? Math.round((thumbsUp / (thumbsUp + thumbsDown)) * 100)
+        : null
+
+      // Write operations
+      const writes = writeAudits?.data || []
+      const totalWrites = writes.length
+      const confirmedWrites = writes.filter((w: any) => w.confirmed_by_user).length
+
+      // Daily trend (last 7 days)
+      const dailyTrend: Record<string, { requests: number; tokens: number }> = {}
+      weekData.forEach((u: any) => {
+        const day = u.created_at?.split('T')[0]
+        if (!day) return
+        if (!dailyTrend[day]) dailyTrend[day] = { requests: 0, tokens: 0 }
+        dailyTrend[day].requests++
+        dailyTrend[day].tokens += u.tokens_used || 0
+      })
+
+      return jsonResponse({
+        usage: {
+          today: {
+            requests: todayData.length,
+            total_tokens: todayData.reduce((s: number, u: any) => s + (u.tokens_used || 0), 0),
+            success_rate: todayData.length > 0
+              ? Math.round((todayData.filter((u: any) => u.success).length / todayData.length) * 100) + '%'
+              : 'N/A',
+            by_source: bySource,
+          },
+          week: {
+            requests: weekData.length,
+            total_tokens: weekData.reduce((s: number, u: any) => s + (u.tokens_used || 0), 0),
+            daily_trend: Object.entries(dailyTrend)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([date, stats]) => ({ date, ...stats })),
+          },
+        },
+        feedback: {
+          total: feedbacks.length,
+          thumbs_up: thumbsUp,
+          thumbs_down: thumbsDown,
+          satisfaction_rate: satisfactionRate !== null ? satisfactionRate + '%' : 'N/A',
+          recent_issues: feedbacks.filter((f: any) => f.rating === 'down').slice(0, 5).map((f: any) => ({
+            intent: f.metadata?.intent || 'unknown',
+            time: f.created_at,
+          })),
+        },
+        write_operations: {
+          total: totalWrites,
+          confirmed: confirmedWrites,
+          recent: writes.slice(0, 5).map((w: any) => ({
+            tool: w.tool_name,
+            affected: w.affected_count,
+            confirmed: w.confirmed_by_user,
+            time: w.created_at,
+          })),
+        },
+      }, 200, origin)
+    }
+
     // ═══ STEP 0: Prompt Injection Guard (F7)
     if (message) {
       const { safe, sanitized } = sanitizeUserMessage(message)
@@ -2799,13 +3018,14 @@ serve(async (req) => {
     // ═══ STEP 2: Live data (role-filtered)
     const liveData = await fetchLiveData(supabase, profile).catch(() => '')
 
-    // ═══ STEP 3: Conversation memory
+    // ═══ STEP 3: Conversation memory + feedback context
     const conversationSummary = groqKey ? await getConversationSummary(supabase, auth.userId).catch(() => '') : ''
+    const feedbackContext = await getFeedbackContext(supabase, auth.userId, intent).catch(() => '')
 
     // ═══ STEP 4: Build system prompt — dynamic based on intent (saves ~40% tokens)
     const systemPrompt = buildDynamicSystemPrompt(
       profile || { id: auth.userId, role: 'data_entry', full_name: 'مستخدم', governorate_id: null, district_id: null, governorate_name: null },
-      liveData, '', conversationSummary, primaryKnowledgeIntent,
+      liveData, '', conversationSummary + feedbackContext, primaryKnowledgeIntent,
     )
 
     // ═══ STEP 6: Build messages

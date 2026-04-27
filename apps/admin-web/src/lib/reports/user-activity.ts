@@ -9,10 +9,21 @@ import {
   buildSectionTitle, buildTable, getStyles, printReport,
 } from './shared'
 
-export async function generateUserActivityReport(): Promise<void> {
+export async function generateUserActivityReport(options?: {
+  dateFrom?: string; dateTo?: string
+}): Promise<void> {
+  const dateFrom = options?.dateFrom
+  const dateTo = options?.dateTo
+
+  const applyDateFilter = (q: any) => {
+    if (dateFrom) q = q.gte('created_at', dateFrom)
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+    return q
+  }
+
   const [usersRes, subsRes] = await Promise.allSettled([
     supabase.from('profiles').select('*, governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('last_login', { ascending: false }),
-    supabase.from('form_submissions').select('submitted_by, created_at').is('deleted_at', null),
+    applyDateFilter(supabase.from('form_submissions').select('submitted_by, created_at').is('deleted_at', null)),
   ])
 
   const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []

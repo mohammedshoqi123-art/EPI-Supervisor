@@ -1,14 +1,16 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  Styled Excel Export — HTML-based Excel with full formatting
- *  تصدير Excel مُنسّق — ب HTML tables + CSS
+ *  Styled Excel Export — Real .xlsx with full formatting
+ *  تصدير Excel مُنسّق — ملفات .xlsx حقيقية مع تنسيق كامل
  * ═══════════════════════════════════════════════════════════════
- *  Excel يفتح ملفات .xls المبنية بـ HTML + CSS بتنسيق كامل:
- *  ألوان، خطوط، حدود، zebra stripes، merged cells
+ *  Generates proper .xlsx files using the xlsx library.
+ *  Supports color themes, conditional formatting, auto-width,
+ *  freeze panes, auto-filter, and multi-sheet workbooks.
  * ═══════════════════════════════════════════════════════════════
  */
 
-import { BRAND } from './pdf-brand'
+import * as XLSX from 'xlsx'
+import { getSavedTheme, getTheme, type ReportTheme } from './report-colors'
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -35,163 +37,271 @@ export interface StyledSheet {
 export interface StyledWorkbook {
   sheets: StyledSheet[]
   fileName: string
+  /** Color theme ID — if omitted, uses saved theme from localStorage */
+  themeId?: string
 }
 
 // ─── Helpers ────────────────────────────────────────────────
 
-function escapeHtml(text: unknown): string {
-  if (text === null || text === undefined) return ''
-  const str = String(text)
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function formatValue(val: unknown, numFmt?: string): string {
+function formatValue(val: unknown, numFmt?: string): string | number {
   if (val === null || val === undefined) return ''
   if (numFmt === 'percent') {
     const num = typeof val === 'number' ? val : parseFloat(String(val))
-    return isNaN(num) ? String(val) : `${(num * 100).toFixed(1)}%`
+    return isNaN(num) ? String(val) : num // Return as number for Excel percentage format
   }
   if (numFmt === 'number') {
     const num = typeof val === 'number' ? val : parseFloat(String(val))
-    return isNaN(num) ? String(val) : num.toLocaleString('ar-SA')
+    return isNaN(num) ? String(val) : num
   }
   return String(val)
 }
 
+function getNumFmt(numFmt?: string): string | undefined {
+  if (numFmt === 'number') return '#,##0'
+  if (numFmt === 'percent') return '0.0%'
+  return undefined
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const clean = hex.replace('#', '')
+  const result = /^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(clean)
+  return result
+    ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) }
+    : { r: 0, g: 0, b: 0 }
+}
+
+function lightenColor(hex: string, amount: number): string {
+  const { r, g, b } = hexToRgb(hex)
+  const lr = Math.min(255, r + amount)
+  const lg = Math.min(255, g + amount)
+  const lb = Math.min(255, b + amount)
+  return [lr, lg, lb].map(x => x.toString(16).padStart(2, '0')).join('')
+}
+
 // ═══════════════════════════════════════════════════════════════
-// EXPORT — Generates styled HTML Excel file
+// EXPORT — Generates proper .xlsx file
 // ═══════════════════════════════════════════════════════════════
 
 export function exportStyledExcel(workbook: StyledWorkbook): void {
-  const { sheets, fileName } = workbook
+  const { sheets, fileName, themeId } = workbook
+  const theme = themeId ? getTheme(themeId) : getSavedTheme()
 
-  // Build multi-sheet HTML
-  let html = ''
+  const wb = XLSX.utils.book_new()
 
-  for (let si = 0; si < sheets.length; si++) {
-    const sheet = sheets[si]
+  for (const sheet of sheets) {
     const { title, subtitle, columns, data, showTotal, totalColumns, rowColor } = sheet
 
-    if (si > 0) html += '<br style="page-break-before:always" />'
+    // ── Build header rows ──
+    const headerRow = columns.map(c => c.header)
 
-    html += `<table cellpadding="0" cellspacing="0" style="direction:rtl;font-family:'Cairo','Segoe UI',Tahoma,Arial,sans-serif;font-size:13px;border-collapse:collapse;width:100%;margin-bottom:24px;">`
+    // ── Build data rows ──
+    const rows = data.map(row =>
+      columns.map(c => formatValue(row[c.key], c.numFmt))
+    )
 
-    // Title row
+    // ── Total row ──
+    let totalRow: unknown[] | null = null
+    if (showTotal && totalColumns && totalColumns.length > 0) {
+      totalRow = columns.map(c => {
+        if (c.key === columns[0].key) return 'الإجمالي'
+        if (totalColumns.includes(c.key)) {
+          const sum = data.reduce((acc, row) => {
+            const val = row[c.key]
+            return acc + (typeof val === 'number' ? val : 0)
+          }, 0)
+          return formatValue(sum, c.numFmt)
+        }
+        return ''
+      })
+    }
+
+    // ── Build sheet data ──
+    const sheetData: unknown[][] = []
+    let startRow = 0
+
     if (title) {
-      html += `<tr>
-        <td colspan="${columns.length}" style="background:${BRAND.primaryDark};color:white;font-size:18px;font-weight:800;padding:14px 18px;text-align:center;border:1px solid ${BRAND.primary};">
-          ${escapeHtml(title)}
-        </td>
-      </tr>`
+      sheetData.push([title])
+      startRow++
     }
-
-    // Subtitle row
     if (subtitle) {
-      html += `<tr>
-        <td colspan="${columns.length}" style="background:${BRAND.bgLight};color:${BRAND.textMuted};font-size:12px;padding:8px 18px;text-align:center;border:1px solid ${BRAND.border};">
-          ${escapeHtml(subtitle)}
-        </td>
-      </tr>`
+      sheetData.push([subtitle])
+      startRow++
+    }
+    if (title || subtitle) {
+      sheetData.push([])
+      startRow++
     }
 
-    // Header row
-    html += '<tr>'
-    for (const col of columns) {
-      html += `<th style="background:${BRAND.primary};color:white;font-size:12px;font-weight:700;padding:10px 14px;text-align:${col.align || 'right'};border:1px solid ${BRAND.primary};white-space:nowrap;min-width:${col.width || 15}ex;">`
-      html += escapeHtml(col.header)
-      html += '</th>'
+    sheetData.push(headerRow)
+    sheetData.push(...rows)
+
+    if (totalRow) {
+      sheetData.push(totalRow)
     }
-    html += '</tr>'
 
-    // Data rows
-    for (let ri = 0; ri < data.length; ri++) {
-      const row = data[ri]
-      const isEven = ri % 2 === 0
-      const customColor = rowColor?.(row)
-      const bgColor = customColor ? `${customColor}22` : isEven ? '#FFFFFF' : BRAND.bgLight
+    // ── Create sheet ──
+    const ws = XLSX.utils.aoa_to_sheet(sheetData)
 
-      html += '<tr>'
-      for (const col of columns) {
-        const val = row[col.key]
-        const formatted = formatValue(val, col.numFmt)
-        const cellColor = customColor || BRAND.textDark
+    // ── Column widths ──
+    ws['!cols'] = columns.map(c => ({
+      wch: c.width || Math.min(Math.max(c.header.length * 1.5, 10), 30),
+    }))
 
-        let cellStyle = `background:${bgColor};font-size:12px;padding:8px 14px;border:1px solid ${BRAND.border};text-align:${col.align || 'right'};color:${cellColor};`
+    // ── Merge title cells ──
+    const merges: XLSX.Range[] = []
+    if (title) {
+      merges.push({
+        s: { r: 0, c: 0 },
+        e: { r: 0, c: columns.length - 1 },
+      })
+    }
+    if (subtitle) {
+      merges.push({
+        s: { r: 1, c: 0 },
+        e: { r: 1, c: columns.length - 1 },
+      })
+    }
+    ws['!merges'] = merges
 
-        // Bold for numbers
-        if (typeof val === 'number') cellStyle += 'font-weight:700;tabular-nums:true;'
+    // ── Auto filter ──
+    if (data.length > 0) {
+      const headerRowIndex = startRow
+      ws['!autofilter'] = {
+        ref: XLSX.utils.encode_range({
+          s: { r: headerRowIndex, c: 0 },
+          e: { r: headerRowIndex + data.length, c: columns.length - 1 },
+        }),
+      }
+    }
 
-        // Red/green for severity
-        if (col.key === 'severity' || col.key === 'status') {
-          const valStr = String(val).toLowerCase()
-          if (valStr === 'حرج' || valStr === 'critical' || valStr === 'غير نشط' || valStr === 'مرفوض') {
-            cellStyle += `color:${BRAND.accent};font-weight:700;`
-          } else if (valStr === 'نشط' || valStr === 'مرسلة' || valStr === 'محلول' || valStr === 'نجح') {
-            cellStyle += `color:${BRAND.success};font-weight:700;`
-          } else if (valStr === 'عالي' || valStr === 'high' || valStr === 'مسودة') {
-            cellStyle += `color:${BRAND.warning};font-weight:700;`
+    // ── Freeze panes ──
+    ws['!freeze'] = { xSplit: 0, ySplit: startRow + 1 }
+
+    // ── Apply cell styling ──
+
+    // Title row styling
+    if (title) {
+      const titleCell = ws['A1']
+      if (titleCell) {
+        titleCell.s = {
+          font: { bold: true, sz: 16, color: { rgb: theme.primaryDark } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          fill: { fgColor: { rgb: lightenColor(theme.primary, 180) } },
+        }
+      }
+    }
+
+    // Subtitle row styling
+    if (subtitle) {
+      const subCell = ws['A2']
+      if (subCell) {
+        subCell.s = {
+          font: { sz: 11, color: { rgb: theme.borderColor } },
+          alignment: { horizontal: 'center' },
+        }
+      }
+    }
+
+    // Header row styling
+    const headerRowIndex = startRow
+    for (let c = 0; c < columns.length; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r: headerRowIndex, c })
+      const cell = ws[cellRef]
+      if (cell) {
+        cell.s = {
+          font: { bold: true, sz: 11, color: { rgb: theme.headerText } },
+          fill: { fgColor: { rgb: theme.headerBg } },
+          alignment: {
+            horizontal: columns[c].align || 'right',
+            vertical: 'center',
+            wrapText: true,
+          },
+          border: {
+            top: { style: 'thin', color: { rgb: lightenColor(theme.primary, 40) } },
+            bottom: { style: 'thin', color: { rgb: lightenColor(theme.primary, 40) } },
+          },
+        }
+      }
+    }
+
+    // Data rows styling
+    for (let r = headerRowIndex + 1; r < sheetData.length; r++) {
+      const dataIndex = r - headerRowIndex - 1
+      const isEvenRow = dataIndex % 2 === 0
+      const isTotalRow = totalRow && r === sheetData.length - 1
+      const dataRow = data[dataIndex]
+
+      // Determine row background
+      let rowBg = isEvenRow ? theme.rowEven : theme.rowOdd
+      if (isTotalRow) {
+        rowBg = lightenColor(theme.primary, 180)
+      } else if (dataRow && rowColor) {
+        const customColor = rowColor(dataRow)
+        if (customColor) {
+          rowBg = lightenColor(customColor, 200)
+        }
+      }
+
+      for (let c = 0; c < columns.length; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r, c })
+        const cell = ws[cellRef]
+        if (!cell) continue
+
+        // Number format
+        const numFmt = getNumFmt(columns[c].numFmt)
+
+        const style: Record<string, unknown> = {
+          alignment: {
+            horizontal: columns[c].align || 'right',
+            vertical: 'center',
+          },
+          fill: { fgColor: { rgb: rowBg } },
+          border: {
+            bottom: { style: 'thin', color: { rgb: theme.borderColor } },
+          },
+        }
+
+        // Total row styling
+        if (isTotalRow) {
+          style.font = { bold: true, sz: 11 }
+          style.border = {
+            top: { style: 'medium', color: { rgb: theme.primary } },
+            bottom: { style: 'medium', color: { rgb: theme.primary } },
           }
         }
 
-        html += `<td style="${cellStyle}">${escapeHtml(formatted)}</td>`
-      }
-      html += '</tr>'
-    }
-
-    // Total row
-    if (showTotal && totalColumns && totalColumns.length > 0) {
-      html += '<tr>'
-      for (const col of columns) {
-        const isTotalCol = totalColumns.includes(col.key)
-        let totalVal = ''
-
-        if (col.key === columns[0].key) {
-          totalVal = 'الإجمالي'
-        } else if (isTotalCol) {
-          const sum = data.reduce((acc, row) => {
-            const v = row[col.key]
-            return acc + (typeof v === 'number' ? v : 0)
-          }, 0)
-          totalVal = formatValue(sum, col.numFmt)
+        // Number format
+        if (numFmt) {
+          style.numFmt = numFmt
         }
 
-        html += `<td style="background:${BRAND.primaryDark};color:white;font-size:13px;font-weight:800;padding:10px 14px;text-align:${col.align || 'right'};border:2px solid ${BRAND.primary};">`
-        html += escapeHtml(totalVal)
-        html += '</td>'
+        // Bold numbers
+        if (typeof cell.v === 'number' && !isTotalRow) {
+          style.font = { bold: true }
+        }
+
+        // Conditional status/severity coloring
+        const valStr = String(cell.v || '').toLowerCase()
+        if (columns[c].key === 'severity' || columns[c].key === 'status') {
+          if (['حرج', 'critical', 'غير نشط', 'مرفوض'].includes(valStr)) {
+            style.font = { bold: true, color: { rgb: 'C62828' } }
+          } else if (['نشط', 'مرسلة', 'محلول', 'نجح'].includes(valStr)) {
+            style.font = { bold: true, color: { rgb: '2E7D32' } }
+          } else if (['عالي', 'high', 'مسودة'].includes(valStr)) {
+            style.font = { bold: true, color: { rgb: 'F57F17' } }
+          }
+        }
+
+        cell.s = style
       }
-      html += '</tr>'
     }
 
-    html += '</table>'
+    // ── Add sheet to workbook ──
+    XLSX.utils.book_append_sheet(wb, ws, sheet.name.slice(0, 31))
   }
 
-  // Wrap in HTML document
-  const fullHtml = `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>${escapeHtml(fileName)}</title>
-<style>
-  @page { size: A4 landscape; margin: 10mm; }
-  body { direction: rtl; font-family: 'Cairo','Segoe UI',Tahoma,Arial,sans-serif; }
-  table { page-break-inside: auto; }
-  tr { page-break-inside: avoid; }
-</style>
-</head>
-<body>
-${html}
-</body>
-</html>`
-
-  // Download as .xls (Excel opens HTML tables with full styling)
-  const blob = new Blob(['\ufeff' + fullHtml], { type: 'application/vnd.ms-excel;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${fileName}.xls`
-  a.click()
-  URL.revokeObjectURL(url)
+  // ── Download ──
+  XLSX.writeFile(wb, `${fileName}.xlsx`)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -204,10 +314,11 @@ export function exportDashboardStyledExcel(stats: {
   submissions_today: number; submissions_this_week: number
   total_forms: number; active_forms: number
   approval_rate: number; submissions_trend: number
-}): void {
+}, themeId?: string): void {
   const today = new Date().toLocaleDateString('ar-SA')
   exportStyledExcel({
     fileName: `dashboard_${new Date().toISOString().split('T')[0]}`,
+    themeId,
     sheets: [{
       name: 'ملخص لوحة التحكم',
       title: '📊 ملخص المؤشرات — EPI Supervisor',
@@ -235,10 +346,11 @@ export function exportDashboardStyledExcel(stats: {
 
 export function exportGovernorateStyledExcel(govs: {
   name: string; submissions: number
-}[]): void {
+}[], themeId?: string): void {
   const maxSubs = Math.max(...govs.map(g => g.submissions), 1)
   exportStyledExcel({
     fileName: `governorates_${new Date().toISOString().split('T')[0]}`,
+    themeId,
     sheets: [{
       name: 'أداء المحافظات',
       title: '🗺️ تقرير أداء المحافظات — EPI Supervisor',
@@ -264,10 +376,10 @@ export function exportGovernorateStyledExcel(govs: {
       totalColumns: ['submissions'],
       rowColor: (row) => {
         const rate = maxSubs > 0 ? (row.submissions as number) / maxSubs : 0
-        if (rate >= 0.8) return BRAND.success
-        if (rate >= 0.5) return BRAND.info
-        if (rate >= 0.2) return BRAND.warning
-        return BRAND.accent
+        if (rate >= 0.8) return '2E7D32'
+        if (rate >= 0.5) return '0277BD'
+        if (rate >= 0.2) return 'F57F17'
+        return 'E53935'
       },
     }],
   })
@@ -275,9 +387,10 @@ export function exportGovernorateStyledExcel(govs: {
 
 export function exportTimelineStyledExcel(chartData: {
   date: string; submitted: number; draft: number
-}[]): void {
+}[], themeId?: string): void {
   exportStyledExcel({
     fileName: `timeline_${new Date().toISOString().split('T')[0]}`,
+    themeId,
     sheets: [{
       name: 'الإرساليات — خط زمني',
       title: '📈 تطور الإرساليات — آخر 30 يوم',
@@ -308,9 +421,10 @@ export function exportSubmissionsStyledExcel(submissions: {
   index: number; form: string; status: string
   submitted_by: string; governorate: string; district: string
   campaign: string; date: string
-}[]): void {
+}[], themeId?: string): void {
   exportStyledExcel({
     fileName: `submissions_${new Date().toISOString().split('T')[0]}`,
+    themeId,
     sheets: [{
       name: 'إرساليات النماذج',
       title: '📋 تقرير الإرساليات الشامل — EPI Supervisor',
@@ -327,8 +441,8 @@ export function exportSubmissionsStyledExcel(submissions: {
       ],
       data: submissions,
       rowColor: (row) => {
-        if (row.status === 'مرسلة') return BRAND.success
-        if (row.status === 'مسودة') return BRAND.warning
+        if (row.status === 'مرسلة') return '2E7D32'
+        if (row.status === 'مسودة') return 'F57F17'
         return null
       },
     }],
@@ -339,9 +453,10 @@ export function exportShortagesStyledExcel(shortages: {
   index: number; item: string; category: string
   needed: number; available: number; severity: string
   resolved: string; by: string; gov: string; date: string
-}[]): void {
+}[], themeId?: string): void {
   exportStyledExcel({
     fileName: `shortages_${new Date().toISOString().split('T')[0]}`,
+    themeId,
     sheets: [{
       name: 'نواقص الإمدادات',
       title: '📦 تقرير النواقص — EPI Supervisor',
@@ -361,8 +476,8 @@ export function exportShortagesStyledExcel(shortages: {
       data: shortages,
       rowColor: (row) => {
         const sev = String(row.severity).toLowerCase()
-        if (sev === 'حرج' || sev === 'critical') return BRAND.accent
-        if (sev === 'عالي' || sev === 'high') return BRAND.warning
+        if (sev === 'حرج' || sev === 'critical') return 'C62828'
+        if (sev === 'عالي' || sev === 'high') return 'F57F17'
         return null
       },
     }],
@@ -372,13 +487,14 @@ export function exportShortagesStyledExcel(shortages: {
 export function exportUsersStyledExcel(users: {
   full_name: string; email: string; role: string
   is_active: boolean; governorate?: string; created_at: string
-}[]): void {
+}[], themeId?: string): void {
   const roleLabels: Record<string, string> = {
     admin: 'مدير النظام', central: 'مركزي', governorate: 'محافظة',
     district: 'مديرية', data_entry: 'إدخال بيانات',
   }
   exportStyledExcel({
     fileName: `users_${new Date().toISOString().split('T')[0]}`,
+    themeId,
     sheets: [{
       name: 'المستخدمين',
       title: '👥 تقرير المستخدمين — EPI Supervisor',
@@ -401,15 +517,16 @@ export function exportUsersStyledExcel(users: {
         governorate: u.governorate || '—',
         created_at: new Date(u.created_at).toLocaleDateString('ar-SA'),
       })),
-      rowColor: (row) => row.status === 'نشط' ? BRAND.success : BRAND.accent,
+      rowColor: (row) => row.status === 'نشط' ? '2E7D32' : 'E53935',
     }],
   })
 }
 
-export function exportRolesStyledExcel(roles: { name: string; value: number }[]): void {
+export function exportRolesStyledExcel(roles: { name: string; value: number }[], themeId?: string): void {
   const total = roles.reduce((s, r) => s + r.value, 0)
   exportStyledExcel({
     fileName: `roles_${new Date().toISOString().split('T')[0]}`,
+    themeId,
     sheets: [{
       name: 'توزيع الأدوار',
       title: '👥 توزيع المستخدمين حسب الدور',

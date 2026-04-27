@@ -14,7 +14,6 @@ const SubmissionsPage = lazy(() => import('@/pages/SubmissionsPage'))
 const AIInsightsPage = lazy(() => import('@/pages/AIInsightsPage'))
 const AISettingsPage = lazy(() => import('@/pages/AISettingsPage'))
 const AuditPage = lazy(() => import('@/pages/AuditPage'))
-const GovernoratesPage = lazy(() => import('@/pages/GovernoratesPage'))
 const MapPage = lazy(() => import('@/pages/MapPage'))
 const PagesManagementPage = lazy(() => import('@/pages/PagesManagementPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
@@ -23,7 +22,6 @@ const BotChatPage = lazy(() => import('@/pages/BotChatPage'))
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
 const ReferencesPage = lazy(() => import('@/pages/ReferencesPage'))
 const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
-const ShortagesPage = lazy(() => import('@/pages/ShortagesPage'))
 const ScheduledReportsPage = lazy(() => import('@/pages/ScheduledReportsPage'))
 const PublicDashboardPage = lazy(() => import('@/pages/PublicDashboardPage'))
 
@@ -71,11 +69,9 @@ export default function App() {
         {/* Routes for admin, central, governorate, district — management level */}
         <Route element={<ProtectedRoute allowedRoles={['admin', 'central', 'governorate', 'district']} />}>
           <Route element={<AppLayout />}>
-            <Route path="shortages" element={<Suspense fallback={<PageLoader />}><ShortagesPage /></Suspense>} />
             <Route path="insights" element={<Suspense fallback={<PageLoader />}><AIInsightsPage /></Suspense>} />
             <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
             <Route path="scheduled-reports" element={<Suspense fallback={<PageLoader />}><ScheduledReportsPage /></Suspense>} />
-            <Route path="governorates" element={<Suspense fallback={<PageLoader />}><GovernoratesPage /></Suspense>} />
           </Route>
         </Route>
 

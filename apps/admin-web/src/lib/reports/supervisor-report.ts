@@ -20,9 +20,24 @@ import {
 export async function generateSupervisorReport(options?: {
   dateFrom?: string; dateTo?: string; governorateId?: string
 }): Promise<void> {
+  const dateFrom = options?.dateFrom
+  const dateTo = options?.dateTo
+  const governorateId = options?.governorateId
+
+  const applyDateFilter = (q: any) => {
+    if (dateFrom) q = q.gte('created_at', dateFrom)
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+    if (governorateId && governorateId !== 'all') q = q.eq('governorate_id', governorateId)
+    return q
+  }
+
+  const subsQuery = applyDateFilter(
+    supabase.from('form_submissions').select('*, forms(title_ar), governorates(name_ar), districts(name_ar)').is('deleted_at', null)
+  ).order('created_at', { ascending: false }).limit(20000)
+
   const [usersRes, subsRes, govsRes] = await Promise.allSettled([
     supabase.from('profiles').select('*, governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('created_at', { ascending: false }),
-    supabase.from('form_submissions').select('*, forms(title_ar), governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('created_at', { ascending: false }).limit(20000),
+    subsQuery,
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
   ])
 

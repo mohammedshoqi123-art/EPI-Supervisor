@@ -22,9 +22,22 @@ export async function generateFormAnalysisReport(
   formId: string,
   options?: { dateFrom?: string; dateTo?: string }
 ): Promise<void> {
+  const dateFrom = options?.dateFrom
+  const dateTo = options?.dateTo
+
+  const applyDateFilter = (q: any) => {
+    if (dateFrom) q = q.gte('created_at', dateFrom)
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+    return q
+  }
+
+  const subsQuery = applyDateFilter(
+    supabase.from('form_submissions').select('*, profiles:submitted_by(full_name, role), governorates(name_ar), districts(name_ar)').eq('form_id', formId).is('deleted_at', null)
+  ).order('created_at', { ascending: false })
+
   const [formRes, subsRes, govsRes] = await Promise.allSettled([
     supabase.from('forms').select('*').eq('id', formId).single(),
-    supabase.from('form_submissions').select('*, profiles:submitted_by(full_name, role), governorates(name_ar), districts(name_ar)').eq('form_id', formId).is('deleted_at', null).order('created_at', { ascending: false }),
+    subsQuery,
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
   ])
 

@@ -17,9 +17,20 @@ import {
   printReport,
 } from './shared'
 
-export async function generateCampaignComparisonReport(): Promise<void> {
+export async function generateCampaignComparisonReport(options?: {
+  dateFrom?: string; dateTo?: string
+}): Promise<void> {
+  const dateFrom = options?.dateFrom
+  const dateTo = options?.dateTo
+
+  const applyDateFilter = (q: any) => {
+    if (dateFrom) q = q.gte('created_at', dateFrom)
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+    return q
+  }
+
   const [subsRes, formsRes, govsRes] = await Promise.allSettled([
-    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar)').is('deleted_at', null).limit(20000),
+    applyDateFilter(supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar)').is('deleted_at', null)).limit(20000),
     supabase.from('forms').select('*').eq('is_active', true).is('deleted_at', null),
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
   ])

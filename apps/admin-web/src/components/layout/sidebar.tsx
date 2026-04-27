@@ -8,7 +8,7 @@ import {
   AlertTriangle, Bell, Moon, Sun, Menu, X, Sparkles, Layout, Clock,
   Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
   FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare,
-  FileSpreadsheet, PackageX, Calendar
+  FileSpreadsheet, Calendar
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -52,31 +52,30 @@ interface NavSection {
 const navSections: NavSection[] = [
   {
     id: 'overview',
-    label: 'نظرة عامة',
-    icon: Gauge,
+    label: 'الرئيسية',
+    icon: LayoutDashboard,
     items: [
-      { icon: Gauge, label: 'لوحة التحكم', href: '/dashboard' },
+      { icon: LayoutDashboard, label: 'لوحة التحكم', href: '/dashboard' },
+      { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
     ],
   },
   {
     id: 'data',
-    label: 'إدارة البيانات',
-    icon: FileSearch,
+    label: 'البيانات',
+    icon: FileStack,
     items: [
       { icon: FileSearch, label: 'النماذج', href: '/forms' },
       { icon: FileStack, label: 'الإرساليات', href: '/submissions' },
-      { icon: PackageX, label: 'النواقص', href: '/shortages', roles: ['admin', 'central', 'governorate', 'district'] },
     ],
   },
   {
     id: 'analytics',
-    label: 'التحليلات والتقارير',
+    label: 'التقارير والتحليلات',
     icon: BarChart3,
     items: [
       { icon: BarChart3, label: 'التحليلات', href: '/insights', roles: ['admin', 'central', 'governorate', 'district'] },
       { icon: FileSpreadsheet, label: 'التقارير والبيانات', href: '/reports', roles: ['admin', 'central', 'governorate', 'district'] },
       { icon: Calendar, label: 'التقارير المجدولة', href: '/scheduled-reports', roles: ['admin', 'central', 'governorate', 'district'] },
-      { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
     ],
   },
   {
@@ -95,7 +94,6 @@ const navSections: NavSection[] = [
     icon: Users,
     items: [
       { icon: Users, label: 'المستخدمون', href: '/users', roles: ['admin', 'central'] },
-      { icon: MapPinned, label: 'المحافظات', href: '/governorates', roles: ['admin', 'central', 'governorate', 'district'] },
       { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
       { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
     ],

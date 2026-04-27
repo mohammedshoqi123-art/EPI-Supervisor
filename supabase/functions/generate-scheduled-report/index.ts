@@ -306,6 +306,82 @@ async function sendWebhook(
   }
 }
 
+async function sendWhatsApp(
+  phoneNumbers: string[],
+  message: string,
+  attachmentUrl?: string
+): Promise<{ success: boolean; error?: string }> {
+  const apiUrl = Deno.env.get('WHATSAPP_API_URL')
+  const accessToken = Deno.env.get('WHATSAPP_ACCESS_TOKEN')
+
+  if (!apiUrl || !accessToken) {
+    return { success: false, error: 'WHATSAPP_API_URL or WHATSAPP_ACCESS_TOKEN not configured' }
+  }
+
+  const errors: string[] = []
+
+  for (const phone of phoneNumbers) {
+    try {
+      // Clean phone number (remove spaces, ensure + prefix)
+      const cleanPhone = phone.replace(/\s/g, '').replace(/^(?!\+)/, '+')
+
+      const body: Record<string, unknown> = {
+        messaging_product: 'whatsapp',
+        to: cleanPhone,
+        type: 'text',
+        text: { body: message },
+      }
+
+      const res = await fetch(`${apiUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        errors.push(`${cleanPhone}: ${res.status} ${errText}`)
+      }
+    } catch (e) {
+      errors.push(`${phone}: ${e}`)
+    }
+  }
+
+  if (errors.length > 0) {
+    return { success: false, error: `Failed for ${errors.length}/${phoneNumbers.length} numbers: ${errors.join('; ')}` }
+  }
+  return { success: true }
+}
+
+async function sendTelegram(
+  botToken: string,
+  chatId: string,
+  message: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML',
+      }),
+    })
+
+    if (!res.ok) {
+      const errText = await res.text()
+      return { success: false, error: `Telegram ${res.status}: ${errText}` }
+    }
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: String(e) }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MAIN HANDLER
 // ═══════════════════════════════════════════════════════════════
@@ -432,6 +508,67 @@ serve(async (req) => {
         if (!result.success) deliveryError = result.error || null
       } else {
         deliveryError = 'No webhook URL configured'
+      }
+    } else if (report.delivery_method === 'whatsapp') {
+      const phoneNumbers = (report.delivery_config?.phone_numbers as string[]) || []
+      if (phoneNumbers.length > 0) {
+        const govStatsText = (data.governorates || [])
+          .sort((a: any, b: any) => b.submissions - a.submissions)
+          .slice(0, 5)
+          .map((g: any) => `${g.name_ar}: ${g.submissions}`)
+          .join('\n')
+
+        const waMessage = [
+          `📊 *${report.name}*`,
+          `📅 ${today}`,
+          '',
+          `📋 الإرساليات: ${data.stats?.total_submissions || 0}`,
+          `✅ مرسلة: ${data.stats?.submitted_submissions || 0}`,
+          `📝 مسودة: ${data.stats?.draft_submissions || 0}`,
+          `👥 مستخدمين: ${data.stats?.total_users || 0}`,
+          '',
+          '🏛️ أعلى المحافظات:',
+          govStatsText || 'لا توجد بيانات',
+          '',
+          fileUrl ? `📎 التقرير: ${fileUrl}` : '',
+          '— مشرف EPI',
+        ].filter(Boolean).join('\n')
+
+        const result = await sendWhatsApp(phoneNumbers, waMessage, fileUrl || undefined)
+        if (!result.success) deliveryError = result.error || null
+      } else {
+        deliveryError = 'No WhatsApp numbers configured'
+      }
+    } else if (report.delivery_method === 'telegram') {
+      const botToken = report.delivery_config?.bot_token as string
+      const chatId = report.delivery_config?.chat_id as string
+      if (botToken && chatId) {
+        const govStatsText = (data.governorates || [])
+          .sort((a: any, b: any) => b.submissions - a.submissions)
+          .slice(0, 5)
+          .map((g: any) => `• ${g.name_ar}: ${g.submissions}`)
+          .join('\n')
+
+        const tgMessage = [
+          `📊 <b>${report.name}</b>`,
+          `📅 ${today}`,
+          '',
+          `📋 الإرساليات: ${data.stats?.total_submissions || 0}`,
+          `✅ مرسلة: <b>${data.stats?.submitted_submissions || 0}</b>`,
+          `📝 مسودة: ${data.stats?.draft_submissions || 0}`,
+          `👥 مستخدمين: ${data.stats?.total_users || 0}`,
+          '',
+          '🏛️ أعلى المحافظات:',
+          govStatsText || 'لا توجد بيانات',
+          '',
+          fileUrl ? `📎 <a href="${fileUrl}">تحميل التقرير</a>` : '',
+          '— مشرف EPI',
+        ].filter(Boolean).join('\n')
+
+        const result = await sendTelegram(botToken, chatId, tgMessage)
+        if (!result.success) deliveryError = result.error || null
+      } else {
+        deliveryError = 'Telegram bot_token and chat_id required'
       }
     }
 

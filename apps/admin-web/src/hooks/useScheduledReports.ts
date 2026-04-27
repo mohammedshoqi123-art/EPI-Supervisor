@@ -74,6 +74,8 @@ export const SCHEDULE_PRESETS = [
 export const DELIVERY_METHODS = [
   { value: 'download', label: 'تحميل مباشر', icon: '📥', description: 'يُحفظ في سجل التقارير للتحميل' },
   { value: 'email', label: 'بريد إلكتروني', icon: '📧', description: 'يرسل لقائمة بريدية' },
+  { value: 'whatsapp', label: 'WhatsApp', icon: '💬', description: 'يرسل لأرقام واتساب محددة' },
+  { value: 'telegram', label: 'Telegram', icon: '✈️', description: 'يرسل لقناة أو مجموعة تليجرام' },
   { value: 'webhook', label: 'Webhook', icon: '🔗', description: 'يرسل لرابط خارجي (API)' },
 ] as const
 

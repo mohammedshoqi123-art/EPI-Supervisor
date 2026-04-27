@@ -6,7 +6,7 @@ import {
   PackageX, Shield, ArrowUpRight,
   CheckCircle2, PieChart as PieChartIcon, Target,
   Sparkles, Gauge, FileDown, Info, ScrollText, History, ArrowLeftRight,
-  Search, X, FileSearch, Star
+  Search, X, FileSearch, Star, Palette
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
 import { formatNumber, cn } from '@/lib/utils'
+import { REPORT_THEMES, getSavedTheme, saveTheme, type ReportTheme } from '@/lib/report-colors'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, ResponsiveContainer, Legend
@@ -55,6 +56,15 @@ export default function ReportsPage() {
       localStorage.setItem('epi-favorite-reports', JSON.stringify([...next]))
       return next
     })
+  }, [])
+
+  // ═══ Color Theme State ═══
+  const [selectedTheme, setSelectedTheme] = useState<ReportTheme>(() => getSavedTheme())
+
+  const handleThemeChange = useCallback((themeId: string) => {
+    const theme = REPORT_THEMES.find(t => t.id === themeId) || REPORT_THEMES[0]
+    setSelectedTheme(theme)
+    saveTheme(themeId)
   }, [])
 
   // ═══ Report Cards Definition ═══
@@ -203,6 +213,27 @@ export default function ReportsPage() {
                   </SelectContent>
                 </Select>
               )}
+              {/* Color Theme Picker */}
+              <div className="flex items-center gap-2">
+                <Palette className="w-3.5 h-3.5 text-muted-foreground" />
+                <div className="flex items-center gap-1.5">
+                  {REPORT_THEMES.map(theme => (
+                    <button
+                      key={theme.id}
+                      onClick={() => handleThemeChange(theme.id)}
+                      title={theme.nameAr}
+                      className={cn(
+                        'w-6 h-6 rounded-full border-2 transition-all duration-200 hover:scale-110',
+                        selectedTheme.id === theme.id
+                          ? 'border-foreground shadow-md scale-110'
+                          : 'border-transparent hover:border-muted-foreground/30'
+                      )}
+                      style={{ backgroundColor: `#${theme.primary}` }}
+                    />
+                  ))}
+                </div>
+                <span className="text-[10px] text-muted-foreground font-medium">{selectedTheme.nameAr}</span>
+              </div>
               {(h.dateFrom || h.dateTo || h.selectedGovFilter !== 'all') && (
                 <Button variant="ghost" size="sm" onClick={() => { h.setDateFrom(''); h.setDateTo(''); h.setSelectedGovFilter('all') }} className="h-9 gap-1 text-muted-foreground">
                   <RefreshCw className="w-3 h-3" /> مسح

@@ -9,9 +9,22 @@ import {
   buildSectionTitle, buildTable, getStyles, printReport,
 } from './shared'
 
-export async function generateShortagesDetailedReport(): Promise<void> {
+export async function generateShortagesDetailedReport(options?: {
+  dateFrom?: string; dateTo?: string; governorateId?: string
+}): Promise<void> {
+  const dateFrom = options?.dateFrom
+  const dateTo = options?.dateTo
+  const governorateId = options?.governorateId
+
+  const applyDateFilter = (q: any) => {
+    if (dateFrom) q = q.gte('created_at', dateFrom)
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+    if (governorateId && governorateId !== 'all') q = q.eq('governorate_id', governorateId)
+    return q
+  }
+
   const [shortagesRes, govsRes] = await Promise.allSettled([
-    supabase.from('supply_shortages').select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name)').is('deleted_at', null).order('created_at', { ascending: false }),
+    applyDateFilter(supabase.from('supply_shortages').select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name)').is('deleted_at', null)).order('created_at', { ascending: false }),
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
   ])
 

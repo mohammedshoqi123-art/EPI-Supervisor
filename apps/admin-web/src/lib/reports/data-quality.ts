@@ -18,9 +18,20 @@ import {
   printReport,
 } from './shared'
 
-export async function generateDataQualityReport(): Promise<void> {
+export async function generateDataQualityReport(options?: {
+  dateFrom?: string; dateTo?: string
+}): Promise<void> {
+  const dateFrom = options?.dateFrom
+  const dateTo = options?.dateTo
+
+  const applyDateFilter = (q: any) => {
+    if (dateFrom) q = q.gte('created_at', dateFrom)
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+    return q
+  }
+
   const [subsRes, formsRes] = await Promise.allSettled([
-    supabase.from('form_submissions').select('*, forms(title_ar, schema), governorates(name_ar)').is('deleted_at', null).limit(20000),
+    applyDateFilter(supabase.from('form_submissions').select('*, forms(title_ar, schema), governorates(name_ar)').is('deleted_at', null)).limit(20000),
     supabase.from('forms').select('*').eq('is_active', true).is('deleted_at', null),
   ])
 

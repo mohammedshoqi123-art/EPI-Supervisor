@@ -42,48 +42,44 @@ export function ReportPreview({
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [zoom, setZoom] = useState(100)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [iframeReady, setIframeReady] = useState(false)
 
-  // Write HTML to iframe when it changes
+  // Reset ready state when dialog opens/closes or html changes
   useEffect(() => {
-    if (iframeRef.current && html && open) {
-      const doc = iframeRef.current.contentDocument
-      if (doc) {
-        doc.open()
-        doc.write(html)
-        doc.close()
-
-        // Wait for content to render, then fix dimensions
-        setTimeout(() => {
-          if (!iframeRef.current) return
-          const iDoc = iframeRef.current.contentDocument
-          if (!iDoc) return
-
-          // Force-reload any external CSS (Google Fonts) after write
-          const links = iDoc.querySelectorAll('link[rel="stylesheet"]')
-          links.forEach(link => {
-            const href = link.getAttribute('href')
-            if (href) {
-              link.setAttribute('href', href + '?t=' + Date.now())
-            }
-          })
-
-          // Inject base styles for iframe context
-          const style = iDoc.createElement('style')
-          style.textContent = `
-            html, body { margin: 0; padding: 16px; background: white; overflow: visible; }
-            @media screen {
-              body { max-width: 210mm; margin: 0 auto; padding: 20px; }
-            }
-          `
-          iDoc.head.appendChild(style)
-
-          // Auto-resize iframe to content height
-          const bodyHeight = iDoc.body?.scrollHeight || 800
-          iframeRef.current.style.height = `${bodyHeight + 40}px`
-        }, 300)
-      }
+    if (open && html) {
+      setIframeReady(false)
     }
-  }, [html, open])
+  }, [open, html])
+
+  // Auto-resize iframe after content loads
+  const handleIframeLoad = useCallback(() => {
+    if (!iframeRef.current) return
+    try {
+      const iDoc = iframeRef.current.contentDocument
+      if (!iDoc) return
+
+      // Inject base styles for iframe context
+      const existingStyle = iDoc.getElementById('epi-preview-styles')
+      if (!existingStyle) {
+        const style = iDoc.createElement('style')
+        style.id = 'epi-preview-styles'
+        style.textContent = `
+          html, body { margin: 0; padding: 16px; background: white; overflow: visible; }
+          @media screen {
+            body { max-width: 210mm; margin: 0 auto; padding: 20px; }
+          }
+        `
+        iDoc.head.appendChild(style)
+      }
+
+      // Auto-resize iframe to content height
+      const bodyHeight = iDoc.body?.scrollHeight || 800
+      iframeRef.current.style.height = `${bodyHeight + 40}px`
+      setIframeReady(true)
+    } catch {
+      setIframeReady(true)
+    }
+  }, [])
 
   const handleZoomIn = useCallback(() => {
     setZoom(prev => Math.min(prev + 10, 150))
@@ -237,10 +233,18 @@ export function ReportPreview({
           >
             <iframe
               ref={iframeRef}
+              srcdoc={html}
               className="w-full border-0"
-              style={{ minHeight: '297mm', height: '100%', display: 'block' }}
+              style={{
+                minHeight: '297mm',
+                height: iframeReady ? '100%' : '297mm',
+                display: 'block',
+                opacity: iframeReady ? 1 : 0,
+                transition: 'opacity 0.2s ease',
+              }}
               title="معاينة التقرير"
               sandbox="allow-same-origin allow-scripts allow-modals allow-popups"
+              onLoad={handleIframeLoad}
             />
           </div>
         </div>

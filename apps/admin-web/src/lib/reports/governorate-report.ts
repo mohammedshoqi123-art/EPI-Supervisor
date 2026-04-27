@@ -22,12 +22,29 @@ export async function generateGovernorateDetailReport(
   governorateId: string,
   options?: { dateFrom?: string; dateTo?: string }
 ): Promise<void> {
+  const dateFrom = options?.dateFrom
+  const dateTo = options?.dateTo
+
+  const applyDateFilter = (q: any) => {
+    if (dateFrom) q = q.gte('created_at', dateFrom)
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+    return q
+  }
+
+  const subsQuery = applyDateFilter(
+    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), profiles:submitted_by(full_name, role), districts(name_ar)').eq('governorate_id', governorateId).is('deleted_at', null)
+  ).order('created_at', { ascending: false })
+
+  const shortagesQuery = applyDateFilter(
+    supabase.from('supply_shortages').select('*').eq('governorate_id', governorateId).is('deleted_at', null)
+  )
+
   const [govRes, subsRes, usersRes, districtsRes, shortagesRes] = await Promise.allSettled([
     supabase.from('governorates').select('*').eq('id', governorateId).single(),
-    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), profiles:submitted_by(full_name, role), districts(name_ar)').eq('governorate_id', governorateId).is('deleted_at', null).order('created_at', { ascending: false }),
+    subsQuery,
     supabase.from('profiles').select('*, districts(name_ar)').eq('governorate_id', governorateId).is('deleted_at', null),
     supabase.from('districts').select('*').eq('governorate_id', governorateId).eq('is_active', true).is('deleted_at', null).order('name_ar'),
-    supabase.from('supply_shortages').select('*').eq('governorate_id', governorateId).is('deleted_at', null),
+    shortagesQuery,
   ])
 
   const gov = govRes.status === 'fulfilled' ? govRes.value.data : null

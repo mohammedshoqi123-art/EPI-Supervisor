@@ -175,6 +175,15 @@ function ReportDialog({
   const [webhookUrl, setWebhookUrl] = useState(
     (form.delivery_config?.webhook_url as string) || ''
   )
+  const [whatsappNumbers, setWhatsappNumbers] = useState(
+    (form.delivery_config?.phone_numbers as string[])?.join(', ') || ''
+  )
+  const [telegramChatId, setTelegramChatId] = useState(
+    (form.delivery_config?.chat_id as string) || ''
+  )
+  const [telegramBotToken, setTelegramBotToken] = useState(
+    (form.delivery_config?.bot_token as string) || ''
+  )
 
   const handleSubmit = async () => {
     if (!form.name.trim()) {
@@ -186,6 +195,10 @@ function ReportDialog({
       config.delivery_config = { emails: emailList.split(',').map(e => e.trim()).filter(Boolean) }
     } else if (form.delivery_method === 'webhook') {
       config.delivery_config = { webhook_url: webhookUrl }
+    } else if (form.delivery_method === 'whatsapp') {
+      config.delivery_config = { phone_numbers: whatsappNumbers.split(',').map(e => e.trim()).filter(Boolean) }
+    } else if (form.delivery_method === 'telegram') {
+      config.delivery_config = { chat_id: telegramChatId, bot_token: telegramBotToken }
     }
 
     try {
@@ -331,7 +344,7 @@ function ReportDialog({
               {DELIVERY_METHODS.map(method => (
                 <button
                   key={method.value}
-                  onClick={() => setForm(f => ({ ...f, delivery_method: method.value as 'download' | 'email' | 'webhook' }))}
+                  onClick={() => setForm(f => ({ ...f, delivery_method: method.value as 'download' | 'email' | 'webhook' | 'whatsapp' | 'telegram' }))}
                   className={cn(
                     'w-full flex items-center gap-3 p-3 rounded-lg border text-right transition-all',
                     form.delivery_method === method.value
@@ -373,6 +386,56 @@ function ReportDialog({
                   className="mt-1"
                   dir="ltr"
                 />
+              </div>
+            )}
+
+            {form.delivery_method === 'whatsapp' && (
+              <div className="mt-3 p-3 rounded-lg bg-muted/30 border space-y-3">
+                <div>
+                  <Label className="text-xs font-medium">أرقام الواتساب</Label>
+                  <Input
+                    value={whatsappNumbers}
+                    onChange={e => setWhatsappNumbers(e.target.value)}
+                    placeholder="+967712345678, +967798765432"
+                    className="mt-1"
+                    dir="ltr"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">افصل بين الأرقام بفاصلة. يبدأ الرقم برمز الدولة (+967)</p>
+                </div>
+                <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400">
+                    💡 يتطلب إعداد WhatsApp Business API في المتغيرات البيئية للسيرفر:
+                    <code className="block mt-1 text-[9px] bg-amber-100 dark:bg-amber-900/30 px-1 rounded">WHATSAPP_API_URL, WHATSAPP_ACCESS_TOKEN</code>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {form.delivery_method === 'telegram' && (
+              <div className="mt-3 p-3 rounded-lg bg-muted/30 border space-y-3">
+                <div>
+                  <Label className="text-xs font-medium">Bot Token</Label>
+                  <Input
+                    value={telegramBotToken}
+                    onChange={e => setTelegramBotToken(e.target.value)}
+                    placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                    className="mt-1"
+                    dir="ltr"
+                    type="password"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">احصل عليه من @BotFather في تليجرام</p>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">Chat ID</Label>
+                  <Input
+                    value={telegramChatId}
+                    onChange={e => setTelegramChatId(e.target.value)}
+                    placeholder="-1001234567890"
+                    className="mt-1"
+                    dir="ltr"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">ID القناة أو المجموعة. أرسل رسالة لـ @userinfobot لمعرفة ID الخاص بك</p>
+                </div>
               </div>
             )}
           </div>

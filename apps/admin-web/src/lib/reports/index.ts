@@ -42,5 +42,6 @@ export { generateDailySupervisorEvaluation } from './daily-supervisor-evaluation
 export { generateGovernorateSupervisorsEvaluation } from './governate-supervisors-evaluation'
 export { generateDistrictSupervisorsEvaluation } from './district-supervisors-evaluation'
 export { generateCentralSupervisorsEvaluation } from './central-supervisors-evaluation'
+export { generateGeneralSupervisorsEvaluation } from './general-supervisors-evaluation'
 export { generateYesNoAnalysisReport } from './yesno-analysis-report'
 export { generateMapReport } from './map-report'

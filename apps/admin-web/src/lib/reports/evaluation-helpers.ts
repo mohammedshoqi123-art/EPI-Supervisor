@@ -49,7 +49,12 @@ export interface EvaluationData {
 
 export function isGeneralSupervisor(name: string): boolean {
   const n = (name || '').trim()
-  return n.includes('مدير عام مكتب الصحة العامة والسكان بالمحافظة')
+  if (n.includes('مدير عام مكتب الصحة العامة والسكان بالمحافظة')) return true
+  // مشرفين محددين بالاسم
+  const specificNames = [
+    'عبدالحكيم محمد احمد عينة',
+  ]
+  return specificNames.some(specific => n.includes(specific))
 }
 
 // ─── Date Helpers ───────────────────────────────────────────

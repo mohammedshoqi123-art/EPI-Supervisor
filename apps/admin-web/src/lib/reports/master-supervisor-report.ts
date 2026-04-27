@@ -1,13 +1,12 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  التقرير الشامل للمشرفين — تقييم + تحليل + تحديات + خريطة
- *  Master Supervisor Report — Evaluation + Analysis + Challenges + Map
+ *  التقرير الشامل للمشرفين — تقييم + تحليل + تحديات
+ *  Master Supervisor Report — Evaluation + Analysis + Challenges
  * ═══════════════════════════════════════════════════════════════
- *  يدمج 4 تقارير في تقرير واحد شامل:
+ *  يدمج 3 تقارير في تقرير واحد شامل:
  *  1. تقييم أداء المشرفين الشامل
  *  2. تحليل حقول نعم/لا
  *  3. تحديات الإشراف الميداني
- *  4. ملخص مواقع المشرفين GPS
  * ═══════════════════════════════════════════════════════════════
  */
 
@@ -173,7 +172,7 @@ export async function generateMasterSupervisorReport(options?: {
   const evalData = await fetchComprehensiveEvaluationData(options)
 
   // Fetch yes/no submissions + challenges + GPS in parallel
-  const [yesNoRes, challengesRes, gpsRes] = await Promise.allSettled([
+  const [yesNoRes, challengesRes] = await Promise.allSettled([
     supabase.from('form_submissions')
       .select('id, data, governorate_id, status')
       .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
@@ -186,14 +185,6 @@ export async function generateMasterSupervisorReport(options?: {
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(10000),
-
-    supabase.from('form_submissions')
-      .select('id, gps_lat, gps_lng, governorate_id, submitted_by, profiles:submitted_by(full_name), governorates(name_ar)')
-      .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
-      .is('deleted_at', null)
-      .not('gps_lat', 'is', null)
-      .not('gps_lng', 'is', null)
-      .limit(50000),
   ])
 
   // ── Governorate lookup ──
@@ -315,32 +306,6 @@ export async function generateMasterSupervisorReport(options?: {
   const totalChallenges = govChallenges.reduce((s, g) => s + g.challenges.length, 0)
   const totalActions = govChallenges.reduce((s, g) => s + g.actions.length, 0)
   const totalRecommendations = govChallenges.reduce((s, g) => s + g.recommendations.length, 0)
-
-  // ══════════════════════════════════════════════
-  // SECTION 4: GPS MAP SUMMARY
-  // ══════════════════════════════════════════════
-
-  const gpsSubs = gpsRes.status === 'fulfilled'
-    ? (gpsRes.value.data || []).filter((s: any) =>
-        s.gps_lat && s.gps_lng &&
-        typeof s.gps_lat === 'number' && typeof s.gps_lng === 'number' &&
-        s.gps_lat !== 0 && s.gps_lng !== 0
-      )
-    : []
-
-  const gpsGovGroups = new Map<string, { name: string; count: number; supervisors: Set<string> }>()
-  for (const sub of gpsSubs) {
-    const govName = (sub as any).governorates?.name_ar || 'غير محدد'
-    if (!gpsGovGroups.has(govName)) gpsGovGroups.set(govName, { name: govName, count: 0, supervisors: new Set() })
-    const g = gpsGovGroups.get(govName)!
-    g.count++
-    const name = (sub as any).profiles?.full_name
-    if (name) g.supervisors.add(name)
-  }
-
-  const totalGpsPoints = gpsSubs.length
-  const totalGpsGovs = gpsGovGroups.size
-  const totalGpsSupervisors = new Set(gpsSubs.map((s: any) => s.submitted_by)).size
 
   // ══════════════════════════════════════════════
   // BUILD HTML
@@ -478,21 +443,6 @@ export async function generateMasterSupervisorReport(options?: {
           border-bottom: 1px solid ${BRAND.border};
         }
 
-        .gps-card {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 8px 12px;
-          border: 1px solid ${BRAND.border};
-          border-radius: 8px;
-          margin: 4px 0;
-        }
-        .gps-dot {
-          width: 10px; height: 10px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
         .top-bottom-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -519,7 +469,7 @@ export async function generateMasterSupervisorReport(options?: {
     <body>
       ${buildHeader(
         'التقرير الشامل للمشرفين',
-        'تقييم + تحليل + تحديات + خريطة — تقرير مدمج',
+        'تقييم + تحليل + تحديات — تقرير مدمج',
         todayArabic,
       )}
 
@@ -535,7 +485,6 @@ export async function generateMasterSupervisorReport(options?: {
         ${buildKPI('إجمالي الاستمارات', totalForms, '📋', BRAND.info, `مرسلة: ${totalSubmitted}`)}
         ${buildKPI('نسبة نعم الكلية', `${overallYesRate}%`, '🎯', overallYesRate >= 70 ? BRAND.success : BRAND.warning, `${totalYesAll}/${totalAnswers}`)}
         ${buildKPI('تحديات ميدانية', totalChallengeSubs, '⚠️', '#E53935', `${totalChallenges} نقطة`)}
-        ${buildKPI('نقاط GPS', totalGpsPoints, '📍', '#FF6D00', `${totalGpsGovs} محافظة`)}
       </div>
 
       <!-- ═══════════════════════════════════════════ -->
@@ -728,47 +677,6 @@ export async function generateMasterSupervisorReport(options?: {
               </div>
             </div>
           `).join('')}
-        </div>
-      </div>
-
-      <!-- ═══════════════════════════════════════════ -->
-      <!-- القسم 4: ملخص مواقع المشرفين GPS -->
-      <!-- ═══════════════════════════════════════════ -->
-      <div class="master-section">
-        <div class="master-section-header">
-          <div class="master-section-title">🗺️ القسم 4: مواقع المشرفين GPS</div>
-          <div class="master-section-badge">${totalGpsPoints} نقطة | ${totalGpsGovs} محافظة</div>
-        </div>
-        <div class="master-section-body">
-          <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
-            ${buildKPI('نقاط GPS', totalGpsPoints, '📍', '#FF6D00')}
-            ${buildKPI('محافظات مغطاة', totalGpsGovs, '🏛️', BRAND.primary, `${totalGpsGovs}/${govs.length}`)}
-            ${buildKPI('مشرفين بمواقع', totalGpsSupervisors, '👥', BRAND.info)}
-          </div>
-
-          ${gpsGovGroups.size === 0 ? `
-            <div style="text-align:center;padding:20px;color:${BRAND.textMuted};font-size:12px;">لا توجد نقاط GPS مسجلة</div>
-          ` : `
-            ${buildTable(
-              ['المحافظة', 'نقاط GPS', 'المشرفين', 'المواقع'],
-              [...gpsGovGroups.values()]
-                .sort((a, b) => b.count - a.count)
-                .map(g => {
-                  const colors = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#34495e','#16a085','#c0392b','#8e44ad','#2980b9']
-                  const idx = [...gpsGovGroups.keys()].indexOf(g.name)
-                  const color = colors[idx % colors.length]
-                  return [
-                    `<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;"></span> ${escapeHtml(g.name)}</span>`,
-                    `<span style="font-weight:700;">${g.count}</span>`,
-                    `${g.supervisors.size}`,
-                    `<span style="font-size:9px;color:${BRAND.textMuted};">${[...g.supervisors].slice(0, 3).join(', ')}${g.supervisors.size > 3 ? '...' : ''}</span>`,
-                  ]
-                })
-            )}
-            <div style="margin-top:10px;padding:10px;background:${BRAND.bgLight};border-radius:8px;text-align:center;font-size:11px;color:${BRAND.textMuted};">
-              💡 لعرض الخريطة التفاعلية الكاملة مع مواقع GPS، استخدم تقرير "خريطة مواقع المشرفين" المنفصل
-            </div>
-          `}
         </div>
       </div>
 

@@ -196,7 +196,7 @@ function calculateSubmissionDistribution(govStats: Array<{ name: string; submiss
 function calculateTrend(chartData: Array<{ date: string; submitted: number; draft: number }> | undefined) {
   if (!chartData || chartData.length < 14) return { trend: 'stable', change: 0, weeklyData: [] }
 
-  const weeklyData = []
+  const weeklyData: any[] = []
   for (let i = 0; i < chartData.length; i += 7) {
     const week = chartData.slice(i, i + 7)
     const total = week.reduce((sum, d) => sum + d.submitted + d.draft, 0)

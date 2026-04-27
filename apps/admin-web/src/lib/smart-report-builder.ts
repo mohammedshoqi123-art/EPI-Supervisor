@@ -168,7 +168,7 @@ async function generateDailyReport(format: 'pdf' | 'excel') {
   const data = await fetchDailyData()
   const today = new Date().toLocaleDateString('ar-SA')
 
-  const sections = []
+  const sections: any[] = []
 
   // KPIs
   sections.push({

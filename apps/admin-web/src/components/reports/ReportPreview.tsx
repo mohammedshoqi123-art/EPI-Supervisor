@@ -233,7 +233,7 @@ export function ReportPreview({
           >
             <iframe
               ref={iframeRef}
-              srcdoc={html}
+              srcDoc={html}
               className="w-full border-0"
               style={{
                 minHeight: '297mm',

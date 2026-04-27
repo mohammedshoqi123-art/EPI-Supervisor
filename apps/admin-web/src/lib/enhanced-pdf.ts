@@ -12,11 +12,11 @@ import { supabase } from './supabase'
 
 // ─── Brand Constants ─────────────────────────────────────────
 
-import { BRAND as _BRAND } from './pdf-brand'
+import { BRAND } from './pdf-brand'
 import { EPI_LOGO_BASE64 } from './epi-logo'
 
-/** @deprecated Import BRAND from '@/lib/pdf-brand' instead */
-export const PDF_BRAND = _BRAND
+/** @deprecated Use BRAND from '@/lib/pdf-brand' directly */
+export const PDF_BRAND = BRAND
 
 // ─── Types ───────────────────────────────────────────────────
 

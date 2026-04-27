@@ -177,3 +177,122 @@ export async function fetchEvaluationData(options?: {
 
   return { users, subs, govs, dists, enriched, govGroups, targetDate, dayName, dateArabic }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// FETCH COMPREHENSIVE — جلب شامل (كل الاستمارات بدون فلتر تاريخ)
+// ═══════════════════════════════════════════════════════════════
+
+export interface ComprehensiveEvaluationData {
+  users: any[]
+  subs: any[]
+  govs: { id: string; name_ar: string }[]
+  dists: { id: string; name_ar: string; governorate_id: string }[]
+  enriched: EnrichedUser[]
+  govGroups: Map<string, GovGroup>
+  dateRange: { from: string; to: string }
+  totalDays: number
+}
+
+export async function fetchComprehensiveEvaluationData(options?: {
+  governorateId?: string
+}): Promise<ComprehensiveEvaluationData> {
+  // ── Fetch all data (no date filter) ──
+  const [usersRes, subsRes, govsRes, distsRes] = await Promise.allSettled([
+    supabase.from('profiles')
+      .select('id, full_name, phone, role, governorate_id, district_id, is_active')
+      .is('deleted_at', null)
+      .order('governorate_id', { ascending: true }),
+
+    supabase.from('form_submissions')
+      .select('id, submitted_by, governorate_id, district_id, status, created_at')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true })
+      .limit(100000),
+
+    supabase.from('governorates')
+      .select('id, name_ar')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('name_ar', { ascending: true }),
+
+    supabase.from('districts')
+      .select('id, name_ar, governorate_id')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('name_ar', { ascending: true }),
+  ])
+
+  const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
+  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
+  const dists = distsRes.status === 'fulfilled' ? distsRes.value.data || [] : []
+
+  // ── Calculate date range ──
+  let dateFrom = ''
+  let dateTo = ''
+  let totalDays = 0
+  if (subs.length > 0) {
+    dateFrom = subs[0].created_at?.split('T')[0] || ''
+    dateTo = subs[subs.length - 1].created_at?.split('T')[0] || ''
+    if (dateFrom && dateTo) {
+      const from = new Date(dateFrom)
+      const to = new Date(dateTo)
+      totalDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    }
+  }
+
+  // ── Build lookup maps ──
+  const govsMap = new Map<string, { id: string; name_ar: string }>()
+  for (const g of govs) govsMap.set(g.id, g)
+
+  const distsMap = new Map<string, { id: string; name_ar: string; governorate_id: string }>()
+  for (const d of dists) distsMap.set(d.id, d)
+
+  // ── Enrich each user (all-time totals) ──
+  const enriched: EnrichedUser[] = users
+    .filter((u: any) => u.is_active)
+    .map((u: any) => {
+      const userSubs = subs.filter((s: any) => s.submitted_by === u.id)
+      const submitted = userSubs.filter((s: any) => s.status === 'submitted').length
+      const draft = userSubs.filter((s: any) => s.status === 'draft').length
+      const total = userSubs.length
+      const gov = u.governorate_id ? govsMap.get(u.governorate_id) : null
+      const dist = u.district_id ? distsMap.get(u.district_id) : null
+
+      return {
+        ...u,
+        totalToday: total,       // reuse field name for compatibility
+        submittedToday: submitted,
+        draftToday: draft,
+        isGenSupervisor: isGeneralSupervisor(u.full_name || ''),
+        govName: gov?.name_ar || '',
+        govId: u.governorate_id || '',
+        distName: dist?.name_ar || '',
+      }
+    })
+
+  // ── Group by governorate ──
+  const govGroups = new Map<string, GovGroup>()
+
+  for (const gov of govs) {
+    const govUsers = enriched.filter(u => u.govId === gov.id)
+
+    const govLevel = govUsers
+      .filter(u => u.role === 'governorate' || u.role === 'central' || u.role === 'admin')
+      .sort((a, b) => {
+        const order: Record<string, number> = { central: 0, admin: 0, governorate: 1 }
+        return (order[a.role] ?? 9) - (order[b.role] ?? 9)
+      })
+
+    const distMap = new Map<string, EnrichedUser[]>()
+    for (const u of govUsers.filter(u => u.role === 'district' || u.role === 'data_entry')) {
+      const distKey = u.district_id || '_no_district'
+      if (!distMap.has(distKey)) distMap.set(distKey, [])
+      distMap.get(distKey)!.push(u)
+    }
+
+    govGroups.set(gov.id, { gov, allUsers: govUsers, govLevelUsers: govLevel, districts: distMap })
+  }
+
+  return { users, subs, govs, dists, enriched, govGroups, dateRange: { from: dateFrom, to: dateTo }, totalDays }
+}

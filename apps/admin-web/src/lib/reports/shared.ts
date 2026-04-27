@@ -6,6 +6,10 @@
  */
 
 import { BRAND } from '../pdf-brand'
+// Note: BRAND is now dynamically updatable via setBrandTheme().
+// When a user picks a color theme, BRAND is updated globally,
+// so all reports that use these shared utilities automatically
+// pick up the new colors.
 import { EPI_LOGO_BASE64 } from '../epi-logo'
 
 // ─── Arabic Date ───

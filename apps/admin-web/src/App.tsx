@@ -4,7 +4,11 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppLayout } from '@/components/layout/app-layout'
 import { ProtectedRoute } from '@/components/layout/protected-route'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { initBrandTheme } from '@/lib/report-colors'
 import LoginPage from '@/pages/LoginPage'
+
+// Initialize report color theme from localStorage on app startup
+initBrandTheme()
 
 // Lazy load pages for better performance
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))

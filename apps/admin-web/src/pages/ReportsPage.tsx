@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import {
   BarChart3, FileSpreadsheet, Download, Calendar, Filter,
   Users, FileStack, MapPin, AlertTriangle, TrendingUp, TrendingDown,
@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
 import { formatNumber, cn } from '@/lib/utils'
-import { REPORT_THEMES, getSavedTheme, saveTheme, type ReportTheme } from '@/lib/report-colors'
+import { REPORT_THEMES, getSavedTheme, saveTheme, initBrandTheme, type ReportTheme } from '@/lib/report-colors'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, ResponsiveContainer, Legend
@@ -60,6 +60,11 @@ export default function ReportsPage() {
 
   // ═══ Color Theme State ═══
   const [selectedTheme, setSelectedTheme] = useState<ReportTheme>(() => getSavedTheme())
+
+  // Initialize global BRAND colors from saved theme on mount
+  useEffect(() => {
+    initBrandTheme()
+  }, [])
 
   const handleThemeChange = useCallback((themeId: string) => {
     const theme = REPORT_THEMES.find(t => t.id === themeId) || REPORT_THEMES[0]
@@ -138,6 +143,7 @@ export default function ReportsPage() {
     cards.push({ icon: FileSearch, title: '📋 PDF — استمارة الإشراف', subtitle: 'النشاط الإيصالي التكاملي — 8 أقسام إشرافية، 33 مؤشر، تحليل تحديات ميدانية', color: 'text-white', gradient: 'bg-gradient-to-r from-teal-600 to-cyan-700', onClick: h.handleSupervisionFormReport, loading: h.exportingReport === 'supervision-form', badge: 'إشراف', format: 'pdf' })
     cards.push({ icon: FileText, title: '📝 PDF — تحديات الإشراف الميداني', subtitle: 'آخر 3 حقول: التحديات والصعوبات، الإجراءات المتخذة، التوصيات', color: 'text-white', gradient: 'bg-gradient-to-r from-indigo-600 to-blue-700', onClick: h.handleSupervisionChallengesReport, loading: h.exportingReport === 'supervision-challenges', badge: 'ميداني', format: 'pdf' })
     cards.push({ icon: Users, title: '📋 تقييم أداء المشرفين اليومي', subtitle: 'اليومي — المركزي + المحافظات + المديريات | الاسم، الصفة، عدد الاستمارات', color: 'text-white', gradient: 'bg-gradient-to-r from-emerald-600 to-teal-700', onClick: h.handleDailySupervisorEvaluation, loading: h.exportingReport === 'daily-supervisor-eval', badge: 'يومي', format: 'pdf' })
+    cards.push({ icon: Users, title: '📊 تقييم أداء المشرفين الشامل', subtitle: 'جميع الاستمارات — بدون فلتر تاريخ | إجمالي النشاط، المديريات، المحافظات', color: 'text-white', gradient: 'bg-gradient-to-r from-violet-600 to-indigo-700', onClick: h.handleComprehensiveSupervisorEvaluation, loading: h.exportingReport === 'comprehensive-supervisor-eval', badge: 'شامل', format: 'pdf' })
     cards.push({ icon: Shield, title: '🏛️ تقييم إشراف عام', subtitle: 'المشرفين العامين فقط — مدير عام مكتب الصحة، تقييم الأداء، ترتيب، نسب النشاط', color: 'text-white', gradient: 'bg-gradient-to-r from-blue-700 to-indigo-800', onClick: h.handleGeneralSupervisorsEvaluation, loading: h.exportingReport === 'general-supervisors-eval', badge: 'إشراف عام', format: 'pdf' })
     cards.push({ icon: Sparkles, title: '📊 تحليل حقول نعم/لا', subtitle: 'استمارة الاشراف — تحليل شامل لكل حقل نعم/لا حسب القسم والمحافظة', color: 'text-white', gradient: 'bg-gradient-to-r from-violet-600 to-purple-700', onClick: h.handleYesNoAnalysis, loading: h.exportingReport === 'yesno-analysis', badge: 'تحليل', format: 'pdf' })
     cards.push({ icon: MapPin, title: '🗺️ خريطة مواقع المشرفين', subtitle: 'خريطة اليمن + خريطة كل محافظة — مواقع GPS للمشرفين', color: 'text-white', gradient: 'bg-gradient-to-r from-teal-500 to-cyan-600', onClick: h.handleMapReport, loading: false, badge: 'خريطة', format: 'pdf' })

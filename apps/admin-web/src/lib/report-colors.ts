@@ -4,8 +4,14 @@
  * ═══════════════════════════════════════════════════════════════
  *  Allows users to pick a color theme for their reports.
  *  Each theme defines primary, accent, and supporting colors.
+ *
+ *  When a theme is applied via saveTheme()/applyThemeToBrand(),
+ *  the global BRAND object in pdf-brand.ts is updated so all
+ *  reports (PDF, professional, Excel) use the new colors.
  * ═══════════════════════════════════════════════════════════════
  */
+
+import { setBrandTheme, resetBrandTheme } from './pdf-brand'
 
 export interface ReportTheme {
   id: string
@@ -151,9 +157,47 @@ export function getSavedTheme(): ReportTheme {
   return REPORT_THEMES[0]
 }
 
-/** Save theme to localStorage */
+/**
+ * Apply a ReportTheme to the global BRAND object.
+ * This makes all PDF/professional reports use the theme colors.
+ */
+export function applyThemeToBrand(theme: ReportTheme): void {
+  if (theme.id === 'blue') {
+    // Blue is the default — reset to defaults
+    resetBrandTheme()
+    return
+  }
+  setBrandTheme({
+    primary: `#${theme.primary}`,
+    primaryDark: `#${theme.primaryDark}`,
+    bgLight: `#${theme.rowOdd}`,
+    border: `#${theme.borderColor}`,
+    textDark: '#212121',
+    textMuted: '#616161',
+    // Map theme colors to semantic roles
+    accent: '#E53935',   // Keep accent (red) consistent
+    success: '#2E7D32',  // Keep success (green) consistent
+    warning: '#F57F17',  // Keep warning (amber) consistent
+    info: `#${theme.primary}`, // Info uses theme primary
+    bgWhite: '#FFFFFF',
+  })
+}
+
+/** Save theme to localStorage and apply to global BRAND */
 export function saveTheme(id: string): void {
   try {
     localStorage.setItem('epi-report-theme', id)
   } catch { /* ignore */ }
+  // Apply the theme to the global BRAND so all reports use it
+  const theme = getTheme(id)
+  applyThemeToBrand(theme)
+}
+
+/**
+ * Initialize the brand theme from localStorage.
+ * Call this on app startup to restore the saved theme.
+ */
+export function initBrandTheme(): void {
+  const theme = getSavedTheme()
+  applyThemeToBrand(theme)
 }

@@ -6,7 +6,7 @@
  *  الترتيب: محافظات (كل محافظة ← مشرفي المحافظة ← مديرياتها)
  *  المركزي يظهر مع محافظته مسجّل "مركزي"
  *  المركزي بدون محافظة لا يُذكر
- *  إشراف عام: مدير عام / مدير رعاية / مشرف التحصين بالمحافظة
+ *  إشراف عام: مدير عام / مدير رعاية / مشرف المحافظة
  * ═══════════════════════════════════════════════════════════════
  */
 
@@ -29,7 +29,7 @@ import { fetchEvaluationData, isGeneralSupervisor, type EnrichedUser, type GovGr
 const ROLE_LABELS: Record<string, string> = {
   admin: 'مدير النظام',
   central: 'مركزي',
-  governorate: 'مشرف التحصين',
+  governorate: 'مشرف محافظة',
   district: 'مديرية',
   data_entry: 'إدخال بيانات',
 }
@@ -114,7 +114,7 @@ export async function generateDailySupervisorEvaluation(options?: {
     if (u.role === 'central' || u.role === 'admin') {
       roleLabel = 'مركزي'
     } else if (u.role === 'governorate') {
-      roleLabel = 'مشرف التحصين'
+      roleLabel = 'مشرف محافظة'
     } else if (u.role === 'district') {
       roleLabel = 'مديرية'
     } else {

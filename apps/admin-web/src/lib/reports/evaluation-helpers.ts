@@ -52,7 +52,7 @@ export function isGeneralSupervisor(name: string): boolean {
   if (n.includes('مدير عام مكتب الصحة العامة والسكان بالمحافظة')) return true
   // مشرفين محددين بالاسم
   const specificNames = [
-    'عبدالحكيم محمد احمد عينة',
+    'عبدالحكيم محمد احمد عيناء',
   ]
   return specificNames.some(specific => n.includes(specific))
 }

@@ -76,6 +76,7 @@ ALTER TABLE scheduled_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scheduled_report_runs ENABLE ROW LEVEL SECURITY;
 
 -- Admin and central can manage scheduled reports
+DROP POLICY IF EXISTS "scheduled_reports_admin_all" ON scheduled_reports;
 CREATE POLICY "scheduled_reports_admin_all" ON scheduled_reports
   FOR ALL USING (
     EXISTS (
@@ -86,6 +87,7 @@ CREATE POLICY "scheduled_reports_admin_all" ON scheduled_reports
     )
   );
 
+DROP POLICY IF EXISTS "scheduled_report_runs_read" ON scheduled_report_runs;
 CREATE POLICY "scheduled_report_runs_read" ON scheduled_report_runs
   FOR SELECT USING (
     EXISTS (
@@ -156,6 +158,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_next_run ON scheduled_reports;
 CREATE TRIGGER trigger_update_next_run
   BEFORE INSERT OR UPDATE ON scheduled_reports
   FOR EACH ROW EXECUTE FUNCTION update_next_run();

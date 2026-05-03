@@ -30,10 +30,12 @@ CREATE INDEX IF NOT EXISTS idx_campaign_types_visible ON campaign_types(visible)
 -- RLS: everyone can read, only admin can write
 ALTER TABLE campaign_types ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can view campaign types" ON campaign_types;
 CREATE POLICY "Anyone can view campaign types"
   ON campaign_types FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Admin can manage campaign types" ON campaign_types;
 CREATE POLICY "Admin can manage campaign types"
   ON campaign_types FOR ALL
   USING (
@@ -53,6 +55,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS campaign_types_updated_at ON campaign_types;
 CREATE TRIGGER campaign_types_updated_at
   BEFORE UPDATE ON campaign_types
   FOR EACH ROW

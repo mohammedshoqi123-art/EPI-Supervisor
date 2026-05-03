@@ -72,10 +72,12 @@ CREATE TABLE IF NOT EXISTS ai_write_audit (
 ALTER TABLE ai_write_audit ENABLE ROW LEVEL SECURITY;
 
 -- Admin can read all audit logs
+DROP POLICY IF EXISTS "audit_admin_read" ON ai_write_audit;
 CREATE POLICY "audit_admin_read" ON ai_write_audit
   FOR SELECT USING (public.user_role() = 'admin');
 
 -- Users can read their own audit logs
+DROP POLICY IF EXISTS "audit_own_read" ON ai_write_audit;
 CREATE POLICY "audit_own_read" ON ai_write_audit
   FOR SELECT USING (auth.uid() = user_id);
 

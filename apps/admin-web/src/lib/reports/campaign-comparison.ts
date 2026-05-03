@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '../supabase'
+import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import {
   escapeHtml,
@@ -23,19 +24,37 @@ export async function generateCampaignComparisonReport(options?: {
   const dateFrom = options?.dateFrom
   const dateTo = options?.dateTo
 
-  const applyDateFilter = (q: any) => {
-    if (dateFrom) q = q.gte('created_at', dateFrom)
-    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
-    return q
+  // Paginated fetch for submissions
+  async function fetchAllSubs() {
+    const allData: any[] = []
+    let offset = 0
+    const pageSize = 1000
+    while (true) {
+      let q = supabase
+        .from('form_submissions')
+        .select('*, forms(title_ar, campaign_type), governorates(name_ar)')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + pageSize - 1)
+      if (dateFrom) q = q.gte('created_at', dateFrom)
+      if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+      const { data, error } = await q
+      if (error || !data || data.length === 0) break
+      allData.push(...data)
+      if (data.length < pageSize) break
+      offset += pageSize
+      if (allData.length >= 100000) break
+    }
+    return allData
   }
 
-  const [subsRes, formsRes, govsRes] = await Promise.allSettled([
-    applyDateFilter(supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar)').is('deleted_at', null)).limit(20000),
+  const [subsData, formsRes, govsRes] = await Promise.allSettled([
+    fetchAllSubs(),
     supabase.from('forms').select('*').eq('is_active', true).is('deleted_at', null),
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
   ])
 
-  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const subs = subsData.status === 'fulfilled' ? (subsData.value as any[]) || [] : []
   const forms = formsRes.status === 'fulfilled' ? formsRes.value.data || [] : []
   const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
 

@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '../supabase'
+import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import { EPI_LOGO_BASE64 } from '../epi-logo'
 import {
@@ -41,19 +42,33 @@ export async function generateChallengesReport(options?: {
 }): Promise<void> {
   const now = new Date()
 
-  // ── Fetch all relevant data ──
-  const [subsRes, shortagesRes, govsRes, districtsRes, usersRes, auditRes] = await Promise.allSettled([
-    supabase.from('form_submissions')
-      .select(`
-        id, status, data, notes, gps_lat, gps_lng, photos, created_at,
-        forms(title_ar, campaign_type),
-        profiles!submitted_by(full_name, phone),
-        governorates(id, name_ar),
-        districts(id, name_ar)
-      `)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(50000),
+  // ── Fetch all relevant data (paginated for large tables) ──
+  async function fetchPaginated(table: string, select: string, filters?: (q: any) => any) {
+    const allData: any[] = []
+    let offset = 0
+    const pageSize = 1000
+    while (true) {
+      let q = supabase.from(table).select(select).is('deleted_at', null)
+        .order('created_at', { ascending: false }).range(offset, offset + pageSize - 1)
+      if (filters) q = filters(q)
+      const { data, error } = await q
+      if (error || !data || data.length === 0) break
+      allData.push(...data)
+      if (data.length < pageSize) break
+      offset += pageSize
+      if (allData.length >= 100000) break
+    }
+    return allData
+  }
+
+  const [subsData, shortagesRes, govsRes, districtsRes, usersRes, auditData] = await Promise.allSettled([
+    fetchPaginated('form_submissions', `
+      id, status, data, notes, gps_lat, gps_lng, photos, created_at,
+      forms(title_ar, campaign_type),
+      profiles!submitted_by(full_name, phone),
+      governorates(id, name_ar),
+      districts(id, name_ar)
+    `),
     supabase.from('supply_shortages')
       .select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name)')
       .is('deleted_at', null)
@@ -61,19 +76,15 @@ export async function generateChallengesReport(options?: {
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
     supabase.from('districts').select('*').eq('is_active', true).is('deleted_at', null),
     supabase.from('profiles').select('*').is('deleted_at', null),
-    supabase.from('audit_logs')
-      .select('*, profiles(full_name)')
-      .in('action', ['create', 'update', 'delete'])
-      .order('created_at', { ascending: false })
-      .limit(5000),
+    fetchPaginated('audit_logs', '*, profiles(full_name)', (q) => q.in('action', ['create', 'update', 'delete'])),
   ])
 
-  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const subs = subsData.status === 'fulfilled' ? (subsData.value as any[]) || [] : []
   const shortages = shortagesRes.status === 'fulfilled' ? shortagesRes.value.data || [] : []
   const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
   const districts = districtsRes.status === 'fulfilled' ? districtsRes.value.data || [] : []
   const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
-  const auditLogs = auditRes.status === 'fulfilled' ? auditRes.value.data || [] : []
+  const auditLogs = auditData.status === 'fulfilled' ? (auditData.value as any[]) || [] : []
 
   // ── Filter by date if provided ──
   let filteredSubs = subs

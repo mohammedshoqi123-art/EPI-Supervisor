@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '../supabase'
+import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 
 // ─── Yemen center & governorate approximate centers ──────────
@@ -44,28 +45,44 @@ export async function generateMapReport(options?: {
   const dateFrom = options?.dateFrom || today
   const dateTo = options?.dateTo || today
 
-  // ── Fetch submissions with GPS ──
-  let query = supabase
-    .from('form_submissions')
-    .select(`
-      id, gps_lat, gps_lng, created_at, status, data,
-      profiles:submitted_by(full_name, role),
-      governorates(name_ar),
-      districts(name_ar)
-    `)
-    .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
-    .is('deleted_at', null)
-    .not('gps_lat', 'is', null)
-    .not('gps_lng', 'is', null)
-    .gte('created_at', `${dateFrom}T00:00:00`)
-    .lte('created_at', `${dateTo}T23:59:59`)
-    .limit(10000)
+  // ── Fetch submissions with GPS (paginated) ──
+  async function fetchAllSubmissions() {
+    const allData: any[] = []
+    let offset = 0
+    const pageSize = 1000
+    while (true) {
+      let q = supabase
+        .from('form_submissions')
+        .select(`
+          id, gps_lat, gps_lng, created_at, status, data,
+          profiles:submitted_by(full_name, role),
+          governorates(name_ar),
+          districts(name_ar)
+        `)
+        .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
+        .is('deleted_at', null)
+        .not('gps_lat', 'is', null)
+        .not('gps_lng', 'is', null)
+        .gte('created_at', `${dateFrom}T00:00:00`)
+        .lte('created_at', `${dateTo}T23:59:59`)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + pageSize - 1)
 
-  if (options?.governorateId && options.governorateId !== 'all') {
-    query = query.eq('governorate_id', options.governorateId)
+      if (options?.governorateId && options.governorateId !== 'all') {
+        q = q.eq('governorate_id', options.governorateId)
+      }
+
+      const { data, error } = await q
+      if (error || !data || data.length === 0) break
+      allData.push(...data)
+      if (data.length < pageSize) break
+      offset += pageSize
+      if (allData.length >= 100000) break
+    }
+    return allData
   }
 
-  const { data: submissions } = await query
+  const submissions = await fetchAllSubmissions()
   const subs = (submissions || []).filter((s: any) =>
     s.gps_lat && s.gps_lng &&
     typeof s.gps_lat === 'number' && typeof s.gps_lng === 'number' &&

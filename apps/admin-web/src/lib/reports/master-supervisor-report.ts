@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '../supabase'
+import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import {
   escapeHtml,
@@ -172,19 +173,27 @@ export async function generateMasterSupervisorReport(options?: {
   const evalData = await fetchComprehensiveEvaluationData(options)
 
   // Fetch yes/no submissions + challenges + GPS in parallel
-  const [yesNoRes, challengesRes] = await Promise.allSettled([
-    supabase.from('form_submissions')
-      .select('id, data, governorate_id, status')
-      .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
-      .eq('status', 'submitted')
-      .is('deleted_at', null)
-      .limit(50000),
+  // NOTE: Uses bulkFetch for pagination (Supabase PostgREST caps at ~1000 rows per request)
+  const [yesNoResult, challengesResult] = await Promise.allSettled([
+    bulkFetch({
+      table: 'form_submissions',
+      select: 'id, data, governorate_id, status',
+      maxRows: 100000,
+      pageSize: 1000,
+      orderBy: 'created_at',
+      orderDirection: 'desc',
+      applyFilters: (q) => q.eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24').eq('status', 'submitted').is('deleted_at', null),
+    }),
 
-    supabase.from('form_submissions')
-      .select('id, data, governorate_id, district_id, submitted_by, created_at')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(10000),
+    bulkFetch({
+      table: 'form_submissions',
+      select: 'id, data, governorate_id, district_id, submitted_by, created_at',
+      maxRows: 100000,
+      pageSize: 1000,
+      orderBy: 'created_at',
+      orderDirection: 'desc',
+      applyFilters: (q) => q.is('deleted_at', null),
+    }),
   ])
 
   // ── Governorate lookup ──
@@ -223,7 +232,7 @@ export async function generateMasterSupervisorReport(options?: {
   // SECTION 2: YES/NO ANALYSIS
   // ══════════════════════════════════════════════
 
-  const yesNoSubs = yesNoRes.status === 'fulfilled' ? yesNoRes.value.data || [] : []
+  const yesNoSubs = yesNoResult.status === 'fulfilled' ? (yesNoResult.value as any).data || [] : []
   const allFieldKeys = FORM_SECTIONS.flatMap(s => s.fields.map(f => f.key))
 
   const fieldStats = new Map<string, { yes: number; no: number; total: number }>()
@@ -265,7 +274,7 @@ export async function generateMasterSupervisorReport(options?: {
   // SECTION 3: CHALLENGES
   // ══════════════════════════════════════════════
 
-  const challengeSubs = challengesRes.status === 'fulfilled' ? challengesRes.value.data || [] : []
+  const challengeSubs = challengesResult.status === 'fulfilled' ? (challengesResult.value as any).data || [] : []
   const profilesRes = await supabase.from('profiles').select('id, full_name').is('deleted_at', null)
   const profilesMap = new Map<string, string>()
   for (const p of profilesRes.data || []) profilesMap.set(p.id, p.full_name)

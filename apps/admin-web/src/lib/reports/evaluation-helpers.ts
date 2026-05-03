@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '@/lib/supabase'
+import { bulkFetch } from '@/lib/bulk-fetch'
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -91,18 +92,12 @@ export async function fetchEvaluationData(options?: {
   const dateArabic = formatDateArabic(new Date(targetDate))
 
   // ── Fetch all data ──
-  const [usersRes, subsRes, govsRes, distsRes] = await Promise.allSettled([
+  // NOTE: submissions uses bulkFetch for pagination (Supabase PostgREST caps at ~1000 rows per request)
+  const [usersRes, govsRes, distsRes] = await Promise.allSettled([
     supabase.from('profiles')
       .select('id, full_name, phone, role, governorate_id, district_id, is_active')
       .is('deleted_at', null)
       .order('governorate_id', { ascending: true }),
-
-    supabase.from('form_submissions')
-      .select('id, submitted_by, governorate_id, district_id, status, created_at')
-      .is('deleted_at', null)
-      .gte('created_at', dayStart)
-      .lte('created_at', dayEnd)
-      .limit(50000),
 
     supabase.from('governorates')
       .select('id, name_ar')
@@ -117,8 +112,19 @@ export async function fetchEvaluationData(options?: {
       .order('name_ar', { ascending: true }),
   ])
 
+  // Paginated fetch for submissions on target date
+  const subsResult = await bulkFetch({
+    table: 'form_submissions',
+    select: 'id, submitted_by, governorate_id, district_id, status, created_at',
+    maxRows: 100000,
+    pageSize: 1000,
+    orderBy: 'created_at',
+    orderDirection: 'asc',
+    applyFilters: (q) => q.is('deleted_at', null).gte('created_at', dayStart).lte('created_at', dayEnd),
+  })
+
   const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
-  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const subs = subsResult.data as any[]
   const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
   const dists = distsRes.status === 'fulfilled' ? distsRes.value.data || [] : []
 
@@ -197,17 +203,12 @@ export async function fetchComprehensiveEvaluationData(options?: {
   governorateId?: string
 }): Promise<ComprehensiveEvaluationData> {
   // ── Fetch all data (no date filter) ──
-  const [usersRes, subsRes, govsRes, distsRes] = await Promise.allSettled([
+  // NOTE: submissions uses bulkFetch for pagination (Supabase PostgREST caps at ~1000 rows per request)
+  const [usersRes, govsRes, distsRes] = await Promise.allSettled([
     supabase.from('profiles')
       .select('id, full_name, phone, role, governorate_id, district_id, is_active')
       .is('deleted_at', null)
       .order('governorate_id', { ascending: true }),
-
-    supabase.from('form_submissions')
-      .select('id, submitted_by, governorate_id, district_id, status, created_at')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: true })
-      .limit(100000),
 
     supabase.from('governorates')
       .select('id, name_ar')
@@ -222,8 +223,19 @@ export async function fetchComprehensiveEvaluationData(options?: {
       .order('name_ar', { ascending: true }),
   ])
 
+  // Paginated fetch for ALL submissions (no 1000-row cap)
+  const subsResult = await bulkFetch({
+    table: 'form_submissions',
+    select: 'id, submitted_by, governorate_id, district_id, status, created_at',
+    maxRows: 100000,
+    pageSize: 1000,
+    orderBy: 'created_at',
+    orderDirection: 'asc',
+    applyFilters: (q) => q.is('deleted_at', null),
+  })
+
   const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
-  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const subs = subsResult.data as any[]
   const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
   const dists = distsRes.status === 'fulfilled' ? distsRes.value.data || [] : []
 

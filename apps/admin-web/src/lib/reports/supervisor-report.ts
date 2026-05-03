@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '../supabase'
+import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import {
   escapeHtml,
@@ -31,18 +32,29 @@ export async function generateSupervisorReport(options?: {
     return q
   }
 
-  const subsQuery = applyDateFilter(
-    supabase.from('form_submissions').select('*, forms(title_ar), governorates(name_ar), districts(name_ar)').is('deleted_at', null)
-  ).order('created_at', { ascending: false }).limit(20000)
-
-  const [usersRes, subsRes, govsRes] = await Promise.allSettled([
+  const [usersRes, govsRes] = await Promise.allSettled([
     supabase.from('profiles').select('*, governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('created_at', { ascending: false }),
-    subsQuery,
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
   ])
 
+  const subsResult = await bulkFetch({
+    table: 'form_submissions',
+    select: '*, forms(title_ar), governorates(name_ar), districts(name_ar)',
+    maxRows: 100000,
+    pageSize: 1000,
+    orderBy: 'created_at',
+    orderDirection: 'desc',
+    applyFilters: (q) => {
+      q = q.is('deleted_at', null)
+      if (dateFrom) q = q.gte('created_at', dateFrom)
+      if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+      if (governorateId && governorateId !== 'all') q = q.eq('governorate_id', governorateId)
+      return q
+    },
+  })
+
   const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
-  const subs = subsRes.status === 'fulfilled' ? subsRes.value.data || [] : []
+  const subs = subsResult.data as any[]
   const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
 
   const fieldRoles = ['data_entry', 'district', 'governorate']

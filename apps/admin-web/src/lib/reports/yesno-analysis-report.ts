@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '../supabase'
+import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import {
   escapeHtml,
@@ -189,24 +190,42 @@ export async function generateYesNoAnalysisReport(options?: {
   const dayStart = `${dateFrom}T00:00:00`
   const dayEnd = `${dateTo}T23:59:59`
 
-  // ── Fetch submissions ──
-  let query = supabase
-    .from('form_submissions')
-    .select('id, data, governorate_id, submitted_by, created_at, profiles:submitted_by(full_name, role), governorates(name_ar)')
-    .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
-    .is('deleted_at', null)
-    .eq('status', 'submitted')
-    .gte('created_at', dayStart)
-    .lte('created_at', dayEnd)
-    .limit(10000)
+  // ── Fetch submissions (paginated to bypass PostgREST 1000-row cap) ──
+  const subsResult = await bulkFetch({
+    table: 'form_submissions',
+    select: 'id, data, governorate_id, submitted_by, created_at',
+    maxRows: 100000,
+    pageSize: 1000,
+    orderBy: 'created_at',
+    orderDirection: 'desc',
+    applyFilters: (q) => {
+      q = q.eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
+        .is('deleted_at', null)
+        .eq('status', 'submitted')
+        .gte('created_at', dayStart)
+        .lte('created_at', dayEnd)
+      if (options?.governorateId && options.governorateId !== 'all') {
+        q = q.eq('governorate_id', options.governorateId)
+      }
+      return q
+    },
+  })
 
-  if (options?.governorateId && options.governorateId !== 'all') {
-    query = query.eq('governorate_id', options.governorateId)
-  }
+  // Fetch profiles map for supervisor names
+  const profilesRes = await supabase.from('profiles').select('id, full_name, role').is('deleted_at', null)
+  const profilesMap = new Map<string, { name: string; role: string }>()
+  for (const p of profilesRes.data || []) profilesMap.set(p.id, { name: p.full_name, role: p.role })
 
-  const { data: submissions } = await query
+  // Fetch governorates map
+  const govsRes = await supabase.from('governorates').select('id, name_ar').eq('is_active', true).is('deleted_at', null)
+  const govsMap = new Map<string, string>()
+  for (const g of govsRes.data || []) govsMap.set(g.id, g.name_ar)
 
-  const subs = submissions || []
+  const subs = (subsResult.data as any[]).map(s => ({
+    ...s,
+    profiles: profilesMap.get(s.submitted_by) || null,
+    governorates: s.governorate_id ? { name_ar: govsMap.get(s.governorate_id) || 'غير محدد' } : null,
+  }))
   const totalSubs = subs.length
 
   // ── Collect all yes/no field keys ──

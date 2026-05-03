@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '../supabase'
+import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import {
   escapeHtml, formatDateArabic,
@@ -95,23 +96,29 @@ export async function generateSupervisionChallengesReport(options?: {
   dateTo?: string
   governorateId?: string
 }): Promise<void> {
-  // ── Fetch data ──
-  let query = supabase
-    .from('form_submissions')
-    .select('id, status, data, notes, gps_lat, gps_lng, created_at, submitted_by, governorate_id, district_id')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(10000)
+  // ── Fetch data (paginated) ──
+  const subsResult = await bulkFetch({
+    table: 'form_submissions',
+    select: 'id, status, data, notes, gps_lat, gps_lng, created_at, submitted_by, governorate_id, district_id',
+    maxRows: 100000,
+    pageSize: 1000,
+    orderBy: 'created_at',
+    orderDirection: 'desc',
+    applyFilters: (q) => {
+      q = q.is('deleted_at', null)
+      if (options?.dateFrom) q = q.gte('created_at', options.dateFrom)
+      if (options?.dateTo) q = q.lte('created_at', options.dateTo + 'T23:59:59')
+      return q
+    },
+  })
 
-  if (options?.dateFrom) query = query.gte('created_at', options.dateFrom)
-  if (options?.dateTo) query = query.lte('created_at', options.dateTo + 'T23:59:59')
-
-  const [{ data: submissions }, { data: profilesData }, { data: govsData }, { data: distsData }] = await Promise.all([
-    query,
+  const [{ data: profilesData }, { data: govsData }, { data: distsData }] = await Promise.all([
     supabase.from('profiles').select('id, full_name, phone, role').is('deleted_at', null),
     supabase.from('governorates').select('id, name_ar').eq('is_active', true).is('deleted_at', null),
     supabase.from('districts').select('id, name_ar, governorate_id').eq('is_active', true).is('deleted_at', null),
   ])
+
+  const submissions = subsResult.data as any[]
 
   const profilesMap = new Map<string, any>()
   for (const p of profilesData || []) profilesMap.set(p.id, p)

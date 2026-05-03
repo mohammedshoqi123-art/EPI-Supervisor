@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '../supabase'
+import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import { EPI_LOGO_BASE64 } from '../epi-logo'
 import {
@@ -159,31 +160,39 @@ export async function generateSupervisionFormReport(options?: {
 }): Promise<void> {
   const now = new Date()
 
-  // ── Fetch supervision form submissions + profiles separately ──
-  let query = supabase
-    .from('form_submissions')
-    .select(`
-      id, status, data, notes, gps_lat, gps_lng, photos, created_at, submitted_by, governorate_id, district_id,
-      forms(id, title_ar, campaign_type)
-    `)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(10000)
+  // ── Fetch supervision form submissions (paginated) ──
+  const subsResult = await bulkFetch({
+    table: 'form_submissions',
+    select: 'id, status, data, notes, gps_lat, gps_lng, photos, created_at, submitted_by, governorate_id, district_id, form_id',
+    maxRows: 100000,
+    pageSize: 1000,
+    orderBy: 'created_at',
+    orderDirection: 'desc',
+    applyFilters: (q) => {
+      q = q.is('deleted_at', null)
+      if (options?.formId) q = q.eq('form_id', options.formId)
+      if (options?.dateFrom) q = q.gte('created_at', options.dateFrom)
+      if (options?.dateTo) q = q.lte('created_at', options.dateTo + 'T23:59:59')
+      return q
+    },
+  })
 
-  // Filter by supervision form if specified
-  if (options?.formId) {
-    query = query.eq('form_id', options.formId)
-  }
-
-  if (options?.dateFrom) query = query.gte('created_at', options.dateFrom)
-  if (options?.dateTo) query = query.lte('created_at', options.dateTo + 'T23:59:59')
-
-  const [{ data: submissions }, { data: profilesData }, { data: govsData }, { data: distsData }] = await Promise.all([
-    query,
+  const [{ data: profilesData }, { data: govsData }, { data: distsData }, { data: formsData }] = await Promise.all([
     supabase.from('profiles').select('id, full_name, phone, role').is('deleted_at', null),
     supabase.from('governorates').select('id, name_ar').eq('is_active', true).is('deleted_at', null),
     supabase.from('districts').select('id, name_ar, governorate_id').eq('is_active', true).is('deleted_at', null),
+    supabase.from('forms').select('id, title_ar, campaign_type').is('deleted_at', null),
   ])
+
+  // Build form lookup
+  const formsMap = new Map<string, any>()
+  for (const f of formsData || []) formsMap.set(f.id, f)
+
+  // Enrich submissions with form data
+  const submissions = (subsResult.data as any[]).map(s => ({
+    ...s,
+    forms: formsMap.get(s.form_id) || null,
+  }))
 
   // Build lookup maps
   const profilesMap = new Map<string, { full_name: string; phone: string; role: string }>()

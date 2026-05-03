@@ -598,86 +598,10 @@ INSERT INTO app_settings (key, value, label_ar, type, category) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 COMMIT;
--- Chat channels table
-CREATE TABLE IF NOT EXISTS chat_channels (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  description TEXT,
-  is_announcement BOOLEAN NOT NULL DEFAULT false,
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  created_by UUID REFERENCES profiles(id),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- Notifications enhancements: add policies for user access
+-- (chat_channels and chat_messages removed - not in production)
 
-CREATE INDEX IF NOT EXISTS idx_chat_channels_active ON chat_channels(is_active) WHERE is_active = true;
-
-ALTER TABLE chat_channels ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "chat_channels_select_all" ON chat_channels;
-DROP POLICY IF EXISTS "chat_channels_insert_auth" ON chat_channels;
-DROP POLICY IF EXISTS "chat_channels_update_creator" ON chat_channels;
-DROP POLICY IF EXISTS "chat_channels_delete_admin" ON chat_channels;
-CREATE POLICY "chat_channels_select_all" ON chat_channels FOR SELECT USING (auth.uid() IS NOT NULL AND is_active = true);
-CREATE POLICY "chat_channels_insert_auth" ON chat_channels FOR INSERT WITH CHECK (created_by = auth.uid());
-CREATE POLICY "chat_channels_update_creator" ON chat_channels FOR UPDATE USING (created_by = auth.uid() OR public.user_role() = 'admin');
-CREATE POLICY "chat_channels_delete_admin" ON chat_channels FOR DELETE USING (public.user_role() = 'admin');
-
-GRANT SELECT, INSERT ON chat_channels TO authenticated;
-
--- Default channels
-INSERT INTO chat_channels (name, description, is_announcement, is_active)
-VALUES ('عام', 'القناة العامة للتواصل بين أعضاء الفريق', false, true)
-ON CONFLICT DO NOTHING;
-
--- Chat messages table
-CREATE TABLE IF NOT EXISTS chat_messages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  channel_id UUID REFERENCES chat_channels(id) ON DELETE CASCADE,
-  sender_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  sender_name TEXT NOT NULL,
-  content TEXT NOT NULL,
-  room TEXT NOT NULL DEFAULT 'general',
-  is_read BOOLEAN NOT NULL DEFAULT false,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_id);
-CREATE INDEX IF NOT EXISTS idx_chat_messages_unread ON chat_messages(is_read, created_at DESC) WHERE is_read = false;
-
-ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "chat_select_all" ON chat_messages;
-DROP POLICY IF EXISTS "chat_insert_auth" ON chat_messages;
-DROP POLICY IF EXISTS "chat_update_own" ON chat_messages;
-CREATE POLICY "chat_select_all" ON chat_messages FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "chat_insert_auth" ON chat_messages FOR INSERT WITH CHECK (sender_id = auth.uid());
-CREATE POLICY "chat_update_own" ON chat_messages FOR UPDATE USING (sender_id = auth.uid());
-
-GRANT SELECT, INSERT, UPDATE ON chat_messages TO authenticated;
-
--- Trigger for chat_channels updated_at
-DROP TRIGGER IF EXISTS trg_chat_channels_updated ON chat_channels;
-CREATE TRIGGER trg_chat_channels_updated BEFORE UPDATE ON chat_channels FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Notifications table (if not exists)
-CREATE TABLE IF NOT EXISTS notifications (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  recipient_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  body TEXT NOT NULL,
-  type TEXT NOT NULL DEFAULT 'info',
-  category TEXT DEFAULT 'general',
-  data JSONB DEFAULT '{}',
-  is_read BOOLEAN NOT NULL DEFAULT false,
-  read_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_notifications_recipient ON notifications(recipient_id, is_read, created_at DESC);
-
+-- Notifications RLS policies
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "notifications_select_own" ON notifications;
@@ -961,8 +885,8 @@ COMMIT;
 -- ═══════════════════════════════════════════════════════════════
 --  007: Notifications Enhancements
 --  - Add DELETE policy for notifications
---  - Add notification_templates table
---  - Fix grants
+--  - Add update_updated_at_column function
+--  (notification_templates removed - not in production)
 -- ═══════════════════════════════════════════════════════════════
 
 -- 1. Delete policy: users can delete their own notifications
@@ -978,58 +902,7 @@ CREATE POLICY "notifications_delete_admin" ON notifications
 -- Grant DELETE on notifications
 GRANT DELETE ON notifications TO authenticated;
 
--- 2. Notification Templates table
-CREATE TABLE IF NOT EXISTS notification_templates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL,
-  body TEXT NOT NULL DEFAULT '',
-  type TEXT NOT NULL DEFAULT 'info',
-  category TEXT NOT NULL DEFAULT 'system',
-  is_system BOOLEAN NOT NULL DEFAULT false,
-  created_by UUID REFERENCES profiles(id),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- RLS for templates
-ALTER TABLE notification_templates ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "templates_select_all" ON notification_templates;
-CREATE POLICY "templates_select_all" ON notification_templates
-  FOR SELECT USING (true);
-
-DROP POLICY IF EXISTS "templates_insert_admin" ON notification_templates;
-CREATE POLICY "templates_insert_admin" ON notification_templates
-  FOR INSERT WITH CHECK (public.user_role() IN ('admin', 'central'));
-
-DROP POLICY IF EXISTS "templates_update_admin" ON notification_templates;
-CREATE POLICY "templates_update_admin" ON notification_templates
-  FOR UPDATE USING (public.user_role() IN ('admin', 'central'));
-
-DROP POLICY IF EXISTS "templates_delete_admin" ON notification_templates;
-CREATE POLICY "templates_delete_admin" ON notification_templates
-  FOR DELETE USING (public.user_role() IN ('admin', 'central'));
-
-GRANT SELECT ON notification_templates TO authenticated;
-GRANT INSERT ON notification_templates TO authenticated;
-GRANT UPDATE ON notification_templates TO authenticated;
-GRANT DELETE ON notification_templates TO authenticated;
-
--- Index
-CREATE INDEX IF NOT EXISTS idx_templates_category ON notification_templates(category);
-
--- 3. Seed default templates
-INSERT INTO notification_templates (title, body, type, category, is_system) VALUES
-  ('تذكير بالإرساليات', 'يرجى إكمال الإرساليات المعلقة قبل نهاية اليوم.', 'warning', 'submission', true),
-  ('صيانة النظام', 'سيكون النظام في وضع الصيانة اليوم من الساعة 10 مساءً حتى 12 مساءً.', 'info', 'system', true),
-  ('نقص في اللقاحات', 'تم رصد نقص في أحد اللقاحات. يرجى المراجعة فوراً.', 'error', 'shortage', true),
-  ('إشعار عام', '', 'info', 'system', true),
-  ('تمت الموافقة', 'تمت الموافقة على طلبك بنجاح.', 'success', 'user', true),
-  ('تحديث النظام', 'تم تحديث النظام بإصدار جديد. يرجى مراجعة التغييرات.', 'info', 'system', true),
-  ('تنبيه أمني', 'تم رصد نشاط غير معتاد على حسابك. يرجى التحقق.', 'warning', 'user', true)
-ON CONFLICT DO NOTHING;
-
--- 4. Updated_at trigger for templates
+-- 2. Updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1037,135 +910,14 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_templates_updated_at ON notification_templates;
-CREATE TRIGGER trg_templates_updated_at
-  BEFORE UPDATE ON notification_templates
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 -- ═══════════════════════════════════════════════════════════════════
---  AI Model Management — جدول نماذج الذكاء الاصطناعي
+--  AI Settings — app_settings additions only
+--  (ai_models, ai_model_usage tables removed - not in production)
 -- ═══════════════════════════════════════════════════════════════════
 
 BEGIN;
 
--- ═══ جدول النماذج ═══
-CREATE TABLE IF NOT EXISTS ai_models (
-  id            TEXT PRIMARY KEY,
-  name          TEXT NOT NULL,
-  name_ar       TEXT NOT NULL,
-  provider      TEXT NOT NULL,           -- 'groq', 'mimo', 'gemini', 'huggingface', 'local'
-  model_id      TEXT NOT NULL,           -- e.g. 'llama-3.3-70b-versatile'
-  description   TEXT,
-  description_ar TEXT,
-  is_active     BOOLEAN DEFAULT true,
-  is_default    BOOLEAN DEFAULT false,
-  priority      INT DEFAULT 10,          -- lower = higher priority
-  max_tokens    INT DEFAULT 800,
-  temperature   NUMERIC(3,2) DEFAULT 0.4,
-  capabilities  JSONB DEFAULT '[]',      -- ['chat','streaming','function_calling','json_mode','arabic']
-  config        JSONB DEFAULT '{}',      -- provider-specific config
-  usage_count   BIGINT DEFAULT 0,
-  last_used_at  TIMESTAMPTZ,
-  created_at    TIMESTAMPTZ DEFAULT now(),
-  updated_at    TIMESTAMPTZ DEFAULT now()
-);
-
--- ═══ جدول استهلاك النماذج (للمراقبة) ═══
-CREATE TABLE IF NOT EXISTS ai_model_usage (
-  id            BIGSERIAL PRIMARY KEY,
-  model_id      TEXT REFERENCES ai_models(id),
-  user_id       UUID REFERENCES profiles(id),
-  endpoint      TEXT DEFAULT 'ai-chat-v3',
-  tokens_used   INT DEFAULT 0,
-  latency_ms    INT,
-  success       BOOLEAN DEFAULT true,
-  error_message TEXT,
-  response_source TEXT,           -- 'groq', 'groq_function_call', 'mimo', 'huggingface_fallback', 'local', 'all_failed'
-  created_at    TIMESTAMPTZ DEFAULT now()
-);
-
--- ═══ فهارس ═══
-CREATE INDEX IF NOT EXISTS idx_ai_models_provider ON ai_models(provider);
-CREATE INDEX IF NOT EXISTS idx_ai_models_active ON ai_models(is_active);
-CREATE INDEX IF NOT EXISTS idx_ai_model_usage_model ON ai_model_usage(model_id);
-CREATE INDEX IF NOT EXISTS idx_ai_model_usage_date ON ai_model_usage(created_at);
-
--- ═══ RLS ═══
-ALTER TABLE ai_models ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ai_model_usage ENABLE ROW LEVEL SECURITY;
-
--- الجميع يقدر يشوف النماذج النشطة
-CREATE POLICY "ai_models_select_auth" ON ai_models
-  FOR SELECT USING (auth.uid() IS NOT NULL AND is_active = true);
-
--- الأدمن فقط يقدر يعدل
-CREATE POLICY "ai_models_manage_admin" ON ai_models
-  FOR ALL USING (public.user_role() = 'admin');
-
--- الاستهلاك: الأدمن يشوف الكل، المستخدم يشوف حقه
-CREATE POLICY "ai_usage_select_admin" ON ai_model_usage
-  FOR SELECT USING (public.user_role() = 'admin');
-
-CREATE POLICY "ai_usage_insert_auth" ON ai_model_usage
-  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
-
--- ═══ الصلاحيات ═══
-GRANT SELECT ON ai_models TO authenticated;
-GRANT SELECT, INSERT ON ai_model_usage TO authenticated;
-
--- ═══ Seed: النماذج الافتراضية ═══
-INSERT INTO ai_models (id, name, name_ar, provider, model_id, description, description_ar, is_active, is_default, priority, max_tokens, temperature, capabilities) VALUES
-  (
-    'groq-70b', 'Groq Llama 3.3 70B', 'جروك لاما 3.3 70B',
-    'groq', 'llama-3.3-70b-versatile',
-    'Most capable model — best for complex analysis, reports, and Arabic',
-    'النموذج الأقوى — الأفضل للتحليلات المعقدة والتقارير والعربية',
-    true, true, 1, 800, 0.40,
-    '["chat","streaming","function_calling","json_mode","arabic","reports"]'::jsonb
-  ),
-  (
-    'groq-8b', 'Groq Llama 3.1 8B', 'جروك لاما 3.1 8B',
-    'groq', 'llama-3.1-8b-instant',
-    'Ultra-fast (~200ms) — best for quick queries, intent extraction, suggestions',
-    'سريع جداً (~200ms) — الأفضل للاستعلامات السريعة والاقتراحات',
-    true, false, 2, 300, 0.30,
-    '["chat","streaming","json_mode","fast"]'::jsonb
-  ),
-  (
-    'mimo-v2', 'Xiaomi MiMo v2 Pro', 'شاومي ميمو v2 برو',
-    'mimo', 'mimo-v2-pro',
-    'Xiaomi AI — good for Arabic, alternative to Groq',
-    'ذكاء شاومي — جيد للعربية، بديل لجروك',
-    true, false, 3, 800, 0.40,
-    '["chat","streaming","arabic"]'::jsonb
-  ),
-  (
-    'gemini-pro', 'Google Gemini', 'جوجل جيميني',
-    'gemini', 'gemini-pro',
-    'Google AI — multimodal capabilities',
-    'ذكاء جوجل — إمكانيات متعددة الوسائط',
-    true, false, 4, 800, 0.40,
-    '["chat","arabic"]'::jsonb
-  ),
-  (
-    'hf-e5', 'HuggingFace Embeddings', 'هاجنج فيس لل embeddings',
-    'huggingface', 'intfloat/multilingual-e5-large',
-    'Multilingual embeddings for RAG pipeline',
-    'تمثيلات متعددة اللغات لـ RAG',
-    true, false, 10, 0, 0.00,
-    '["embeddings","multilingual"]'::jsonb
-  ),
-  (
-    'local-ai', 'Local AI (Offline)', 'ذكاء محلي (بدون إنترنت)',
-    'local', 'enhanced-local-ai',
-    'Rule-based AI — works fully offline, no API needed',
-    'ذكاء قائم على القواعد — يعمل بدون إنترنت',
-    true, false, 99, 0, 0.00,
-    '["offline","basic_analysis"]'::jsonb
-  )
-ON CONFLICT (id) DO NOTHING;
-
--- ═══ تحديث app_settings لإضافة إعدادات AI إضافية ═══
+-- ═══ تحديث app_settings لإضافة إعدادات AI ═══
 INSERT INTO app_settings (key, value, label_ar, type, category) VALUES
   ('ai_enabled', 'true', 'تفعيل المساعد الذكي', 'boolean', 'ai'),
   ('ai_default_model', '"groq-70b"', 'النموذج الافتراضي', 'string', 'ai'),
@@ -1174,59 +926,6 @@ INSERT INTO app_settings (key, value, label_ar, type, category) VALUES
   ('ai_max_history', '6', 'أقصى عدد رسائل في السجل', 'number', 'ai'),
   ('ai_rate_limit', '25', 'أقصى عدد طلبات في الدقيقة', 'number', 'ai')
 ON CONFLICT (key) DO NOTHING;
-
--- ═══ دالة لتسجيل الاستهلاك ═══
-CREATE OR REPLACE FUNCTION log_ai_usage(
-  p_model_id TEXT,
-  p_tokens INT DEFAULT 0,
-  p_latency_ms INT DEFAULT NULL,
-  p_success BOOLEAN DEFAULT true,
-  p_error TEXT DEFAULT NULL
-) RETURNS VOID AS $$
-BEGIN
-  INSERT INTO ai_model_usage (model_id, user_id, tokens_used, latency_ms, success, error_message)
-  VALUES (p_model_id, auth.uid(), p_tokens, p_latency_ms, p_success, p_error);
-
-  UPDATE ai_models
-  SET usage_count = usage_count + 1,
-      last_used_at = now(),
-      updated_at = now()
-  WHERE id = p_model_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-GRANT EXECUTE ON FUNCTION log_ai_usage TO authenticated;
-
--- ═══ دالة لجلب النموذج الافتراضي ═══
-CREATE OR REPLACE FUNCTION get_default_ai_model()
-RETURNS TABLE (
-  id TEXT,
-  provider TEXT,
-  model_id TEXT,
-  max_tokens INT,
-  temperature NUMERIC,
-  capabilities JSONB
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT m.id, m.provider, m.model_id, m.max_tokens, m.temperature, m.capabilities
-  FROM ai_models m
-  WHERE m.is_default = true AND m.is_active = true
-  LIMIT 1;
-
-  -- If no default, return highest priority active model
-  IF NOT FOUND THEN
-    RETURN QUERY
-    SELECT m.id, m.provider, m.model_id, m.max_tokens, m.temperature, m.capabilities
-    FROM ai_models m
-    WHERE m.is_active = true
-    ORDER BY m.priority ASC
-    LIMIT 1;
-  END IF;
-END;
-$$ LANGUAGE plpgsql STABLE;
-
-GRANT EXECUTE ON FUNCTION get_default_ai_model TO authenticated;
 
 COMMIT;
 -- Fix rate_limit function to match actual table schema
@@ -1844,6 +1543,123 @@ $$;
 GRANT EXECUTE ON FUNCTION public_subs_by_gov(int) TO service_role;
 GRANT EXECUTE ON FUNCTION public_subs_by_day(int) TO service_role;
 GRANT EXECUTE ON FUNCTION public_subs_by_form(int) TO service_role;
+-- ═══════════════════════════════════════════════════════════════
+-- 033: Sync functions from production
+-- These functions exist in production and must be preserved
+-- ═══════════════════════════════════════════════════════════════
+
+-- add_document: Add/update RAG documents
+CREATE OR REPLACE FUNCTION public.add_document(p_id text, p_title text, p_title_ar text, p_doc_type text, p_source_file text, p_description text DEFAULT NULL::text)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  INSERT INTO ai_documents (id, title, title_ar, doc_type, source_file, description)
+  VALUES (p_id, p_title, p_title_ar, p_doc_type, p_source_file, p_description)
+  ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    title_ar = EXCLUDED.title_ar,
+    description = EXCLUDED.description,
+    updated_at = now();
+END;
+$function$;
+
+-- cleanup_old_embeddings: Remove embeddings older than 30 days
+CREATE OR REPLACE FUNCTION public.cleanup_old_embeddings()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$ BEGIN DELETE FROM ai_embedding_cache WHERE created_at < now() - INTERVAL '30 days'; END; $function$;
+
+-- cleanup_old_responses: Remove cached responses older than 1 hour
+CREATE OR REPLACE FUNCTION public.cleanup_old_responses()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$ BEGIN DELETE FROM ai_response_cache WHERE created_at < now() - INTERVAL '1 hour'; END; $function$;
+
+-- exec_sql: Safe read-only SQL execution (SELECT only)
+CREATE OR REPLACE FUNCTION public.exec_sql(sql_query text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$ DECLARE result JSONB; normalized TEXT; row_count INTEGER; BEGIN normalized := UPPER(TRIM(sql_query)); IF NOT normalized LIKE 'SELECT%' THEN RAISE EXCEPTION 'Only SELECT queries are allowed'; END IF; IF normalized ~* '\b(DELETE|UPDATE|INSERT|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE|EXECUTE)\b' THEN RAISE EXCEPTION 'Forbidden keyword detected'; END IF; IF normalized ~* '\b(pg_sleep|pg_terminate|pg_cancel|lo_import|lo_export)\b' THEN RAISE EXCEPTION 'Forbidden function call'; END IF; SET LOCAL statement_timeout = '5s'; EXECUTE 'SELECT COUNT(*) FROM (' || sql_query || ' LIMIT 500) t' INTO row_count; IF row_count = 0 THEN RETURN '[]'::jsonb; END IF; EXECUTE 'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (' || sql_query || ' LIMIT 500) t' INTO result; RETURN result; END; $function$;
+
+-- get_default_ai_model: Get the default AI model
+CREATE OR REPLACE FUNCTION public.get_default_ai_model()
+ RETURNS TABLE(id text, provider text, model_id text, max_tokens integer, temperature numeric, capabilities jsonb)
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+BEGIN
+  RETURN QUERY
+  SELECT m.id, m.provider, m.model_id, m.max_tokens, m.temperature, m.capabilities
+  FROM ai_models m
+  WHERE m.is_default = true AND m.is_active = true
+  LIMIT 1;
+  IF NOT FOUND THEN
+    RETURN QUERY
+    SELECT m.id, m.provider, m.model_id, m.max_tokens, m.temperature, m.capabilities
+    FROM ai_models m
+    WHERE m.is_active = true
+    ORDER BY m.priority ASC
+    LIMIT 1;
+  END IF;
+END;
+$function$;
+
+-- log_ai_usage: Log AI model usage
+CREATE OR REPLACE FUNCTION public.log_ai_usage(p_model_id text, p_tokens integer DEFAULT 0, p_latency_ms integer DEFAULT 0, p_success boolean DEFAULT true, p_error text DEFAULT NULL::text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+BEGIN
+  INSERT INTO ai_usage_log (model_id, user_id, tokens, latency_ms, success, error)
+  VALUES (p_model_id, auth.uid(), p_tokens, p_latency_ms, p_success, p_error);
+END;
+$function$;
+
+-- refresh_system_knowledge: Refresh system knowledge cache
+CREATE OR REPLACE FUNCTION public.refresh_system_knowledge()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$ BEGIN DELETE FROM ai_system_knowledge WHERE source = 'db_query'; END; $function$;
+
+-- search_knowledge: Semantic search in knowledge base
+CREATE OR REPLACE FUNCTION public.search_knowledge(query_embedding vector, match_count integer DEFAULT 5, similarity_threshold double precision DEFAULT 0.5, filter_doc_type text DEFAULT NULL::text)
+ RETURNS TABLE(chunk_id bigint, document_id text, doc_title text, doc_type text, content text, metadata jsonb, similarity double precision)
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+BEGIN
+  RETURN QUERY
+  SELECT c.id AS chunk_id, c.document_id, d.title AS doc_title, d.doc_type, c.content, c.metadata,
+    1 - (c.embedding <=> query_embedding) AS similarity
+  FROM ai_chunks c JOIN ai_documents d ON d.id = c.document_id
+  WHERE c.embedding IS NOT NULL
+    AND (filter_doc_type IS NULL OR d.doc_type = filter_doc_type)
+    AND 1 - (c.embedding <=> query_embedding) > similarity_threshold
+  ORDER BY c.embedding <=> query_embedding LIMIT match_count;
+END;
+$function$;
+
+-- search_knowledge_by_type: Search knowledge base by document type
+CREATE OR REPLACE FUNCTION public.search_knowledge_by_type(query_embedding vector, filter_doc_type text, match_count integer DEFAULT 5, similarity_threshold double precision DEFAULT 0.4)
+ RETURNS TABLE(chunk_id bigint, document_id text, doc_title text, doc_type text, content text, metadata jsonb, similarity double precision)
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+BEGIN
+  RETURN QUERY
+  SELECT c.id AS chunk_id, c.document_id, d.title AS doc_title, d.doc_type, c.content, c.metadata,
+    1 - (c.embedding <=> query_embedding) AS similarity
+  FROM ai_chunks c JOIN ai_documents d ON d.id = c.document_id
+  WHERE c.embedding IS NOT NULL
+    AND d.doc_type = filter_doc_type
+    AND 1 - (c.embedding <=> query_embedding) > similarity_threshold
+  ORDER BY c.embedding <=> query_embedding LIMIT match_count;
+END;
+$function$;
 -- Update handle_new_user trigger to save governorate_id and district_id
 -- Previously these fields were always NULL on new profiles
 

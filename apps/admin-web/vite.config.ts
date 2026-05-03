@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
-    base: '/EPI-Supervisor/',
+    base: env.VITE_BASE_PATH || '/EPI-Supervisor/',
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

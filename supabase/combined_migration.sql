@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   email TEXT NOT NULL UNIQUE, full_name TEXT NOT NULL, phone TEXT,
   role user_role NOT NULL DEFAULT 'data_entry',
   governorate_id UUID REFERENCES governorates(id), district_id UUID REFERENCES districts(id),
-  avatar_url TEXT, is_active BOOLEAN NOT NULL DEFAULT true, last_login TIMESTAMPTZ,
+  avatar_url TEXT, national_id TEXT, is_active BOOLEAN NOT NULL DEFAULT true, last_login TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), deleted_at TIMESTAMPTZ,
   CONSTRAINT profiles_email_check CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
   CONSTRAINT profiles_full_name_check CHECK (length(full_name) >= 2)
@@ -461,7 +461,7 @@ CREATE POLICY "facilities_select_all" ON health_facilities FOR SELECT USING (tru
 DROP POLICY IF EXISTS "audit_select_admin" ON audit_logs;
 DROP POLICY IF EXISTS "audit_insert_system" ON audit_logs;
 CREATE POLICY "audit_select_admin" ON audit_logs FOR SELECT USING (public.user_role() IN ('admin','central'));
-CREATE POLICY "audit_insert_system" ON audit_logs FOR INSERT WITH CHECK (true);
+CREATE POLICY "audit_insert_system" ON audit_logs FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
 -- DOC REFERENCES
 DROP POLICY IF EXISTS "references_select_active" ON doc_references;
@@ -515,10 +515,15 @@ DROP POLICY IF EXISTS "Users can upload own submission photos" ON storage.object
 DROP POLICY IF EXISTS "Users can view own submission photos" ON storage.objects;
 DROP POLICY IF EXISTS "Admins can upload references" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated can view references" ON storage.objects;
+DROP POLICY IF EXISTS "Users can upload own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Anyone can view avatars" ON storage.objects;
 CREATE POLICY "Users can upload own submission photos" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'submission-photos' AND auth.uid()::text = (storage.foldername(name))[1]);
 CREATE POLICY "Users can view own submission photos" ON storage.objects FOR SELECT USING (bucket_id = 'submission-photos' AND auth.uid()::text = (storage.foldername(name))[1]);
 CREATE POLICY "Admins can upload references" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'references' AND public.user_role() = 'admin');
 CREATE POLICY "Authenticated can view references" ON storage.objects FOR SELECT USING (bucket_id = 'references' AND auth.uid() IS NOT NULL);
+CREATE POLICY "Users can upload own avatar" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Users can update own avatar" ON storage.objects FOR UPDATE USING (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Anyone can view avatars" ON storage.objects FOR SELECT USING (bucket_id = 'avatars');
 
 -- ============================================================
 -- 9. GRANTS
@@ -537,7 +542,8 @@ GRANT SELECT ON pages TO authenticated;
 GRANT SELECT ON app_settings TO authenticated;
 GRANT SELECT ON doc_references TO authenticated;
 GRANT SELECT ON notifications TO authenticated;
-GRANT INSERT ON profiles TO anon;
+-- Note: profile creation handled by handle_new_user() trigger on auth.users
+-- No direct INSERT grant needed for anon
 
 -- ============================================================
 -- 10. APPLY TRIGGERS
@@ -591,9 +597,317 @@ INSERT INTO app_settings (key, value, label_ar, type, category) VALUES
   ('max_login_attempts', '5', 'أقصى عدد محاولات تسجيل الدخول', 'number', 'security')
 ON CONFLICT (key) DO NOTHING;
 
+COMMIT;
+-- Chat channels table
+CREATE TABLE IF NOT EXISTS chat_channels (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  is_announcement BOOLEAN NOT NULL DEFAULT false,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_channels_active ON chat_channels(is_active) WHERE is_active = true;
+
+ALTER TABLE chat_channels ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "chat_channels_select_all" ON chat_channels;
+DROP POLICY IF EXISTS "chat_channels_insert_auth" ON chat_channels;
+DROP POLICY IF EXISTS "chat_channels_update_creator" ON chat_channels;
+DROP POLICY IF EXISTS "chat_channels_delete_admin" ON chat_channels;
+CREATE POLICY "chat_channels_select_all" ON chat_channels FOR SELECT USING (auth.uid() IS NOT NULL AND is_active = true);
+CREATE POLICY "chat_channels_insert_auth" ON chat_channels FOR INSERT WITH CHECK (created_by = auth.uid());
+CREATE POLICY "chat_channels_update_creator" ON chat_channels FOR UPDATE USING (created_by = auth.uid() OR public.user_role() = 'admin');
+CREATE POLICY "chat_channels_delete_admin" ON chat_channels FOR DELETE USING (public.user_role() = 'admin');
+
+GRANT SELECT, INSERT ON chat_channels TO authenticated;
+
+-- Default channels
+INSERT INTO chat_channels (name, description, is_announcement, is_active)
+VALUES ('عام', 'القناة العامة للتواصل بين أعضاء الفريق', false, true)
+ON CONFLICT DO NOTHING;
+
+-- Chat messages table
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel_id UUID REFERENCES chat_channels(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  sender_name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  room TEXT NOT NULL DEFAULT 'general',
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_unread ON chat_messages(is_read, created_at DESC) WHERE is_read = false;
+
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "chat_select_all" ON chat_messages;
+DROP POLICY IF EXISTS "chat_insert_auth" ON chat_messages;
+DROP POLICY IF EXISTS "chat_update_own" ON chat_messages;
+CREATE POLICY "chat_select_all" ON chat_messages FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "chat_insert_auth" ON chat_messages FOR INSERT WITH CHECK (sender_id = auth.uid());
+CREATE POLICY "chat_update_own" ON chat_messages FOR UPDATE USING (sender_id = auth.uid());
+
+GRANT SELECT, INSERT, UPDATE ON chat_messages TO authenticated;
+
+-- Trigger for chat_channels updated_at
+DROP TRIGGER IF EXISTS trg_chat_channels_updated ON chat_channels;
+CREATE TRIGGER trg_chat_channels_updated BEFORE UPDATE ON chat_channels FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Notifications table (if not exists)
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipient_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'info',
+  category TEXT DEFAULT 'general',
+  data JSONB DEFAULT '{}',
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_notifications_recipient ON notifications(recipient_id, is_read, created_at DESC);
+
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "notifications_select_own" ON notifications;
+DROP POLICY IF EXISTS "notifications_update_own" ON notifications;
+DROP POLICY IF EXISTS "notifications_insert_system" ON notifications;
+CREATE POLICY "notifications_select_own" ON notifications FOR SELECT USING (recipient_id = auth.uid());
+CREATE POLICY "notifications_update_own" ON notifications FOR UPDATE USING (recipient_id = auth.uid());
+CREATE POLICY "notifications_insert_system" ON notifications FOR INSERT WITH CHECK (true);
+
+GRANT SELECT, INSERT, UPDATE ON notifications TO authenticated;
 -- ============================================================
--- 13. CLEANUP: Soft-delete unwanted forms
+-- Migration 004: Campaign/Activity System
+-- Adds campaign_type to forms and user preferences
 -- ============================================================
+
+BEGIN;
+
+-- 1. Add campaign_type column to forms
+ALTER TABLE forms ADD COLUMN IF NOT EXISTS campaign_type TEXT NOT NULL DEFAULT 'polio_campaign';
+
+-- Add index for filtering
+CREATE INDEX IF NOT EXISTS idx_forms_campaign_type ON forms(campaign_type) WHERE deleted_at IS NULL;
+
+-- Add check constraint
+ALTER TABLE forms DROP CONSTRAINT IF EXISTS forms_campaign_type_check;
+ALTER TABLE forms ADD CONSTRAINT forms_campaign_type_check
+  CHECK (campaign_type IN ('polio_campaign', 'integrated_activity'));
+
+-- 2. Add active_campaign to profiles (user preference)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS active_campaign TEXT NOT NULL DEFAULT 'polio_campaign';
+
+ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_active_campaign_check;
+ALTER TABLE profiles ADD CONSTRAINT profiles_active_campaign_check
+  CHECK (active_campaign IN ('polio_campaign', 'integrated_activity'));
+
+-- 3. Assign existing forms to campaigns
+-- Polio Campaign forms
+UPDATE forms SET campaign_type = 'polio_campaign'
+WHERE title_ar LIKE '%شلل%'
+  AND deleted_at IS NULL;
+
+-- Integrated Activity forms
+UPDATE forms SET campaign_type = 'integrated_activity'
+WHERE (title_ar LIKE '%ايصالي%' OR title_ar LIKE '%تكميلي%' OR title_ar LIKE '%النشاط الإيصالي%')
+  AND deleted_at IS NULL;
+
+-- 4. Soft-delete the 3 unwanted forms
+UPDATE forms SET deleted_at = now()
+WHERE title_ar IN (
+  'تقرير نقص التجهيزات',
+  'تقرير الزيارات الميدانية',
+  'استمارة مراقبة التطعيم',
+  'Equipment Shortage Report',
+  'Field Visit Report',
+  'Vaccination Monitoring Form'
+)
+AND deleted_at IS NULL;
+
+-- 5. RPC: get user's active campaign
+CREATE OR REPLACE FUNCTION get_active_campaign()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT COALESCE(
+    (SELECT active_campaign FROM profiles WHERE id = auth.uid()),
+    'polio_campaign'
+  );
+$$;
+
+-- 6. RPC: set user's active campaign
+CREATE OR REPLACE FUNCTION set_active_campaign(campaign TEXT)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF campaign NOT IN ('polio_campaign', 'integrated_activity') THEN
+    RAISE EXCEPTION 'Invalid campaign type: %', campaign;
+  END IF;
+
+  UPDATE profiles
+  SET active_campaign = campaign, updated_at = now()
+  WHERE id = auth.uid();
+END;
+$$;
+
+-- 7. Update getForms function to accept campaign filter
+CREATE OR REPLACE FUNCTION get_forms_by_campaign(campaign TEXT DEFAULT NULL)
+RETURNS SETOF forms
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT * FROM forms
+  WHERE deleted_at IS NULL
+    AND is_active = true
+    AND (campaign IS NULL OR campaign_type = campaign)
+  ORDER BY created_at DESC;
+$$;
+
+COMMIT;
+-- ============================================================
+-- Migration 005: Campaign Filtering on Submissions
+-- Denormalizes campaign_type on form_submissions for fast filtering
+-- ============================================================
+
+BEGIN;
+
+-- 1. Add campaign_type to form_submissions (denormalized)
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS campaign_type TEXT NOT NULL DEFAULT 'polio_campaign';
+
+ALTER TABLE form_submissions DROP CONSTRAINT IF EXISTS form_submissions_campaign_type_check;
+ALTER TABLE form_submissions ADD CONSTRAINT form_submissions_campaign_type_check
+  CHECK (campaign_type IN ('polio_campaign', 'integrated_activity'));
+
+-- Index for fast filtering
+CREATE INDEX IF NOT EXISTS idx_submissions_campaign ON form_submissions(campaign_type) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_submissions_campaign_status ON form_submissions(campaign_type, status) WHERE deleted_at IS NULL;
+
+-- 2. Backfill existing submissions from their form's campaign_type
+UPDATE form_submissions fs
+SET campaign_type = f.campaign_type
+FROM forms f
+WHERE fs.form_id = f.id
+  AND fs.deleted_at IS NULL;
+
+-- 3. Trigger: auto-set campaign_type on insert
+CREATE OR REPLACE FUNCTION set_submission_campaign()
+RETURNS TRIGGER AS $$
+BEGIN
+  SELECT campaign_type INTO NEW.campaign_type
+  FROM forms WHERE id = NEW.form_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_set_submission_campaign ON form_submissions;
+CREATE TRIGGER trg_set_submission_campaign
+  BEFORE INSERT ON form_submissions
+  FOR EACH ROW EXECUTE FUNCTION set_submission_campaign();
+
+-- 4. Update get_governorate_report to accept campaign filter
+CREATE OR REPLACE FUNCTION get_governorate_report(
+  p_campaign TEXT DEFAULT NULL,
+  p_governorate_id UUID DEFAULT NULL,
+  p_start_date DATE DEFAULT NULL,
+  p_end_date DATE DEFAULT NULL
+)
+RETURNS TABLE (
+  governorate_id UUID,
+  governorate_name TEXT,
+  total_submissions BIGINT,
+  submitted BIGINT,
+  reviewed BIGINT,
+  approved BIGINT,
+  rejected BIGINT,
+  draft BIGINT,
+  gps_submissions BIGINT,
+  photo_submissions BIGINT
+) LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT
+    g.id AS governorate_id,
+    g.name_ar AS governorate_name,
+    COUNT(fs.id) AS total_submissions,
+    COUNT(*) FILTER (WHERE fs.status = 'submitted') AS submitted,
+    COUNT(*) FILTER (WHERE fs.status = 'reviewed') AS reviewed,
+    COUNT(*) FILTER (WHERE fs.status = 'approved') AS approved,
+    COUNT(*) FILTER (WHERE fs.status = 'rejected') AS rejected,
+    COUNT(*) FILTER (WHERE fs.status = 'draft') AS draft,
+    COUNT(*) FILTER (WHERE fs.gps_lat IS NOT NULL) AS gps_submissions,
+    COUNT(*) FILTER (WHERE array_length(fs.photos, 1) > 0) AS photo_submissions
+  FROM governorates g
+  LEFT JOIN form_submissions fs ON fs.governorate_id = g.id
+    AND fs.deleted_at IS NULL
+    AND (p_campaign IS NULL OR fs.campaign_type = p_campaign)
+    AND (p_start_date IS NULL OR fs.created_at >= p_start_date)
+    AND (p_end_date IS NULL OR fs.created_at <= p_end_date)
+  WHERE g.deleted_at IS NULL
+    AND (p_governorate_id IS NULL OR g.id = p_governorate_id)
+  GROUP BY g.id, g.name_ar
+  ORDER BY g.name_ar;
+$$;
+
+-- 5. Update get_analytics to filter by campaign
+CREATE OR REPLACE FUNCTION get_analytics(
+  p_campaign TEXT DEFAULT NULL,
+  p_governorate_id UUID DEFAULT NULL,
+  p_district_id UUID DEFAULT NULL,
+  p_start_date DATE DEFAULT NULL,
+  p_end_date DATE DEFAULT NULL
+)
+RETURNS JSON LANGUAGE plpgsql STABLE SECURITY DEFINER AS $$
+DECLARE
+  result JSON;
+BEGIN
+  SELECT json_build_object(
+    'total_submissions', COUNT(*),
+    'by_status', json_object_agg(status, cnt),
+    'by_campaign', json_object_agg(campaign_type, campaign_cnt),
+    'gps_coverage', ROUND(100.0 * COUNT(*) FILTER (WHERE gps_lat IS NOT NULL) / GREATEST(COUNT(*), 1), 1),
+    'photo_coverage', ROUND(100.0 * COUNT(*) FILTER (WHERE array_length(photos, 1) > 0) / GREATEST(COUNT(*), 1), 1),
+    'avg_daily_submissions', ROUND(COUNT(*)::numeric / GREATEST(EXTRACT(DAY FROM COALESCE(p_end_date::timestamp, now()) - COALESCE(p_start_date::timestamp, now() - interval '30 days')), 1), 1)
+  ) INTO result
+  FROM (
+    SELECT *,
+      COUNT(*) OVER (PARTITION BY status) AS cnt,
+      COUNT(*) OVER (PARTITION BY campaign_type) AS campaign_cnt
+    FROM form_submissions
+    WHERE deleted_at IS NULL
+      AND (p_campaign IS NULL OR campaign_type = p_campaign)
+      AND (p_governorate_id IS NULL OR governorate_id = p_governorate_id)
+      AND (p_district_id IS NULL OR district_id = p_district_id)
+      AND (p_start_date IS NULL OR created_at >= p_start_date)
+      AND (p_end_date IS NULL OR created_at <= p_end_date)
+  ) sub;
+  RETURN result;
+END;
+$$;
+
+COMMIT;
+-- ============================================================
+-- Migration 006: Delete Unwanted Forms (Permanent)
+-- حذف النماذج غير المرغوبة بشكل نهائي
+-- ============================================================
+
+BEGIN;
+
+-- ═══ 1. Soft-delete the 3 unwanted forms (all languages) ═══
 UPDATE forms
 SET deleted_at = now(), updated_at = now()
 WHERE deleted_at IS NULL
@@ -610,9 +924,994 @@ WHERE deleted_at IS NULL
     )
   );
 
+-- Log the deletion
+INSERT INTO audit_logs (user_id, action, resource_type, details)
+SELECT
+  COALESCE(auth.uid(), '00000000-0000-0000-0000-000000000000'::uuid),
+  'delete',
+  'forms',
+  jsonb_build_object(
+    'reason', 'migration_006_cleanup',
+    'deleted_forms', ARRAY[title_ar, title_en]
+  )
+FROM forms
+WHERE deleted_at IS NOT NULL
+  AND updated_at >= now() - interval '1 second';
+
+-- ═══ 2. Also soft-delete any submissions tied to these forms ═══
+-- (Optional: keep data for historical records, just hide from UI)
+UPDATE form_submissions fs
+SET deleted_at = now(), updated_at = now()
+WHERE fs.deleted_at IS NULL
+  AND fs.form_id IN (
+    SELECT id FROM forms
+    WHERE title_ar IN (
+      'استمارة مراقبة التطعيم',
+      'تقرير الزيارات الميدانية',
+      'تقرير نقص التجهيزات'
+    )
+    OR title_en IN (
+      'Vaccination Monitoring Form',
+      'Field Visit Report',
+      'Equipment Shortage Report'
+    )
+  );
+
+COMMIT;
+-- ═══════════════════════════════════════════════════════════════
+--  007: Notifications Enhancements
+--  - Add DELETE policy for notifications
+--  - Add notification_templates table
+--  - Fix grants
+-- ═══════════════════════════════════════════════════════════════
+
+-- 1. Delete policy: users can delete their own notifications
+DROP POLICY IF EXISTS "notifications_delete_own" ON notifications;
+CREATE POLICY "notifications_delete_own" ON notifications
+  FOR DELETE USING (recipient_id = auth.uid());
+
+-- Also allow admins to delete any notification
+DROP POLICY IF EXISTS "notifications_delete_admin" ON notifications;
+CREATE POLICY "notifications_delete_admin" ON notifications
+  FOR DELETE USING (public.user_role() IN ('admin', 'central'));
+
+-- Grant DELETE on notifications
+GRANT DELETE ON notifications TO authenticated;
+
+-- 2. Notification Templates table
+CREATE TABLE IF NOT EXISTS notification_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  type TEXT NOT NULL DEFAULT 'info',
+  category TEXT NOT NULL DEFAULT 'system',
+  is_system BOOLEAN NOT NULL DEFAULT false,
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- RLS for templates
+ALTER TABLE notification_templates ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "templates_select_all" ON notification_templates;
+CREATE POLICY "templates_select_all" ON notification_templates
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "templates_insert_admin" ON notification_templates;
+CREATE POLICY "templates_insert_admin" ON notification_templates
+  FOR INSERT WITH CHECK (public.user_role() IN ('admin', 'central'));
+
+DROP POLICY IF EXISTS "templates_update_admin" ON notification_templates;
+CREATE POLICY "templates_update_admin" ON notification_templates
+  FOR UPDATE USING (public.user_role() IN ('admin', 'central'));
+
+DROP POLICY IF EXISTS "templates_delete_admin" ON notification_templates;
+CREATE POLICY "templates_delete_admin" ON notification_templates
+  FOR DELETE USING (public.user_role() IN ('admin', 'central'));
+
+GRANT SELECT ON notification_templates TO authenticated;
+GRANT INSERT ON notification_templates TO authenticated;
+GRANT UPDATE ON notification_templates TO authenticated;
+GRANT DELETE ON notification_templates TO authenticated;
+
+-- Index
+CREATE INDEX IF NOT EXISTS idx_templates_category ON notification_templates(category);
+
+-- 3. Seed default templates
+INSERT INTO notification_templates (title, body, type, category, is_system) VALUES
+  ('تذكير بالإرساليات', 'يرجى إكمال الإرساليات المعلقة قبل نهاية اليوم.', 'warning', 'submission', true),
+  ('صيانة النظام', 'سيكون النظام في وضع الصيانة اليوم من الساعة 10 مساءً حتى 12 مساءً.', 'info', 'system', true),
+  ('نقص في اللقاحات', 'تم رصد نقص في أحد اللقاحات. يرجى المراجعة فوراً.', 'error', 'shortage', true),
+  ('إشعار عام', '', 'info', 'system', true),
+  ('تمت الموافقة', 'تمت الموافقة على طلبك بنجاح.', 'success', 'user', true),
+  ('تحديث النظام', 'تم تحديث النظام بإصدار جديد. يرجى مراجعة التغييرات.', 'info', 'system', true),
+  ('تنبيه أمني', 'تم رصد نشاط غير معتاد على حسابك. يرجى التحقق.', 'warning', 'user', true)
+ON CONFLICT DO NOTHING;
+
+-- 4. Updated_at trigger for templates
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_templates_updated_at ON notification_templates;
+CREATE TRIGGER trg_templates_updated_at
+  BEFORE UPDATE ON notification_templates
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- ═══════════════════════════════════════════════════════════════════
+--  AI Model Management — جدول نماذج الذكاء الاصطناعي
+-- ═══════════════════════════════════════════════════════════════════
+
+BEGIN;
+
+-- ═══ جدول النماذج ═══
+CREATE TABLE IF NOT EXISTS ai_models (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  name_ar       TEXT NOT NULL,
+  provider      TEXT NOT NULL,           -- 'groq', 'mimo', 'gemini', 'huggingface', 'local'
+  model_id      TEXT NOT NULL,           -- e.g. 'llama-3.3-70b-versatile'
+  description   TEXT,
+  description_ar TEXT,
+  is_active     BOOLEAN DEFAULT true,
+  is_default    BOOLEAN DEFAULT false,
+  priority      INT DEFAULT 10,          -- lower = higher priority
+  max_tokens    INT DEFAULT 800,
+  temperature   NUMERIC(3,2) DEFAULT 0.4,
+  capabilities  JSONB DEFAULT '[]',      -- ['chat','streaming','function_calling','json_mode','arabic']
+  config        JSONB DEFAULT '{}',      -- provider-specific config
+  usage_count   BIGINT DEFAULT 0,
+  last_used_at  TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  updated_at    TIMESTAMPTZ DEFAULT now()
+);
+
+-- ═══ جدول استهلاك النماذج (للمراقبة) ═══
+CREATE TABLE IF NOT EXISTS ai_model_usage (
+  id            BIGSERIAL PRIMARY KEY,
+  model_id      TEXT REFERENCES ai_models(id),
+  user_id       UUID REFERENCES profiles(id),
+  endpoint      TEXT DEFAULT 'ai-chat-v3',
+  tokens_used   INT DEFAULT 0,
+  latency_ms    INT,
+  success       BOOLEAN DEFAULT true,
+  error_message TEXT,
+  response_source TEXT,           -- 'groq', 'groq_function_call', 'mimo', 'huggingface_fallback', 'local', 'all_failed'
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+
+-- ═══ فهارس ═══
+CREATE INDEX IF NOT EXISTS idx_ai_models_provider ON ai_models(provider);
+CREATE INDEX IF NOT EXISTS idx_ai_models_active ON ai_models(is_active);
+CREATE INDEX IF NOT EXISTS idx_ai_model_usage_model ON ai_model_usage(model_id);
+CREATE INDEX IF NOT EXISTS idx_ai_model_usage_date ON ai_model_usage(created_at);
+
+-- ═══ RLS ═══
+ALTER TABLE ai_models ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_model_usage ENABLE ROW LEVEL SECURITY;
+
+-- الجميع يقدر يشوف النماذج النشطة
+CREATE POLICY "ai_models_select_auth" ON ai_models
+  FOR SELECT USING (auth.uid() IS NOT NULL AND is_active = true);
+
+-- الأدمن فقط يقدر يعدل
+CREATE POLICY "ai_models_manage_admin" ON ai_models
+  FOR ALL USING (public.user_role() = 'admin');
+
+-- الاستهلاك: الأدمن يشوف الكل، المستخدم يشوف حقه
+CREATE POLICY "ai_usage_select_admin" ON ai_model_usage
+  FOR SELECT USING (public.user_role() = 'admin');
+
+CREATE POLICY "ai_usage_insert_auth" ON ai_model_usage
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+-- ═══ الصلاحيات ═══
+GRANT SELECT ON ai_models TO authenticated;
+GRANT SELECT, INSERT ON ai_model_usage TO authenticated;
+
+-- ═══ Seed: النماذج الافتراضية ═══
+INSERT INTO ai_models (id, name, name_ar, provider, model_id, description, description_ar, is_active, is_default, priority, max_tokens, temperature, capabilities) VALUES
+  (
+    'groq-70b', 'Groq Llama 3.3 70B', 'جروك لاما 3.3 70B',
+    'groq', 'llama-3.3-70b-versatile',
+    'Most capable model — best for complex analysis, reports, and Arabic',
+    'النموذج الأقوى — الأفضل للتحليلات المعقدة والتقارير والعربية',
+    true, true, 1, 800, 0.40,
+    '["chat","streaming","function_calling","json_mode","arabic","reports"]'::jsonb
+  ),
+  (
+    'groq-8b', 'Groq Llama 3.1 8B', 'جروك لاما 3.1 8B',
+    'groq', 'llama-3.1-8b-instant',
+    'Ultra-fast (~200ms) — best for quick queries, intent extraction, suggestions',
+    'سريع جداً (~200ms) — الأفضل للاستعلامات السريعة والاقتراحات',
+    true, false, 2, 300, 0.30,
+    '["chat","streaming","json_mode","fast"]'::jsonb
+  ),
+  (
+    'mimo-v2', 'Xiaomi MiMo v2 Pro', 'شاومي ميمو v2 برو',
+    'mimo', 'mimo-v2-pro',
+    'Xiaomi AI — good for Arabic, alternative to Groq',
+    'ذكاء شاومي — جيد للعربية، بديل لجروك',
+    true, false, 3, 800, 0.40,
+    '["chat","streaming","arabic"]'::jsonb
+  ),
+  (
+    'gemini-pro', 'Google Gemini', 'جوجل جيميني',
+    'gemini', 'gemini-pro',
+    'Google AI — multimodal capabilities',
+    'ذكاء جوجل — إمكانيات متعددة الوسائط',
+    true, false, 4, 800, 0.40,
+    '["chat","arabic"]'::jsonb
+  ),
+  (
+    'hf-e5', 'HuggingFace Embeddings', 'هاجنج فيس لل embeddings',
+    'huggingface', 'intfloat/multilingual-e5-large',
+    'Multilingual embeddings for RAG pipeline',
+    'تمثيلات متعددة اللغات لـ RAG',
+    true, false, 10, 0, 0.00,
+    '["embeddings","multilingual"]'::jsonb
+  ),
+  (
+    'local-ai', 'Local AI (Offline)', 'ذكاء محلي (بدون إنترنت)',
+    'local', 'enhanced-local-ai',
+    'Rule-based AI — works fully offline, no API needed',
+    'ذكاء قائم على القواعد — يعمل بدون إنترنت',
+    true, false, 99, 0, 0.00,
+    '["offline","basic_analysis"]'::jsonb
+  )
+ON CONFLICT (id) DO NOTHING;
+
+-- ═══ تحديث app_settings لإضافة إعدادات AI إضافية ═══
+INSERT INTO app_settings (key, value, label_ar, type, category) VALUES
+  ('ai_enabled', 'true', 'تفعيل المساعد الذكي', 'boolean', 'ai'),
+  ('ai_default_model', '"groq-70b"', 'النموذج الافتراضي', 'string', 'ai'),
+  ('ai_fallback_enabled', 'true', 'تفعيل التراجع التلقائي', 'boolean', 'ai'),
+  ('ai_stream_enabled', 'true', 'تفعيل الكتابة التدريجية', 'boolean', 'ai'),
+  ('ai_max_history', '6', 'أقصى عدد رسائل في السجل', 'number', 'ai'),
+  ('ai_rate_limit', '25', 'أقصى عدد طلبات في الدقيقة', 'number', 'ai')
+ON CONFLICT (key) DO NOTHING;
+
+-- ═══ دالة لتسجيل الاستهلاك ═══
+CREATE OR REPLACE FUNCTION log_ai_usage(
+  p_model_id TEXT,
+  p_tokens INT DEFAULT 0,
+  p_latency_ms INT DEFAULT NULL,
+  p_success BOOLEAN DEFAULT true,
+  p_error TEXT DEFAULT NULL
+) RETURNS VOID AS $$
+BEGIN
+  INSERT INTO ai_model_usage (model_id, user_id, tokens_used, latency_ms, success, error_message)
+  VALUES (p_model_id, auth.uid(), p_tokens, p_latency_ms, p_success, p_error);
+
+  UPDATE ai_models
+  SET usage_count = usage_count + 1,
+      last_used_at = now(),
+      updated_at = now()
+  WHERE id = p_model_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION log_ai_usage TO authenticated;
+
+-- ═══ دالة لجلب النموذج الافتراضي ═══
+CREATE OR REPLACE FUNCTION get_default_ai_model()
+RETURNS TABLE (
+  id TEXT,
+  provider TEXT,
+  model_id TEXT,
+  max_tokens INT,
+  temperature NUMERIC,
+  capabilities JSONB
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT m.id, m.provider, m.model_id, m.max_tokens, m.temperature, m.capabilities
+  FROM ai_models m
+  WHERE m.is_default = true AND m.is_active = true
+  LIMIT 1;
+
+  -- If no default, return highest priority active model
+  IF NOT FOUND THEN
+    RETURN QUERY
+    SELECT m.id, m.provider, m.model_id, m.max_tokens, m.temperature, m.capabilities
+    FROM ai_models m
+    WHERE m.is_active = true
+    ORDER BY m.priority ASC
+    LIMIT 1;
+  END IF;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+GRANT EXECUTE ON FUNCTION get_default_ai_model TO authenticated;
+
+COMMIT;
+-- Fix rate_limit function to match actual table schema
+-- Actual columns: id, user_id, endpoint, count, reset_at, created_at
+-- Migration had: window_start, request_count (WRONG)
+
+BEGIN;
+
+-- Drop old function
+DROP FUNCTION IF EXISTS public.check_and_increment_rate_limit(UUID, TEXT, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS public.cleanup_old_rate_limits();
+
+-- Recreate with correct column names
+CREATE OR REPLACE FUNCTION public.check_and_increment_rate_limit(
+  p_user_id UUID,
+  p_endpoint TEXT,
+  p_window_seconds INTEGER DEFAULT 60,
+  p_max_requests INTEGER DEFAULT 10
+)
+RETURNS TABLE(allowed BOOLEAN, current_count INTEGER, reset_at TIMESTAMPTZ)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_reset_at TIMESTAMPTZ;
+  v_current_count INTEGER;
+BEGIN
+  v_reset_at := now() + (p_window_seconds || ' seconds')::INTERVAL;
+
+  -- Check if there's an active window
+  SELECT rate_limits.count INTO v_current_count
+  FROM rate_limits
+  WHERE rate_limits.user_id = p_user_id
+    AND rate_limits.endpoint = p_endpoint
+    AND rate_limits.reset_at > now()
+  ORDER BY rate_limits.reset_at DESC
+  LIMIT 1;
+
+  IF v_current_count IS NULL THEN
+    -- No active window — create new one
+    INSERT INTO rate_limits (user_id, endpoint, count, reset_at)
+    VALUES (p_user_id, p_endpoint, 1, v_reset_at);
+    v_current_count := 1;
+  ELSE
+    -- Active window exists — increment
+    UPDATE rate_limits
+    SET count = rate_limits.count + 1
+    WHERE rate_limits.user_id = p_user_id
+      AND rate_limits.endpoint = p_endpoint
+      AND rate_limits.reset_at > now();
+    v_current_count := v_current_count + 1;
+  END IF;
+
+  RETURN QUERY SELECT
+    v_current_count <= p_max_requests AS allowed,
+    v_current_count AS current_count,
+    v_reset_at;
+END;
+$$;
+
+-- Cleanup old entries
+CREATE OR REPLACE FUNCTION public.cleanup_old_rate_limits()
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  DELETE FROM rate_limits WHERE reset_at < now() - INTERVAL '2 hours';
+$$;
+
+COMMIT;
+-- Fix rate_limit: handle expired windows by upserting
+-- Previous version failed on INSERT due to unique constraint
+
+BEGIN;
+
+DROP FUNCTION IF EXISTS public.check_and_increment_rate_limit(UUID, TEXT, INTEGER, INTEGER);
+
+CREATE OR REPLACE FUNCTION public.check_and_increment_rate_limit(
+  p_user_id UUID,
+  p_endpoint TEXT,
+  p_window_seconds INTEGER DEFAULT 60,
+  p_max_requests INTEGER DEFAULT 10
+)
+RETURNS TABLE(allowed BOOLEAN, current_count INTEGER, reset_at TIMESTAMPTZ)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_new_reset_at TIMESTAMPTZ;
+  v_count INTEGER;
+BEGIN
+  v_new_reset_at := now() + (p_window_seconds || ' seconds')::INTERVAL;
+
+  -- Try to increment existing active window
+  UPDATE rate_limits
+  SET count = rate_limits.count + 1
+  WHERE rate_limits.user_id = p_user_id
+    AND rate_limits.endpoint = p_endpoint
+    AND rate_limits.reset_at > now()
+  RETURNING rate_limits.count INTO v_count;
+
+  IF v_count IS NULL THEN
+    -- No active window — upsert (reset expired or new entry)
+    INSERT INTO rate_limits (user_id, endpoint, count, reset_at)
+    VALUES (p_user_id, p_endpoint, 1, v_new_reset_at)
+    ON CONFLICT (user_id, endpoint)
+    DO UPDATE SET count = 1, reset_at = v_new_reset_at
+    RETURNING rate_limits.count INTO v_count;
+  END IF;
+
+  RETURN QUERY SELECT
+    v_count <= p_max_requests AS allowed,
+    v_count AS current_count,
+    v_new_reset_at;
+END;
+$$;
+
+-- Also cleanup old entries
+CREATE OR REPLACE FUNCTION public.cleanup_old_rate_limits()
+RETURNS void LANGUAGE sql SECURITY DEFINER
+AS $$ DELETE FROM rate_limits WHERE reset_at < now() - INTERVAL '2 hours'; $$;
+
+COMMIT;
+-- ============================================================
+-- Simplify submission_status: remove approved/reviewed/rejected
+-- Only keep: draft, submitted
+-- ============================================================
+
+BEGIN;
+
+-- 1. Update existing approved/reviewed/rejected rows to 'submitted'
+UPDATE form_submissions SET status = 'submitted' WHERE status IN ('approved', 'reviewed', 'rejected');
+
+-- 2. Create new enum with only draft + submitted
+DO $$ BEGIN
+  CREATE TYPE submission_status_new AS ENUM ('draft', 'submitted');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- 3. Alter column to use new enum
+ALTER TABLE form_submissions
+  ALTER COLUMN status DROP DEFAULT;
+
+ALTER TABLE form_submissions
+  ALTER COLUMN status TYPE submission_status_new
+  USING status::text::submission_status_new;
+
+ALTER TABLE form_submissions
+  ALTER COLUMN status SET DEFAULT 'draft';
+
+-- 4. Drop old enum and rename new
+DROP TYPE submission_status;
+ALTER TYPE submission_status_new RENAME TO submission_status;
+
+-- 5. Update notification trigger to remove old status labels
+CREATE OR REPLACE FUNCTION fn_notify_submission_status()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_label TEXT;
+  v_type TEXT;
+BEGIN
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    CASE NEW.status
+      WHEN 'submitted' THEN v_label := 'تم الإرسال'; v_type := 'success';
+      WHEN 'draft' THEN v_label := 'تم الحفظ كمسودة'; v_type := 'info';
+      ELSE v_label := NEW.status::TEXT; v_type := 'info';
+    END CASE;
+
+    INSERT INTO notifications (recipient_id, title, body, type, category, data)
+    VALUES (NEW.submitted_by, 'تحديث حالة الاستمارة',
+            v_label, v_type, 'form', json_build_object('submission_id', NEW.id));
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMIT;
+-- Migration 022: Security Hardening
+-- Fixes audit_insert_system, anon profile grants, and applies to existing deployments
+
+BEGIN;
+
+-- ═══ 1. Fix audit_insert_system: restrict INSERT to service_role only ═══
+DROP POLICY IF EXISTS "audit_insert_system" ON audit_logs;
+CREATE POLICY "audit_insert_system" ON audit_logs
+  FOR INSERT WITH CHECK (auth.role() = 'service_role');
+
+-- ═══ 2. Remove unnecessary INSERT grant for anon on profiles ═══
+-- Profile creation is handled by handle_new_user() trigger (SECURITY DEFINER)
+REVOKE INSERT ON profiles FROM anon;
+
+COMMIT;
+-- ═══════════════════════════════════════════════════════════
+-- 020_permission_overhaul.sql
+-- Permission changes:
+--   1. Submissions: all non-admin roles see own submissions only
+--   2. Shortages: policies removed (feature deprecated)
+--   3. Audit logs: admin only (remove central access)
+--   4. Forms: admin only for modify (remove central access)
+-- ═══════════════════════════════════════════════════════════
+
+-- ─── 1. FORM SUBMISSIONS ───────────────────────────────────
+-- All non-admin roles see only their own submissions.
+-- Analytics/insights still work via Edge Functions (service_role).
+
+DROP POLICY IF EXISTS "submissions_select_hierarchical" ON form_submissions;
+CREATE POLICY "submissions_select_own_or_admin" ON form_submissions
+  FOR SELECT USING (
+    public.user_role() = 'admin'
+    OR submitted_by = auth.uid()
+  );
+
+-- Keep insert/update as-is (own + admin/central can update)
+-- submissions_insert_own: already correct
+-- submissions_update_own_or_admin: admin + central can still update
+
+-- ─── 2. SUPPLY SHORTAGES — remove all policies ────────────
+DROP POLICY IF EXISTS "shortages_select_hierarchical" ON supply_shortages;
+DROP POLICY IF EXISTS "shortages_insert_auth" ON supply_shortages;
+DROP POLICY IF EXISTS "shortages_update_hierarchical" ON supply_shortages;
+
+-- Admin-only access for legacy data
+CREATE POLICY "shortages_admin_only_select" ON supply_shortages
+  FOR SELECT USING (public.user_role() = 'admin');
+CREATE POLICY "shortages_admin_only_insert" ON supply_shortages
+  FOR INSERT WITH CHECK (public.user_role() = 'admin');
+CREATE POLICY "shortages_admin_only_update" ON supply_shortages
+  FOR UPDATE USING (public.user_role() = 'admin');
+CREATE POLICY "shortages_admin_only_delete" ON supply_shortages
+  FOR DELETE USING (public.user_role() = 'admin');
+
+-- ─── 3. AUDIT LOGS — admin + central ──────────────────────
+-- (keep existing policy, no change needed)
+-- audit_select_admin: admin + central can view
+
+-- ─── 4. FORMS — admin only for modify ─────────────────────
+DROP POLICY IF EXISTS "forms_modify_admin" ON forms;
+CREATE POLICY "forms_modify_admin_only" ON forms
+  FOR ALL USING (public.user_role() = 'admin');
+
+-- ─── 5. PAGES — admin only for modify ─────────────────────
+DROP POLICY IF EXISTS "pages_manage_admin" ON pages;
+CREATE POLICY "pages_manage_admin_only" ON pages
+  FOR ALL USING (public.user_role() = 'admin');
+
+-- ─── 6. DOC REFERENCES — admin only for modify ────────────
+-- (references already admin-only, no change needed)
+
+-- ═══════════════════════════════════════════════════════════
+-- SUMMARY OF NEW PERMISSION MATRIX:
+-- ═══════════════════════════════════════════════════════════
+-- Resource          | admin | central | governorate | district | data_entry
+-- ─────────────────────────────────────────────────────────────────────────
+-- Submissions (sel) | ALL   | OWN     | OWN         | OWN      | OWN
+-- Submissions (upd) | ALL   | ALL     | OWN         | OWN      | OWN
+-- Shortages         | ALL   | NONE    | NONE        | NONE     | NONE
+-- Audit Logs        | ALL   | NONE    | NONE        | NONE     | NONE
+-- Forms (modify)    | ALL   | NONE    | NONE        | NONE     | NONE
+-- Analytics         | ALL   | ALL     | GOV         | DIST     | OWN
+-- ═══════════════════════════════════════════════════════════
+-- 024: Seed Yemen Governorates (15 active only)
+-- Idempotent — uses ON CONFLICT to avoid duplicates
+-- ═══════════════════════════════════════════════════════════
+
+BEGIN;
+
+INSERT INTO governorates (name_ar, name_en, code, center_lat, center_lng, population, is_active)
+VALUES
+  ('أبين', 'Abyan', 'ABYAN', 13.6333, 46.0167, 640000, true),
+  ('البيضاء', 'Al Bayda', 'ALBAYD', 14.1667, 45.4500, 820000, true),
+  ('الجوف', 'Al Jawf', 'JOF', 16.2000, 44.7833, 660000, true),
+  ('الحديدة', 'Al Hudaydah', 'ALHUDA', 14.7979, 42.9545, 3752000, true),
+  ('الضالع', 'Al Dhalee', 'ALDHAL', 13.7000, 44.7333, 650000, true),
+  ('المكلا', 'Al Mukalla', 'ALMUKA', 14.5400, 49.1300, 500000, true),
+  ('المهرة', 'Al Maharah', 'ALMAHA', 16.8000, 51.0000, 260000, true),
+  ('تعز', 'Taiz', 'TAIZZ', 13.5789, 44.0219, 3275000, true),
+  ('حجة', 'Hajjah', 'HAJ', 15.6917, 43.6022, 2080000, true),
+  ('سقطرى', 'Socotra', 'SOCOTR', 12.4634, 53.8238, 80000, true),
+  ('سيئون', 'Sayun', 'SAYUN', 15.9500, 48.8000, 400000, true),
+  ('شبوة', 'Shabwah', 'SHABWA', 14.8300, 46.8300, 680000, true),
+  ('عدن', 'Aden', 'ADEN', 12.8000, 45.0300, 1080000, true),
+  ('لحج', 'Lahij', 'LAHJ', 13.0567, 44.8819, 1050000, true),
+  ('مأرب', 'Marib', 'MARIB', 15.4625, 45.3250, 540000, true)
+ON CONFLICT (code) DO UPDATE SET
+  name_ar = EXCLUDED.name_ar,
+  name_en = EXCLUDED.name_en,
+  center_lat = EXCLUDED.center_lat,
+  center_lng = EXCLUDED.center_lng,
+  population = EXCLUDED.population,
+  is_active = EXCLUDED.is_active,
+  updated_at = now();
+
+-- Soft-delete any other governorates that shouldn't exist
+UPDATE governorates
+SET deleted_at = now(), is_active = false, updated_at = now()
+WHERE code NOT IN ('ABYAN','ALBAYD','JOF','ALHUDA','ALDHAL','ALMUKA','ALMAHA','TAIZZ','HAJ','SOCOTR','SAYUN','SHABWA','ADEN','LAHJ','MARIB')
+AND deleted_at IS NULL;
+
+COMMIT;
+-- ═══════════════════════════════════════════════════════════
+-- 025: Fix JWT role — ensure admin users get their role in JWT
+-- Problem: user_role() reads JWT first, but JWT has "authenticated"
+--          not the actual user role → admin can't see data
+-- Solution: Update auth.users.app_metadata on role change so JWT
+--           includes the correct role
+-- ═══════════════════════════════════════════════════════════
+
+BEGIN;
+
+-- 1. Function to sync role to auth.users.app_metadata
+--    When a profile's role changes, update the auth user's app_metadata
+--    so the JWT includes the correct role claim
+CREATE OR REPLACE FUNCTION public.sync_user_role_to_auth()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Update auth.users.app_metadata with the new role
+  -- This ensures the JWT will include the role claim
+  UPDATE auth.users
+  SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', NEW.role::text)
+  WHERE id = NEW.id;
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  -- Don't fail the profile update if auth sync fails
+  RAISE WARNING 'sync_user_role_to_auth failed for %: %', NEW.id, SQLERRM;
+  RETURN NEW;
+END;
+$$;
+
+-- 2. Trigger on profiles table — fires on INSERT or role UPDATE
+DROP TRIGGER IF EXISTS trg_sync_user_role ON profiles;
+CREATE TRIGGER trg_sync_user_role
+  AFTER INSERT OR UPDATE OF role ON profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION sync_user_role_to_auth();
+
+-- 3. Backfill: sync ALL existing users' roles to auth.users.app_metadata
+--    This fixes existing users who don't have role in their JWT
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN SELECT id, role FROM profiles WHERE role IS NOT NULL
+  LOOP
+    UPDATE auth.users
+    SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', r.role::text)
+    WHERE id = r.id;
+  END LOOP;
+  RAISE NOTICE 'Backfilled roles for all users';
+END;
+$$;
+
+COMMIT;
+-- ═══════════════════════════════════════════════════════════
+-- 026: Cleanup Governorates — Keep only 15 active ones
+-- ⚠️ MUST match the same 15 governorates in 024!
+-- The 15 governorates are:
+--   أبين, البيضاء, الجوف, الحديدة, الضالع, المكلا, المهرة,
+--   تعز, حجة, سقطرى, سيئون, شبوة, عدن, لحج, مأرب
+-- ═══════════════════════════════════════════════════════════
+
+BEGIN;
+
+-- Step 1: Soft-delete governorates NOT in the 15 active list
+-- Uses codes to match — same codes as migration 024
+UPDATE governorates
+SET deleted_at = now(), is_active = false, updated_at = now()
+WHERE code NOT IN (
+  'ABYAN','ALBAYD','JOF','ALHUDA','ALDHAL','ALMUKA','ALMAHA',
+  'TAIZZ','HAJ','SOCOTR','SAYUN','SHABWA','ADEN','LAHJ','MARIB'
+)
+AND deleted_at IS NULL;
+
+-- Step 2: Soft-delete districts belonging to deleted governorates
+UPDATE districts
+SET deleted_at = now(), is_active = false, updated_at = now()
+WHERE governorate_id IN (
+  SELECT id FROM governorates WHERE deleted_at IS NOT NULL
+)
+AND deleted_at IS NULL;
+
+-- Step 3: Ensure the 15 wanted governorates are active
+UPDATE governorates
+SET is_active = true, deleted_at = NULL, updated_at = now()
+WHERE code IN (
+  'ABYAN','ALBAYD','JOF','ALHUDA','ALDHAL','ALMUKA','ALMAHA',
+  'TAIZZ','HAJ','SOCOTR','SAYUN','SHABWA','ADEN','LAHJ','MARIB'
+);
+
+COMMIT;
+-- ═══════════════════════════════════════════════════════════
+-- 027: Governorate Guard — Prevent future duplicates
+-- This migration:
+--   1. Ensures exactly 15 active governorates exist
+--   2. Deduplicates any remaining copies by name_ar
+--   3. Migrates orphan references to the canonical ID
+--   4. Adds a partial unique index to prevent future dupes
+-- ═══════════════════════════════════════════════════════════
+
+BEGIN;
+
+-- ─── 1. Deduplicate governorates ───────────────────────────
+-- For each name_ar, keep the oldest record that has users.
+-- Migrate all references to the kept ID, then delete the rest.
+
+DO $$
+DECLARE
+  rec RECORD;
+  canonical_id UUID;
+  dup_ids UUID[];
+BEGIN
+  FOR rec IN
+    SELECT name_ar, array_agg(id ORDER BY
+      -- Prefer: has users > is_active > oldest
+      (SELECT COUNT(*) FROM profiles WHERE governorate_id = governorates.id) DESC,
+      is_active DESC,
+      created_at ASC
+    ) AS ids
+    FROM governorates
+    GROUP BY name_ar
+    HAVING COUNT(*) > 1
+  LOOP
+    canonical_id := rec.ids[1];
+    dup_ids := rec.ids[2:];
+
+    -- Migrate profiles
+    UPDATE profiles SET governorate_id = canonical_id
+    WHERE governorate_id = ANY(dup_ids);
+
+    -- Migrate form_submissions
+    UPDATE form_submissions SET governorate_id = canonical_id
+    WHERE governorate_id = ANY(dup_ids);
+
+    -- Migrate supply_shortages
+    UPDATE supply_shortages SET governorate_id = canonical_id
+    WHERE governorate_id = ANY(dup_ids);
+
+    -- Migrate districts
+    UPDATE districts SET governorate_id = canonical_id
+    WHERE governorate_id = ANY(dup_ids);
+
+    -- Delete duplicates
+    DELETE FROM governorates WHERE id = ANY(dup_ids);
+
+    RAISE NOTICE 'Deduplicated %: kept %, removed % ids',
+      rec.name_ar, canonical_id, array_length(dup_ids, 1);
+  END LOOP;
+END $$;
+
+-- ─── 2. Ensure the 15 are active, rest are deleted ─────────
+UPDATE governorates
+SET is_active = true, deleted_at = NULL, updated_at = now()
+WHERE code IN (
+  'ABYAN','ALBAYD','JOF','ALHUDA','ALDHAL','ALMUKA','ALMAHA',
+  'TAIZZ','HAJ','SOCOTR','SAYUN','SHABWA','ADEN','LAHJ','MARIB'
+);
+
+UPDATE governorates
+SET deleted_at = COALESCE(deleted_at, now()), is_active = false, updated_at = now()
+WHERE code NOT IN (
+  'ABYAN','ALBAYD','JOF','ALHUDA','ALDHAL','ALMUKA','ALMAHA',
+  'TAIZZ','HAJ','SOCOTR','SAYUN','SHABWA','ADEN','LAHJ','MARIB'
+)
+AND deleted_at IS NULL;
+
+-- ─── 3. Migrate any orphan profiles to correct governorate ──
+-- Profiles pointing to deleted governorates → set to NULL
+-- (admin can re-assign later)
+UPDATE profiles
+SET governorate_id = NULL, updated_at = now()
+WHERE governorate_id IN (SELECT id FROM governorates WHERE deleted_at IS NOT NULL)
+AND deleted_at IS NULL;
+
+-- ─── 4. Partial unique index: only one active governorate per name ──
+-- This prevents future INSERT from creating duplicates
+CREATE UNIQUE INDEX IF NOT EXISTS idx_governorates_name_active
+  ON governorates (name_ar)
+  WHERE deleted_at IS NULL;
+
+-- ─── 5. Same guard for districts ────────────────────────────
+CREATE UNIQUE INDEX IF NOT EXISTS idx_districts_code_active
+  ON districts (code)
+  WHERE deleted_at IS NULL;
+
 COMMIT;
 
--- ============================================================
--- 12. SEED DATA
--- ============================================================
--- (See migrations/002_seed_data.sql for full seed data)
+-- Verification
+DO $$
+DECLARE
+  active_count INTEGER;
+  dup_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO active_count FROM governorates WHERE deleted_at IS NULL;
+  SELECT COUNT(*) INTO dup_count FROM (
+    SELECT name_ar FROM governorates WHERE deleted_at IS NULL
+    GROUP BY name_ar HAVING COUNT(*) > 1
+  ) t;
+
+  IF active_count != 15 THEN
+    RAISE WARNING 'Expected 15 active governorates, got %', active_count;
+  END IF;
+
+  IF dup_count > 0 THEN
+    RAISE WARNING 'Still have % duplicate governorate names!', dup_count;
+  END IF;
+
+  RAISE NOTICE '✅ Governorates: % active, % duplicates', active_count, dup_count;
+END $$;
+-- ═══════════════════════════════════════════════════════════════
+--  Public Dashboard — helper functions for Edge Function
+--  SECURITY DEFINER so they bypass RLS (service role calls them)
+--  No PII returned — aggregated counts only
+-- ═══════════════════════════════════════════════════════════════
+
+-- Submissions count by governorate
+CREATE OR REPLACE FUNCTION public_subs_by_gov(p_days int DEFAULT 30)
+RETURNS TABLE (
+  governorate_id uuid,
+  name_ar text,
+  total bigint,
+  submitted bigint,
+  draft bigint
+) 
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    g.id AS governorate_id,
+    g.name_ar,
+    COUNT(fs.id) AS total,
+    COUNT(fs.id) FILTER (WHERE fs.status = 'submitted') AS submitted,
+    COUNT(fs.id) FILTER (WHERE fs.status = 'draft') AS draft
+  FROM governorates g
+  LEFT JOIN form_submissions fs
+    ON fs.governorate_id = g.id
+    AND fs.deleted_at IS NULL
+    AND fs.created_at >= (CURRENT_DATE - p_days * INTERVAL '1 day')
+  WHERE g.is_active = true
+    AND g.deleted_at IS NULL
+  GROUP BY g.id, g.name_ar
+  ORDER BY total DESC;
+$$;
+
+-- Submissions count by day (last N days)
+CREATE OR REPLACE FUNCTION public_subs_by_day(p_days int DEFAULT 30)
+RETURNS TABLE (
+  day date,
+  total bigint,
+  submitted bigint,
+  draft bigint
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH days AS (
+    SELECT generate_series(
+      CURRENT_DATE - p_days * INTERVAL '1 day',
+      CURRENT_DATE,
+      '1 day'
+    )::date AS day
+  )
+  SELECT
+    d.day,
+    COUNT(fs.id) AS total,
+    COUNT(fs.id) FILTER (WHERE fs.status = 'submitted') AS submitted,
+    COUNT(fs.id) FILTER (WHERE fs.status = 'draft') AS draft
+  FROM days d
+  LEFT JOIN form_submissions fs
+    ON fs.deleted_at IS NULL
+    AND fs.created_at >= d.day::timestamp
+    AND fs.created_at < (d.day + 1)::timestamp
+  GROUP BY d.day
+  ORDER BY d.day;
+$$;
+
+-- Submissions count by form
+CREATE OR REPLACE FUNCTION public_subs_by_form(p_days int DEFAULT 30)
+RETURNS TABLE (
+  form_id uuid,
+  title_ar text,
+  campaign_type text,
+  total bigint,
+  submitted bigint
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    f.id AS form_id,
+    f.title_ar,
+    f.campaign_type,
+    COUNT(fs.id) AS total,
+    COUNT(fs.id) FILTER (WHERE fs.status = 'submitted') AS submitted
+  FROM forms f
+  LEFT JOIN form_submissions fs
+    ON fs.form_id = f.id
+    AND fs.deleted_at IS NULL
+    AND fs.created_at >= (CURRENT_DATE - p_days * INTERVAL '1 day')
+  WHERE f.deleted_at IS NULL
+  GROUP BY f.id, f.title_ar, f.campaign_type
+  HAVING COUNT(fs.id) > 0
+  ORDER BY total DESC;
+$$;
+
+-- Grant execute to anon (Edge Function uses service role, but just in case)
+GRANT EXECUTE ON FUNCTION public_subs_by_gov(int) TO service_role;
+GRANT EXECUTE ON FUNCTION public_subs_by_day(int) TO service_role;
+GRANT EXECUTE ON FUNCTION public_subs_by_form(int) TO service_role;
+-- Update handle_new_user trigger to save governorate_id and district_id
+-- Previously these fields were always NULL on new profiles
+
+CREATE OR REPLACE FUNCTION handle_new_user() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  INSERT INTO profiles (id, email, full_name, role, governorate_id, district_id)
+  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'data_entry'),
+    (NEW.raw_user_meta_data->>'governorate_id')::UUID,
+    (NEW.raw_user_meta_data->>'district_id')::UUID);
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'Failed to create profile for user %: %', NEW.id, SQLERRM;
+  RETURN NEW;
+END; $$;
+-- ═══════════════════════════════════════════════════════════════════════
+-- Fix: Circular dependency in user_role() RLS function
+-- Problem: user_role() queries profiles, but RLS on profiles uses user_role()
+-- Solution: Use auth.jwt() claims first, fall back to profiles query
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- ═══ الدالة المُصلحة: تقرأ من JWT أولاً، ثم من profiles كـ fallback ═══
+CREATE OR REPLACE FUNCTION public.user_role()
+RETURNS user_role
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  -- ═══ الخطوة 1: حاول تقرأ الدور من JWT claims (الأسرع + لا circular) ═══
+  SELECT COALESCE(
+    (SELECT (auth.jwt() ->> 'role')::user_role WHERE auth.jwt() ->> 'role' IS NOT NULL),
+    -- ═══ الخطوة 2: fallback — اقرأ من profiles (للتوافق مع البيانات القديمة) ═══
+    (SELECT role FROM profiles WHERE id = auth.uid() LIMIT 1)
+  );
+$$;
+
+-- ═══ تأكد من أن المستخدم الجديد يحصل على profile حتى لو فشل الـ trigger ═══
+-- هذا يحل مشكلة "Profile not found" عند أول تسجيل دخول
+CREATE OR REPLACE FUNCTION public.ensure_profile_on_login()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- إذا ما في profile، أنشئ واحد
+  INSERT INTO profiles (id, email, full_name, role, is_active)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'data_entry'),
+    true
+  )
+  ON CONFLICT (id) DO NOTHING; -- لا تكتب فوق profile موجود
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  -- لا تفشل auth بسبب profile
+  RAISE WARNING 'ensure_profile_on_login failed for %: %', NEW.id, SQLERRM;
+  RETURN NEW;
+END;
+$$;
+
+-- ═══ تحديث trigger الرئيسي ═══
+DROP TRIGGER IF EXISTS trg_auth_signup ON auth.users;
+CREATE TRIGGER trg_auth_signup
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION ensure_profile_on_login();

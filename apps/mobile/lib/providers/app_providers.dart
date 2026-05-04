@@ -171,7 +171,7 @@ class SubmissionsFilter {
     this.governorateId,
     this.districtId,
     this.campaignType,
-    this.limit = 500, // ═══ PERFORMANCE: Reduced from 2000 — 500足够 for most cases, protects offline cache ═══
+    this.limit = 2000, // ═══ All submissions — cache handles performance ═══
     this.offset = 0,
   });
 
@@ -228,7 +228,7 @@ final governoratesProvider = FutureProvider<List<Map<String, dynamic>>>((
   final allGovs = await cache.getList(
     'governorates',
     () => ref.read(databaseServiceProvider).getGovernorates(),
-    maxAge: const Duration(hours: 24),
+    maxAge: const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
   );
   // ═══ FIX: Filter out inactive governorates client-side ═══
   return allGovs.where((g) => g['is_active'] != false).toList();
@@ -247,7 +247,7 @@ final districtsProvider =
     () => ref
         .read(databaseServiceProvider)
         .getDistricts(governorateId: governorateId),
-    maxAge: const Duration(hours: 24),
+    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
   );
 });
 
@@ -263,7 +263,7 @@ final healthFacilitiesProvider =
     () => ref
         .read(databaseServiceProvider)
         .getHealthFacilities(districtId: districtId),
-    maxAge: const Duration(hours: 24),
+    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
   );
 });
 
@@ -339,7 +339,7 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
     () => ref
         .read(databaseServiceProvider)
         .getForms(campaignType: campaign.value),
-    maxAge: const Duration(hours: 24), // Forms change rarely — cache 24h
+    maxAge: const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
   );
   // ═══ FIX: Filter out inactive forms client-side as extra safety ═══
   // RLS should handle this, but cache might have stale data
@@ -367,8 +367,8 @@ final submissionsProvider =
           offset: filter.offset,
         ),
     maxAge: const Duration(
-      hours: 2,
-    ), // Submissions cached 2h for offline access
+      days: 7,
+    ), // ═══ Cache 7 days — sync button refreshes ═══
   );
 });
 
@@ -398,14 +398,14 @@ final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
     // Submitted count from cache or server — uses cached data, no extra fetch
     final cache = await ref.read(offlineDataCacheProvider.future);
     final campaign = ref.read(campaignProvider);
-    final filter = SubmissionsFilter(campaignType: campaign.value, limit: 500);
+    final filter = SubmissionsFilter(campaignType: campaign.value, limit: 2000);
     final subs = await cache.getList(
       filter.cacheKey,
       () => ref.read(databaseServiceProvider).getSubmissions(
             campaignType: campaign.value,
-            limit: 500,
+            limit: 2000,
           ),
-      maxAge: const Duration(hours: 2),
+      maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
     );
     submitted = subs
         .where((s) =>
@@ -487,7 +487,7 @@ final dashboardAnalyticsProvider =
           startDate: filter.startDate,
           endDate: filter.endDate,
         ),
-    maxAge: const Duration(hours: 2), // Analytics cached 2h for offline
+    maxAge: const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
   );
 });
 
@@ -498,7 +498,7 @@ final shortagesProvider = FutureProvider<List<Map<String, dynamic>>>((
   return cache.getList(
     'shortages',
     () => ref.read(databaseServiceProvider).getShortages(),
-    maxAge: const Duration(hours: 2),
+    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
   );
 });
 
@@ -508,7 +508,7 @@ final submissionTrendProvider =
   return cache.getList(
     'submission_trend_$days',
     () => ref.read(analyticsServiceProvider).getSubmissionTrend(days: days),
-    maxAge: const Duration(hours: 1),
+    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
   );
 });
 
@@ -519,7 +519,7 @@ final governorateRankingProvider = FutureProvider<List<Map<String, dynamic>>>((
   return cache.getList(
     'governorate_ranking',
     () => ref.read(analyticsServiceProvider).getGovernorateRanking(),
-    maxAge: const Duration(hours: 1),
+    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
   );
 });
 

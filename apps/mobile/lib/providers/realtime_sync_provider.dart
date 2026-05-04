@@ -3,12 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_core/epi_core.dart';
-import '../providers/app_providers.dart';
 
 /// ═══════════════════════════════════════════════════════════════════════
 /// Realtime Sync Service
-/// ي listens for changes in Supabase tables and invalidates local cache
-/// ensures that admin dashboard changes are reflected in mobile app instantly
+/// ي listens for changes in Supabase tables
+/// DOES NOT auto-refresh — just notifies user that data changed
+/// User presses sync button to update
 /// ═══════════════════════════════════════════════════════════════════════
 
 class RealtimeSyncService {
@@ -19,6 +19,10 @@ class RealtimeSyncService {
   RealtimeChannel? _governoratesChannel;
   RealtimeChannel? _districtsChannel;
   bool _isListening = false;
+
+  /// Stream of change events — UI can listen to show "data changed" indicator
+  final _changeController = StreamController<String>.broadcast();
+  Stream<String> get onChange => _changeController.stream;
 
   RealtimeSyncService(this._ref);
 
@@ -38,7 +42,7 @@ class RealtimeSyncService {
         table: 'forms',
         callback: (payload) {
           debugPrint('[RealtimeSync] Forms changed: ${payload.eventType}');
-          _invalidateFormsCache();
+          _changeController.add('forms');
         },
       );
       _formsChannel!.subscribe();
@@ -51,7 +55,7 @@ class RealtimeSyncService {
         table: 'doc_references',
         callback: (payload) {
           debugPrint('[RealtimeSync] References changed: ${payload.eventType}');
-          _invalidateReferencesCache();
+          _changeController.add('references');
         },
       );
       _referencesChannel!.subscribe();
@@ -77,7 +81,7 @@ class RealtimeSyncService {
         table: 'governorates',
         callback: (payload) {
           debugPrint('[RealtimeSync] Governorates changed: ${payload.eventType}');
-          _invalidateGovernoratesCache();
+          _changeController.add('governorates');
         },
       );
       _governoratesChannel!.subscribe();
@@ -90,7 +94,7 @@ class RealtimeSyncService {
         table: 'districts',
         callback: (payload) {
           debugPrint('[RealtimeSync] Districts changed: ${payload.eventType}');
-          _invalidateDistrictsCache();
+          _changeController.add('districts');
         },
       );
       _districtsChannel!.subscribe();
@@ -99,48 +103,6 @@ class RealtimeSyncService {
       debugPrint('[RealtimeSync] ✅ Started listening for changes');
     } catch (e) {
       debugPrint('[RealtimeSync] ❌ Failed to start: $e');
-    }
-  }
-
-  /// Invalidate forms cache — forces mobile to re-fetch from server
-  void _invalidateFormsCache() {
-    try {
-      _ref.invalidate(formsProvider);
-      _ref.invalidate(formStatsProvider);
-      // Also clear offline cache
-      _clearOfflineCache('forms');
-      debugPrint('[RealtimeSync] Forms cache invalidated');
-    } catch (e) {
-      debugPrint('[RealtimeSync] Forms invalidation error: $e');
-    }
-  }
-
-  /// Invalidate references cache
-  void _invalidateReferencesCache() {
-    // References screen loads directly from Supabase, no Riverpod provider
-    // The screen will refresh on next visit
-    debugPrint('[RealtimeSync] References changed — will refresh on next visit');
-  }
-
-  /// Invalidate governorates cache
-  void _invalidateGovernoratesCache() {
-    try {
-      _ref.invalidate(governoratesProvider);
-      _clearOfflineCache('governorates');
-      debugPrint('[RealtimeSync] Governorates cache invalidated');
-    } catch (e) {
-      debugPrint('[RealtimeSync] Governorates invalidation error: $e');
-    }
-  }
-
-  /// Invalidate districts cache
-  void _invalidateDistrictsCache() {
-    try {
-      _ref.invalidate(districtsProvider);
-      _clearOfflineCache('districts');
-      debugPrint('[RealtimeSync] Districts cache invalidated');
-    } catch (e) {
-      debugPrint('[RealtimeSync] Districts invalidation error: $e');
     }
   }
 
@@ -163,23 +125,6 @@ class RealtimeSyncService {
     }
   }
 
-  /// Clear specific cache key from offline storage
-  Future<void> _clearOfflineCache(String prefix) async {
-    try {
-      final cache = await _ref.read(offlineDataCacheProvider.future);
-      // Clear all cache keys that start with the prefix
-      await cache.forceInvalidate(prefix);
-      // Also clear campaign-specific forms cache
-      final campaign = _ref.read(campaignProvider);
-      if (prefix == 'forms') {
-        await cache.forceInvalidate('forms_${campaign.value}');
-        await cache.forceInvalidate('forms_all');
-      }
-    } catch (e) {
-      debugPrint('[RealtimeSync] Cache clear error: $e');
-    }
-  }
-
   /// Stop listening for changes
   void dispose() {
     _formsChannel?.unsubscribe();
@@ -187,6 +132,7 @@ class RealtimeSyncService {
     _profilesChannel?.unsubscribe();
     _governoratesChannel?.unsubscribe();
     _districtsChannel?.unsubscribe();
+    _changeController.close();
     _isListening = false;
     debugPrint('[RealtimeSync] Stopped listening');
   }

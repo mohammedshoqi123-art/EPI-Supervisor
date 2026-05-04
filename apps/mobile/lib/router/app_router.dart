@@ -6,6 +6,7 @@ import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 
 import '../providers/app_providers.dart';
+import '../providers/full_sync_provider.dart';
 import '../screens/splash_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/dashboard_screen.dart';
@@ -182,34 +183,64 @@ class _MainShellState extends ConsumerState<MainShell> {
   bool _isSyncing = false;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  Future<void> _triggerManualSync() async {
+  /// ═══ مزامنة شاملة — تجلب ALL data من السيرفر وتحفظها بالكاش ═══
+  Future<void> _triggerFullSync() async {
     if (_isSyncing) return;
-    setState(() => _isSyncing = true);
-    try {
-      final syncService = await ref.read(syncServiceProvider.future);
-      final result = await syncService.sync();
+    if (!ConnectivityUtils.isOnline) {
       if (mounted) {
-        final msg = result.synced > 0
-            ? 'تمت مزامنة ${result.synced} عنصر ✅'
-            : result.failed > 0
-                ? 'فشلت مزامنة ${result.failed} عنصر ❌'
-                : 'لا توجد عناصر للمزامنة';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg, style: const TextStyle(fontFamily: 'Tajawal')),
-            duration: const Duration(seconds: 2),
+          const SnackBar(
+            content: Text(
+              'لا يمكن المزامنة بدون إنترنت 🔌',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
+            backgroundColor: Colors.orange,
           ),
         );
+      }
+      return;
+    }
+
+    setState(() => _isSyncing = true);
+    HapticFeedback.mediumImpact();
+
+    try {
+      final result = await ref.read(fullSyncProvider.notifier).syncAll();
+
+      if (mounted) {
+        if (result.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'فشلت المزامنة: ${result.error}',
+                style: const TextStyle(fontFamily: 'Tajawal'),
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'تمت المزامنة ✅ ${result.forms} نموذج، ${result.submissions} إرسالية، ${result.governorates} محافظة',
+                style: const TextStyle(fontFamily: 'Tajawal'),
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'فشلت المزامنة: $e',
+              'خطأ: $e',
               style: const TextStyle(fontFamily: 'Tajawal'),
             ),
-            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -242,7 +273,7 @@ class _MainShellState extends ConsumerState<MainShell> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // ═══ Drawer menu button — uses GlobalKey to reliably open drawer ═══
+          // ═══ Drawer menu button ═══
           FloatingActionButton.small(
             heroTag: 'menu_fab',
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
@@ -252,32 +283,70 @@ class _MainShellState extends ConsumerState<MainShell> {
             child: const Icon(Icons.menu_rounded, size: 22),
           ),
           const SizedBox(height: 10),
-          // ═══ Sync button (only when pending) ═══
-          if (pendingCount > 0) ...[
-            FloatingActionButton.small(
-              heroTag: 'sync_fab',
-              onPressed: _isSyncing ? null : _triggerManualSync,
-              backgroundColor: isOnline ? Colors.green : Colors.orange,
-              foregroundColor: Colors.white,
-              elevation: 4,
-              child: _isSyncing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Badge(
-                      label: Text(
-                        '$pendingCount',
-                        style: const TextStyle(fontSize: 10),
-                      ),
-                      child: const Icon(Icons.cloud_upload_rounded, size: 20),
+          // ═══ زرار المزامنة الشامل — دائماً ظاهر ═══
+          FloatingActionButton.extended(
+            heroTag: 'sync_fab',
+            onPressed: _isSyncing ? null : _triggerFullSync,
+            backgroundColor: _isSyncing
+                ? Colors.grey
+                : isOnline
+                    ? AppTheme.primaryColor
+                    : Colors.orange,
+            foregroundColor: Colors.white,
+            elevation: 6,
+            icon: _isSyncing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
                     ),
+                  )
+                : const Icon(Icons.cloud_sync_rounded, size: 20),
+            label: Text(
+              _isSyncing ? 'جاري المزامنة...' : 'مزامنة',
+              style: const TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            const SizedBox(height: 10),
+          ),
+          if (pendingCount > 0) ...[
+            const SizedBox(height: 8),
+            // ═══ Pending uploads badge ═══
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.orange,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_upload_rounded, size: 14, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text(
+                    '$pendingCount في الانتظار',
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           ],
           // ═══ AI Assistant — hidden on /ai page ═══
           if (!GoRouterState.of(context).matchedLocation.startsWith('/ai'))

@@ -79,14 +79,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     _tabController.addListener(_onTabChanged);
     _listenForSyncCompletion();
 
-    // Auto-refresh when internet returns
-    ref.listen(connectivityProvider, (prev, next) {
-      final wasOffline = prev?.valueOrNull == false;
-      final isNowOnline = next.valueOrNull == true;
-      if (wasOffline && isNowOnline && mounted) {
-        _refreshAll();
-      }
-    });
+    // ═══ NO auto-refresh on connectivity — user presses sync button ═══
 
     // Load initial data for the first tab
     _loadDraftsPage(0);
@@ -257,7 +250,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       // ═══ PERFORMANCE: Use reasonable limit — cached data is reused ═══
       final filter = SubmissionsFilter(
         campaignType: campaign.value,
-        limit: 500, // ═══ PERFORMANCE: Reduced from 2000 ═══
+        limit: 2000, // ═══ All submissions — cache handles performance ═══
         offset: 0,
       );
       final data = await ref.read(submissionsProvider(filter).future);

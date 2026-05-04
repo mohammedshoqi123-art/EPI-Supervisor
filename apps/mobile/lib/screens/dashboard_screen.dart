@@ -52,15 +52,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       if (mounted) _pulseAnim.stop();
     });
 
-    // ═══ FIX #1: Auto-refresh dashboard when internet returns ═══
-    // ═══ PERFORMANCE: Debounced to prevent rapid invalidation cascade ═══
-    ref.listen(connectivityProvider, (prev, next) {
-      final wasOffline = prev?.valueOrNull == false;
-      final isNowOnline = next.valueOrNull == true;
-      if (wasOffline && isNowOnline && mounted) {
-        _debouncedRefresh();
-      }
-    });
+    // ═══ NO auto-refresh on connectivity — user presses sync button ═══
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(syncServiceProvider.future).then((service) {
@@ -72,27 +64,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   @override
-  // ═══ Debounce refresh — prevents cascade invalidations ═══
-  Timer? _refreshDebounce;
-  void _debouncedRefresh() {
-    _refreshDebounce?.cancel();
-    _refreshDebounce = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      final campaign = ref.read(campaignProvider);
-      ref.invalidate(dashboardAnalyticsProvider(
-        AnalyticsFilter(campaignType: campaign.value),
-      ));
-      ref.invalidate(submissionTrendProvider);
-      ref.invalidate(governorateRankingProvider);
-      ref.invalidate(notificationCountProvider);
-      ref.invalidate(syncPendingCountProvider);
-      ref.invalidate(localDraftCountProvider);
-    });
-  }
-
-  @override
   void dispose() {
-    _refreshDebounce?.cancel();
     _headerAnim.dispose();
     _cardsAnim.dispose();
     _pulseAnim.dispose();

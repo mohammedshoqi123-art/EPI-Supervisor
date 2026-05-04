@@ -23,14 +23,7 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
     super.initState();
     _loadReferences();
 
-    // ═══ Auto-refresh when internet returns ═══
-    ref.listen(connectivityProvider, (prev, next) {
-      final wasOffline = prev?.valueOrNull == false;
-      final isNowOnline = next.valueOrNull == true;
-      if (wasOffline && isNowOnline && mounted) {
-        _loadReferences();
-      }
-    });
+    // ═══ NO auto-refresh — user presses sync button ═══
   }
 
   Future<void> _loadReferences() async {

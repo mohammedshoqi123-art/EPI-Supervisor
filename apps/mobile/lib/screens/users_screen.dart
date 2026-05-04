@@ -28,14 +28,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     super.initState();
     _loadAll();
 
-    // ═══ Auto-refresh when internet returns ═══
-    ref.listen(connectivityProvider, (prev, next) {
-      final wasOffline = prev?.valueOrNull == false;
-      final isNowOnline = next.valueOrNull == true;
-      if (wasOffline && isNowOnline && mounted) {
-        _loadAll();
-      }
-    });
+    // ═══ NO auto-refresh — user presses sync button ═══
   }
 
   @override

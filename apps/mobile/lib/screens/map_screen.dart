@@ -60,14 +60,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         CurvedAnimation(parent: _fabAnimController, curve: Curves.easeInOut);
     _fabAnimController.forward();
 
-    // ═══ FIX #1: Auto-refresh map when internet returns ═══
-    ref.listen(connectivityProvider, (prev, next) {
-      final wasOffline = prev?.valueOrNull == false;
-      final isNowOnline = next.valueOrNull == true;
-      if (wasOffline && isNowOnline && mounted) {
-        _refresh();
-      }
-    });
+    // ═══ NO auto-refresh — user presses sync button ═══
   }
 
   @override
@@ -87,7 +80,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     HapticFeedback.mediumImpact();
     ref.invalidate(submissionsProvider(SubmissionsFilter(
       campaignType: ref.read(campaignProvider).value,
-      limit: 500, // ═══ FIX #2: Load all submissions for map ═══
+      limit: 2000, // ═══ FIX #2: Load all submissions for map ═══
     )));
     ref.invalidate(governoratesProvider);
   }
@@ -149,7 +142,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final allSubs = ref
             .read(submissionsProvider(SubmissionsFilter(
               campaignType: ref.read(campaignProvider).value,
-              limit: 500,
+              limit: 2000,
             )))
             .valueOrNull ??
         [];
@@ -435,7 +428,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final allSubs = ref
             .read(submissionsProvider(SubmissionsFilter(
               campaignType: ref.read(campaignProvider).value,
-              limit: 500,
+              limit: 2000,
             )))
             .valueOrNull ??
         [];

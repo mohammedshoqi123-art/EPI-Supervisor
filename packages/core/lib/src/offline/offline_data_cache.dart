@@ -162,6 +162,12 @@ class OfflineDataCache {
     }
   }
 
+  /// Public: Save a list to both memory and persistent cache
+  /// Used by FullSync to pre-populate cache from server data
+  Future<void> putList(String key, List<Map<String, dynamic>> data) async {
+    await _saveToCache(key, data);
+  }
+
   /// Get from memory cache if not expired
   dynamic _getFromMemory<T>(String key, Duration maxAge) {
     final entry = _memoryCache[key];

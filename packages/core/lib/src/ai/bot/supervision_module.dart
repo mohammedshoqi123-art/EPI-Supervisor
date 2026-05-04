@@ -9,33 +9,33 @@ import 'dart:convert';
 
 /// حالة الزيارة الإشرافية
 enum VisitStatus {
-  planned,     // مخططة
-  inProgress,  // جارية
-  completed,   // مكتملة
-  followUp,    // متابعة
+  planned, // مخططة
+  inProgress, // جارية
+  completed, // مكتملة
+  followUp, // متابعة
 }
 
 /// مستوى الأداء
 enum PerformanceLevel {
-  excellent,  // ممتاز
-  good,       // جيد
+  excellent, // ممتاز
+  good, // جيد
   satisfactory, // مقبول
   needsImprovement, // يحتاج تحسين
-  critical,   // حرج
+  critical, // حرج
 }
 
 /// تصنيف الملاحظة
 enum ObservationCategory {
-  coldChain,       // سلسلة التبريد
-  vaccineAdmin,    // إعطاء اللقاح
-  recordKeeping,   // التسجيل
+  coldChain, // سلسلة التبريد
+  vaccineAdmin, // إعطاء اللقاح
+  recordKeeping, // التسجيل
   wasteManagement, // إدارة النفايات
-  communication,   // التواصل
+  communication, // التواصل
   sessionPlanning, // تخطيط الجلسات
-  dataQuality,     // جودة البيانات
-  aefi,            // الآثار الضارة
-  community,       // المجتمع
-  staffing,        // الكوادر
+  dataQuality, // جودة البيانات
+  aefi, // الآثار الضارة
+  community, // المجتمع
+  staffing, // الكوادر
 }
 
 /// ملاحظة إشرافية
@@ -59,21 +59,23 @@ class SupervisionObservation {
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'category': category.name,
-    'description': description,
-    'performance': performance.name,
-    'evidence': evidence,
-    'photos': photos,
-    'recommendation': recommendation,
-  };
+        'id': id,
+        'category': category.name,
+        'description': description,
+        'performance': performance.name,
+        'evidence': evidence,
+        'photos': photos,
+        'recommendation': recommendation,
+      };
 
   factory SupervisionObservation.fromJson(Map<String, dynamic> json) =>
       SupervisionObservation(
         id: json['id'],
-        category: ObservationCategory.values.firstWhere((e) => e.name == json['category']),
+        category: ObservationCategory.values
+            .firstWhere((e) => e.name == json['category']),
         description: json['description'],
-        performance: PerformanceLevel.values.firstWhere((e) => e.name == json['performance']),
+        performance: PerformanceLevel.values
+            .firstWhere((e) => e.name == json['performance']),
         evidence: json['evidence'],
         photos: (json['photos'] as List?)?.cast<String>() ?? [],
         recommendation: json['recommendation'],
@@ -99,22 +101,22 @@ class ActionPlan {
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'action': action,
-    'responsible': responsible,
-    'deadline': deadline,
-    'status': status,
-    'notes': notes,
-  };
+        'id': id,
+        'action': action,
+        'responsible': responsible,
+        'deadline': deadline,
+        'status': status,
+        'notes': notes,
+      };
 
   factory ActionPlan.fromJson(Map<String, dynamic> json) => ActionPlan(
-    id: json['id'],
-    action: json['action'],
-    responsible: json['responsible'],
-    deadline: json['deadline'],
-    status: json['status'] ?? 'pending',
-    notes: json['notes'],
-  );
+        id: json['id'],
+        action: json['action'],
+        responsible: json['responsible'],
+        deadline: json['deadline'],
+        status: json['status'] ?? 'pending',
+        notes: json['notes'],
+      );
 }
 
 /// زيارة إشرافية داعمة
@@ -228,10 +230,14 @@ class SupervisionVisit {
       buf.writeln('━━━━ خطة العمل ━━━━');
       for (int i = 0; i < actionPlans.length; i++) {
         final plan = actionPlans[i];
-        final statusEmoji = plan.status == 'completed' ? '✅' :
-                           plan.status == 'inProgress' ? '🔄' : '⏳';
+        final statusEmoji = plan.status == 'completed'
+            ? '✅'
+            : plan.status == 'inProgress'
+                ? '🔄'
+                : '⏳';
         buf.writeln('  ${i + 1}. $statusEmoji ${plan.action}');
-        buf.writeln('     المسؤول: ${plan.responsible} | الموعد: ${plan.deadline}');
+        buf.writeln(
+            '     المسؤول: ${plan.responsible} | الموعد: ${plan.deadline}');
       }
     }
 
@@ -246,74 +252,79 @@ class SupervisionVisit {
 
   /// تحويل لـ JSON — جاهز لـ Supabase
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'facility_name': facilityName,
-    'governorate': governorate,
-    'district': district,
-    'visit_date': visitDate.toIso8601String(),
-    'status': status.name,
-    'supervisor_name': supervisorName,
-    'supervisor_title': supervisorTitle,
-    'observations': observations.map((o) => o.toJson()).toList(),
-    'action_plans': actionPlans.map((a) => a.toJson()).toList(),
-    'overall_performance': overallPerformance,
-    'summary': summary,
-    'next_visit_date': nextVisitDate,
-    'created_at': createdAt.toIso8601String(),
-    'updated_at': updatedAt?.toIso8601String(),
-  };
+        'id': id,
+        'facility_name': facilityName,
+        'governorate': governorate,
+        'district': district,
+        'visit_date': visitDate.toIso8601String(),
+        'status': status.name,
+        'supervisor_name': supervisorName,
+        'supervisor_title': supervisorTitle,
+        'observations': observations.map((o) => o.toJson()).toList(),
+        'action_plans': actionPlans.map((a) => a.toJson()).toList(),
+        'overall_performance': overallPerformance,
+        'summary': summary,
+        'next_visit_date': nextVisitDate,
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt?.toIso8601String(),
+      };
 
-  factory SupervisionVisit.fromJson(Map<String, dynamic> json) => SupervisionVisit(
-    id: json['id'],
-    facilityName: json['facility_name'],
-    governorate: json['governorate'],
-    district: json['district'],
-    visitDate: DateTime.parse(json['visit_date']),
-    status: VisitStatus.values.firstWhere((e) => e.name == json['status']),
-    supervisorName: json['supervisor_name'],
-    supervisorTitle: json['supervisor_title'],
-    observations: (json['observations'] as List?)
-        ?.map((o) => SupervisionObservation.fromJson(o)).toList() ?? [],
-    actionPlans: (json['action_plans'] as List?)
-        ?.map((a) => ActionPlan.fromJson(a)).toList() ?? [],
-    overallPerformance: json['overall_performance'] ?? '',
-    summary: json['summary'] ?? '',
-    nextVisitDate: json['next_visit_date'],
-  );
+  factory SupervisionVisit.fromJson(Map<String, dynamic> json) =>
+      SupervisionVisit(
+        id: json['id'],
+        facilityName: json['facility_name'],
+        governorate: json['governorate'],
+        district: json['district'],
+        visitDate: DateTime.parse(json['visit_date']),
+        status: VisitStatus.values.firstWhere((e) => e.name == json['status']),
+        supervisorName: json['supervisor_name'],
+        supervisorTitle: json['supervisor_title'],
+        observations: (json['observations'] as List?)
+                ?.map((o) => SupervisionObservation.fromJson(o))
+                .toList() ??
+            [],
+        actionPlans: (json['action_plans'] as List?)
+                ?.map((a) => ActionPlan.fromJson(a))
+                .toList() ??
+            [],
+        overallPerformance: json['overall_performance'] ?? '',
+        summary: json['summary'] ?? '',
+        nextVisitDate: json['next_visit_date'],
+      );
 
   // ───ـ وظائف مساعدة ───ـ
-  static String _formatDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  static String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   static String _performanceToArabic(PerformanceLevel level) => {
-    PerformanceLevel.excellent: 'ممتاز',
-    PerformanceLevel.good: 'جيد',
-    PerformanceLevel.satisfactory: 'مقبول',
-    PerformanceLevel.needsImprovement: 'يحتاج تحسين',
-    PerformanceLevel.critical: 'حرج',
-  }[level]!;
+        PerformanceLevel.excellent: 'ممتاز',
+        PerformanceLevel.good: 'جيد',
+        PerformanceLevel.satisfactory: 'مقبول',
+        PerformanceLevel.needsImprovement: 'يحتاج تحسين',
+        PerformanceLevel.critical: 'حرج',
+      }[level]!;
 
   static String _performanceToEmoji(PerformanceLevel level) => {
-    PerformanceLevel.excellent: '🟢',
-    PerformanceLevel.good: '🔵',
-    PerformanceLevel.satisfactory: '🟡',
-    PerformanceLevel.needsImprovement: '🟠',
-    PerformanceLevel.critical: '🔴',
-  }[level]!;
+        PerformanceLevel.excellent: '🟢',
+        PerformanceLevel.good: '🔵',
+        PerformanceLevel.satisfactory: '🟡',
+        PerformanceLevel.needsImprovement: '🟠',
+        PerformanceLevel.critical: '🔴',
+      }[level]!;
 
   static String _categoryToArabic(ObservationCategory cat) => {
-    ObservationCategory.coldChain: '❄️ سلسلة التبريد',
-    ObservationCategory.vaccineAdmin: '💉 إعطاء اللقاح',
-    ObservationCategory.recordKeeping: '📝 التسجيل',
-    ObservationCategory.wasteManagement: '🗑️ إدارة النفايات',
-    ObservationCategory.communication: '🗣️ التواصل',
-    ObservationCategory.sessionPlanning: '📅 تخطيط الجلسات',
-    ObservationCategory.dataQuality: '📊 جودة البيانات',
-    ObservationCategory.aefi: '⚠️ الآثار الضارة',
-    ObservationCategory.community: '🏘️ المجتمع',
-    ObservationCategory.staffing: '👥 الكوادر',
-  }[cat]!;
+        ObservationCategory.coldChain: '❄️ سلسلة التبريد',
+        ObservationCategory.vaccineAdmin: '💉 إعطاء اللقاح',
+        ObservationCategory.recordKeeping: '📝 التسجيل',
+        ObservationCategory.wasteManagement: '🗑️ إدارة النفايات',
+        ObservationCategory.communication: '🗣️ التواصل',
+        ObservationCategory.sessionPlanning: '📅 تخطيط الجلسات',
+        ObservationCategory.dataQuality: '📊 جودة البيانات',
+        ObservationCategory.aefi: '⚠️ الآثار الضارة',
+        ObservationCategory.community: '🏘️ المجتمع',
+        ObservationCategory.staffing: '👥 الكوادر',
+      }[cat]!;
 }
-
 
 /// ═══════════════════════════════════════════════════════════════════════
 ///  خدمة الإشراف الداعم — طبقة منطق الأعمال
@@ -356,11 +367,12 @@ class SupervisionService {
       _visits.where((v) {
         final perf = v.calculateOverallPerformance();
         return perf == PerformanceLevel.needsImprovement ||
-               perf == PerformanceLevel.critical;
+            perf == PerformanceLevel.critical;
       }).toList();
 
   /// إضافة ملاحظة لزيارة
-  static SupervisionVisit addObservation(String visitId, SupervisionObservation obs) {
+  static SupervisionVisit addObservation(
+      String visitId, SupervisionObservation obs) {
     final idx = _visits.indexWhere((v) => v.id == visitId);
     if (idx == -1) throw Exception('زيارة غير موجودة');
     final visit = _visits[idx];
@@ -416,13 +428,17 @@ class SupervisionService {
     final perf = visit.calculateOverallPerformance();
     final perfArabic = _perfArabic(perf);
 
-    final critical = visit.observations.where((o) =>
-        o.performance == PerformanceLevel.critical).length;
-    final needsImprovement = visit.observations.where((o) =>
-        o.performance == PerformanceLevel.needsImprovement).length;
-    final good = visit.observations.where((o) =>
-        o.performance == PerformanceLevel.good ||
-        o.performance == PerformanceLevel.excellent).length;
+    final critical = visit.observations
+        .where((o) => o.performance == PerformanceLevel.critical)
+        .length;
+    final needsImprovement = visit.observations
+        .where((o) => o.performance == PerformanceLevel.needsImprovement)
+        .length;
+    final good = visit.observations
+        .where((o) =>
+            o.performance == PerformanceLevel.good ||
+            o.performance == PerformanceLevel.excellent)
+        .length;
 
     final buf = StringBuffer();
     buf.writeln('📋 ملخص إشرافي — ${visit.facilityName}');
@@ -443,15 +459,18 @@ class SupervisionService {
     buf.writeln('');
     buf.writeln('━━━━ التوصيات الذكية ━━━━');
 
-    if (visit.observations.any((o) => o.category == ObservationCategory.coldChain &&
+    if (visit.observations.any((o) =>
+        o.category == ObservationCategory.coldChain &&
         o.performance == PerformanceLevel.critical)) {
       buf.writeln('❄️ عاجل: إصلاح سلسلة التبريد — اللقاحات معرضة للتلف!');
     }
-    if (visit.observations.any((o) => o.category == ObservationCategory.vaccineAdmin &&
+    if (visit.observations.any((o) =>
+        o.category == ObservationCategory.vaccineAdmin &&
         o.performance.index >= PerformanceLevel.needsImprovement.index)) {
       buf.writeln('💉 تدريب فوري على تقنيات إعطاء اللقاح');
     }
-    if (visit.observations.any((o) => o.category == ObservationCategory.dataQuality &&
+    if (visit.observations.any((o) =>
+        o.category == ObservationCategory.dataQuality &&
         o.performance.index >= PerformanceLevel.needsImprovement.index)) {
       buf.writeln('📊 مراجعة نظام التسجيل والإبلاغ');
     }
@@ -479,10 +498,10 @@ class SupervisionService {
   }
 
   static String _perfArabic(PerformanceLevel level) => {
-    PerformanceLevel.excellent: 'ممتاز',
-    PerformanceLevel.good: 'جيد',
-    PerformanceLevel.satisfactory: 'مقبول',
-    PerformanceLevel.needsImprovement: 'يحتاج تحسين',
-    PerformanceLevel.critical: 'حرج',
-  }[level]!;
+        PerformanceLevel.excellent: 'ممتاز',
+        PerformanceLevel.good: 'جيد',
+        PerformanceLevel.satisfactory: 'مقبول',
+        PerformanceLevel.needsImprovement: 'يحتاج تحسين',
+        PerformanceLevel.critical: 'حرج',
+      }[level]!;
 }

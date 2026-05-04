@@ -82,11 +82,14 @@ class OfflineDataCache {
     } catch (e) {
       // 4. Network failed — ALWAYS try stale cache (memory or disk), never rethrow empty
       if (kDebugMode) {
-        print('[OfflineDataCache] Network failed for $cacheKey, using stale cache: $e');
+        print(
+            '[OfflineDataCache] Network failed for $cacheKey, using stale cache: $e');
       }
 
-      final staleMemory = _getFromMemory<List>(cacheKey, const Duration(days: 365));
-      if (staleMemory != null) return List<Map<String, dynamic>>.from(staleMemory);
+      final staleMemory =
+          _getFromMemory<List>(cacheKey, const Duration(days: 365));
+      if (staleMemory != null)
+        return List<Map<String, dynamic>>.from(staleMemory);
 
       final stalePersisted = _getFromPersistentRaw<List>(cacheKey);
       if (stalePersisted != null) {
@@ -132,7 +135,8 @@ class OfflineDataCache {
       return data;
     } catch (e) {
       // Network failed — always try stale fallback
-      final staleMemory = _getFromMemory<Map>(cacheKey, const Duration(days: 365));
+      final staleMemory =
+          _getFromMemory<Map>(cacheKey, const Duration(days: 365));
       if (staleMemory != null) return Map<String, dynamic>.from(staleMemory);
 
       final stalePersisted = _getFromPersistentRaw<Map>(cacheKey);
@@ -285,13 +289,15 @@ class OfflineDataCache {
   /// This caused stale data to be served after sync, especially in the Numbers/Visitors tab.
   Future<void> invalidateByPrefix(String prefix) async {
     // 1. Clear matching memory cache keys
-    final memoryKeys = _memoryCache.keys.where((k) => k.startsWith(prefix)).toList();
+    final memoryKeys =
+        _memoryCache.keys.where((k) => k.startsWith(prefix)).toList();
     for (final key in memoryKeys) {
       _memoryCache.remove(key);
     }
 
     // 2. Clear matching persistent (Hive) cache keys
-    final persistentKeys = _offline.getCacheKeys().where((k) => k.startsWith(prefix)).toList();
+    final persistentKeys =
+        _offline.getCacheKeys().where((k) => k.startsWith(prefix)).toList();
     for (final key in persistentKeys) {
       await _offline.removeCacheKey(key);
     }

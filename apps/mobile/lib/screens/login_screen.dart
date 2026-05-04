@@ -54,7 +54,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         HapticFeedback.mediumImpact();
         // Biometric success — the stored session will auto-login via GoRouter redirect
         // If no stored session, show message
-        context.showError('تم التحقق — سيتم تسجيل الدخول تلقائياً عند وجود جلسة محفوظة');
+        context.showError(
+            'تم التحقق — سيتم تسجيل الدخول تلقائياً عند وجود جلسة محفوظة');
       }
     } catch (e) {
       HapticFeedback.heavyImpact();
@@ -136,7 +137,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       if (mounted) {
         final errStr = lastError.toString();
         String message = 'فشل تسجيل الدخول';
-        if (errStr.contains('SocketException') || errStr.contains('Failed host')) {
+        if (errStr.contains('SocketException') ||
+            errStr.contains('Failed host')) {
           message = 'لا يوجد اتصال بالإنترنت. تحقق من الشبكة.';
         } else if (errStr.contains('timeout') || errStr.contains('Timeout')) {
           message = 'انتهت مهلة الاتصال. حاول مرة أخرى.';
@@ -412,14 +414,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               FutureBuilder<bool>(
                                 future: _canUseBiometric(),
                                 builder: (context, snapshot) {
-                                  if (snapshot.data != true) return const SizedBox.shrink();
+                                  if (snapshot.data != true)
+                                    return const SizedBox.shrink();
                                   return SizedBox(
                                     height: 48,
                                     child: OutlinedButton.icon(
-                                      onPressed: _biometricLoading ? null : _loginWithBiometric,
+                                      onPressed: _biometricLoading
+                                          ? null
+                                          : _loginWithBiometric,
                                       icon: _biometricLoading
-                                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                                          : const Icon(Icons.fingerprint_rounded, size: 22),
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2))
+                                          : const Icon(
+                                              Icons.fingerprint_rounded,
+                                              size: 22),
                                       label: const Text(
                                         'دخول بالبصمة',
                                         style: TextStyle(
@@ -429,8 +440,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                         ),
                                       ),
                                       style: OutlinedButton.styleFrom(
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                        side: BorderSide(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14)),
+                                        side: BorderSide(
+                                            color: AppTheme.primaryColor
+                                                .withValues(alpha: 0.3)),
                                       ),
                                     ),
                                   );

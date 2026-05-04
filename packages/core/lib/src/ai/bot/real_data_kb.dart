@@ -50,21 +50,42 @@ const List<PolioCampaignData> polioCampaignsData = [
     coverageRate: 100,
     wastageRate: 0,
     governorates: {
-      'أبين': GovPolioData(name: 'أبين', vaccinated: 95975, coverage: 101, rating: 'جيدة'),
-      'الحديدة': GovPolioData(name: 'الحديدة', vaccinated: 42883, coverage: 151, rating: 'ممتازة'),
-      'الضالع': GovPolioData(name: 'الضالع', vaccinated: 86918, coverage: 100, rating: 'جيدة'),
-      'المهرة': GovPolioData(name: 'المهرة', vaccinated: 21330, coverage: 94, rating: 'مقبولة'),
-      'تعز': GovPolioData(name: 'تعز', vaccinated: 336730, coverage: 102, rating: 'جيدة'),
-      'حضرموت الساحل': GovPolioData(name: 'حضرموت الساحل', vaccinated: 103237, coverage: 98, rating: 'جيدة'),
-      'حضرموت الوادي': GovPolioData(name: 'حضرموت الوادي', vaccinated: 76381, coverage: 90, rating: 'مقبولة'),
-      'سقطرى': GovPolioData(name: 'سقطرى', vaccinated: 10805, coverage: 90, rating: 'مقبولة'),
-      'شبوة': GovPolioData(name: 'شبوة', vaccinated: 112276, coverage: 93, rating: 'مقبولة'),
-      'عدن': GovPolioData(name: 'عدن', vaccinated: 64295, coverage: 87, rating: 'متدنية'),
-      'لحج': GovPolioData(name: 'لحج', vaccinated: 130284, coverage: 99, rating: 'جيدة'),
-      'مأرب': GovPolioData(name: 'مأرب', vaccinated: 72325, coverage: 95, rating: 'مقبولة'),
-      'حجة': GovPolioData(name: 'حجة', vaccinated: 55765, coverage: 89, rating: 'متدنية'),
-      'البيضاء': GovPolioData(name: 'البيضاء', vaccinated: 18855, coverage: 82, rating: 'متدنية'),
-      'الجوف': GovPolioData(name: 'الجوف', vaccinated: 13904, coverage: 79, rating: 'متدنية'),
+      'أبين': GovPolioData(
+          name: 'أبين', vaccinated: 95975, coverage: 101, rating: 'جيدة'),
+      'الحديدة': GovPolioData(
+          name: 'الحديدة', vaccinated: 42883, coverage: 151, rating: 'ممتازة'),
+      'الضالع': GovPolioData(
+          name: 'الضالع', vaccinated: 86918, coverage: 100, rating: 'جيدة'),
+      'المهرة': GovPolioData(
+          name: 'المهرة', vaccinated: 21330, coverage: 94, rating: 'مقبولة'),
+      'تعز': GovPolioData(
+          name: 'تعز', vaccinated: 336730, coverage: 102, rating: 'جيدة'),
+      'حضرموت الساحل': GovPolioData(
+          name: 'حضرموت الساحل',
+          vaccinated: 103237,
+          coverage: 98,
+          rating: 'جيدة'),
+      'حضرموت الوادي': GovPolioData(
+          name: 'حضرموت الوادي',
+          vaccinated: 76381,
+          coverage: 90,
+          rating: 'مقبولة'),
+      'سقطرى': GovPolioData(
+          name: 'سقطرى', vaccinated: 10805, coverage: 90, rating: 'مقبولة'),
+      'شبوة': GovPolioData(
+          name: 'شبوة', vaccinated: 112276, coverage: 93, rating: 'مقبولة'),
+      'عدن': GovPolioData(
+          name: 'عدن', vaccinated: 64295, coverage: 87, rating: 'متدنية'),
+      'لحج': GovPolioData(
+          name: 'لحج', vaccinated: 130284, coverage: 99, rating: 'جيدة'),
+      'مأرب': GovPolioData(
+          name: 'مأرب', vaccinated: 72325, coverage: 95, rating: 'مقبولة'),
+      'حجة': GovPolioData(
+          name: 'حجة', vaccinated: 55765, coverage: 89, rating: 'متدنية'),
+      'البيضاء': GovPolioData(
+          name: 'البيضاء', vaccinated: 18855, coverage: 82, rating: 'متدنية'),
+      'الجوف': GovPolioData(
+          name: 'الجوف', vaccinated: 13904, coverage: 79, rating: 'متدنية'),
     },
   ),
 
@@ -76,21 +97,42 @@ const List<PolioCampaignData> polioCampaignsData = [
     coverageRate: 102,
     wastageRate: 0,
     governorates: {
-      'أبين': GovPolioData(name: 'أبين', vaccinated: 95293, coverage: 99, rating: 'جيدة'),
-      'الحديدة': GovPolioData(name: 'الحديدة', vaccinated: 47537, coverage: 117, rating: 'ممتازة'),
-      'الضالع': GovPolioData(name: 'الضالع', vaccinated: 91904, coverage: 103, rating: 'جيدة'),
-      'المهرة': GovPolioData(name: 'المهرة', vaccinated: 20728, coverage: 95, rating: 'مقبولة'),
-      'تعز': GovPolioData(name: 'تعز', vaccinated: 347155, coverage: 106, rating: 'جيدة'),
-      'حضرموت الساحل': GovPolioData(name: 'حضرموت الساحل', vaccinated: 105387, coverage: 99, rating: 'جيدة'),
-      'حضرموت الوادي': GovPolioData(name: 'حضرموت الوادي', vaccinated: 82010, coverage: 95, rating: 'مقبولة'),
-      'سقطرى': GovPolioData(name: 'سقطرى', vaccinated: 11186, coverage: 96, rating: 'مقبولة'),
-      'شبوة': GovPolioData(name: 'شبوة', vaccinated: 112131, coverage: 93, rating: 'مقبولة'),
-      'عدن': GovPolioData(name: 'عدن', vaccinated: 63909, coverage: 87, rating: 'متدنية'),
-      'لحج': GovPolioData(name: 'لحج', vaccinated: 137000, coverage: 104, rating: 'جيدة'),
-      'مأرب': GovPolioData(name: 'مأرب', vaccinated: 74313, coverage: 98, rating: 'جيدة'),
-      'حجة': GovPolioData(name: 'حجة', vaccinated: 60261, coverage: 96, rating: 'مقبولة'),
-      'البيضاء': GovPolioData(name: 'البيضاء', vaccinated: 19320, coverage: 84, rating: 'متدنية'),
-      'الجوف': GovPolioData(name: 'الجوف', vaccinated: 14145, coverage: 80, rating: 'متدنية'),
+      'أبين': GovPolioData(
+          name: 'أبين', vaccinated: 95293, coverage: 99, rating: 'جيدة'),
+      'الحديدة': GovPolioData(
+          name: 'الحديدة', vaccinated: 47537, coverage: 117, rating: 'ممتازة'),
+      'الضالع': GovPolioData(
+          name: 'الضالع', vaccinated: 91904, coverage: 103, rating: 'جيدة'),
+      'المهرة': GovPolioData(
+          name: 'المهرة', vaccinated: 20728, coverage: 95, rating: 'مقبولة'),
+      'تعز': GovPolioData(
+          name: 'تعز', vaccinated: 347155, coverage: 106, rating: 'جيدة'),
+      'حضرموت الساحل': GovPolioData(
+          name: 'حضرموت الساحل',
+          vaccinated: 105387,
+          coverage: 99,
+          rating: 'جيدة'),
+      'حضرموت الوادي': GovPolioData(
+          name: 'حضرموت الوادي',
+          vaccinated: 82010,
+          coverage: 95,
+          rating: 'مقبولة'),
+      'سقطرى': GovPolioData(
+          name: 'سقطرى', vaccinated: 11186, coverage: 96, rating: 'مقبولة'),
+      'شبوة': GovPolioData(
+          name: 'شبوة', vaccinated: 112131, coverage: 93, rating: 'مقبولة'),
+      'عدن': GovPolioData(
+          name: 'عدن', vaccinated: 63909, coverage: 87, rating: 'متدنية'),
+      'لحج': GovPolioData(
+          name: 'لحج', vaccinated: 137000, coverage: 104, rating: 'جيدة'),
+      'مأرب': GovPolioData(
+          name: 'مأرب', vaccinated: 74313, coverage: 98, rating: 'جيدة'),
+      'حجة': GovPolioData(
+          name: 'حجة', vaccinated: 60261, coverage: 96, rating: 'مقبولة'),
+      'البيضاء': GovPolioData(
+          name: 'البيضاء', vaccinated: 19320, coverage: 84, rating: 'متدنية'),
+      'الجوف': GovPolioData(
+          name: 'الجوف', vaccinated: 14145, coverage: 80, rating: 'متدنية'),
     },
   ),
 
@@ -102,21 +144,42 @@ const List<PolioCampaignData> polioCampaignsData = [
     coverageRate: 104,
     wastageRate: 11,
     governorates: {
-      'أبين': GovPolioData(name: 'أبين', vaccinated: 98264, coverage: 100, rating: 'ممتازة'),
-      'الحديدة': GovPolioData(name: 'الحديدة', vaccinated: 51184, coverage: 123, rating: 'ممتازة'),
-      'الضالع': GovPolioData(name: 'الضالع', vaccinated: 97408, coverage: 105, rating: 'ممتازة'),
-      'المهرة': GovPolioData(name: 'المهرة', vaccinated: 20517, coverage: 91, rating: 'مقبولة'),
-      'تعز': GovPolioData(name: 'تعز', vaccinated: 358991, coverage: 107, rating: 'ممتازة'),
-      'حضرموت الساحل': GovPolioData(name: 'حضرموت الساحل', vaccinated: 108325, coverage: 98, rating: 'جيدة'),
-      'حضرموت الوادي': GovPolioData(name: 'حضرموت الوادي', vaccinated: 83842, coverage: 95, rating: 'مقبولة'),
-      'سقطرى': GovPolioData(name: 'سقطرى', vaccinated: 11465, coverage: 93, rating: 'مقبولة'),
-      'شبوة': GovPolioData(name: 'شبوة', vaccinated: 113755, coverage: 95, rating: 'مقبولة'),
-      'عدن': GovPolioData(name: 'عدن', vaccinated: 67043, coverage: 91, rating: 'مقبولة'),
-      'لحج': GovPolioData(name: 'لحج', vaccinated: 140650, coverage: 107, rating: 'ممتازة'),
-      'مأرب': GovPolioData(name: 'مأرب', vaccinated: 76704, coverage: 101, rating: 'جيدة'),
-      'حجة': GovPolioData(name: 'حجة', vaccinated: 63806, coverage: 102, rating: 'جيدة'),
-      'البيضاء': GovPolioData(name: 'البيضاء', vaccinated: 20264, coverage: 88, rating: 'متدنية'),
-      'الجوف': GovPolioData(name: 'الجوف', vaccinated: 14831, coverage: 84, rating: 'متدنية'),
+      'أبين': GovPolioData(
+          name: 'أبين', vaccinated: 98264, coverage: 100, rating: 'ممتازة'),
+      'الحديدة': GovPolioData(
+          name: 'الحديدة', vaccinated: 51184, coverage: 123, rating: 'ممتازة'),
+      'الضالع': GovPolioData(
+          name: 'الضالع', vaccinated: 97408, coverage: 105, rating: 'ممتازة'),
+      'المهرة': GovPolioData(
+          name: 'المهرة', vaccinated: 20517, coverage: 91, rating: 'مقبولة'),
+      'تعز': GovPolioData(
+          name: 'تعز', vaccinated: 358991, coverage: 107, rating: 'ممتازة'),
+      'حضرموت الساحل': GovPolioData(
+          name: 'حضرموت الساحل',
+          vaccinated: 108325,
+          coverage: 98,
+          rating: 'جيدة'),
+      'حضرموت الوادي': GovPolioData(
+          name: 'حضرموت الوادي',
+          vaccinated: 83842,
+          coverage: 95,
+          rating: 'مقبولة'),
+      'سقطرى': GovPolioData(
+          name: 'سقطرى', vaccinated: 11465, coverage: 93, rating: 'مقبولة'),
+      'شبوة': GovPolioData(
+          name: 'شبوة', vaccinated: 113755, coverage: 95, rating: 'مقبولة'),
+      'عدن': GovPolioData(
+          name: 'عدن', vaccinated: 67043, coverage: 91, rating: 'مقبولة'),
+      'لحج': GovPolioData(
+          name: 'لحج', vaccinated: 140650, coverage: 107, rating: 'ممتازة'),
+      'مأرب': GovPolioData(
+          name: 'مأرب', vaccinated: 76704, coverage: 101, rating: 'جيدة'),
+      'حجة': GovPolioData(
+          name: 'حجة', vaccinated: 63806, coverage: 102, rating: 'جيدة'),
+      'البيضاء': GovPolioData(
+          name: 'البيضاء', vaccinated: 20264, coverage: 88, rating: 'متدنية'),
+      'الجوف': GovPolioData(
+          name: 'الجوف', vaccinated: 14831, coverage: 84, rating: 'متدنية'),
     },
   ),
 
@@ -128,21 +191,42 @@ const List<PolioCampaignData> polioCampaignsData = [
     coverageRate: 107,
     wastageRate: 11,
     governorates: {
-      'أبين': GovPolioData(name: 'أبين', vaccinated: 97374, coverage: 99, rating: 'ممتازة'),
-      'الحديدة': GovPolioData(name: 'الحديدة', vaccinated: 54236, coverage: 131, rating: 'ممتازة'),
-      'الضالع': GovPolioData(name: 'الضالع', vaccinated: 99418, coverage: 107, rating: 'ممتازة'),
-      'المهرة': GovPolioData(name: 'المهرة', vaccinated: 21243, coverage: 94, rating: 'مقبولة'),
-      'تعز': GovPolioData(name: 'تعز', vaccinated: 360398, coverage: 107, rating: 'ممتازة'),
-      'حضرموت الساحل': GovPolioData(name: 'حضرموت الساحل', vaccinated: 110768, coverage: 100, rating: 'ممتازة'),
-      'حضرموت الوادي': GovPolioData(name: 'حضرموت الوادي', vaccinated: 85993, coverage: 96, rating: 'جيدة'),
-      'سقطرى': GovPolioData(name: 'سقطرى', vaccinated: 11723, coverage: 95, rating: 'مقبولة'),
-      'شبوة': GovPolioData(name: 'شبوة', vaccinated: 116519, coverage: 97, rating: 'جيدة'),
-      'عدن': GovPolioData(name: 'عدن', vaccinated: 67037, coverage: 91, rating: 'مقبولة'),
-      'لحج': GovPolioData(name: 'لحج', vaccinated: 141781, coverage: 108, rating: 'ممتازة'),
-      'مأرب': GovPolioData(name: 'مأرب', vaccinated: 77037, coverage: 101, rating: 'جيدة'),
-      'حجة': GovPolioData(name: 'حجة', vaccinated: 64384, coverage: 103, rating: 'جيدة'),
-      'البيضاء': GovPolioData(name: 'البيضاء', vaccinated: 20383, coverage: 88, rating: 'متدنية'),
-      'الجوف': GovPolioData(name: 'الجوف', vaccinated: 14727, coverage: 84, rating: 'متدنية'),
+      'أبين': GovPolioData(
+          name: 'أبين', vaccinated: 97374, coverage: 99, rating: 'ممتازة'),
+      'الحديدة': GovPolioData(
+          name: 'الحديدة', vaccinated: 54236, coverage: 131, rating: 'ممتازة'),
+      'الضالع': GovPolioData(
+          name: 'الضالع', vaccinated: 99418, coverage: 107, rating: 'ممتازة'),
+      'المهرة': GovPolioData(
+          name: 'المهرة', vaccinated: 21243, coverage: 94, rating: 'مقبولة'),
+      'تعز': GovPolioData(
+          name: 'تعز', vaccinated: 360398, coverage: 107, rating: 'ممتازة'),
+      'حضرموت الساحل': GovPolioData(
+          name: 'حضرموت الساحل',
+          vaccinated: 110768,
+          coverage: 100,
+          rating: 'ممتازة'),
+      'حضرموت الوادي': GovPolioData(
+          name: 'حضرموت الوادي',
+          vaccinated: 85993,
+          coverage: 96,
+          rating: 'جيدة'),
+      'سقطرى': GovPolioData(
+          name: 'سقطرى', vaccinated: 11723, coverage: 95, rating: 'مقبولة'),
+      'شبوة': GovPolioData(
+          name: 'شبوة', vaccinated: 116519, coverage: 97, rating: 'جيدة'),
+      'عدن': GovPolioData(
+          name: 'عدن', vaccinated: 67037, coverage: 91, rating: 'مقبولة'),
+      'لحج': GovPolioData(
+          name: 'لحج', vaccinated: 141781, coverage: 108, rating: 'ممتازة'),
+      'مأرب': GovPolioData(
+          name: 'مأرب', vaccinated: 77037, coverage: 101, rating: 'جيدة'),
+      'حجة': GovPolioData(
+          name: 'حجة', vaccinated: 64384, coverage: 103, rating: 'جيدة'),
+      'البيضاء': GovPolioData(
+          name: 'البيضاء', vaccinated: 20383, coverage: 88, rating: 'متدنية'),
+      'الجوف': GovPolioData(
+          name: 'الجوف', vaccinated: 14727, coverage: 84, rating: 'متدنية'),
     },
   ),
 ];
@@ -191,21 +275,34 @@ const List<SIAData> siaData = [
     totalSessions: 1873,
     totalWorkers: 7620,
     governorates: {
-      'أبين': SIAGovData(name: 'أبين', districts: 11, sessions: 229, workers: 916),
-      'البيضاء': SIAGovData(name: 'البيضاء', districts: 1, sessions: 19, workers: 76),
-      'الحديدة': SIAGovData(name: 'الحديدة', districts: 2, sessions: 37, workers: 148),
-      'الضالع': SIAGovData(name: 'الضالع', districts: 6, sessions: 178, workers: 712),
-      'المهرة': SIAGovData(name: 'المهرة', districts: 9, sessions: 58, workers: 232),
-      'تعز': SIAGovData(name: 'تعز', districts: 17, sessions: 387, workers: 1548),
-      'المكلا': SIAGovData(name: 'المكلا', districts: 12, sessions: 142, workers: 568),
-      'سيئون': SIAGovData(name: 'سيئون', districts: 10, sessions: 114, workers: 456),
-      'سقطرى': SIAGovData(name: 'سقطرى', districts: 2, sessions: 20, workers: 80),
-      'شبوة': SIAGovData(name: 'شبوة', districts: 17, sessions: 236, workers: 944),
-      'لحج': SIAGovData(name: 'لحج', districts: 15, sessions: 256, workers: 1024),
-      'مأرب': SIAGovData(name: 'مأرب', districts: 5, sessions: 167, workers: 668),
+      'أبين':
+          SIAGovData(name: 'أبين', districts: 11, sessions: 229, workers: 916),
+      'البيضاء':
+          SIAGovData(name: 'البيضاء', districts: 1, sessions: 19, workers: 76),
+      'الحديدة':
+          SIAGovData(name: 'الحديدة', districts: 2, sessions: 37, workers: 148),
+      'الضالع':
+          SIAGovData(name: 'الضالع', districts: 6, sessions: 178, workers: 712),
+      'المهرة':
+          SIAGovData(name: 'المهرة', districts: 9, sessions: 58, workers: 232),
+      'تعز':
+          SIAGovData(name: 'تعز', districts: 17, sessions: 387, workers: 1548),
+      'المكلا': SIAGovData(
+          name: 'المكلا', districts: 12, sessions: 142, workers: 568),
+      'سيئون':
+          SIAGovData(name: 'سيئون', districts: 10, sessions: 114, workers: 456),
+      'سقطرى':
+          SIAGovData(name: 'سقطرى', districts: 2, sessions: 20, workers: 80),
+      'شبوة':
+          SIAGovData(name: 'شبوة', districts: 17, sessions: 236, workers: 944),
+      'لحج':
+          SIAGovData(name: 'لحج', districts: 15, sessions: 256, workers: 1024),
+      'مأرب':
+          SIAGovData(name: 'مأرب', districts: 5, sessions: 167, workers: 668),
       'عدن': SIAGovData(name: 'عدن', districts: 8, sessions: 0, workers: 128),
       'حجة': SIAGovData(name: 'حجة', districts: 1, sessions: 20, workers: 80),
-      'الجوف': SIAGovData(name: 'الجوف', districts: 1, sessions: 10, workers: 40),
+      'الجوف':
+          SIAGovData(name: 'الجوف', districts: 1, sessions: 10, workers: 40),
     },
   ),
   SIAData(
@@ -215,21 +312,34 @@ const List<SIAData> siaData = [
     totalSessions: 2164,
     totalWorkers: 8802,
     governorates: {
-      'أبين': SIAGovData(name: 'أبين', districts: 11, sessions: 258, workers: 1032),
-      'البيضاء': SIAGovData(name: 'البيضاء', districts: 2, sessions: 27, workers: 108),
-      'الحديدة': SIAGovData(name: 'الحديدة', districts: 2, sessions: 42, workers: 168),
-      'الضالع': SIAGovData(name: 'الضالع', districts: 6, sessions: 216, workers: 864),
-      'المهرة': SIAGovData(name: 'المهرة', districts: 9, sessions: 66, workers: 264),
-      'تعز': SIAGovData(name: 'تعز', districts: 17, sessions: 441, workers: 1764),
-      'المكلا': SIAGovData(name: 'المكلا', districts: 12, sessions: 155, workers: 620),
-      'سيئون': SIAGovData(name: 'سيئون', districts: 11, sessions: 122, workers: 488),
-      'سقطرى': SIAGovData(name: 'سقطرى', districts: 2, sessions: 21, workers: 84),
-      'شبوة': SIAGovData(name: 'شبوة', districts: 17, sessions: 262, workers: 1048),
-      'لحج': SIAGovData(name: 'لحج', districts: 15, sessions: 286, workers: 1144),
-      'مأرب': SIAGovData(name: 'مأرب', districts: 5, sessions: 197, workers: 788),
+      'أبين':
+          SIAGovData(name: 'أبين', districts: 11, sessions: 258, workers: 1032),
+      'البيضاء':
+          SIAGovData(name: 'البيضاء', districts: 2, sessions: 27, workers: 108),
+      'الحديدة':
+          SIAGovData(name: 'الحديدة', districts: 2, sessions: 42, workers: 168),
+      'الضالع':
+          SIAGovData(name: 'الضالع', districts: 6, sessions: 216, workers: 864),
+      'المهرة':
+          SIAGovData(name: 'المهرة', districts: 9, sessions: 66, workers: 264),
+      'تعز':
+          SIAGovData(name: 'تعز', districts: 17, sessions: 441, workers: 1764),
+      'المكلا': SIAGovData(
+          name: 'المكلا', districts: 12, sessions: 155, workers: 620),
+      'سيئون':
+          SIAGovData(name: 'سيئون', districts: 11, sessions: 122, workers: 488),
+      'سقطرى':
+          SIAGovData(name: 'سقطرى', districts: 2, sessions: 21, workers: 84),
+      'شبوة':
+          SIAGovData(name: 'شبوة', districts: 17, sessions: 262, workers: 1048),
+      'لحج':
+          SIAGovData(name: 'لحج', districts: 15, sessions: 286, workers: 1144),
+      'مأرب':
+          SIAGovData(name: 'مأرب', districts: 5, sessions: 197, workers: 788),
       'عدن': SIAGovData(name: 'عدن', districts: 8, sessions: 0, workers: 146),
       'حجة': SIAGovData(name: 'حجة', districts: 4, sessions: 53, workers: 212),
-      'الجوف': SIAGovData(name: 'الجوف', districts: 1, sessions: 18, workers: 72),
+      'الجوف':
+          SIAGovData(name: 'الجوف', districts: 1, sessions: 18, workers: 72),
     },
   ),
   SIAData(
@@ -239,21 +349,34 @@ const List<SIAData> siaData = [
     totalSessions: 2114,
     totalWorkers: 8602,
     governorates: {
-      'أبين': SIAGovData(name: 'أبين', districts: 11, sessions: 247, workers: 988),
-      'البيضاء': SIAGovData(name: 'البيضاء', districts: 2, sessions: 25, workers: 100),
-      'الحديدة': SIAGovData(name: 'الحديدة', districts: 2, sessions: 42, workers: 168),
-      'الضالع': SIAGovData(name: 'الضالع', districts: 6, sessions: 211, workers: 844),
-      'المهرة': SIAGovData(name: 'المهرة', districts: 9, sessions: 65, workers: 260),
-      'تعز': SIAGovData(name: 'تعز', districts: 17, sessions: 436, workers: 1744),
-      'المكلا': SIAGovData(name: 'المكلا', districts: 12, sessions: 148, workers: 592),
-      'سيئون': SIAGovData(name: 'سيئون', districts: 10, sessions: 117, workers: 468),
-      'سقطرى': SIAGovData(name: 'سقطرى', districts: 2, sessions: 20, workers: 80),
-      'شبوة': SIAGovData(name: 'شبوة', districts: 17, sessions: 257, workers: 1028),
-      'لحج': SIAGovData(name: 'لحج', districts: 15, sessions: 279, workers: 1116),
-      'مأرب': SIAGovData(name: 'مأرب', districts: 5, sessions: 196, workers: 784),
+      'أبين':
+          SIAGovData(name: 'أبين', districts: 11, sessions: 247, workers: 988),
+      'البيضاء':
+          SIAGovData(name: 'البيضاء', districts: 2, sessions: 25, workers: 100),
+      'الحديدة':
+          SIAGovData(name: 'الحديدة', districts: 2, sessions: 42, workers: 168),
+      'الضالع':
+          SIAGovData(name: 'الضالع', districts: 6, sessions: 211, workers: 844),
+      'المهرة':
+          SIAGovData(name: 'المهرة', districts: 9, sessions: 65, workers: 260),
+      'تعز':
+          SIAGovData(name: 'تعز', districts: 17, sessions: 436, workers: 1744),
+      'المكلا': SIAGovData(
+          name: 'المكلا', districts: 12, sessions: 148, workers: 592),
+      'سيئون':
+          SIAGovData(name: 'سيئون', districts: 10, sessions: 117, workers: 468),
+      'سقطرى':
+          SIAGovData(name: 'سقطرى', districts: 2, sessions: 20, workers: 80),
+      'شبوة':
+          SIAGovData(name: 'شبوة', districts: 17, sessions: 257, workers: 1028),
+      'لحج':
+          SIAGovData(name: 'لحج', districts: 15, sessions: 279, workers: 1116),
+      'مأرب':
+          SIAGovData(name: 'مأرب', districts: 5, sessions: 196, workers: 784),
       'عدن': SIAGovData(name: 'عدن', districts: 8, sessions: 0, workers: 146),
       'حجة': SIAGovData(name: 'حجة', districts: 4, sessions: 53, workers: 212),
-      'الجوف': SIAGovData(name: 'الجوف', districts: 1, sessions: 18, workers: 72),
+      'الجوف':
+          SIAGovData(name: 'الجوف', districts: 1, sessions: 18, workers: 72),
     },
   ),
   SIAData(
@@ -263,21 +386,34 @@ const List<SIAData> siaData = [
     totalSessions: 2171,
     totalWorkers: 8538,
     governorates: {
-      'أبين': SIAGovData(name: 'أبين', districts: 11, sessions: 245, workers: 980),
-      'البيضاء': SIAGovData(name: 'البيضاء', districts: 2, sessions: 27, workers: 108),
-      'الحديدة': SIAGovData(name: 'الحديدة', districts: 2, sessions: 42, workers: 168),
-      'الضالع': SIAGovData(name: 'الضالع', districts: 6, sessions: 211, workers: 844),
-      'المهرة': SIAGovData(name: 'المهرة', districts: 9, sessions: 64, workers: 256),
-      'تعز': SIAGovData(name: 'تعز', districts: 17, sessions: 432, workers: 1728),
-      'المكلا': SIAGovData(name: 'المكلا', districts: 12, sessions: 148, workers: 592),
-      'سيئون': SIAGovData(name: 'سيئون', districts: 10, sessions: 119, workers: 476),
-      'سقطرى': SIAGovData(name: 'سقطرى', districts: 2, sessions: 20, workers: 80),
-      'شبوة': SIAGovData(name: 'شبوة', districts: 17, sessions: 254, workers: 1016),
-      'لحج': SIAGovData(name: 'لحج', districts: 15, sessions: 273, workers: 1092),
-      'مأرب': SIAGovData(name: 'مأرب', districts: 5, sessions: 194, workers: 776),
+      'أبين':
+          SIAGovData(name: 'أبين', districts: 11, sessions: 245, workers: 980),
+      'البيضاء':
+          SIAGovData(name: 'البيضاء', districts: 2, sessions: 27, workers: 108),
+      'الحديدة':
+          SIAGovData(name: 'الحديدة', districts: 2, sessions: 42, workers: 168),
+      'الضالع':
+          SIAGovData(name: 'الضالع', districts: 6, sessions: 211, workers: 844),
+      'المهرة':
+          SIAGovData(name: 'المهرة', districts: 9, sessions: 64, workers: 256),
+      'تعز':
+          SIAGovData(name: 'تعز', districts: 17, sessions: 432, workers: 1728),
+      'المكلا': SIAGovData(
+          name: 'المكلا', districts: 12, sessions: 148, workers: 592),
+      'سيئون':
+          SIAGovData(name: 'سيئون', districts: 10, sessions: 119, workers: 476),
+      'سقطرى':
+          SIAGovData(name: 'سقطرى', districts: 2, sessions: 20, workers: 80),
+      'شبوة':
+          SIAGovData(name: 'شبوة', districts: 17, sessions: 254, workers: 1016),
+      'لحج':
+          SIAGovData(name: 'لحج', districts: 15, sessions: 273, workers: 1092),
+      'مأرب':
+          SIAGovData(name: 'مأرب', districts: 5, sessions: 194, workers: 776),
       'عدن': SIAGovData(name: 'عدن', districts: 8, sessions: 73, workers: 146),
       'حجة': SIAGovData(name: 'حجة', districts: 4, sessions: 53, workers: 212),
-      'الجوف': SIAGovData(name: 'الجوف', districts: 1, sessions: 16, workers: 64),
+      'الجوف':
+          SIAGovData(name: 'الجوف', districts: 1, sessions: 16, workers: 64),
     },
   ),
   SIAData(
@@ -287,21 +423,34 @@ const List<SIAData> siaData = [
     totalSessions: 2171,
     totalWorkers: 8538,
     governorates: {
-      'أبين': SIAGovData(name: 'أبين', districts: 11, sessions: 245, workers: 980),
-      'البيضاء': SIAGovData(name: 'البيضاء', districts: 2, sessions: 27, workers: 108),
-      'الحديدة': SIAGovData(name: 'الحديدة', districts: 2, sessions: 42, workers: 168),
-      'الضالع': SIAGovData(name: 'الضالع', districts: 6, sessions: 211, workers: 844),
-      'المهرة': SIAGovData(name: 'المهرة', districts: 9, sessions: 64, workers: 256),
-      'تعز': SIAGovData(name: 'تعز', districts: 17, sessions: 432, workers: 1728),
-      'المكلا': SIAGovData(name: 'المكلا', districts: 12, sessions: 148, workers: 592),
-      'سيئون': SIAGovData(name: 'سيئون', districts: 10, sessions: 119, workers: 476),
-      'سقطرى': SIAGovData(name: 'سقطرى', districts: 2, sessions: 20, workers: 80),
-      'شبوة': SIAGovData(name: 'شبوة', districts: 17, sessions: 254, workers: 1016),
-      'لحج': SIAGovData(name: 'لحج', districts: 15, sessions: 273, workers: 1092),
-      'مأرب': SIAGovData(name: 'مأرب', districts: 5, sessions: 194, workers: 776),
+      'أبين':
+          SIAGovData(name: 'أبين', districts: 11, sessions: 245, workers: 980),
+      'البيضاء':
+          SIAGovData(name: 'البيضاء', districts: 2, sessions: 27, workers: 108),
+      'الحديدة':
+          SIAGovData(name: 'الحديدة', districts: 2, sessions: 42, workers: 168),
+      'الضالع':
+          SIAGovData(name: 'الضالع', districts: 6, sessions: 211, workers: 844),
+      'المهرة':
+          SIAGovData(name: 'المهرة', districts: 9, sessions: 64, workers: 256),
+      'تعز':
+          SIAGovData(name: 'تعز', districts: 17, sessions: 432, workers: 1728),
+      'المكلا': SIAGovData(
+          name: 'المكلا', districts: 12, sessions: 148, workers: 592),
+      'سيئون':
+          SIAGovData(name: 'سيئون', districts: 10, sessions: 119, workers: 476),
+      'سقطرى':
+          SIAGovData(name: 'سقطرى', districts: 2, sessions: 20, workers: 80),
+      'شبوة':
+          SIAGovData(name: 'شبوة', districts: 17, sessions: 254, workers: 1016),
+      'لحج':
+          SIAGovData(name: 'لحج', districts: 15, sessions: 273, workers: 1092),
+      'مأرب':
+          SIAGovData(name: 'مأرب', districts: 5, sessions: 194, workers: 776),
       'عدن': SIAGovData(name: 'عدن', districts: 8, sessions: 73, workers: 146),
       'حجة': SIAGovData(name: 'حجة', districts: 4, sessions: 53, workers: 212),
-      'الجوف': SIAGovData(name: 'الجوف', districts: 1, sessions: 16, workers: 64),
+      'الجوف':
+          SIAGovData(name: 'الجوف', districts: 1, sessions: 16, workers: 64),
     },
   ),
 ];
@@ -328,14 +477,54 @@ class CoverageData {
 
 /// بيانات التغطية حتى ديسمبر 2025 — إجمالي المحافظات
 const List<CoverageData> coverageByGov = [
-  CoverageData(governorate: 'أبين', district: 'الإجمالي', mr1Coverage: 93, penta1Coverage: 100.7, penta3Coverage: 93.2),
-  CoverageData(governorate: 'عدن', district: 'الإجمالي', mr1Coverage: 87, penta1Coverage: 97.7, penta3Coverage: 87.8),
-  CoverageData(governorate: 'المكلا', district: 'الإجمالي', mr1Coverage: 68, penta1Coverage: 82.2, penta3Coverage: 79.2),
-  CoverageData(governorate: 'الضالع', district: 'الإجمالي', mr1Coverage: 85, penta1Coverage: 97.8, penta3Coverage: 86.5),
-  CoverageData(governorate: 'لحج', district: 'الإجمالي', mr1Coverage: 84, penta1Coverage: 95.5, penta3Coverage: 82.7),
-  CoverageData(governorate: 'شبوة', district: 'الإجمالي', mr1Coverage: 82, penta1Coverage: 92.1, penta3Coverage: 82.2),
-  CoverageData(governorate: 'مأرب', district: 'الإجمالي', mr1Coverage: 78, penta1Coverage: 94.5, penta3Coverage: 82.4),
-  CoverageData(governorate: 'تعز', district: 'الإجمالي', mr1Coverage: 82, penta1Coverage: 95.3, penta3Coverage: 85),
+  CoverageData(
+      governorate: 'أبين',
+      district: 'الإجمالي',
+      mr1Coverage: 93,
+      penta1Coverage: 100.7,
+      penta3Coverage: 93.2),
+  CoverageData(
+      governorate: 'عدن',
+      district: 'الإجمالي',
+      mr1Coverage: 87,
+      penta1Coverage: 97.7,
+      penta3Coverage: 87.8),
+  CoverageData(
+      governorate: 'المكلا',
+      district: 'الإجمالي',
+      mr1Coverage: 68,
+      penta1Coverage: 82.2,
+      penta3Coverage: 79.2),
+  CoverageData(
+      governorate: 'الضالع',
+      district: 'الإجمالي',
+      mr1Coverage: 85,
+      penta1Coverage: 97.8,
+      penta3Coverage: 86.5),
+  CoverageData(
+      governorate: 'لحج',
+      district: 'الإجمالي',
+      mr1Coverage: 84,
+      penta1Coverage: 95.5,
+      penta3Coverage: 82.7),
+  CoverageData(
+      governorate: 'شبوة',
+      district: 'الإجمالي',
+      mr1Coverage: 82,
+      penta1Coverage: 92.1,
+      penta3Coverage: 82.2),
+  CoverageData(
+      governorate: 'مأرب',
+      district: 'الإجمالي',
+      mr1Coverage: 78,
+      penta1Coverage: 94.5,
+      penta3Coverage: 82.4),
+  CoverageData(
+      governorate: 'تعز',
+      district: 'الإجمالي',
+      mr1Coverage: 82,
+      penta1Coverage: 95.3,
+      penta3Coverage: 85),
 ];
 
 /// ═══════════════════════════════════════════════════════════════════════
@@ -343,10 +532,8 @@ const List<CoverageData> coverageByGov = [
 /// ═══════════════════════════════════════════════════════════════════════
 
 const Map<String, String> realDataKnowledgeBase = {
-
   // ─── تحليل حملات شلل الأطفال ───
-  'ملخص حملات شلل الأطفال':
-      '📊 ملخص حملات التطعيم ضد شلل الأطفال 2024-2025:\n\n'
+  'ملخص حملات شلل الأطفال': '📊 ملخص حملات التطعيم ضد شلل الأطفال 2024-2025:\n\n'
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
       '📅 فبراير 2024 (الجولة الأولى):\n'
       '   • إجمالي المطعمين: 1,291,196 طفل\n'
@@ -369,55 +556,54 @@ const Map<String, String> realDataKnowledgeBase = {
 
   'أفضل المحافظات تغطية شلل':
       '🏆 أفضل المحافظات في تغطية حملات شلل الأطفال:\n\n'
-      '━━━━ الجولة الثانية سبتمبر 2025 ━━━━\n'
-      '🥇 الحديدة: 131% — أداء ممتاز جداً\n'
-      '🥈 لحج: 108% — أداء ممتاز\n'
-      '🥉 تعز: 107% — أداء ممتاز\n'
-      '4️⃣ الضالع: 107% — أداء ممتاز\n'
-      '5️⃣ حجة: 103% — أداء جيد\n'
-      '6️⃣ مأرب: 101% — أداء جيد\n'
-      '7️⃣ حضرموت الساحل: 100% — أداء ممتاز\n\n'
-      '📌 ملاحظة: تعز تساهم بأكبر عدد من المطعمين (360,398 طفل)',
+          '━━━━ الجولة الثانية سبتمبر 2025 ━━━━\n'
+          '🥇 الحديدة: 131% — أداء ممتاز جداً\n'
+          '🥈 لحج: 108% — أداء ممتاز\n'
+          '🥉 تعز: 107% — أداء ممتاز\n'
+          '4️⃣ الضالع: 107% — أداء ممتاز\n'
+          '5️⃣ حجة: 103% — أداء جيد\n'
+          '6️⃣ مأرب: 101% — أداء جيد\n'
+          '7️⃣ حضرموت الساحل: 100% — أداء ممتاز\n\n'
+          '📌 ملاحظة: تعز تساهم بأكبر عدد من المطعمين (360,398 طفل)',
 
   'أضعف المحافظات تغطية شلل':
       '⚠️ المحافظات التي تحتاج تحسين في تغطية شلل الأطفال:\n\n'
-      '━━━━ الجولة الثانية سبتمبر 2025 ━━━━\n'
-      '❌ البيضاء: 88% — أقل من الحد الأدنى (95%)\n'
-      '❌ الجوف: 84% — أقل من الحد الأدنى\n'
-      '❌ عدن: 91% — أقل من الحد الأدنى\n'
-      '⚠️ المهرة: 94% — قريبة لكن تحت الحد\n'
-      '⚠️ سقطرى: 95% — على الحد الأدنى\n\n'
-      '📌 الأسباب المحتملة:\n'
-      '• صعوبة الوصول في البيضاء والجوف\n'
-      '• أعداد السكان النازحين\n'
-      '• ضعف البنية التحتية الصحية\n'
-      '• مقاومة مجتمعية في بعض المناطق\n\n'
-      '💡 التوصية: تركيز الجهود والتدخلات على هذه المحافظات',
+          '━━━━ الجولة الثانية سبتمبر 2025 ━━━━\n'
+          '❌ البيضاء: 88% — أقل من الحد الأدنى (95%)\n'
+          '❌ الجوف: 84% — أقل من الحد الأدنى\n'
+          '❌ عدن: 91% — أقل من الحد الأدنى\n'
+          '⚠️ المهرة: 94% — قريبة لكن تحت الحد\n'
+          '⚠️ سقطرى: 95% — على الحد الأدنى\n\n'
+          '📌 الأسباب المحتملة:\n'
+          '• صعوبة الوصول في البيضاء والجوف\n'
+          '• أعداد السكان النازحين\n'
+          '• ضعف البنية التحتية الصحية\n'
+          '• مقاومة مجتمعية في بعض المناطق\n\n'
+          '💡 التوصية: تركيز الجهود والتدخلات على هذه المحافظات',
 
   'مقارنة تغطية شلل بين الجولات':
       '📊 مقارنة تغطية حملات شلل الأطفال بين الجولات:\n\n'
-      '┌─────────────┬──────────┬──────────┬──────────┬──────────┐\n'
-      '│ المحافظة     │ فبراير   │ يوليو    │ يوليو    │ سبتمبر   │\n'
-      '│             │ 2024     │ 2024     │ 2025     │ 2025     │\n'
-      '├─────────────┼──────────┼──────────┼──────────┼──────────┤\n'
-      '│ أبين         │ 101%     │ 99%      │ 100%     │ 99%      │\n'
-      '│ الحديدة      │ 151%     │ 117%     │ 123%     │ 131%     │\n'
-      '│ الضالع       │ 100%     │ 103%     │ 105%     │ 107%     │\n'
-      '│ المهرة       │ 94%      │ 95%      │ 91%      │ 94%      │\n'
-      '│ تعز          │ 102%     │ 106%     │ 107%     │ 107%     │\n'
-      '│ عدن          │ 87%      │ 87%      │ 91%      │ 91%      │\n'
-      '│ البيضاء      │ 82%      │ 84%      │ 88%      │ 88%      │\n'
-      '│ الجوف        │ 79%      │ 80%      │ 84%      │ 84%      │\n'
-      '└─────────────┴──────────┴──────────┴──────────┴──────────┘\n\n'
-      '📈 الاتجاهات:\n'
-      '• الحديدة: ارتفاع ملحوظ من 117% إلى 131%\n'
-      '• الضالع: تحسن تدريجي من 100% إلى 107%\n'
-      '• البيضاء والجوف: تحسن بطيء لكن لا يزال تحت 95%\n'
-      '• عدن: تحسن طفيف من 87% إلى 91%',
+          '┌─────────────┬──────────┬──────────┬──────────┬──────────┐\n'
+          '│ المحافظة     │ فبراير   │ يوليو    │ يوليو    │ سبتمبر   │\n'
+          '│             │ 2024     │ 2024     │ 2025     │ 2025     │\n'
+          '├─────────────┼──────────┼──────────┼──────────┼──────────┤\n'
+          '│ أبين         │ 101%     │ 99%      │ 100%     │ 99%      │\n'
+          '│ الحديدة      │ 151%     │ 117%     │ 123%     │ 131%     │\n'
+          '│ الضالع       │ 100%     │ 103%     │ 105%     │ 107%     │\n'
+          '│ المهرة       │ 94%      │ 95%      │ 91%      │ 94%      │\n'
+          '│ تعز          │ 102%     │ 106%     │ 107%     │ 107%     │\n'
+          '│ عدن          │ 87%      │ 87%      │ 91%      │ 91%      │\n'
+          '│ البيضاء      │ 82%      │ 84%      │ 88%      │ 88%      │\n'
+          '│ الجوف        │ 79%      │ 80%      │ 84%      │ 84%      │\n'
+          '└─────────────┴──────────┴──────────┴──────────┴──────────┘\n\n'
+          '📈 الاتجاهات:\n'
+          '• الحديدة: ارتفاع ملحوظ من 117% إلى 131%\n'
+          '• الضالع: تحسن تدريجي من 100% إلى 107%\n'
+          '• البيضاء والجوف: تحسن بطيء لكن لا يزال تحت 95%\n'
+          '• عدن: تحسن طفيف من 87% إلى 91%',
 
   // ─── تحليل النشاط الايصالي التكاملي ───
-  'ملخص النشاط الايصالي':
-      '📊 ملخص النشاط الايصالي التكاملي 2025:\n\n'
+  'ملخص النشاط الايصالي': '📊 ملخص النشاط الايصالي التكاملي 2025:\n\n'
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
       'المرحلة الأولى (أبريل-مايو 2025):\n'
       '   • المديريات: 117 | الجلسات: 1,873 | العاملين: 7,620\n\n'
@@ -437,24 +623,23 @@ const Map<String, String> realDataKnowledgeBase = {
 
   'معدل الجلسة في النشاط الايصالي':
       '📊 معدل الجلسة في النشاط الايصالي التكاملي:\n\n'
-      '📌 ما هو معدل الجلسة؟\n'
-      'هو متوسط عدد الأطفال المطعمين في الجلسة الواحدة.\n\n'
-      '━━━━ مقارنة معدل الجلسة بين المراحل ━━━━\n'
-      'المرحلة الأولى: معدل جلسة ~29 طفل/جلسة\n'
-      'المرحلة الثانية: معدل جلسة ~32 طفل/جلسة\n'
-      'المرحلة الثالثة: معدل جلسة ~30 طفل/جلسة\n'
-      'المرحلة الرابعة: معدل جلسة ~30 طفل/جلسة\n'
-      'المرحلة الخامسة: معدل جلسة ~30 طفل/جلسة\n\n'
-      '━━━━ تباين معدل الجلسة حسب المحافظة ━━━━\n'
-      '• تعز: أعلى معدل (40+ طفل/جلسة)\n'
-      '• الضالع: معدل مرتفع (35-40)\n'
-      '• المهرة: أقل معدل (7-15 طفل/جلسة)\n'
-      '• سقطرى: معدل منخفض (4-6 طفل/جلسة)\n\n'
-      '💡 معدل الجلسة يعكس كثافة السكان وكفاءة التخطيط',
+          '📌 ما هو معدل الجلسة؟\n'
+          'هو متوسط عدد الأطفال المطعمين في الجلسة الواحدة.\n\n'
+          '━━━━ مقارنة معدل الجلسة بين المراحل ━━━━\n'
+          'المرحلة الأولى: معدل جلسة ~29 طفل/جلسة\n'
+          'المرحلة الثانية: معدل جلسة ~32 طفل/جلسة\n'
+          'المرحلة الثالثة: معدل جلسة ~30 طفل/جلسة\n'
+          'المرحلة الرابعة: معدل جلسة ~30 طفل/جلسة\n'
+          'المرحلة الخامسة: معدل جلسة ~30 طفل/جلسة\n\n'
+          '━━━━ تباين معدل الجلسة حسب المحافظة ━━━━\n'
+          '• تعز: أعلى معدل (40+ طفل/جلسة)\n'
+          '• الضالع: معدل مرتفع (35-40)\n'
+          '• المهرة: أقل معدل (7-15 طفل/جلسة)\n'
+          '• سقطرى: معدل منخفض (4-6 طفل/جلسة)\n\n'
+          '💡 معدل الجلسة يعكس كثافة السكان وكفاءة التخطيط',
 
   // ─── بيانات التغطية الشهرية ───
-  'ملخص التغطية 2025':
-      '📊 ملخص التغطية التطعيمية حتى ديسمبر 2025:\n\n'
+  'ملخص التغطية 2025': '📊 ملخص التغطية التطعيمية حتى ديسمبر 2025:\n\n'
       '━━━━ المؤشرات الرئيسية ━━━━\n'
       '💉 MR1 (الحصبة الأولى تحت سنة):\n'
       '   • أعلى تغطية: أبين 93%\n'
@@ -474,8 +659,7 @@ const Map<String, String> realDataKnowledgeBase = {
       '   • المكلا: 3% فقط — ممتاز\n'
       '   • عدن: 9.9% — يحتاج تحسين',
 
-  'تغطية المكلا 2025':
-      '📊 تحليل تغطية المكلا (حضرموت الساحل) 2025:\n\n'
+  'تغطية المكلا 2025': '📊 تحليل تغطية المكلا (حضرموت الساحل) 2025:\n\n'
       '⚠️ المكلا تعاني من تدني التغطية!\n\n'
       '💉 MR1: 68% — أقل من الحد الأدنى (90%)\n'
       '💉 Penta1: 82.2% — أقل من الحد الأدنى\n'
@@ -492,8 +676,7 @@ const Map<String, String> realDataKnowledgeBase = {
       '   2. زيادة عدد الجلسات الثابتة\n'
       '   3. تفعيل فرق متنقلة للمناطق النائية',
 
-  'تغطية عدن 2025':
-      '📊 تحليل تغطية عدن 2025:\n\n'
+  'تغطية عدن 2025': '📊 تحليل تغطية عدن 2025:\n\n'
       '💉 MR1: 87% — أقل من الحد الأدنى (90%)\n'
       '💉 Penta1: 97.7% — جيدة\n'
       '💉 Penta3: 87.8% — أقل من الحد الأدنى\n\n'
@@ -512,8 +695,7 @@ const Map<String, String> realDataKnowledgeBase = {
       '   • البريقة نموذج ممتاز يمكن تعميمه',
 
   // ─── تحليل الاتجاهات والتنبؤات ───
-  'اتجاهات التغطية':
-      '📈 اتجاهات التغطية التطعيمية في اليمن:\n\n'
+  'اتجاهات التغطية': '📈 اتجاهات التغطية التطعيمية في اليمن:\n\n'
       '━━━━ الاتجاهات الإيجابية ━━━━\n'
       '✅ تحسن تدريجي في تغطية حملات شلل الأطفال:\n'
       '   • 2024: 100-102% → 2025: 104-107%\n'
@@ -533,8 +715,7 @@ const Map<String, String> realDataKnowledgeBase = {
       '   • الحاجة لتركيز الجهود على المحافظات المتدنية\n'
       '   • زيادة عدد الجلسات في المناطق النائية',
 
-  'تنبؤات 2026':
-      '🔮 التنبؤات والتوقعات لبرنامج التحصين 2026:\n\n'
+  'تنبؤات 2026': '🔮 التنبؤات والتوقعات لبرنامج التحصين 2026:\n\n'
       '━━━━ التوقعات المبنية على البيانات ━━━━\n\n'
       '📊 حملات شلل الأطفال:\n'
       '   • نتوقع تغطية 108-112% في الجولات القادمة\n'
@@ -555,8 +736,7 @@ const Map<String, String> realDataKnowledgeBase = {
       '   4. توسيع نطاق الفرق المتنقلة',
 
   // ─── مقارنات بين المحافظات ───
-  'مقارنة تعز والحديدة':
-      '📊 مقارنة بين تعز والحديدة في حملات شلل الأطفال:\n\n'
+  'مقارنة تعز والحديدة': '📊 مقارنة بين تعز والحديدة في حملات شلل الأطفال:\n\n'
       '━━━━ تعز ━━━━\n'
       '• أكبر مساهم بأعداد المطعمين\n'
       '• سبتمبر 2025: 360,398 طفل (107% تغطية)\n'
@@ -571,8 +751,7 @@ const Map<String, String> realDataKnowledgeBase = {
       '• تعز: حجم كبير + تغطية ممتازة = المحافظة الأهم\n'
       '• الحديدة: تغطية فائقة = تحتاج مراجعة المستهدفين',
 
-  'محافظات تحتاج تدخل':
-      '🚨 المحافظات التي تحتاج تدخل عاجل:\n\n'
+  'محافظات تحتاج تدخل': '🚨 المحافظات التي تحتاج تدخل عاجل:\n\n'
       '━━━━ الأولوية القصوى ━━━━\n'
       '1️⃣ البيضاء:\n'
       '   • تغطية شلل: 88% (أقل من 95%)\n'
@@ -596,8 +775,7 @@ const Map<String, String> realDataKnowledgeBase = {
       '   • معدل جلسة منخفض جداً (7-15)',
 
   // ─── مؤشرات الأداء الرئيسية ───
-  'KPI التحصين 2025':
-      '📊 مؤشرات الأداء الرئيسية (KPIs) للتحصين 2025:\n\n'
+  'KPI التحصين 2025': '📊 مؤشرات الأداء الرئيسية (KPIs) للتحصين 2025:\n\n'
       '━━━━ مؤشرات حملات شلل الأطفال ━━━━\n'
       '✅ التغطية الوطنية: 107% (الهدف: ≥95%)\n'
       '✅ إجمالي المطعمين: 1,440,085\n'
@@ -614,8 +792,7 @@ const Map<String, String> realDataKnowledgeBase = {
       '✅ المديريات المغطاة: 121\n'
       '⚠️ معدل الجلسة متباين: 4-54 طفل/جلسة',
 
-  'فجوة التسرب':
-      '📊 تحليل فجوة التسرب (Drop-out Rate) في التحصين:\n\n'
+  'فجوة التسرب': '📊 تحليل فجوة التسرب (Drop-out Rate) في التحصين:\n\n'
       '📌 ما هي فجوة التسرب؟\n'
       'هي الفرق بين عدد الأطفال الذين بدأوا التطعيم وأكملوه.\n\n'
       '━━━━ التحليل الوطني ━━━━\n'

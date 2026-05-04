@@ -103,8 +103,9 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
     final safePage = _currentPage.clamp(0, (totalPages - 1).clamp(0, 9999));
     final start = safePage * _pageSize;
     final end = (start + _pageSize).clamp(0, filtered.length);
-    final pageItems =
-        start < filtered.length ? filtered.sublist(start, end).cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
+    final pageItems = start < filtered.length
+        ? filtered.sublist(start, end).cast<Map<String, dynamic>>()
+        : <Map<String, dynamic>>[];
 
     setState(() {
       _pageItems = pageItems;
@@ -117,16 +118,12 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
     sorted.sort((a, b) {
       switch (_sortBy) {
         case 'date_desc':
-          final da =
-              DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(2000);
-          final db =
-              DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(2000);
+          final da = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(2000);
+          final db = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(2000);
           return db.compareTo(da);
         case 'date_asc':
-          final da =
-              DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(2000);
-          final db =
-              DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(2000);
+          final da = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(2000);
+          final db = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(2000);
           return da.compareTo(db);
         case 'name_asc':
           final na = (a['forms']?['title_ar'] ?? '').toString().toLowerCase();
@@ -500,9 +497,8 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
                           style: TextStyle(
                             fontFamily: 'Cairo',
                             fontWeight: FontWeight.w700,
-                            color: isCurrent
-                                ? Colors.white
-                                : AppTheme.textPrimary,
+                            color:
+                                isCurrent ? Colors.white : AppTheme.textPrimary,
                           ),
                         ),
                       ),

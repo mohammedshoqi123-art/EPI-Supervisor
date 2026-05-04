@@ -332,7 +332,7 @@ class SyncService {
       }
 
       // ═══ FIX: Warm up forms cache for all campaign types ═══
-      // Ensures both 'polio_campaign' and 'integrated_activity' forms 
+      // Ensures both 'polio_campaign' and 'integrated_activity' forms
       // are cached locally whenever we are online.
       if (_offline.isOnline) {
         await _warmUpFormsCache();
@@ -394,13 +394,15 @@ class SyncService {
       for (final type in types) {
         await cache.getList(
           'forms_$type',
-          () => _api.callFunction(SupabaseConfig.fnGetForms, {'campaign_type': type}).then(
+          () => _api.callFunction(
+              SupabaseConfig.fnGetForms, {'campaign_type': type}).then(
             (resp) => List<Map<String, dynamic>>.from(resp['forms'] ?? []),
           ),
           maxAge: const Duration(hours: 12), // Refresh every 12h if online
         );
       }
-      if (kDebugMode) print('[SyncService] Forms cache warmed up for all campaign types');
+      if (kDebugMode)
+        print('[SyncService] Forms cache warmed up for all campaign types');
     } catch (e) {
       if (kDebugMode) print('[SyncService] Warm-up failed: $e');
     }

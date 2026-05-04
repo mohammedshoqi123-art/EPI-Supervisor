@@ -63,20 +63,22 @@ class BotLLMService {
     }
     _status = BotAIStatus.loading;
     try {
-      final response = await http.post(
-        Uri.parse('$_apiBaseUrl/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
-        body: jsonEncode({
-          'model': _model,
-          'messages': [
-            {'role': 'user', 'content': 'مرحبا'}
-          ],
-          'max_tokens': 10,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_apiBaseUrl/chat/completions'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_apiKey',
+            },
+            body: jsonEncode({
+              'model': _model,
+              'messages': [
+                {'role': 'user', 'content': 'مرحبا'}
+              ],
+              'max_tokens': 10,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         _status = BotAIStatus.online;
@@ -96,7 +98,8 @@ class BotLLMService {
     Map<String, dynamic>? childProfile,
   }) async {
     if (!isOnline || _apiKey.isEmpty) {
-      return const BotAIResponse(text: '', isFromLLM: false, status: BotAIStatus.offline);
+      return const BotAIResponse(
+          text: '', isFromLLM: false, status: BotAIStatus.offline);
     }
 
     try {
@@ -116,19 +119,21 @@ class BotLLMService {
 
       messages.add({'role': 'user', 'content': userMessage});
 
-      final response = await http.post(
-        Uri.parse('$_apiBaseUrl/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
-        body: jsonEncode({
-          'model': _model,
-          'messages': messages,
-          'temperature': _temperature,
-          'max_tokens': _maxTokens,
-        }),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .post(
+            Uri.parse('$_apiBaseUrl/chat/completions'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_apiKey',
+            },
+            body: jsonEncode({
+              'model': _model,
+              'messages': messages,
+              'temperature': _temperature,
+              'max_tokens': _maxTokens,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -140,9 +145,11 @@ class BotLLMService {
         );
       }
 
-      return const BotAIResponse(text: '', isFromLLM: false, status: BotAIStatus.error);
+      return const BotAIResponse(
+          text: '', isFromLLM: false, status: BotAIStatus.error);
     } catch (_) {
-      return const BotAIResponse(text: '', isFromLLM: false, status: BotAIStatus.error);
+      return const BotAIResponse(
+          text: '', isFromLLM: false, status: BotAIStatus.error);
     }
   }
 
@@ -165,7 +172,8 @@ class BotLLMService {
       }
       if (match) {
         buffer.writeln('【${entry.key}】');
-        buffer.writeln(entry.value.substring(0, entry.value.length > 500 ? 500 : entry.value.length));
+        buffer.writeln(entry.value
+            .substring(0, entry.value.length > 500 ? 500 : entry.value.length));
         buffer.writeln();
         found++;
       }
@@ -181,7 +189,8 @@ class BotLLMService {
       }
       if (hits >= 2) {
         buffer.writeln('【${entry.key}】');
-        buffer.writeln(entry.value.substring(0, entry.value.length > 400 ? 400 : entry.value.length));
+        buffer.writeln(entry.value
+            .substring(0, entry.value.length > 400 ? 400 : entry.value.length));
         buffer.writeln();
         found++;
       }
@@ -190,25 +199,32 @@ class BotLLMService {
     return buffer.toString();
   }
 
-  static String _buildSystemPrompt(String ragContext, Map<String, dynamic>? childProfile) {
+  static String _buildSystemPrompt(
+      String ragContext, Map<String, dynamic>? childProfile) {
     final buf = StringBuffer();
-    buf.writeln('أنت "مستشار التحصين الصحي الموسع" — مساعد ذكي متخصص في برنامج التحصين باليمن 🇾🇪');
+    buf.writeln(
+        'أنت "مستشار التحصين الصحي الموسع" — مساعد ذكي متخصص في برنامج التحصين باليمن 🇾🇪');
     buf.writeln();
     buf.writeln('تعليمات:');
     buf.writeln('- أجب باللغة العربية دائماً');
     buf.writeln('- كن دقيقاً طبياً واستند للإرشادات الرسمية');
     buf.writeln('- استخدم نبرة ودودة ومهنية');
-    buf.writeln('- إذا كان السؤال طارئاً (تشنجات، صعوبة تنفس) حث على طلب المساعدة الطبية فوراً');
+    buf.writeln(
+        '- إذا كان السؤال طارئاً (تشنجات، صعوبة تنفس) حث على طلب المساعدة الطبية فوراً');
     buf.writeln('- لا تشخص الأمراض ولا تصف أدوية');
     buf.writeln('- استخدم الإيموجي بشكل مناسب');
 
     if (childProfile != null && childProfile.isNotEmpty) {
       buf.writeln();
       buf.writeln('معلومات الطفل:');
-      if (childProfile['name'] != null) buf.writeln('- الاسم: ${childProfile['name']}');
-      if (childProfile['ageMonths'] != null) buf.writeln('- العمر: ${childProfile['ageMonths']} أشهر');
-      if (childProfile['gender'] != null) buf.writeln('- الجنس: ${childProfile['gender']}');
-      if (childProfile['mentionedSymptoms'] != null) buf.writeln('- الأعراض: ${childProfile['mentionedSymptoms']}');
+      if (childProfile['name'] != null)
+        buf.writeln('- الاسم: ${childProfile['name']}');
+      if (childProfile['ageMonths'] != null)
+        buf.writeln('- العمر: ${childProfile['ageMonths']} أشهر');
+      if (childProfile['gender'] != null)
+        buf.writeln('- الجنس: ${childProfile['gender']}');
+      if (childProfile['mentionedSymptoms'] != null)
+        buf.writeln('- الأعراض: ${childProfile['mentionedSymptoms']}');
     }
 
     if (ragContext.isNotEmpty) {
@@ -221,7 +237,8 @@ class BotLLMService {
     return buf.toString();
   }
 
-  static List<String> generateQuickReplySuggestions(String userMessage, String botResponse) {
+  static List<String> generateQuickReplySuggestions(
+      String userMessage, String botResponse) {
     final suggestions = <String>[];
     final norm = SmartNLP.normalize(userMessage);
     final respNorm = SmartNLP.normalize(botResponse);
@@ -240,7 +257,8 @@ class BotLLMService {
     }
 
     if (suggestions.isEmpty) {
-      suggestions.addAll(['وش تطعيمات طفلي؟', 'وش الآثار الجانبية؟', 'هل مجاني؟']);
+      suggestions
+          .addAll(['وش تطعيمات طفلي؟', 'وش الآثار الجانبية؟', 'هل مجاني؟']);
     }
 
     return suggestions.take(3).toList();

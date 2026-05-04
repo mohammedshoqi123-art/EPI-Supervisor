@@ -260,8 +260,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                           ? (schema['sections'] as List).fold<int>(
                               0,
                               (s, sec) =>
-                                  s +
-                                  ((sec['fields'] as List?)?.length ?? 0),
+                                  s + ((sec['fields'] as List?)?.length ?? 0),
                             )
                           : schemaFields;
                       final createdAt = form['created_at'] != null
@@ -298,9 +297,8 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     bool isWide,
   ) {
     final campaignType = form['campaign_type'] as String? ?? 'polio_campaign';
-    final campaignLabel = campaignType == 'integrated_activity'
-        ? 'نشاط متكامل'
-        : 'حملة شلل';
+    final campaignLabel =
+        campaignType == 'integrated_activity' ? 'نشاط متكامل' : 'حملة شلل';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -516,8 +514,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     bool requiresGps = existingForm?['requires_gps'] ?? false;
     bool requiresPhoto = existingForm?['requires_photo'] ?? false;
     int maxPhotos = existingForm?['max_photos'] ?? 5;
-    String campaignType =
-        existingForm?['campaign_type'] ?? 'polio_campaign';
+    String campaignType = existingForm?['campaign_type'] ?? 'polio_campaign';
 
     // Allowed roles
     final allRoles = [
@@ -539,16 +536,13 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     );
 
     // Schema fields
-    final schema =
-        existingForm?['schema'] as Map<String, dynamic>? ?? {};
+    final schema = existingForm?['schema'] as Map<String, dynamic>? ?? {};
     final sectionsRaw = schema['sections'] as List? ?? [];
     final fieldsRaw = schema['fields'] as List? ?? [];
-    List<Map<String, dynamic>> flatFields = fieldsRaw
-        .map((f) => Map<String, dynamic>.from(f as Map))
-        .toList();
-    List<Map<String, dynamic>> sections = sectionsRaw
-        .map((s) => Map<String, dynamic>.from(s as Map))
-        .toList();
+    List<Map<String, dynamic>> flatFields =
+        fieldsRaw.map((f) => Map<String, dynamic>.from(f as Map)).toList();
+    List<Map<String, dynamic>> sections =
+        sectionsRaw.map((s) => Map<String, dynamic>.from(s as Map)).toList();
     bool useSections = sections.isNotEmpty;
 
     // Field type definitions
@@ -841,10 +835,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
 
               final data = <String, dynamic>{
                 'title_ar': titleArCtrl.text.trim(),
-                'title_en':
-                    titleEnCtrl.text.trim().isNotEmpty
-                        ? titleEnCtrl.text.trim()
-                        : titleArCtrl.text.trim(),
+                'title_en': titleEnCtrl.text.trim().isNotEmpty
+                    ? titleEnCtrl.text.trim()
+                    : titleArCtrl.text.trim(),
                 'description_ar': descCtrl.text.trim().isNotEmpty
                     ? descCtrl.text.trim()
                     : null,
@@ -859,8 +852,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
               };
 
               if (isEdit) {
-                data['version'] =
-                    (existingForm!['version'] as int? ?? 1) + 1;
+                data['version'] = (existingForm!['version'] as int? ?? 1) + 1;
                 await client
                     .from('forms')
                     .update(data)
@@ -873,8 +865,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
 
               // Refresh
               try {
-                final cache =
-                    await ref.read(offlineDataCacheProvider.future);
+                final cache = await ref.read(offlineDataCacheProvider.future);
                 final campaign = ref.read(campaignProvider);
                 await cache.forceInvalidate('forms_${campaign.value}');
                 await cache.forceInvalidate('forms_all');
@@ -887,9 +878,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      isEdit
-                          ? 'تم تحديث النموذج ✅'
-                          : 'تم إنشاء النموذج ✅',
+                      isEdit ? 'تم تحديث النموذج ✅' : 'تم إنشاء النموذج ✅',
                       style: const TextStyle(fontFamily: 'Tajawal'),
                     ),
                     backgroundColor: AppTheme.successColor,
@@ -982,8 +971,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                    onPressed: () =>
-                        deleteField(idx, sectionIdx: sectionIdx),
+                    onPressed: () => deleteField(idx, sectionIdx: sectionIdx),
                   ),
                 ],
               ),
@@ -1186,8 +1174,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                               spacing: 8,
                               runSpacing: 8,
                               children: allRoles.map((role) {
-                                final selected =
-                                    allowedRoles.contains(role);
+                                final selected = allowedRoles.contains(role);
                                 return FilterChip(
                                   label: Text(
                                     roleLabels[role] ?? role,
@@ -1229,8 +1216,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                                       ),
                                       borderRadius: BorderRadius.circular(10),
                                       child: Container(
-                                        padding:
-                                            const EdgeInsets.symmetric(
+                                        padding: const EdgeInsets.symmetric(
                                           vertical: 10,
                                         ),
                                         decoration: BoxDecoration(
@@ -1261,8 +1247,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                                       ),
                                       borderRadius: BorderRadius.circular(10),
                                       child: Container(
-                                        padding:
-                                            const EdgeInsets.symmetric(
+                                        padding: const EdgeInsets.symmetric(
                                           vertical: 10,
                                         ),
                                         decoration: BoxDecoration(
@@ -1326,8 +1311,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                                 icon: const Icon(Icons.add),
                                 label: const Text('إضافة حقل'),
                                 style: OutlinedButton.styleFrom(
-                                  minimumSize:
-                                      const Size(double.infinity, 44),
+                                  minimumSize: const Size(double.infinity, 44),
                                   foregroundColor: AppTheme.primaryColor,
                                   side: const BorderSide(
                                     color: AppTheme.primaryColor,
@@ -1360,13 +1344,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                                 ...sections.asMap().entries.map((entry) {
                                   final sec = entry.value;
                                   final secIdx = entry.key;
-                                  final secFields =
-                                      (sec['fields'] as List?)
-                                              ?.cast<
-                                                  Map<String, dynamic>>() ??
-                                          [];
-                                  final expanded =
-                                      sec['expanded'] == true;
+                                  final secFields = (sec['fields'] as List?)
+                                          ?.cast<Map<String, dynamic>>() ??
+                                      [];
+                                  final expanded = sec['expanded'] == true;
                                   return Card(
                                     margin: const EdgeInsets.only(bottom: 8),
                                     child: Column(
@@ -1409,10 +1390,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                                                   size: 20,
                                                   color: Colors.red,
                                                 ),
-                                                onPressed: () =>
-                                                    setDialogState(() =>
-                                                        sections.removeAt(
-                                                            secIdx)),
+                                                onPressed: () => setDialogState(
+                                                    () => sections
+                                                        .removeAt(secIdx)),
                                               ),
                                               Icon(
                                                 expanded
@@ -1422,26 +1402,22 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                                             ],
                                           ),
                                           onTap: () => setDialogState(
-                                            () => sec['expanded'] =
-                                                !expanded,
+                                            () => sec['expanded'] = !expanded,
                                           ),
                                         ),
                                         if (expanded)
                                           Padding(
-                                            padding:
-                                                const EdgeInsets.all(12),
+                                            padding: const EdgeInsets.all(12),
                                             child: Column(
                                               children: [
                                                 ...secFields
                                                     .asMap()
                                                     .entries
                                                     .map(
-                                                      (e) =>
-                                                          buildFieldTile(
+                                                      (e) => buildFieldTile(
                                                         e.value,
                                                         e.key,
-                                                        sectionIdx:
-                                                            secIdx,
+                                                        sectionIdx: secIdx,
                                                       ),
                                                     ),
                                               ],
@@ -1457,11 +1433,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                                 icon: const Icon(Icons.create_new_folder),
                                 label: const Text('إضافة قسم'),
                                 style: OutlinedButton.styleFrom(
-                                  minimumSize:
-                                      const Size(double.infinity, 44),
+                                  minimumSize: const Size(double.infinity, 44),
                                   foregroundColor: Colors.teal,
-                                  side:
-                                      const BorderSide(color: Colors.teal),
+                                  side: const BorderSide(color: Colors.teal),
                                 ),
                               ),
                             ],
@@ -1550,13 +1524,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     try {
       final client = Supabase.instance.client;
       final newStatus = !(form['is_active'] as bool? ?? true);
-      await client
-          .from('forms')
-          .update({
-            'is_active': newStatus,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', form['id']);
+      await client.from('forms').update({
+        'is_active': newStatus,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', form['id']);
 
       ref.invalidate(formsListProvider);
       if (mounted) {

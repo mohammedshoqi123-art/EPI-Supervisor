@@ -12,22 +12,29 @@ class VaccinationService {
       id: 'bcg',
       nameAr: 'بي سي جي (BCG)',
       nameEn: 'Bacillus Calmette-Guérin',
-      description: 'تطعيم ضد السل (Tuberculosis) - يعطى مرة واحدة عند الولادة أو في أقرب فرصة ممكنة',
+      description:
+          'تطعيم ضد السل (Tuberculosis) - يعطى مرة واحدة عند الولادة أو في أقرب فرصة ممكنة',
       dueWeeks: 0,
       doseNumber: 'جرعة واحدة',
       route: 'intradermal',
       site: 'الذراع الأيسر - فوق العضلة الدالية',
       color: '#E74C3C',
       iconEmoji: '🩸',
-      sideEffects: ['احمرار مكان الحقن', 'تورم بسيط', 'قُرحة صغيرة تشفى تلقائياً خلال 2-3 أشهر'],
+      sideEffects: [
+        'احمرار مكان الحقن',
+        'تورم بسيط',
+        'قُرحة صغيرة تشفى تلقائياً خلال 2-3 أشهر'
+      ],
       contraindications: ['ضعف المناعة الشديد'],
-      notes: 'يُعطى عند الولادة أو في أقرب فرصة. الحد الأقصى: سنة واحدة (12 شهر) — بعد السنة لا يُعطي. العلامة الطبيعية (التندب) تظهر بعد 6-8 أسابيع',
+      notes:
+          'يُعطى عند الولادة أو في أقرب فرصة. الحد الأقصى: سنة واحدة (12 شهر) — بعد السنة لا يُعطي. العلامة الطبيعية (التندب) تظهر بعد 6-8 أسابيع',
     ),
     Vaccine(
       id: 'hepb0',
       nameAr: 'التهاب الكبد ب - جرعة الولادة',
       nameEn: 'Hepatitis B - Birth Dose',
-      description: 'الجرعة الأولى من تطعيم التهاب الكبد B - تُعطى خلال 24 ساعة من الولادة',
+      description:
+          'الجرعة الأولى من تطعيم التهاب الكبد B - تُعطى خلال 24 ساعة من الولادة',
       dueWeeks: 0,
       doseNumber: 'جرعة الولادة',
       route: 'intramuscular',
@@ -42,7 +49,8 @@ class VaccinationService {
       id: 'opv0',
       nameAr: 'تطعيم شلل الأطفال الفموي - جرعة الولادة',
       nameEn: 'OPV0 - Oral Polio Vaccine Birth Dose',
-      description: 'الجرعة الصفر من تطعيم شلل الأطفال الفموي - تُعطى عند الولادة',
+      description:
+          'الجرعة الصفر من تطعيم شلل الأطفال الفموي - تُعطى عند الولادة',
       dueWeeks: 0,
       doseNumber: 'الجرعة الصفر (OPV0)',
       route: 'oral',
@@ -74,7 +82,8 @@ class VaccinationService {
       id: 'pentavalent1',
       nameAr: 'التطعيم الخماسي - الجرعة الأولى',
       nameEn: 'Pentavalent (DTP-HepB-Hib) Dose 1',
-      description: 'تطعيم واحد يحمي من 5 أمراض: الخناق والكزاز والسعال الديبي والتهاب الكبد B والتهاب الأغشية المخية بكتيريا HiB',
+      description:
+          'تطعيم واحد يحمي من 5 أمراض: الخناق والكزاز والسعال الديبي والتهاب الكبد B والتهاب الأغشية المخية بكتيريا HiB',
       dueWeeks: 6,
       doseNumber: 'الجرعة الأولى',
       route: 'intramuscular',
@@ -82,14 +91,18 @@ class VaccinationService {
       color: '#E67E22',
       iconEmoji: '5️⃣',
       sideEffects: ['ألم واحمرار مكان الحقن', 'حرارة', 'بكاء غير معتاد'],
-      contraindications: ['استجابة عصبية بعد جرعة سابقة', 'اعتلال دماغي بعد جرعة سابقة'],
+      contraindications: [
+        'استجابة عصبية بعد جرعة سابقة',
+        'اعتلال دماغي بعد جرعة سابقة'
+      ],
       notes: 'تطعيم أساسي ومهم جداً. يُعطى 3 جرعات بفاصل 4 أسابيع',
     ),
     Vaccine(
       id: 'pcv1',
       nameAr: 'التطعيم الرئوي - الجرعة الأولى',
       nameEn: 'PCV1 - Pneumococcal Conjugate Vaccine',
-      description: 'تطعيم ضد المكورات الرئوية التي تسبب التهاب السحايا والتهاب الرئة والتهاب الأذن الوسطى',
+      description:
+          'تطعيم ضد المكورات الرئوية التي تسبب التهاب السحايا والتهاب الرئة والتهاب الأذن الوسطى',
       dueWeeks: 6,
       doseNumber: 'الجرعة الأولى',
       route: 'intramuscular',
@@ -112,7 +125,10 @@ class VaccinationService {
       color: '#1ABC9C',
       iconEmoji: '🦠',
       sideEffects: ['إسهال خفيف', 'قيء نادر'],
-      contraindications: ['انسداد معوي', 'متلازمة روتا الفيروسي بعد جرعة سابقة'],
+      contraindications: [
+        'انسداد معوي',
+        'متلازمة روتا الفيروسي بعد جرعة سابقة'
+      ],
       notes: 'فموي وليس حقن! عمر أقصى للجرعة الأولى: 15 أسبوع',
     ),
 
@@ -228,7 +244,8 @@ class VaccinationService {
       id: 'ipv1',
       nameAr: 'شلل الأطفال الحقني (IPV) - الجرعة الأولى',
       nameEn: 'Inactivated Polio Vaccine - Dose 1',
-      description: 'الجرعة الأولى من تطعيم شلل الأطفال الحقني - يُعطى مع الجرعة الثالثة من OPV',
+      description:
+          'الجرعة الأولى من تطعيم شلل الأطفال الحقني - يُعطى مع الجرعة الثالثة من OPV',
       dueWeeks: 14,
       doseNumber: 'الجرعة الأولى',
       route: 'intramuscular',
@@ -260,7 +277,8 @@ class VaccinationService {
       id: 'mr1',
       nameAr: 'الحصبة والحصبة الألمانية (MR) - الجرعة الأولى',
       nameEn: 'Measles-Rubella (MR) Dose 1',
-      description: 'الجرعة الأولى من تطعيم الحصبة والحصبة الألمانية - يحمي من مرض الحصبة الخطير والحصبة الألمانية',
+      description:
+          'الجرعة الأولى من تطعيم الحصبة والحصبة الألمانية - يحمي من مرض الحصبة الخطير والحصبة الألمانية',
       dueMonths: 9,
       doseNumber: 'الجرعة الأولى',
       route: 'subcutaneous',
@@ -269,13 +287,15 @@ class VaccinationService {
       iconEmoji: '🔴',
       sideEffects: ['حرارة بعد 5-12 يوم', 'طفح جلدي خفيف', 'ألم مكان الحقن'],
       contraindications: ['ضعف المناعة الشديد'],
-      notes: 'تطعيم مهم جداً! الحصبة خطيرة على الأطفال. يُعطى في عمر 9 أشهر. الحرارة بعد 5-12 يوم طبيعية',
+      notes:
+          'تطعيم مهم جداً! الحصبة خطيرة على الأطفال. يُعطى في عمر 9 أشهر. الحرارة بعد 5-12 يوم طبيعية',
     ),
     Vaccine(
       id: 'opv4',
       nameAr: 'شلل الأطفال الفموي - الجرعة الرابعة',
       nameEn: 'OPV4 - Oral Polio Vaccine Dose 4',
-      description: 'الجرعة الرابعة من تطعيم شلل الأطفال الفموي - تُعطى في عمر 9 أشهر مع تطعيم الحصبة',
+      description:
+          'الجرعة الرابعة من تطعيم شلل الأطفال الفموي - تُعطى في عمر 9 أشهر مع تطعيم الحصبة',
       dueMonths: 9,
       doseNumber: 'الجرعة الرابعة (OPV4)',
       route: 'oral',
@@ -301,7 +321,8 @@ class VaccinationService {
       iconEmoji: '🌟',
       sideEffects: ['لا توجد آثار جانبية شائعة'],
       contraindications: [],
-      notes: 'تُعطى في عمر 9 أشهر مع MR1. كبسولة زرقاء تحتوي على 100,000 وحدة دولية. الحد الأقصى: 5 سنوات',
+      notes:
+          'تُعطى في عمر 9 أشهر مع MR1. كبسولة زرقاء تحتوي على 100,000 وحدة دولية. الحد الأقصى: 5 سنوات',
     ),
 
     // ──────────── عمر 18 شهر ────────────
@@ -309,7 +330,8 @@ class VaccinationService {
       id: 'mr2',
       nameAr: 'الحصبة والحصبة الألمانية (MR) - الجرعة الثانية',
       nameEn: 'Measles-Rubella (MR) Dose 2',
-      description: 'الجرعة الثانية من تطعيم الحصبة والحصبة الألمانية - تكمل الحماية ضد المرضين',
+      description:
+          'الجرعة الثانية من تطعيم الحصبة والحصبة الألمانية - تكمل الحماية ضد المرضين',
       dueMonths: 18,
       doseNumber: 'الجرعة الثانية',
       route: 'subcutaneous',
@@ -318,13 +340,15 @@ class VaccinationService {
       iconEmoji: '🔴',
       sideEffects: ['حرارة بعد 5-12 يوم', 'ألم مفاصل خفيف (نادر)'],
       contraindications: ['ضعف المناعة الشديد'],
-      notes: 'الجرعة الثانية المكتملة - حماية كاملة ضد الحصبة والحصبة الألمانية. تُعطى في عمر 18 شهر',
+      notes:
+          'الجرعة الثانية المكتملة - حماية كاملة ضد الحصبة والحصبة الألمانية. تُعطى في عمر 18 شهر',
     ),
     Vaccine(
       id: 'penta4',
       nameAr: 'التطعيم الخماسي - الجرعة التعزيزية (Penta4)',
       nameEn: 'Pentavalent Booster (Penta4)',
-      description: 'جرعة تعزيزية من التطعيم الخماسي: الدفتيريا + الكزاز + السعال الديكي + الكبد B + المستديمة النزلية',
+      description:
+          'جرعة تعزيزية من التطعيم الخماسي: الدفتيريا + الكزاز + السعال الديكي + الكبد B + المستديمة النزلية',
       dueMonths: 18,
       doseNumber: 'جرعة تعزيزية',
       route: 'intramuscular',
@@ -333,13 +357,15 @@ class VaccinationService {
       iconEmoji: '💪',
       sideEffects: ['ألم مكان الحقن', 'حرارة'],
       contraindications: [],
-      notes: 'جرعة تعزيزية مهمة. تُعطى في عمر 18 شهر مع MR2 وOPV5. الحد الأقصى: 5 سنوات',
+      notes:
+          'جرعة تعزيزية مهمة. تُعطى في عمر 18 شهر مع MR2 وOPV5. الحد الأقصى: 5 سنوات',
     ),
     Vaccine(
       id: 'opv5',
       nameAr: 'شلل الأطفال الفموي - الجرعة الخامسة',
       nameEn: 'OPV5 - Oral Polio Vaccine Dose 5',
-      description: 'الجرعة الخامسة من تطعيم شلل الأطفال الفموي - جرعة معززة في عمر 18 شهر',
+      description:
+          'الجرعة الخامسة من تطعيم شلل الأطفال الفموي - جرعة معززة في عمر 18 شهر',
       dueMonths: 18,
       doseNumber: 'الجرعة الخامسة (OPV5)',
       route: 'oral',
@@ -354,7 +380,8 @@ class VaccinationService {
       id: 'vitA_3',
       nameAr: 'فيتامين أ - جرعة 18 شهر',
       nameEn: 'Vitamin A - 200,000 IU (18 months)',
-      description: 'كبسولة فيتامين أ (200,000 وحدة دولية) - تُعطى مع التطعيمات في عمر 18 شهر',
+      description:
+          'كبسولة فيتامين أ (200,000 وحدة دولية) - تُعطى مع التطعيمات في عمر 18 شهر',
       dueMonths: 18,
       doseNumber: 'جرعة واحدة (كبسولة حمراء)',
       route: 'oral',
@@ -363,7 +390,8 @@ class VaccinationService {
       iconEmoji: '🌟',
       sideEffects: ['لا توجد آثار جانبية شائعة'],
       contraindications: [],
-      notes: 'تُعطى في عمر 18 شهر مع Penta4 وMR2 وOPV5. كبسولة حمراء (200,000 وحدة دولية). الحد الأقصى: 5 سنوات',
+      notes:
+          'تُعطى في عمر 18 شهر مع Penta4 وMR2 وOPV5. كبسولة حمراء (200,000 وحدة دولية). الحد الأقصى: 5 سنوات',
     ),
 
     // ──────────── عمر 6 سنوات (عند الالتحاق بالمدرسة) ────────────
@@ -371,7 +399,8 @@ class VaccinationService {
       id: 'td_school',
       nameAr: 'الكزاز والخناق (Td) - جرعة المدرسة',
       nameEn: 'Td School Entry Booster',
-      description: 'جرعة تعزيزية من Td (الكزاز والخناق) عند دخول المدرسة — يحمي من الكزاز والخناق فقط (بدون السعال الديكي)',
+      description:
+          'جرعة تعزيزية من Td (الكزاز والخناق) عند دخول المدرسة — يحمي من الكزاز والخناق فقط (بدون السعال الديكي)',
       dueMonths: 72, // 6 years
       doseNumber: 'جرعة واحدة',
       route: 'intramuscular',
@@ -380,13 +409,15 @@ class VaccinationService {
       iconEmoji: '🏫',
       sideEffects: ['ألم مكان الحقن'],
       contraindications: [],
-      notes: 'Td وليس DTP! يُعطى عند دخول المدرسة (5-7 سنوات). الحد الأقصى: 7 سنوات',
+      notes:
+          'Td وليس DTP! يُعطى عند دخول المدرسة (5-7 سنوات). الحد الأقصى: 7 سنوات',
     ),
     Vaccine(
       id: 'mr_school',
       nameAr: 'الحصبة والحصبة الألمانية (MR) - جرعة المدرسة',
       nameEn: 'MR School Entry Booster',
-      description: 'جرعة معززة من تطعيم الحصبة والحصبة الألمانية عند دخول المدرسة',
+      description:
+          'جرعة معززة من تطعيم الحصبة والحصبة الألمانية عند دخول المدرسة',
       dueMonths: 72,
       doseNumber: 'جرعة معززة',
       route: 'subcutaneous',
@@ -395,13 +426,15 @@ class VaccinationService {
       iconEmoji: '🔴',
       sideEffects: ['حرارة بعد 5-12 يوم', 'ألم مكان الحقن'],
       contraindications: ['ضعف المناعة الشديد'],
-      notes: 'جرعة معززة عند دخول المدرسة لضمان المناعة ضد الحصبة والحصبة الألمانية',
+      notes:
+          'جرعة معززة عند دخول المدرسة لضمان المناعة ضد الحصبة والحصبة الألمانية',
     ),
     Vaccine(
       id: 'vitA_school',
       nameAr: 'فيتامين أ - جرعة 6 سنوات',
       nameEn: 'Vitamin A - 200,000 IU (6 years)',
-      description: 'كبسولة فيتامين أ (200,000 وحدة دولية) - تُعطى عند دخول المدرسة',
+      description:
+          'كبسولة فيتامين أ (200,000 وحدة دولية) - تُعطى عند دخول المدرسة',
       dueMonths: 72,
       doseNumber: 'جرعة واحدة (كبسولة حمراء)',
       route: 'oral',
@@ -457,7 +490,8 @@ class VaccinationService {
     }).toList();
   }
 
-  List<Vaccine> getOverdueVaccines(int weeks, int months, List<String> givenIds) {
+  List<Vaccine> getOverdueVaccines(
+      int weeks, int months, List<String> givenIds) {
     return allVaccines.where((v) {
       if (givenIds.contains(v.id)) return false;
       if (v.dueMonths > 0) return months >= v.dueMonths;
@@ -474,21 +508,25 @@ class VaccinationService {
       '14 أسبوع': allVaccines.where((v) => v.dueWeeks == 14).toList(),
       '9 أشهر': allVaccines.where((v) => v.dueMonths == 9).toList(),
       '18 شهر': allVaccines.where((v) => v.dueMonths == 18).toList(),
-      '5-7 سنوات (دخول المدرسة)': allVaccines.where((v) => v.dueMonths == 72).toList(),
+      '5-7 سنوات (دخول المدرسة)':
+          allVaccines.where((v) => v.dueMonths == 72).toList(),
     };
   }
 
   // ──── التطعيمات المتأخرة (overdue) ────────────
-  List<Vaccine> getOverdueVaccinesDetailed(int weeks, int months, List<String> givenIds) {
+  List<Vaccine> getOverdueVaccinesDetailed(
+      int weeks, int months, List<String> givenIds) {
     return allVaccines.where((v) {
       if (givenIds.contains(v.id)) return false;
-      if (v.dueMonths > 0) return months >= v.dueMonths + 2; // أكثر من شهرين تأخير
+      if (v.dueMonths > 0)
+        return months >= v.dueMonths + 2; // أكثر من شهرين تأخير
       return weeks >= v.dueWeeks + 4; // أكثر من 4 أسابيع تأخير
     }).toList();
   }
 
   // ──── التطعيمات المكتملة ────────────
-  List<Vaccine> getCompletedVaccines(int weeks, int months, List<String> givenIds) {
+  List<Vaccine> getCompletedVaccines(
+      int weeks, int months, List<String> givenIds) {
     return allVaccines.where((v) {
       if (!givenIds.contains(v.id)) return false;
       return true;

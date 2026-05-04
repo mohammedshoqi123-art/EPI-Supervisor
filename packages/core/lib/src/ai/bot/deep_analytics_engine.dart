@@ -9,16 +9,16 @@ import 'real_data_kb.dart';
 
 /// نوع التحليل العميق
 enum DeepAnalysisType {
-  riskAssessment,       // تقييم المخاطر
-  rootCauseAnalysis,    // تحليل السبب الجذري
-  trendPrediction,      // تنبؤ الاتجاهات
-  benchmarkComparison,  // مقارنة معيارية
-  supervisionAnalysis,  // تحليل إشرافي
-  coverageProjection,   // إسقاط التغطية
+  riskAssessment, // تقييم المخاطر
+  rootCauseAnalysis, // تحليل السبب الجذري
+  trendPrediction, // تنبؤ الاتجاهات
+  benchmarkComparison, // مقارنة معيارية
+  supervisionAnalysis, // تحليل إشرافي
+  coverageProjection, // إسقاط التغطية
   campaignOptimization, // تحسين الحملات
-  defaulterRisk,        // خطر التسرب
-  resourceAllocation,   // تخصيص الموارد
-  outbreakRisk,         // خطر الأوبئة
+  defaulterRisk, // خطر التسرب
+  resourceAllocation, // تخصيص الموارد
+  outbreakRisk, // خطر الأوبئة
 }
 
 /// نتيجة التحليل العميق
@@ -48,7 +48,6 @@ class DeepAnalysisResult {
 
 /// محرك التحليل والتنبؤ العميق
 class DeepAnalyticsEngine {
-
   // ══════════════════════════════════════════════════════════════════
   //  القسم ١: تقييم المخاطر
   // ══════════════════════════════════════════════════════════════════
@@ -148,14 +147,19 @@ class DeepAnalyticsEngine {
     buf.writeln('━━━━ التقييم الشامل ━━━━');
     buf.writeln('📊 مستوى المخاطر: $riskLevel');
 
-    final riskEmoji = riskLevel == 'حرج' ? '🔴' :
-                      riskLevel == 'مرتفع' ? '🟠' :
-                      riskLevel == 'متوسط' ? '🟡' : '🟢';
+    final riskEmoji = riskLevel == 'حرج'
+        ? '🔴'
+        : riskLevel == 'مرتفع'
+            ? '🟠'
+            : riskLevel == 'متوسط'
+                ? '🟡'
+                : '🟢';
     buf.writeln('$riskEmoji التصنيف: $riskLevel');
 
     return DeepAnalysisResult(
       title: 'تقييم مخاطر $governorate',
-      executiveSummary: 'مستوى المخاطر: $riskLevel — ${findings.length} نتائج رئيسية',
+      executiveSummary:
+          'مستوى المخاطر: $riskLevel — ${findings.length} نتائج رئيسية',
       detailedAnalysis: buf.toString(),
       keyFindings: findings,
       recommendations: recs,
@@ -187,10 +191,12 @@ class DeepAnalyticsEngine {
     final lastPolioRate = polioRates.last;
 
     final avgMr1 = coverageByGov.isNotEmpty
-        ? coverageByGov.map((c) => c.mr1Coverage).reduce((a, b) => a + b) / coverageByGov.length
+        ? coverageByGov.map((c) => c.mr1Coverage).reduce((a, b) => a + b) /
+            coverageByGov.length
         : 82.0;
     final avgPenta3 = coverageByGov.isNotEmpty
-        ? coverageByGov.map((c) => c.penta3Coverage).reduce((a, b) => a + b) / coverageByGov.length
+        ? coverageByGov.map((c) => c.penta3Coverage).reduce((a, b) => a + b) /
+            coverageByGov.length
         : 85.0;
 
     // السيناريو المتفائل
@@ -203,7 +209,8 @@ class DeepAnalyticsEngine {
 
     // السيناريو الأكثر احتمالاً
     buf.writeln('━━━━ السيناريو الأكثر احتمالاً (تحسن 2-3% سنوياً) ━━━━');
-    buf.writeln('💉 شلل الأطفال: ${(lastPolioRate + improvementPerRound).toStringAsFixed(0)}%');
+    buf.writeln(
+        '💉 شلل الأطفال: ${(lastPolioRate + improvementPerRound).toStringAsFixed(0)}%');
     buf.writeln('💉 MR1: ${(avgMr1 + 3).toStringAsFixed(0)}%');
     buf.writeln('💉 Penta3: ${(avgPenta3 + 2.5).toStringAsFixed(0)}%');
     buf.writeln('📊 الشروط: استمرار الوضع الحالي مع تحسين تدريجي');
@@ -233,7 +240,8 @@ class DeepAnalyticsEngine {
 
     return DeepAnalysisResult(
       title: 'تنبؤات التغطية مع السيناريوهات',
-      executiveSummary: 'السيناريو الأكثر احتمالاً: تحسن 2-3% — يحتاج 5-8 سنوات للهدف',
+      executiveSummary:
+          'السيناريو الأكثر احتمالاً: تحسن 2-3% — يحتاج 5-8 سنوات للهدف',
       detailedAnalysis: buf.toString(),
       keyFindings: findings,
       recommendations: recs,
@@ -263,9 +271,13 @@ class DeepAnalyticsEngine {
 
     buf.writeln('━━━━ ترتيب المحافظات حسب تغطية شلل الأطفال ━━━━');
     for (int i = 0; i < sorted.length; i++) {
-      final emoji = sorted[i].coverage >= 100 ? '🟢' :
-                    sorted[i].coverage >= 95 ? '🟡' : '🔴';
-      buf.writeln('  ${i + 1}. $emoji ${sorted[i].name}: ${sorted[i].coverage}% — ${sorted[i].rating}');
+      final emoji = sorted[i].coverage >= 100
+          ? '🟢'
+          : sorted[i].coverage >= 95
+              ? '🟡'
+              : '🔴';
+      buf.writeln(
+          '  ${i + 1}. $emoji ${sorted[i].name}: ${sorted[i].coverage}% — ${sorted[i].rating}');
     }
     buf.writeln('');
 
@@ -281,7 +293,8 @@ class DeepAnalyticsEngine {
     buf.writeln('');
 
     if (gap > 20) {
-      buf.writeln('⚠️ فجوة كبيرة! تدل على تفاوت كبير في الوصول والبنية التحتية');
+      buf.writeln(
+          '⚠️ فجوة كبيرة! تدل على تفاوت كبير في الوصول والبنية التحتية');
       findings.add('فجوة ${gap.toStringAsFixed(0)} نقطة بين الأعلى والأدنى');
       recs.add('نقل أفضل الممارسات من ${best.name} إلى المحافظات المتدنية');
     }
@@ -292,10 +305,14 @@ class DeepAnalyticsEngine {
       ..sort((a, b) => b.mr1Coverage.compareTo(a.mr1Coverage));
 
     for (final cov in sortedRoutine) {
-      final emoji = cov.mr1Coverage >= 90 ? '🟢' :
-                    cov.mr1Coverage >= 80 ? '🟡' : '🔴';
+      final emoji = cov.mr1Coverage >= 90
+          ? '🟢'
+          : cov.mr1Coverage >= 80
+              ? '🟡'
+              : '🔴';
       final dropout = cov.penta1Coverage - cov.penta3Coverage;
-      buf.writeln('  $emoji ${cov.governorate}: MR1=${cov.mr1Coverage}% | تسرب=${dropout.toStringAsFixed(1)}%');
+      buf.writeln(
+          '  $emoji ${cov.governorate}: MR1=${cov.mr1Coverage}% | تسرب=${dropout.toStringAsFixed(1)}%');
     }
 
     findings.add('المكلا: أدنى تغطية روتينية (MR1=68%)');
@@ -305,7 +322,8 @@ class DeepAnalyticsEngine {
 
     return DeepAnalysisResult(
       title: 'المقارنة المعيارية بين المحافظات',
-      executiveSummary: 'فجوة ${gap.toStringAsFixed(0)} نقطة بين الأعلى والأدنى — تحسين مطلوب',
+      executiveSummary:
+          'فجوة ${gap.toStringAsFixed(0)} نقطة بين الأعلى والأدنى — تحسين مطلوب',
       detailedAnalysis: buf.toString(),
       keyFindings: findings,
       recommendations: recs,
@@ -340,7 +358,9 @@ class DeepAnalyticsEngine {
       for (final gov in campaign.governorates.values) {
         if (gov.coverage < 90 && !highPriority.contains(gov.name)) {
           highPriority.add(gov.name);
-        } else if (gov.coverage >= 90 && gov.coverage < 95 && !mediumPriority.contains(gov.name)) {
+        } else if (gov.coverage >= 90 &&
+            gov.coverage < 95 &&
+            !mediumPriority.contains(gov.name)) {
           mediumPriority.add(gov.name);
         }
       }
@@ -360,10 +380,13 @@ class DeepAnalyticsEngine {
     // تحليل النشاط الإيصالي
     buf.writeln('━━━━ تحليل النشاط الإيصالي ━━━━');
     for (final phase in siaData) {
-      buf.writeln('📅 ${phase.phase}: ${phase.totalSessions} جلسة | ${phase.totalWorkers} عامل');
-      final zeroSessionGovs = phase.governorates.values.where((g) => g.sessions == 0).toList();
+      buf.writeln(
+          '📅 ${phase.phase}: ${phase.totalSessions} جلسة | ${phase.totalWorkers} عامل');
+      final zeroSessionGovs =
+          phase.governorates.values.where((g) => g.sessions == 0).toList();
       if (zeroSessionGovs.isNotEmpty) {
-        buf.writeln('   ⚠️ محافظات بلا جلسات: ${zeroSessionGovs.map((g) => g.name).join("، ")}');
+        buf.writeln(
+            '   ⚠️ محافظات بلا جلسات: ${zeroSessionGovs.map((g) => g.name).join("، ")}');
       }
     }
     buf.writeln('');
@@ -390,7 +413,8 @@ class DeepAnalyticsEngine {
 
     return DeepAnalysisResult(
       title: 'تحليل احتياجات الإشراف الداعم',
-      executiveSummary: '${highPriority.length} محافظات بأولوية قصوى — خطة إشرافية مقترحة',
+      executiveSummary:
+          '${highPriority.length} محافظات بأولوية قصوى — خطة إشرافية مقترحة',
       detailedAnalysis: buf.toString(),
       keyFindings: findings,
       recommendations: recs,
@@ -421,7 +445,8 @@ class DeepAnalyticsEngine {
       buf.writeln('🔴 محافظات معرضة لتفشي الحصبة:');
       for (final gov in lowMr1Govs) {
         final gap = 95 - gov.mr1Coverage;
-        buf.writeln('   ❌ ${gov.governorate}: MR1=${gov.mr1Coverage}% (نحتاج +${gap.toStringAsFixed(0)}%)');
+        buf.writeln(
+            '   ❌ ${gov.governorate}: MR1=${gov.mr1Coverage}% (نحتاج +${gap.toStringAsFixed(0)}%)');
       }
       findings.add('${lowMr1Govs.length} محافظات معرضة لتفشي الحصبة');
       recs.add('حملات تحصين تكميلية ضد الحصبة في المحافظات المتدنية');
@@ -455,7 +480,8 @@ class DeepAnalyticsEngine {
     // التقييم الشامل
     buf.writeln('');
     buf.writeln('━━━━ التقييم الشامل ━━━━');
-    final overallRisk = lowMr1Govs.length >= 3 || lowPolioGovs.length >= 3 ? 'مرتفع' : 'متوسط';
+    final overallRisk =
+        lowMr1Govs.length >= 3 || lowPolioGovs.length >= 3 ? 'مرتفع' : 'متوسط';
     buf.writeln('📊 مستوى المخاطر العام: $overallRisk');
     buf.writeln('💉 الأمراض ذات الأولوية: الحصبة > شلل الأطفال > الكزاز');
 
@@ -499,13 +525,17 @@ class DeepAnalyticsEngine {
 
     // المحافظات التي تحتاج تحسين
     final weakGovs = lastCampaign.governorates.values
-        .where((g) => g.coverage < 95).toList()
+        .where((g) => g.coverage < 95)
+        .toList()
       ..sort((a, b) => a.coverage.compareTo(b.coverage));
 
     buf.writeln('━━━━ المحافظات ذات الأولوية ━━━━');
     for (final gov in weakGovs) {
-      final needed = ((95 - gov.coverage) / 100 * gov.vaccinated / gov.coverage * 100).toInt();
-      buf.writeln('  ❌ ${gov.name}: ${gov.coverage}% — يحتاج ~$needed طفل إضافي للهدف');
+      final needed =
+          ((95 - gov.coverage) / 100 * gov.vaccinated / gov.coverage * 100)
+              .toInt();
+      buf.writeln(
+          '  ❌ ${gov.name}: ${gov.coverage}% — يحتاج ~$needed طفل إضافي للهدف');
     }
     buf.writeln('');
 
@@ -526,7 +556,8 @@ class DeepAnalyticsEngine {
 
     return DeepAnalysisResult(
       title: 'تحسين الحملة القادمة',
-      executiveSummary: 'التركيز على ${weakGovs.length} محافظات متدنية + مراجعة المستهدفين',
+      executiveSummary:
+          'التركيز على ${weakGovs.length} محافظات متدنية + مراجعة المستهدفين',
       detailedAnalysis: buf.toString(),
       recommendations: recs,
       actionItems: actions,
@@ -569,8 +600,13 @@ class DeepAnalyticsEngine {
       ..sort((a, b) => b.value.compareTo(a.value));
 
     for (final entry in sortedEff) {
-      final emoji = entry.value > 0.3 ? '🟢' : entry.value > 0.2 ? '🟡' : '🔴';
-      buf.writeln('  $emoji ${entry.key}: ${entry.value.toStringAsFixed(2)} جلسة/عامل');
+      final emoji = entry.value > 0.3
+          ? '🟢'
+          : entry.value > 0.2
+              ? '🟡'
+              : '🔴';
+      buf.writeln(
+          '  $emoji ${entry.key}: ${entry.value.toStringAsFixed(2)} جلسة/عامل');
     }
     buf.writeln('');
 
@@ -586,7 +622,8 @@ class DeepAnalyticsEngine {
 
     return DeepAnalysisResult(
       title: 'تخصيص الموارد',
-      executiveSummary: 'إعادة توزيع الكوادر حسب الكفاءة — تركيز على المحافظات المتدنية',
+      executiveSummary:
+          'إعادة توزيع الكوادر حسب الكفاءة — تركيز على المحافظات المتدنية',
       detailedAnalysis: buf.toString(),
       recommendations: recs,
       type: DeepAnalysisType.resourceAllocation,
@@ -601,12 +638,19 @@ class DeepAnalyticsEngine {
 
   /// تحليل استفسار المستخدم وتحديد نوع التحليل المطلوب
   static DeepAnalysisResult? analyzeQuery(String query) {
-    final norm = query.toLowerCase()
-        .replaceAll('أ', 'ا').replaceAll('إ', 'ا').replaceAll('آ', 'ا')
-        .replaceAll('ة', 'ه').replaceAll('ى', 'ي');
+    final norm = query
+        .toLowerCase()
+        .replaceAll('أ', 'ا')
+        .replaceAll('إ', 'ا')
+        .replaceAll('آ', 'ا')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ى', 'ي');
 
     // تقييم المخاطر
-    if (norm.contains('خطر') || norm.contains('مخاطر') || norm.contains('تقييم') || norm.contains('تحليل مخاطر')) {
+    if (norm.contains('خطر') ||
+        norm.contains('مخاطر') ||
+        norm.contains('تقييم') ||
+        norm.contains('تحليل مخاطر')) {
       // هل حدد محافظة؟
       for (final campaign in polioCampaignsData) {
         for (final gov in campaign.governorates.keys) {
@@ -620,32 +664,52 @@ class DeepAnalyticsEngine {
     }
 
     // تحليل إشرافي
-    if (norm.contains('اشراف') || norm.contains('زياره اشرافي') || norm.contains('خطة اشراف') || norm.contains('احتياج اشراف')) {
+    if (norm.contains('اشراف') ||
+        norm.contains('زياره اشرافي') ||
+        norm.contains('خطة اشراف') ||
+        norm.contains('احتياج اشراف')) {
       return analyzeSupervisionNeeds();
     }
 
     // تحسين الحملات
-    if (norm.contains('تحسين حمل') || norm.contains('حمل قادم') || norm.contains('تخطيط حمل') || norm.contains('اقتراح حمل')) {
+    if (norm.contains('تحسين حمل') ||
+        norm.contains('حمل قادم') ||
+        norm.contains('تخطيط حمل') ||
+        norm.contains('اقتراح حمل')) {
       return optimizeNextCampaign();
     }
 
     // تخصيص الموارد
-    if (norm.contains('تخصيص مورد') || norm.contains('كوادر') || norm.contains('توزيع عامل') || norm.contains('كفاءه')) {
+    if (norm.contains('تخصيص مورد') ||
+        norm.contains('كوادر') ||
+        norm.contains('توزيع عامل') ||
+        norm.contains('كفاءه')) {
       return allocateResources();
     }
 
     // تنبؤات متقدمة
-    if (norm.contains('سيناريو') || norm.contains('تنبؤ متقدم') || norm.contains('توقعات') || norm.contains('اسقاط')) {
+    if (norm.contains('سيناريو') ||
+        norm.contains('تنبؤ متقدم') ||
+        norm.contains('توقعات') ||
+        norm.contains('اسقاط')) {
       return predictCoverageWithScenarios();
     }
 
     // مقارنة معيارية
-    if (norm.contains('مقارنه معيار') || norm.contains('بنشمارك') || norm.contains('ترتيب محافظ') || norm.contains('افضل محافظ') || norm.contains('اقوى محافظ')) {
+    if (norm.contains('مقارنه معيار') ||
+        norm.contains('بنشمارك') ||
+        norm.contains('ترتيب محافظ') ||
+        norm.contains('افضل محافظ') ||
+        norm.contains('اقوى محافظ')) {
       return benchmarkGovernorates();
     }
 
     // مخاطر الأوبئة
-    if (norm.contains('وباء') || norm.contains('فاشي') || norm.contains('تفش') || norm.contains('خطر مرض') || norm.contains('حصبه خطر')) {
+    if (norm.contains('وباء') ||
+        norm.contains('فاشي') ||
+        norm.contains('تفش') ||
+        norm.contains('خطر مرض') ||
+        norm.contains('حصبه خطر')) {
       return assessOutbreakRisk();
     }
 
@@ -657,12 +721,15 @@ class DeepAnalyticsEngine {
     final lastPolio = polioCampaignsData.last;
     final lastSia = siaData.last;
     final avgMr1 = coverageByGov.isNotEmpty
-        ? coverageByGov.map((c) => c.mr1Coverage).reduce((a, b) => a + b) / coverageByGov.length
+        ? coverageByGov.map((c) => c.mr1Coverage).reduce((a, b) => a + b) /
+            coverageByGov.length
         : 82.0;
 
     // حساب المحافظات المتدنية
     final weakGovs = lastPolio.governorates.values
-        .where((g) => g.coverage < 95).map((g) => g.name).toList();
+        .where((g) => g.coverage < 95)
+        .map((g) => g.name)
+        .toList();
 
     return '📋 الإحاطة التنفيذية:\n\n'
         '━━━━ الوضع الحالي ━━━━\n'
@@ -684,9 +751,9 @@ class DeepAnalyticsEngine {
 
   static String _fmt(int n) {
     return n.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},',
-    );
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},',
+        );
   }
 
   static String _worstRisk(String current, String newRisk) {

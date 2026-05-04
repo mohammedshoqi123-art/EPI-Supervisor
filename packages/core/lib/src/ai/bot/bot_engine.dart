@@ -60,7 +60,8 @@ class BotEngine {
     _isAIEnabled = enabled;
   }
 
-  Future<void> initializeAI(String apiKey, {String? baseUrl, String? model}) async {
+  Future<void> initializeAI(String apiKey,
+      {String? baseUrl, String? model}) async {
     BotLLMService.configure(
       apiKey: apiKey,
       baseUrl: baseUrl,
@@ -167,10 +168,12 @@ class BotEngine {
   void _sendMessageToAI(String text) async {
     _isAILoading = true;
     try {
-      final history = _messages.map((m) => {
-        'role': m.isBot ? 'assistant' : 'user',
-        'content': m.text,
-      }).toList();
+      final history = _messages
+          .map((m) => {
+                'role': m.isBot ? 'assistant' : 'user',
+                'content': m.text,
+              })
+          .toList();
 
       final response = await BotLLMService.sendMessage(
         userMessage: text,
@@ -184,7 +187,8 @@ class BotEngine {
         _ctx.lastTopic = _extractTopicFromMessage(text);
         _record('ai_response', text);
 
-        final suggestions = BotLLMService.generateQuickReplySuggestions(text, response.text);
+        final suggestions =
+            BotLLMService.generateQuickReplySuggestions(text, response.text);
         final quickReplies = suggestions.map((s) {
           return BotQuickReply(text: s, emoji: _getEmojiForSuggestion(s));
         }).toList();
@@ -203,10 +207,12 @@ class BotEngine {
 
   Future<BotMessage> _sendMessageToAIAsync(String text) async {
     try {
-      final history = _messages.map((m) => {
-        'role': m.isBot ? 'assistant' : 'user',
-        'content': m.text,
-      }).toList();
+      final history = _messages
+          .map((m) => {
+                'role': m.isBot ? 'assistant' : 'user',
+                'content': m.text,
+              })
+          .toList();
 
       final response = await BotLLMService.sendMessage(
         userMessage: text,
@@ -218,7 +224,8 @@ class BotEngine {
         _ctx.lastTopic = _extractTopicFromMessage(text);
         _record('ai_response', text);
 
-        final suggestions = BotLLMService.generateQuickReplySuggestions(text, response.text);
+        final suggestions =
+            BotLLMService.generateQuickReplySuggestions(text, response.text);
         final quickReplies = suggestions.map((s) {
           return BotQuickReply(text: s, emoji: _getEmojiForSuggestion(s));
         }).toList();
@@ -261,11 +268,19 @@ class BotEngine {
   String _extractTopicFromMessage(String text) {
     final norm = SmartNLP.normalize(text);
     final topicKeywords = {
-      'تطعيم': 'التطعيمات', 'لقاح': 'اللقاحات', 'تحصين': 'التحصين',
-      'اثار': 'الآثار الجانبية', 'جانبي': 'الآثار الجانبية',
-      'حصبه': 'الحصبة', 'شلل': 'شلل الأطفال', 'خماسي': 'الخماسي',
-      'رئوي': 'التطعيم الرئوي', 'روتا': 'الروتا', 'bcg': 'BCG',
-      'اشراف': 'الإشراف الداعم', 'وسيط': 'إدارة المستوى الوسيط',
+      'تطعيم': 'التطعيمات',
+      'لقاح': 'اللقاحات',
+      'تحصين': 'التحصين',
+      'اثار': 'الآثار الجانبية',
+      'جانبي': 'الآثار الجانبية',
+      'حصبه': 'الحصبة',
+      'شلل': 'شلل الأطفال',
+      'خماسي': 'الخماسي',
+      'رئوي': 'التطعيم الرئوي',
+      'روتا': 'الروتا',
+      'bcg': 'BCG',
+      'اشراف': 'الإشراف الداعم',
+      'وسيط': 'إدارة المستوى الوسيط',
     };
     for (final entry in topicKeywords.entries) {
       if (norm.contains(entry.key)) return entry.value;
@@ -308,7 +323,9 @@ class BotEngine {
     }
 
     // الإحاطة التنفيذية
-    if (norm.contains('احاطه تنفيذ') || norm.contains('ملخص تنفيذ') || norm.contains('تقرير شامل')) {
+    if (norm.contains('احاطه تنفيذ') ||
+        norm.contains('ملخص تنفيذ') ||
+        norm.contains('تقرير شامل')) {
       _ctx.lastTopic = 'الإحاطة التنفيذية';
       return BotResponse(DeepAnalyticsEngine.getExecutiveBriefing(), [
         const BotQuickReply(text: 'تقييم المخاطر', emoji: '🎯'),
@@ -334,7 +351,9 @@ class BotEngine {
     if (realDataResp != null) return realDataResp;
 
     // الوضع الحالي
-    if (norm.contains('وضع حالي') || norm.contains('احصائيات') || norm.contains('اخر ارقام')) {
+    if (norm.contains('وضع حالي') ||
+        norm.contains('احصائيات') ||
+        norm.contains('اخر ارقام')) {
       _ctx.lastTopic = 'الوضع الحالي';
       return BotResponse(AnalyticsEngine.getQuickStatus(), [
         const BotQuickReply(text: 'تحليل الحملات', emoji: '📊'),
@@ -344,7 +363,8 @@ class BotEngine {
 
     // الشكر
     if (SmartNLP.isThanking(norm)) {
-      return BotResponse('العفو! 😊 أي سؤال ثاني عن التحصين أنا موجود!', _welcomeReplies());
+      return BotResponse(
+          'العفو! 😊 أي سؤال ثاني عن التحصين أنا موجود!', _welcomeReplies());
     }
 
     // معالجة مباشرة
@@ -357,7 +377,8 @@ class BotEngine {
       return _handleCompoundQuestions(parts, norm);
     }
 
-    final intent = SmartNLP.detectIntent(norm, previousIntent: _ctx.lastTopic, lastTopic: _ctx.lastTopic);
+    final intent = SmartNLP.detectIntent(norm,
+        previousIntent: _ctx.lastTopic, lastTopic: _ctx.lastTopic);
     _ctx.extractEntities(norm);
 
     if (intent == 'greeting') return _handleGreeting(norm);
@@ -366,7 +387,8 @@ class BotEngine {
     if (clar.needs) {
       _ctx.awaitingClarification = true;
       _ctx.clarificationContext = intent;
-      return BotResponse(clar.question, clar.options.map((o) => BotQuickReply(text: o, emoji: '❓')).toList());
+      return BotResponse(clar.question,
+          clar.options.map((o) => BotQuickReply(text: o, emoji: '❓')).toList());
     }
 
     if (_ctx.awaitingClarification) {
@@ -382,33 +404,50 @@ class BotEngine {
 
     // معالجة حسب النية
     switch (intent) {
-      case 'age_query': return _handleAge(norm);
-      case 'vaccine_list': return _handleVaccineList();
-      case 'side_effects': return _handleSideEffects(norm);
-      case 'emergency': return _handleEmergency(norm);
-      case 'location': return _handleLocation();
-      case 'cost': return _handleCost();
-      case 'campaigns': return _handleCampaigns();
-      case 'myths': return _handleMyths(norm);
-      case 'special_cases': return _handleSpecialCases(norm);
-      case 'nutrition': return _handleNutrition(norm);
-      case 'cold_chain': return _handleColdChain(norm);
-      case 'supervision': return _handleSupportiveSupervision(norm);
-      case 'management': return _handleIntermediateManagement(norm);
-      case 'reminder': return _handleReminder(norm);
-      case 'diseases': return _handleDiseases(norm);
-      case 'child_sick': return _handleChildSick(norm);
-      default: break;
+      case 'age_query':
+        return _handleAge(norm);
+      case 'vaccine_list':
+        return _handleVaccineList();
+      case 'side_effects':
+        return _handleSideEffects(norm);
+      case 'emergency':
+        return _handleEmergency(norm);
+      case 'location':
+        return _handleLocation();
+      case 'cost':
+        return _handleCost();
+      case 'campaigns':
+        return _handleCampaigns();
+      case 'myths':
+        return _handleMyths(norm);
+      case 'special_cases':
+        return _handleSpecialCases(norm);
+      case 'nutrition':
+        return _handleNutrition(norm);
+      case 'cold_chain':
+        return _handleColdChain(norm);
+      case 'supervision':
+        return _handleSupportiveSupervision(norm);
+      case 'management':
+        return _handleIntermediateManagement(norm);
+      case 'reminder':
+        return _handleReminder(norm);
+      case 'diseases':
+        return _handleDiseases(norm);
+      case 'child_sick':
+        return _handleChildSick(norm);
+      default:
+        break;
     }
 
     // بحث ذكي
     final found = _smartSearch(norm);
     if (found != null) {
       _ctx.lastTopic = found;
-      final content = _kb[found]
-          ?? advancedImmunizationKB[found]
-          ?? intermediateManagementKB[found]
-          ?? 'عذراً، لا تتوفر معلومات حالياً';
+      final content = _kb[found] ??
+          advancedImmunizationKB[found] ??
+          intermediateManagementKB[found] ??
+          'عذراً، لا تتوفر معلومات حالياً';
       return BotResponse(content, _ctxReplies(found));
     }
 
@@ -418,8 +457,10 @@ class BotEngine {
   // ═══ المعالجات ═══
 
   BotResponse? _handleDirectInput(String norm, String raw) {
-    if (norm.contains('تطعيمات طفلي') || norm.contains('تطعيمات الطفل') ||
-        norm.contains('وش تطعيمات') || norm.contains('ايش تطعيمات')) {
+    if (norm.contains('تطعيمات طفلي') ||
+        norm.contains('تطعيمات الطفل') ||
+        norm.contains('وش تطعيمات') ||
+        norm.contains('ايش تطعيمات')) {
       if (_ctx.child.hasBasicInfo) return _handleAge(norm);
       _ctx.awaitingClarification = true;
       _ctx.clarificationContext = 'age_query';
@@ -431,13 +472,18 @@ class BotEngine {
       ]);
     }
 
-    if (norm.contains('الاثار الجانبيه') || norm.contains('الآثار الجانبية') ||
-        norm.contains('وش الآثار') || norm.contains('ايش الآثار')) {
+    if (norm.contains('الاثار الجانبيه') ||
+        norm.contains('الآثار الجانبية') ||
+        norm.contains('وش الآثار') ||
+        norm.contains('ايش الآثار')) {
       _ctx.lastTopic = 'آثار جانبية';
       return BotResponse(_kb['آثار جانبية'] ?? '', _ctxReplies('side_effects'));
     }
 
-    if (norm.contains('مجاني') || norm.contains('هل مجاني') || norm.contains('مجانا') || norm.contains('بلاش')) {
+    if (norm.contains('مجاني') ||
+        norm.contains('هل مجاني') ||
+        norm.contains('مجانا') ||
+        norm.contains('بلاش')) {
       _ctx.lastTopic = 'مجاناً';
       return BotResponse(_kb['مجاناً'] ?? '', [
         const BotQuickReply(text: 'وين أطعم؟', emoji: '📍'),
@@ -445,7 +491,9 @@ class BotEngine {
       ]);
     }
 
-    if (norm.contains('اوتيزم') || norm.contains('هل يسبب اوتيزم') || norm.contains('توحد')) {
+    if (norm.contains('اوتيزم') ||
+        norm.contains('هل يسبب اوتيزم') ||
+        norm.contains('توحد')) {
       _ctx.lastTopic = 'التطعيم والتوحد';
       return BotResponse(_kb['التطعيم والتوحد'] ?? '', _ctxReplies('myths'));
     }
@@ -455,23 +503,35 @@ class BotEngine {
       return BotResponse(_kb['التطعيم والعقم'] ?? '', _ctxReplies('myths'));
     }
 
-    if (norm.contains('الاشراف الداعم') || norm.contains('اشراف داعم') || norm.contains('إشراف داعم')) {
+    if (norm.contains('الاشراف الداعم') ||
+        norm.contains('اشراف داعم') ||
+        norm.contains('إشراف داعم')) {
       return _handleSupportiveSupervision(norm);
     }
 
-    if (norm.contains('المستوى الوسيط') || norm.contains('اداره المستوى') || norm.contains('مدير مكتب')) {
+    if (norm.contains('المستوى الوسيط') ||
+        norm.contains('اداره المستوى') ||
+        norm.contains('مدير مكتب')) {
       return _handleIntermediateManagement(norm);
     }
 
-    if (norm.contains('مؤشرات اداء') || norm.contains('kpi') || norm.contains('مؤشرات')) {
+    if (norm.contains('مؤشرات اداء') ||
+        norm.contains('kpi') ||
+        norm.contains('مؤشرات')) {
       return _handleIntermediateManagement(norm);
     }
 
-    if (norm.contains('حمل') || norm.contains('nids') || norm.contains('تطعيم לאומי') || norm.contains('حملات')) {
+    if (norm.contains('حمل') ||
+        norm.contains('nids') ||
+        norm.contains('تطعيم לאומי') ||
+        norm.contains('حملات')) {
       return _handleCampaigns();
     }
 
-    if (norm.contains('وباء') || norm.contains('استجابة') || norm.contains('فاشيه') || norm.contains('outbreak')) {
+    if (norm.contains('وباء') ||
+        norm.contains('استجابة') ||
+        norm.contains('فاشيه') ||
+        norm.contains('outbreak')) {
       return _handleOutbreakResponse(norm);
     }
 
@@ -496,15 +556,22 @@ class BotEngine {
     }
 
     // جدول التحصين
-    if (norm.contains('جدول التحصين') || norm.contains('جدول التطعيم') || norm.contains('كل التطعيمات')) {
+    if (norm.contains('جدول التحصين') ||
+        norm.contains('جدول التطعيم') ||
+        norm.contains('كل التطعيمات')) {
       _ctx.lastTopic = 'جدول التحصين';
-      return BotResponse(_kb['جدول التحصين لدون العام'] ?? _kb['متى أطعم'] ?? '', _ctxReplies('vaccine_list'));
+      return BotResponse(
+          _kb['جدول التحصين لدون العام'] ?? _kb['متى أطعم'] ?? '',
+          _ctxReplies('vaccine_list'));
     }
 
     // مبتسرين
-    if (norm.contains('مبتسرين') || norm.contains('خديج') || norm.contains('مبتسر')) {
+    if (norm.contains('مبتسرين') ||
+        norm.contains('خديج') ||
+        norm.contains('مبتسر')) {
       _ctx.lastTopic = 'للأطفال المبتسرين';
-      return BotResponse(_kb['للأطفال المبتسرين'] ?? '', _ctxReplies('special'));
+      return BotResponse(
+          _kb['للأطفال المبتسرين'] ?? '', _ctxReplies('special'));
     }
 
     // حوامل
@@ -516,13 +583,15 @@ class BotEngine {
     // HIV
     if (norm.contains('hiv') || norm.contains('ايدز')) {
       _ctx.lastTopic = 'HIV';
-      return BotResponse(_kb['تطعيم الأطفال المصابين بـ HIV'] ?? '', _ctxReplies('special'));
+      return BotResponse(
+          _kb['تطعيم الأطفال المصابين بـ HIV'] ?? '', _ctxReplies('special'));
     }
 
     // سكر
     if (norm.contains('سكر') && !norm.contains('ما ي')) {
       _ctx.lastTopic = 'سكري';
-      return BotResponse(_kb['الأطفال المصابين بالسكري'] ?? '', _ctxReplies('special'));
+      return BotResponse(
+          _kb['الأطفال المصابين بالسكري'] ?? '', _ctxReplies('special'));
     }
 
     // متى التطعيم
@@ -532,7 +601,9 @@ class BotEngine {
     }
 
     // سلسلة التبريد
-    if (norm.contains('السلسله البارده') || norm.contains('سلسلة التبريد') || norm.contains('التبريد')) {
+    if (norm.contains('السلسله البارده') ||
+        norm.contains('سلسلة التبريد') ||
+        norm.contains('التبريد')) {
       _ctx.lastTopic = 'سلسلة التبريد';
       return BotResponse(_kb['سلسلة التبريد'] ?? '', _ctxReplies('cold_chain'));
     }
@@ -553,7 +624,8 @@ class BotEngine {
       final w = _ctx.child.ageWeeks!;
       final due = VaccinationService().getVaccinesDueAtAge(w, m);
       final upcoming = VaccinationService().getUpcomingVaccines(w, m);
-      final overdue = VaccinationService().getOverdueVaccines(w, m, _ctx.child.givenVaccines);
+      final overdue = VaccinationService()
+          .getOverdueVaccines(w, m, _ctx.child.givenVaccines);
 
       final buf = StringBuffer();
       buf.writeln('📅 عمر طفلك: ${_ctx.child.ageDisplay}');
@@ -575,7 +647,8 @@ class BotEngine {
 
       if (upcoming.isNotEmpty) {
         buf.writeln('\n⏰ التطعيمات القادمة:');
-        for (final v in upcoming) buf.writeln('  📋 ${v.iconEmoji} ${v.nameAr}');
+        for (final v in upcoming)
+          buf.writeln('  📋 ${v.iconEmoji} ${v.nameAr}');
       }
 
       if (due.isEmpty && upcoming.isEmpty) {
@@ -583,7 +656,8 @@ class BotEngine {
       }
 
       if (overdue.isNotEmpty) {
-        buf.writeln('\n🚨 ⚡ مهم: عندك ${overdue.length} تطعيمات متأخرة! روح المركز الصحي اليوم!');
+        buf.writeln(
+            '\n🚨 ⚡ مهم: عندك ${overdue.length} تطعيمات متأخرة! روح المركز الصحي اليوم!');
       }
 
       _ctx.lastTopic = 'عمر الطفل';
@@ -613,7 +687,8 @@ class BotEngine {
       for (final v in e.value) buf.writeln('  ${v.iconEmoji} ${v.nameAr}');
       buf.writeln('');
     }
-    buf.writeln('📊 المجموع: ${VaccinationService.allVaccines.length} تطعيم ضد 11 مرض\n💡 اكتب عمر طفلك لمعرفة تطعيماته!');
+    buf.writeln(
+        '📊 المجموع: ${VaccinationService.allVaccines.length} تطعيم ضد 11 مرض\n💡 اكتب عمر طفلك لمعرفة تطعيماته!');
     _ctx.lastTopic = 'جدول التطعيم';
     return BotResponse(buf.toString(), [
       const BotQuickReply(text: 'عمره 6 أشهر', emoji: '📅'),
@@ -633,28 +708,45 @@ class BotEngine {
               : '✅ حرارة خفيفة — طبيعية بعد التطعيم';
       return BotResponse(
         '🌡️ حرارة طفلك: ${temp}°\n$urgency\n\n${_kb['حرارة بعد التطعيم'] ?? ''}',
-        [const BotQuickReply(text: 'متى أخاف؟', emoji: '🚨'), const BotQuickReply(text: 'متى أروح للطبيب؟', emoji: '🏥')],
+        [
+          const BotQuickReply(text: 'متى أخاف؟', emoji: '🚨'),
+          const BotQuickReply(text: 'متى أروح للطبيب؟', emoji: '🏥')
+        ],
       );
     }
 
-    if (n.contains('حراره') || n.contains('سخون') || n.contains('يسخن') || n.contains('حمى')) {
+    if (n.contains('حراره') ||
+        n.contains('سخون') ||
+        n.contains('يسخن') ||
+        n.contains('حمى')) {
       _ctx.lastTopic = 'حرارة بعد التطعيم';
       return BotResponse(
-        _kb['حرارة بعد التطعيم'] ?? '🌡️ الحرارة بعد التطعيم طبيعية. كم حرارته؟',
-        [const BotQuickReply(text: 'حرارته 38', emoji: '🌡️'), const BotQuickReply(text: 'حرارته 39.5', emoji: '🌡️'), const BotQuickReply(text: 'متى أخاف؟', emoji: '🚨')],
+        _kb['حرارة بعد التطعيم'] ??
+            '🌡️ الحرارة بعد التطعيم طبيعية. كم حرارته؟',
+        [
+          const BotQuickReply(text: 'حرارته 38', emoji: '🌡️'),
+          const BotQuickReply(text: 'حرارته 39.5', emoji: '🌡️'),
+          const BotQuickReply(text: 'متى أخاف؟', emoji: '🚨')
+        ],
       );
     }
 
     if (n.contains('تشنج') || n.contains('نوبه') || n.contains('يرتعش')) {
       _ctx.lastTopic = 'تشنجات بعد التطعيم';
-      return BotResponse(_kb['تشنجات بعد التطعيم'] ?? '🚨 التشنجات حالة طوارئ — اطلب الإسعاف فوراً!', [
-        const BotQuickReply(text: 'وش أسوي الحين؟', emoji: '🚨'),
-      ]);
+      return BotResponse(
+          _kb['تشنجات بعد التطعيم'] ??
+              '🚨 التشنجات حالة طوارئ — اطلب الإسعاف فوراً!',
+          [
+            const BotQuickReply(text: 'وش أسوي الحين؟', emoji: '🚨'),
+          ]);
     }
 
     if (n.contains('تورم') || n.contains('انتفاخ') || n.contains('ورم')) {
       _ctx.lastTopic = 'تتورم مكان الحقن';
-      return BotResponse(_kb['تتورم مكان الحقن'] ?? '💡 التورم البسيط مكان الحقن طبيعي ويروح خلال أيام.', _ctxReplies('side_effects'));
+      return BotResponse(
+          _kb['تتورم مكان الحقن'] ??
+              '💡 التورم البسيط مكان الحقن طبيعي ويروح خلال أيام.',
+          _ctxReplies('side_effects'));
     }
 
     _ctx.lastTopic = 'آثار جانبية';
@@ -684,7 +776,10 @@ class BotEngine {
         '3. أعطه بارادول حسب وزنه\n'
         '4. إذا لم تنخفض خلال ساعة ← اذهب للمستشفى\n\n'
         '⚠️ لا تعطه أسبرين أبداً للطفل!',
-        [const BotQuickReply(text: 'كم جرعة بارادول؟', emoji: '💊'), const BotQuickReply(text: 'متى أروح للمستشفى؟', emoji: '🏥')],
+        [
+          const BotQuickReply(text: 'كم جرعة بارادول؟', emoji: '💊'),
+          const BotQuickReply(text: 'متى أروح للمستشفى؟', emoji: '🏥')
+        ],
       );
     }
 
@@ -695,13 +790,18 @@ class BotEngine {
       '━━ خلال ساعات ━━\n'
       '🟠 حرارة أكثر من 39.5°\n🟠 بكاء مستمر أكثر من 3 ساعات\n🟠 طفح جلدي شديد\n\n'
       '⏰ انتظر 15-30 دقيقة بعد التطعيم في المركز الصحي!\n📞 خط الطوارئ: 333 أو 119',
-      [const BotQuickReply(text: 'حرارة بعد التطعيم', emoji: '🌡️'), const BotQuickReply(text: 'تشنجات', emoji: '🚨')],
+      [
+        const BotQuickReply(text: 'حرارة بعد التطعيم', emoji: '🌡️'),
+        const BotQuickReply(text: 'تشنجات', emoji: '🚨')
+      ],
     );
   }
 
   BotResponse _handleChildSick(String n) {
     final symptoms = _ctx.child.mentionedSymptoms;
-    if (symptoms.contains('تشنجات') || n.contains('تشنج') || n.contains('يرتعش')) {
+    if (symptoms.contains('تشنجات') ||
+        n.contains('تشنج') ||
+        n.contains('يرتعش')) {
       return BotResponse(
         '🚨 اطلب طبيب فوراً!\n\n'
         '⚠️ التشنجات حالة طوارئ:\n'
@@ -721,7 +821,10 @@ class BotEngine {
       '• حرارة أكثر من 38.5° ← انتظر ⏳\n'
       '• مرض شديد ← انتظر حتى يتحسن ⏳\n\n'
       '💡 وش أعراض طفلك بالضبط؟',
-      [const BotQuickReply(text: 'حرارته عالية', emoji: '🌡️'), const BotQuickReply(text: 'عنده إسهال', emoji: '💧')],
+      [
+        const BotQuickReply(text: 'حرارته عالية', emoji: '🌡️'),
+        const BotQuickReply(text: 'عنده إسهال', emoji: '💧')
+      ],
     );
   }
 
@@ -745,7 +848,8 @@ class BotEngine {
   BotResponse _handleSpecialCases(String n) {
     if (n.contains('مبتسر') || n.contains('خديج')) {
       _ctx.lastTopic = 'للأطفال المبتسرين';
-      return BotResponse(_kb['للأطفال المبتسرين'] ?? '', _ctxReplies('special'));
+      return BotResponse(
+          _kb['للأطفال المبتسرين'] ?? '', _ctxReplies('special'));
     }
     if (n.contains('حامل') || n.contains('حوامل')) {
       _ctx.lastTopic = 'الحوامل';
@@ -791,17 +895,22 @@ class BotEngine {
       '6. التهاب الكبد B\n7. المستدمية النزلية\n8. الحصبة\n'
       '9. الحصبة الألمانية\n10. المكورات الرئوية\n11. الروتا فيروس\n\n'
       '💡 اسألني عن أي مرض بالتفصيل!',
-      [const BotQuickReply(text: 'الحصبة', emoji: '🦠'), const BotQuickReply(text: 'شلل الأطفال', emoji: '🦠')],
+      [
+        const BotQuickReply(text: 'الحصبة', emoji: '🦠'),
+        const BotQuickReply(text: 'شلل الأطفال', emoji: '🦠')
+      ],
     );
   }
 
   BotResponse _handleNutrition(String n) {
     if (n.contains('رضاع') || n.contains('يرضع')) {
       _ctx.lastTopic = 'الرضاعة والتطعيم';
-      return BotResponse(_kb['الرضاعة والتطعيم'] ?? '', _ctxReplies('nutrition'));
+      return BotResponse(
+          _kb['الرضاعة والتطعيم'] ?? '', _ctxReplies('nutrition'));
     }
     _ctx.lastTopic = 'تغذية الطفل والتطعيم';
-    return BotResponse(_kb['تغذية الطفل والتطعيم'] ?? '', _ctxReplies('nutrition'));
+    return BotResponse(
+        _kb['تغذية الطفل والتطعيم'] ?? '', _ctxReplies('nutrition'));
   }
 
   BotResponse _handleColdChain(String n) {
@@ -816,21 +925,30 @@ class BotEngine {
   BotResponse _handleSupportiveSupervision(String n) {
     _ctx.lastTopic = 'الأشراف الداعم';
     return BotResponse(
-      _kb['الأشراف الداعم للتحصين'] ?? '🔍 الإشراف الداعم للتحصين:\n\n'
-      'عملية منظمة لتحسين أداء خدمات التحصين من خلال الزيارات الميدانية والتغذية الراجعة.\n\n'
-      '📋 المكونات:\n'
-      '1️⃣ التقييم 2️⃣ التغذية الراجعة 3️⃣ حل المشكلات 4️⃣ التدريب أثناء العمل 5️⃣ المتابعة',
-      [const BotQuickReply(text: 'إدارة المستوى الوسيط', emoji: '🏢'), const BotQuickReply(text: 'مؤشرات الأداء', emoji: '📊')],
+      _kb['الأشراف الداعم للتحصين'] ??
+          '🔍 الإشراف الداعم للتحصين:\n\n'
+              'عملية منظمة لتحسين أداء خدمات التحصين من خلال الزيارات الميدانية والتغذية الراجعة.\n\n'
+              '📋 المكونات:\n'
+              '1️⃣ التقييم 2️⃣ التغذية الراجعة 3️⃣ حل المشكلات 4️⃣ التدريب أثناء العمل 5️⃣ المتابعة',
+      [
+        const BotQuickReply(text: 'إدارة المستوى الوسيط', emoji: '🏢'),
+        const BotQuickReply(text: 'مؤشرات الأداء', emoji: '📊')
+      ],
     );
   }
 
   BotResponse _handleIntermediateManagement(String n) {
     _ctx.lastTopic = 'إدارة المستوى الوسيط';
     return BotResponse(
-      _kb['إدارة المستوى الوسيط'] ?? '🏢 إدارة المستوى الوسيط في التحصين:\n\n'
-      'المستوى الوسيط هو مكتب الصحة بالمحافظة.\n\n'
-      '📋 المهام: التخطيط الدقيق، الإشراف الداعم، متابعة مؤشرات الأداء، إدارة المخزون، رفع التقارير.',
-      [const BotQuickReply(text: 'مؤشرات الأداء', emoji: '📊'), const BotQuickReply(text: 'إشراف داعم', emoji: '🔍'), const BotQuickReply(text: 'تخطيط دقيق', emoji: '📋')],
+      _kb['إدارة المستوى الوسيط'] ??
+          '🏢 إدارة المستوى الوسيط في التحصين:\n\n'
+              'المستوى الوسيط هو مكتب الصحة بالمحافظة.\n\n'
+              '📋 المهام: التخطيط الدقيق، الإشراف الداعم، متابعة مؤشرات الأداء، إدارة المخزون، رفع التقارير.',
+      [
+        const BotQuickReply(text: 'مؤشرات الأداء', emoji: '📊'),
+        const BotQuickReply(text: 'إشراف داعم', emoji: '🔍'),
+        const BotQuickReply(text: 'تخطيط دقيق', emoji: '📋')
+      ],
     );
   }
 
@@ -841,21 +959,28 @@ class BotEngine {
       '📌 الخطوات:\n1️⃣ التأكد من التشخيص والإبلاغ\n2️⃣ تحديد نطاق الفاشية\n'
       '3️⃣ تفعيل فريق الاستجابة السريعة\n4️⃣ حملة تحصين استجابية\n5️⃣ تعزيز الرصد الوبائي\n\n'
       '⚠️ تتطلب استجابة خلال 72 ساعة!',
-      [const BotQuickReply(text: 'حملات', emoji: '🚐'), const BotQuickReply(text: 'توعية', emoji: '📢')],
+      [
+        const BotQuickReply(text: 'حملات', emoji: '🚐'),
+        const BotQuickReply(text: 'توعية', emoji: '📢')
+      ],
     );
   }
 
   BotResponse _handleReminder(String n) {
     if (_ctx.child.hasBasicInfo) {
       final upcoming = VaccinationService().getUpcomingVaccines(
-        _ctx.child.ageWeeks ?? 0, _ctx.child.ageMonths ?? 0,
+        _ctx.child.ageWeeks ?? 0,
+        _ctx.child.ageMonths ?? 0,
       );
       if (upcoming.isNotEmpty) {
-        final buf = StringBuffer('⏰ تذكير بالتطعيمات القادمة (${_ctx.child.ageDisplay}):\n\n');
+        final buf = StringBuffer(
+            '⏰ تذكير بالتطعيمات القادمة (${_ctx.child.ageDisplay}):\n\n');
         for (final v in upcoming) buf.writeln('📋 ${v.iconEmoji} ${v.nameAr}');
-        return BotResponse(buf.toString(), [const BotQuickReply(text: 'وين أطعم؟', emoji: '📍')]);
+        return BotResponse(buf.toString(),
+            [const BotQuickReply(text: 'وين أطعم؟', emoji: '📍')]);
       }
-      return BotResponse('✅ لا توجد تطعيمات قريبة لطفلك في العمر الحالي.', _welcomeReplies());
+      return BotResponse(
+          '✅ لا توجد تطعيمات قريبة لطفلك في العمر الحالي.', _welcomeReplies());
     }
     return BotResponse('📅 قولي عمر طفلك أولاً.', [
       const BotQuickReply(text: 'عمره 3 شهور', emoji: '📅'),
@@ -887,7 +1012,8 @@ class BotEngine {
   BotResponse _handleFollowUp(String n) {
     if (RegExp(r'^(نعم|ايوه|ايه|اي|يب|اوك|اوكي)').hasMatch(n)) {
       if (_ctx.lastTopic.isNotEmpty && _kb.containsKey(_ctx.lastTopic)) {
-        return BotResponse(_kb[_ctx.lastTopic] ?? '', _ctxReplies(_ctx.lastTopic));
+        return BotResponse(
+            _kb[_ctx.lastTopic] ?? '', _ctxReplies(_ctx.lastTopic));
       }
     }
     if (RegExp(r'^(طيب|تمام|زين|اوكي|اوك|شكرا|فاهمت|فهمت)').hasMatch(n)) {
@@ -957,16 +1083,35 @@ class BotEngine {
 
   BotResponse? _searchRealDataKB(String n) {
     final dataKeywords = [
-      'حمله شلل', 'حملات شلل', 'تغطيه', 'تغطية',
-      'افضل محافظه', 'اقوى محافظه', 'اضعف محافظه',
-      'تعز', 'الحديده', 'المكلا', 'عدن', 'لحج',
-      'مارب', 'ابين', 'حجه', 'البيضاء', 'الجوف',
-      'توص', 'بيانات حقيقي', 'تقارير', 'ارقام رسمي',
+      'حمله شلل',
+      'حملات شلل',
+      'تغطيه',
+      'تغطية',
+      'افضل محافظه',
+      'اقوى محافظه',
+      'اضعف محافظه',
+      'تعز',
+      'الحديده',
+      'المكلا',
+      'عدن',
+      'لحج',
+      'مارب',
+      'ابين',
+      'حجه',
+      'البيضاء',
+      'الجوف',
+      'توص',
+      'بيانات حقيقي',
+      'تقارير',
+      'ارقام رسمي',
     ];
 
     bool hasDataKeyword = false;
     for (final kw in dataKeywords) {
-      if (n.contains(kw)) { hasDataKeyword = true; break; }
+      if (n.contains(kw)) {
+        hasDataKeyword = true;
+        break;
+      }
     }
     if (!hasDataKeyword) return null;
 
@@ -1015,25 +1160,47 @@ class BotEngine {
   }
 
   List<BotQuickReply> _welcomeReplies() => const [
-    BotQuickReply(text: 'وش تطعيمات طفلي؟', emoji: '💉'),
-    BotQuickReply(text: 'وش الآثار الجانبية؟', emoji: '⚠️'),
-    BotQuickReply(text: 'هل مجاني؟', emoji: '💰'),
-    BotQuickReply(text: 'هل يسبب أوتيزم؟', emoji: '🚫'),
-    BotQuickReply(text: 'ولدي مريض', emoji: '🤒'),
-    BotQuickReply(text: 'الأشراف الداعم', emoji: '🔍'),
-    BotQuickReply(text: 'إدارة المستوى الوسيط', emoji: '🏢'),
-    BotQuickReply(text: 'جدول التحصين', emoji: '📋'),
-    BotQuickReply(text: 'سلسلة التبريد', emoji: '❄️'),
-  ];
+        BotQuickReply(text: 'وش تطعيمات طفلي؟', emoji: '💉'),
+        BotQuickReply(text: 'وش الآثار الجانبية؟', emoji: '⚠️'),
+        BotQuickReply(text: 'هل مجاني؟', emoji: '💰'),
+        BotQuickReply(text: 'هل يسبب أوتيزم؟', emoji: '🚫'),
+        BotQuickReply(text: 'ولدي مريض', emoji: '🤒'),
+        BotQuickReply(text: 'الأشراف الداعم', emoji: '🔍'),
+        BotQuickReply(text: 'إدارة المستوى الوسيط', emoji: '🏢'),
+        BotQuickReply(text: 'جدول التحصين', emoji: '📋'),
+        BotQuickReply(text: 'سلسلة التبريد', emoji: '❄️'),
+      ];
 
   List<BotQuickReply> _ctxReplies(String topic) {
     final m = {
-      'side_effects': [const BotQuickReply(text: 'حرارة بعد التطعيم', emoji: '🌡️'), const BotQuickReply(text: 'تشنجات', emoji: '🚨'), const BotQuickReply(text: 'متى أخاف؟', emoji: '⚠️')],
-      'special': [const BotQuickReply(text: 'مبتسرين', emoji: '👶'), const BotQuickReply(text: 'حوامل', emoji: '🤰'), const BotQuickReply(text: 'سكر', emoji: '🟡'), const BotQuickReply(text: 'قلب', emoji: '❤️')],
-      'myths': [const BotQuickReply(text: 'هل يسبب أوتيزم؟', emoji: '🚫'), const BotQuickReply(text: 'هل يسبب عقم؟', emoji: '🚫'), const BotQuickReply(text: 'هل مضرة؟', emoji: '🚫')],
-      'nutrition': [const BotQuickReply(text: 'الرضاعة والتطعيم', emoji: '🍼'), const BotQuickReply(text: 'فيتامين أ', emoji: '🌟')],
-      'cold_chain': [const BotQuickReply(text: 'وش هو VVM؟', emoji: '🔍'), const BotQuickReply(text: 'سلسلة التبريد', emoji: '❄️')],
-      'vaccine_list': [const BotQuickReply(text: 'عمره 6 أشهر', emoji: '📅'), const BotQuickReply(text: 'وش الآثار؟', emoji: '⚠️')],
+      'side_effects': [
+        const BotQuickReply(text: 'حرارة بعد التطعيم', emoji: '🌡️'),
+        const BotQuickReply(text: 'تشنجات', emoji: '🚨'),
+        const BotQuickReply(text: 'متى أخاف؟', emoji: '⚠️')
+      ],
+      'special': [
+        const BotQuickReply(text: 'مبتسرين', emoji: '👶'),
+        const BotQuickReply(text: 'حوامل', emoji: '🤰'),
+        const BotQuickReply(text: 'سكر', emoji: '🟡'),
+        const BotQuickReply(text: 'قلب', emoji: '❤️')
+      ],
+      'myths': [
+        const BotQuickReply(text: 'هل يسبب أوتيزم؟', emoji: '🚫'),
+        const BotQuickReply(text: 'هل يسبب عقم؟', emoji: '🚫'),
+        const BotQuickReply(text: 'هل مضرة؟', emoji: '🚫')
+      ],
+      'nutrition': [
+        const BotQuickReply(text: 'الرضاعة والتطعيم', emoji: '🍼'),
+        const BotQuickReply(text: 'فيتامين أ', emoji: '🌟')
+      ],
+      'cold_chain': [
+        const BotQuickReply(text: 'وش هو VVM؟', emoji: '🔍'),
+        const BotQuickReply(text: 'سلسلة التبريد', emoji: '❄️')
+      ],
+      'vaccine_list': [
+        const BotQuickReply(text: 'عمره 6 أشهر', emoji: '📅'),
+        const BotQuickReply(text: 'وش الآثار؟', emoji: '⚠️')
+      ],
     };
     return m[topic] ?? _welcomeReplies();
   }
@@ -1048,7 +1215,8 @@ class BotEngine {
     ));
   }
 
-  String _gid() => '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
+  String _gid() =>
+      '${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
 
   void clearChat() {
     _messages.clear();

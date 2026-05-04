@@ -103,11 +103,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'fill/:formId',
-                builder: (context, state) =>
-                    FormFillScreen(
-                      formId: state.pathParameters['formId']!,
-                      draftId: state.uri.queryParameters['draftId'],
-                    ),
+                builder: (context, state) => FormFillScreen(
+                  formId: state.pathParameters['formId']!,
+                  draftId: state.uri.queryParameters['draftId'],
+                ),
               ),
               GoRoute(
                 path: 'status',
@@ -131,7 +130,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/ai',
             builder: (context, state) => const AiChatScreenV3(),
           ),
-
           GoRoute(
             path: '/references',
             builder: (context, state) => const ReferencesScreen(),
@@ -254,7 +252,8 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     // ═══ PERFORMANCE: use .select() to minimize rebuild scope ═══
     final isOnline = ref.watch(
-      connectivityProvider.select((v) => v.valueOrNull ?? ConnectivityUtils.isOnline),
+      connectivityProvider
+          .select((v) => v.valueOrNull ?? ConnectivityUtils.isOnline),
     );
     final pendingCount = ref.watch(
       syncPendingCountProvider.select((v) => v.valueOrNull ?? 0),
@@ -333,7 +332,8 @@ class _MainShellState extends ConsumerState<MainShell> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.cloud_upload_rounded, size: 14, color: Colors.white),
+                  const Icon(Icons.cloud_upload_rounded,
+                      size: 14, color: Colors.white),
                   const SizedBox(width: 6),
                   Text(
                     '$pendingCount في الانتظار',
@@ -347,7 +347,6 @@ class _MainShellState extends ConsumerState<MainShell> {
                 ],
               ),
             ),
-          ],
           ],
           // ═══ AI Assistant — hidden on /ai page ═══
           if (!GoRouterState.of(context).matchedLocation.startsWith('/ai'))

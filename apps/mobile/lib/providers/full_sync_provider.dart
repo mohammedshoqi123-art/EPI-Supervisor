@@ -31,7 +31,8 @@ class FullSyncResult {
     this.error,
   });
 
-  int get total => forms + submissions + governorates + districts + references + facilities;
+  int get total =>
+      forms + submissions + governorates + districts + references + facilities;
 }
 
 class FullSyncNotifier extends StateNotifier<FullSyncState> {
@@ -149,7 +150,8 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
       _ref.invalidate(governorateRankingProvider);
 
       state = FullSyncState.done;
-      debugPrint('[FullSync] ✅ Complete: $forms forms, $submissions subs, $govs govs, $dists dists');
+      debugPrint(
+          '[FullSync] ✅ Complete: $forms forms, $submissions subs, $govs govs, $dists dists');
 
       return FullSyncResult(
         forms: forms,
@@ -171,6 +173,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
   }
 }
 
-final fullSyncProvider = StateNotifierProvider<FullSyncNotifier, FullSyncState>((ref) {
+final fullSyncProvider =
+    StateNotifierProvider<FullSyncNotifier, FullSyncState>((ref) {
   return FullSyncNotifier(ref);
 });

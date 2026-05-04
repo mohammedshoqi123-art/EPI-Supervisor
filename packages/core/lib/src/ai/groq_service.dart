@@ -12,7 +12,8 @@ class GroqService {
   /// Primary and fallback model IDs
   static const String _modelPrimary = 'llama-3.3-70b-versatile';
   static const String _modelFast = 'llama-3.1-8b-instant';
-  static const String _modelFallback = 'llama3-70b-8192'; // older stable Groq model
+  static const String _modelFallback =
+      'llama3-70b-8192'; // older stable Groq model
 
   final String _apiKey;
   final http.Client _httpClient;

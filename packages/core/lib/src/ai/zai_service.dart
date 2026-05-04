@@ -6,7 +6,8 @@ import '../errors/app_exceptions.dart';
 /// Z AI Service — GLM-based AI model via Z AI API
 /// Free-tier available, supports Arabic, fast inference
 class ZAIService {
-  static const String _baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+  static const String _baseUrl =
+      'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 
   final String _apiKey;
   final http.Client _httpClient;
@@ -241,18 +242,21 @@ Message: $message''',
     required Map<String, dynamic> data,
   }) async {
     final prompts = {
-      'daily': 'أنشئ تقريراً يومياً مفصلاً: ملخص الإرساليات، النواقص الحرجة، 3 توصيات عملية.',
+      'daily':
+          'أنشئ تقريراً يومياً مفصلاً: ملخص الإرساليات، النواقص الحرجة، 3 توصيات عملية.',
       'weekly': 'حلل اتجاه الأسبوع: هل الإرساليات في تحسن؟ ما الأسباب؟ توصيات.',
       'governorate': 'رتب المحافظات بالأداء. الأفضل والأسوأ. نسب وسبب التفاوت.',
       'shortages': 'حلل النواقص: حسب الخطورة والموقع. أولويات المعالجة.',
       'coverage': 'حلل تغطية التطعيم: Penta3، dropout، حصبة. فجوات وتدخلات.',
-      'supervision': 'أنشئ تقرير إشرافي: أداء الزيارات، الملاحظات، خطط التحسين.',
+      'supervision':
+          'أنشئ تقرير إشرافي: أداء الزيارات، الملاحظات، خطط التحسين.',
       'polio': 'حلل حملات الشلل: التغطية، المحافظات الأضعف، التوصيات.',
     };
 
     return chat(
       prompts[templateType] ?? 'أنشئ تقريراً بالبيانات المتاحة.',
-      systemPrompt: 'أنت محلل بيانات متخصص في التطعيم اليمن. أجب بالعربية بتنظيم واضح مع عناوين وأرقام.',
+      systemPrompt:
+          'أنت محلل بيانات متخصص في التطعيم اليمن. أجب بالعربية بتنظيم واضح مع عناوين وأرقام.',
       context: data,
       model: 'glm-4-plus',
       maxTokens: 1200,
@@ -277,7 +281,8 @@ Message: $message''',
     try {
       final resp = await chat(
         prompt,
-        systemPrompt: 'أنت مساعد EPI الذكي. قدم اقتراحات مختصرة وعملية بالعربية.',
+        systemPrompt:
+            'أنت مساعد EPI الذكي. قدم اقتراحات مختصرة وعملية بالعربية.',
         model: 'glm-4-flash',
         maxTokens: 250,
         temperature: 0.7,

@@ -6,7 +6,8 @@ import '../errors/app_exceptions.dart';
 /// OpenRouter AI Service — Gateway to multiple LLM models
 /// Supports free models, Claude, GPT-4, Llama, Mistral, etc.
 class OpenRouterService {
-  static const String _baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+  static const String _baseUrl =
+      'https://openrouter.ai/api/v1/chat/completions';
 
   /// Available models with descriptions
   static const Map<String, String> availableModels = {
@@ -113,7 +114,8 @@ class OpenRouterService {
       }
 
       // Model not available — try next free model
-      if ((resp.statusCode == 400 || resp.statusCode == 404) && retryCount == 0) {
+      if ((resp.statusCode == 400 || resp.statusCode == 404) &&
+          retryCount == 0) {
         return chat(
           message,
           systemPrompt: systemPrompt,
@@ -261,18 +263,21 @@ Message: $message''',
     required Map<String, dynamic> data,
   }) async {
     final prompts = {
-      'daily': 'أنشئ تقريراً يومياً مفصلاً: ملخص الإرساليات، النواقص الحرجة، 3 توصيات عملية.',
+      'daily':
+          'أنشئ تقريراً يومياً مفصلاً: ملخص الإرساليات، النواقص الحرجة، 3 توصيات عملية.',
       'weekly': 'حلل اتجاه الأسبوع: هل الإرساليات في تحسن؟ ما الأسباب؟ توصيات.',
       'governorate': 'رتب المحافظات بالأداء. الأفضل والأسوأ. نسب وسبب التفاوت.',
       'shortages': 'حلل النواقص: حسب الخطورة والموقع. أولويات المعالجة.',
       'coverage': 'حلل تغطية التطعيم: Penta3، dropout، حصبة. فجوات وتدخلات.',
-      'supervision': 'أنشئ تقرير إشرافي: أداء الزيارات، الملاحظات، خطط التحسين.',
+      'supervision':
+          'أنشئ تقرير إشرافي: أداء الزيارات، الملاحظات، خطط التحسين.',
       'polio': 'حلل حملات الشلل: التغطية، المحافظات الأضعف، التوصيات.',
     };
 
     return chat(
       prompts[templateType] ?? 'أنشئ تقريراً بالبيانات المتاحة.',
-      systemPrompt: 'أنت محلل بيانات متخصص في التطعيم اليمن. أجب بالعربية بتنظيم واضح مع عناوين وأرقام.',
+      systemPrompt:
+          'أنت محلل بيانات متخصص في التطعيم اليمن. أجب بالعربية بتنظيم واضح مع عناوين وأرقام.',
       context: data,
       model: 'deepseek/deepseek-chat',
       maxTokens: 1200,
@@ -297,7 +302,8 @@ Message: $message''',
     try {
       final resp = await chat(
         prompt,
-        systemPrompt: 'أنت مساعد EPI الذكي. قدم اقتراحات مختصرة وعملية بالعربية.',
+        systemPrompt:
+            'أنت مساعد EPI الذكي. قدم اقتراحات مختصرة وعملية بالعربية.',
         model: 'meta-llama/llama-3.3-70b-instruct:free',
         maxTokens: 250,
         temperature: 0.7,

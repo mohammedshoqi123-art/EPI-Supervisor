@@ -142,7 +142,8 @@ class AuthRepository {
       }
     } catch (e) {
       _restoreRetryCount++;
-      debugPrint('[Auth] Session restore failed (attempt $_restoreRetryCount): $e');
+      debugPrint(
+          '[Auth] Session restore failed (attempt $_restoreRetryCount): $e');
       // ═══ FIX: إعادة محاولة محدودة بدلاً من recursion لا نهائي ═══
       if (_restoreRetryCount < _maxRestoreRetries) {
         Future.delayed(
@@ -165,7 +166,8 @@ class AuthRepository {
       final timeUntilExpiry = expiresAt.difference(DateTime.now());
 
       if (timeUntilExpiry.inMinutes < 15) {
-        debugPrint('[Auth] Token expiring in ${timeUntilExpiry.inMinutes}min — refreshing...');
+        debugPrint(
+            '[Auth] Token expiring in ${timeUntilExpiry.inMinutes}min — refreshing...');
         await _client?.auth.refreshSession();
         _refreshRetryCount = 0;
       }
@@ -197,8 +199,7 @@ class AuthRepository {
       isAuthenticated: true,
       userId: userId,
       email: user.email,
-      fullName: user.userMetadata?['full_name'] ??
-          user.email?.split('@').first,
+      fullName: user.userMetadata?['full_name'] ?? user.email?.split('@').first,
     );
     _authStateController.add(_currentState);
 
@@ -378,8 +379,7 @@ class AuthRepository {
       await _client!.storage.from('avatars').uploadBinary(
             storagePath,
             fileBytes,
-            fileOptions:
-                FileOptions(contentType: 'image/$ext', upsert: true),
+            fileOptions: FileOptions(contentType: 'image/$ext', upsert: true),
           );
 
       final publicUrl =

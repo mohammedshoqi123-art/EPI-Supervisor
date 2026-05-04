@@ -433,7 +433,8 @@ class OfflineManager {
   // ===== DRAFTS =====
 
   /// Save a draft using a unique [draftId]. Also stores the [formId] so we can identify which form it belongs to.
-  Future<void> saveDraft(String draftId, String formId, Map<String, dynamic> data) async {
+  Future<void> saveDraft(
+      String draftId, String formId, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
       final drafts = _getDrafts();
       drafts[draftId] = {

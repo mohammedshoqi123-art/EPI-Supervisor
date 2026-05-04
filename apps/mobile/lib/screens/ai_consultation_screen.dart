@@ -54,7 +54,8 @@ class AIConsultationScreen extends ConsumerStatefulWidget {
   const AIConsultationScreen({super.key});
 
   @override
-  ConsumerState<AIConsultationScreen> createState() => _AIConsultationScreenState();
+  ConsumerState<AIConsultationScreen> createState() =>
+      _AIConsultationScreenState();
 }
 
 class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
@@ -135,11 +136,13 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
   Future<void> _processWithAI(String text) async {
     try {
       // محاولة معالجة عبر AIRouterV2
-      final response = await _aiRouter.process(
+      final response = await _aiRouter
+          .process(
         text,
         isOnline: _isOnline,
         analyticsData: null, // يمكن ربط بيانات التحليلات لاحقاً
-      ).timeout(const Duration(seconds: 10), onTimeout: () {
+      )
+          .timeout(const Duration(seconds: 10), onTimeout: () {
         // Fallback للمعالجة المحلية عند انتهاء المهلة
         return _processLocallyAsAIRResponse(text);
       });
@@ -234,7 +237,9 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
         _showChildCard = true;
       }
     }
-    if (lower.contains('ولد') || lower.contains('ولدي') || lower.contains('ابني')) {
+    if (lower.contains('ولد') ||
+        lower.contains('ولدي') ||
+        lower.contains('ابني')) {
       _childGender = 'ذكر';
     }
     if (lower.contains('بنت') || lower.contains('بنتي')) {
@@ -270,7 +275,9 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
       );
     }
 
-    if (lower.contains('اثار') || lower.contains('أعراض') || lower.contains('جانبي')) {
+    if (lower.contains('اثار') ||
+        lower.contains('أعراض') ||
+        lower.contains('جانبي')) {
       return ChatMessage(
         text: '📋 الآثار الجانبية للتطعيمات:\n\n'
             '✅ طبيعية وتزول خلال 1-3 أيام:\n'
@@ -292,7 +299,9 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
       );
     }
 
-    if (lower.contains('مجاني') || lower.contains('بلاش') || lower.contains('بفلوس')) {
+    if (lower.contains('مجاني') ||
+        lower.contains('بلاش') ||
+        lower.contains('بفلوس')) {
       return ChatMessage(
         text: '💰 هل التطعيم مجاني؟\n\n'
             '✅ نعم! جميع التطعيمات مجانية 100%\n\n'
@@ -309,7 +318,9 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
       );
     }
 
-    if (lower.contains('وين') || lower.contains('اين') || lower.contains('مركز')) {
+    if (lower.contains('وين') ||
+        lower.contains('اين') ||
+        lower.contains('مركز')) {
       return ChatMessage(
         text: '📍 وين تطعم طفلك:\n\n'
             '• جميع المراكز الصحية الحكومية\n'
@@ -344,7 +355,9 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
       );
     }
 
-    if (lower.contains('تحليلات') || lower.contains('احصائيات') || lower.contains('ارقام')) {
+    if (lower.contains('تحليلات') ||
+        lower.contains('احصائيات') ||
+        lower.contains('ارقام')) {
       if (_isOnline) {
         return ChatMessage(
           text: '📊 جاري تحميل تحليلات النظام...\n\n'
@@ -374,7 +387,9 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
     }
 
     // جدول التحصين الكامل
-    if (lower.contains('جدول') || lower.contains('مواعيد') || lower.contains('متى التطعيم')) {
+    if (lower.contains('جدول') ||
+        lower.contains('مواعيد') ||
+        lower.contains('متى التطعيم')) {
       return ChatMessage(
         text: '📅 جدول التحصين في اليمن:\n\n'
             '🟢 عند الولادة: BCG + HepB0 + OPV0\n'
@@ -415,13 +430,17 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
   }
 
   String _getVaccinesForAge(int months) {
-    if (months == 0) return '🔴 BCG (ضد السل)\n💧 OPV0 (شلل فموي)\n💉 HepB0 (كبد ب)';
+    if (months == 0)
+      return '🔴 BCG (ضد السل)\n💧 OPV0 (شلل فموي)\n💉 HepB0 (كبد ب)';
     if (months < 4) return '💧 OPV1-2\n5️⃣ الخماسي 1-2\n🫁 PCV1-2\n🦠 Rota1-2';
     if (months < 6) return '💧 OPV3\n5️⃣ الخماسي 3\n🫁 PCV3\n💉 IPV1 (شلل حقن)';
-    if (months < 9) return '🔴 MR1 (الحصبة — 9 أشهر)\n💧 OPV4\n💉 IPV2 (شلل حقن)\n🌟 فيتامين أ (100,000 و.د)';
-    if (months < 18) return '🔴 MR2 (18 شهر)\n💪 Penta4 (خماسي تعزيزية)\n💧 OPV5\n🌟 فيتامين أ (200,000 و.د)';
-    if (months < 60) return '💪 Penta4 (18 شهر) — مكتملة\n🔴 MR2 (18 شهر) — مكتملة\n🌟 فيتامين أ (200,000 عند 18 شهر) — مكتملة\n⏳ الجرعة القادمة: Td + MR تعزيزية عند دخول المدارس (5-7 سنوات)';
-  return '🏫 Td (مدرسي)\n🔴 MR تعزيزية\n🌟 فيتامين أ (200,000 و.د)';
+    if (months < 9)
+      return '🔴 MR1 (الحصبة — 9 أشهر)\n💧 OPV4\n💉 IPV2 (شلل حقن)\n🌟 فيتامين أ (100,000 و.د)';
+    if (months < 18)
+      return '🔴 MR2 (18 شهر)\n💪 Penta4 (خماسي تعزيزية)\n💧 OPV5\n🌟 فيتامين أ (200,000 و.د)';
+    if (months < 60)
+      return '💪 Penta4 (18 شهر) — مكتملة\n🔴 MR2 (18 شهر) — مكتملة\n🌟 فيتامين أ (200,000 عند 18 شهر) — مكتملة\n⏳ الجرعة القادمة: Td + MR تعزيزية عند دخول المدارس (5-7 سنوات)';
+    return '🏫 Td (مدرسي)\n🔴 MR تعزيزية\n🌟 فيتامين أ (200,000 و.د)';
   }
 
   void _scrollToBottom() {
@@ -446,7 +465,8 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
           children: [
             // شارة حالة الاتصال
             Container(
-              width: 10, height: 10,
+              width: 10,
+              height: 10,
               decoration: BoxDecoration(
                 color: _isOnline ? Colors.green : Colors.orange,
                 shape: BoxShape.circle,
@@ -458,9 +478,16 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('المساعد الذكي',
-                      style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700, fontSize: 16)),
-                  Text(_isOnline ? 'متصل — AI + تحليلات' : 'أوفلاين — استشارات صحية',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400)),
+                      style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16)),
+                  Text(
+                      _isOnline
+                          ? 'متصل — AI + تحليلات'
+                          : 'أوفلاين — استشارات صحية',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w400)),
                 ],
               ),
             ),
@@ -510,7 +537,8 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
                 if (index == _messages.length && _isTyping) {
                   return _TypingIndicator();
                 }
-                return _MessageBubble(message: _messages[index], onQuickReply: _sendMessage);
+                return _MessageBubble(
+                    message: _messages[index], onQuickReply: _sendMessage);
               },
             ),
           ),
@@ -539,12 +567,17 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text('🧒 بيانات الطفل',
-                style: TextStyle(fontFamily: 'Cairo', fontSize: 20, fontWeight: FontWeight.w700)),
+                style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),
             ListTile(
               leading: const Icon(Icons.cake_rounded),
               title: const Text('العمر'),
-              subtitle: Text(_childAgeMonths != null ? '$_childAgeMonths أشهر' : 'غير محدد'),
+              subtitle: Text(_childAgeMonths != null
+                  ? '$_childAgeMonths أشهر'
+                  : 'غير محدد'),
             ),
             ListTile(
               leading: const Icon(Icons.person_rounded),
@@ -554,7 +587,9 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
             ListTile(
               leading: const Icon(Icons.vaccines_rounded),
               title: const Text('التطعيمات القادمة'),
-              subtitle: Text(_childAgeMonths != null ? _getVaccinesForAge(_childAgeMonths!) : 'حدد العمر أولاً'),
+              subtitle: Text(_childAgeMonths != null
+                  ? _getVaccinesForAge(_childAgeMonths!)
+                  : 'حدد العمر أولاً'),
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
@@ -587,17 +622,20 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
-        crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment:
+            isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           // فقاعة الرسالة
           Row(
-            mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment:
+                isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
             children: [
               if (!isUser) _BotAvatar(source: message.source),
               if (!isUser) const SizedBox(width: 8),
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isUser
                         ? theme.colorScheme.primary
@@ -612,7 +650,10 @@ class _MessageBubble extends StatelessWidget {
                     ),
                     boxShadow: [
                       if (!isUser)
-                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2)),
                     ],
                   ),
                   child: Column(
@@ -645,7 +686,9 @@ class _MessageBubble extends StatelessWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                message.source == MsgSource.botLocal ? 'محلي' : 'سيرفر',
+                                message.source == MsgSource.botLocal
+                                    ? 'محلي'
+                                    : 'سيرفر',
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: message.source == MsgSource.botLocal
@@ -665,7 +708,8 @@ class _MessageBubble extends StatelessWidget {
                 CircleAvatar(
                   radius: 16,
                   backgroundColor: theme.colorScheme.primaryContainer,
-                  child: Icon(Icons.person_rounded, size: 18, color: theme.colorScheme.primary),
+                  child: Icon(Icons.person_rounded,
+                      size: 18, color: theme.colorScheme.primary),
                 ),
             ],
           ),
@@ -679,13 +723,18 @@ class _MessageBubble extends StatelessWidget {
                 runSpacing: 6,
                 children: message.quickReplies.map((qr) {
                   return ActionChip(
-                    avatar: Text(qr.emoji, style: const TextStyle(fontSize: 14)),
-                    label: Text(qr.text, style: const TextStyle(fontSize: 12, fontFamily: 'Cairo')),
+                    avatar:
+                        Text(qr.emoji, style: const TextStyle(fontSize: 14)),
+                    label: Text(qr.text,
+                        style:
+                            const TextStyle(fontSize: 12, fontFamily: 'Cairo')),
                     onPressed: () => onQuickReply(qr.text),
                     backgroundColor: Colors.blue.shade50,
                     side: BorderSide(color: Colors.blue.shade100),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   );
                 }).toList(),
@@ -709,7 +758,9 @@ class _BotAvatar extends StatelessWidget {
           ? Colors.blue.shade100
           : Colors.green.shade100,
       child: Icon(
-        source == MsgSource.botServer ? Icons.cloud_rounded : Icons.smart_toy_rounded,
+        source == MsgSource.botServer
+            ? Icons.cloud_rounded
+            : Icons.smart_toy_rounded,
         size: 18,
         color: source == MsgSource.botServer
             ? Colors.blue.shade700
@@ -729,7 +780,8 @@ class _TypingIndicator extends StatelessWidget {
           CircleAvatar(
             radius: 16,
             backgroundColor: Colors.green.shade100,
-            child: Icon(Icons.smart_toy_rounded, size: 18, color: Colors.green.shade700),
+            child: Icon(Icons.smart_toy_rounded,
+                size: 18, color: Colors.green.shade700),
           ),
           const SizedBox(width: 8),
           Container(
@@ -737,7 +789,9 @@ class _TypingIndicator extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -771,21 +825,30 @@ class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
-    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _ctrl = AnimationController(
+        duration: const Duration(milliseconds: 600), vsync: this);
+    _anim = Tween<double>(begin: 0.4, end: 1.0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
     Future.delayed(Duration(milliseconds: widget.delay), () {
       if (mounted) _ctrl.repeat(reverse: true);
     });
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _anim,
-      child: Container(width: 8, height: 8, decoration: BoxDecoration(color: Colors.grey.shade400, shape: BoxShape.circle)),
+      child: Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+              color: Colors.grey.shade400, shape: BoxShape.circle)),
     );
   }
 }
@@ -810,7 +873,12 @@ class _InputBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8 + 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, -2))
+        ],
       ),
       child: Row(
         children: [
@@ -821,7 +889,8 @@ class _InputBar extends StatelessWidget {
               color: isOnline ? Colors.blue : Colors.orange,
             ),
             onPressed: onToggleOnline,
-            tooltip: isOnline ? 'متصل — اضغط للتبديل' : 'أوفلاين — اضغط للتبديل',
+            tooltip:
+                isOnline ? 'متصل — اضغط للتبديل' : 'أوفلاين — اضغط للتبديل',
           ),
           Expanded(
             child: TextField(
@@ -833,25 +902,31 @@ class _InputBar extends StatelessWidget {
               style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'اسأل عن التحصين...',
-                hintStyle: TextStyle(color: Colors.grey.shade400, fontFamily: 'Cairo'),
+                hintStyle:
+                    TextStyle(color: Colors.grey.shade400, fontFamily: 'Cairo'),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
                 fillColor: Colors.grey.shade50,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
             ),
           ),
           const SizedBox(width: 8),
           Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)]),
+              gradient: LinearGradient(colors: [
+                theme.colorScheme.primary,
+                theme.colorScheme.primary.withOpacity(0.8)
+              ]),
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              icon:
+                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
               onPressed: () => onSend(controller.text),
             ),
           ),
@@ -866,7 +941,8 @@ class _ChildProfileCard extends StatelessWidget {
   final String? gender;
   final VoidCallback onTap;
 
-  const _ChildProfileCard({required this.ageMonths, this.gender, required this.onTap});
+  const _ChildProfileCard(
+      {required this.ageMonths, this.gender, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -882,11 +958,16 @@ class _ChildProfileCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.child_care_rounded, color: Colors.blue.shade600, size: 20),
+            Icon(Icons.child_care_rounded,
+                color: Colors.blue.shade600, size: 20),
             const SizedBox(width: 8),
             Text(
               'عمره $ageMonths أشهر${gender != null ? " • $gender" : ""}',
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.blue.shade700, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  color: Colors.blue.shade700,
+                  fontWeight: FontWeight.w600),
             ),
             const Spacer(),
             Icon(Icons.edit_rounded, size: 16, color: Colors.blue.shade400),

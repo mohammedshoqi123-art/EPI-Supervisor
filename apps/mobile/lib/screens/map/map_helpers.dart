@@ -4,8 +4,8 @@ import 'package:epi_core/epi_core.dart';
 
 /// ═══ Color mode for map markers ═══
 enum MapColorMode {
-  status,  // Color by submission status
-  role,    // Color by supervisor role
+  status, // Color by submission status
+  role, // Color by supervisor role
 }
 
 /// Map utility helpers — colors, formatting, cluster logic

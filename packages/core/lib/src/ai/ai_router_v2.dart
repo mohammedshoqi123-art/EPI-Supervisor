@@ -12,11 +12,11 @@ import 'enhanced_local_ai.dart';
 import 'child_context_manager.dart';
 
 enum ResponseSource {
-  healthLocal,    // استشارة صحية محلية
+  healthLocal, // استشارة صحية محلية
   analyticsLocal, // تحليل بيانات محلي
-  serverAI,       // AI سيرفر (Groq/MIMO)
-  serverAnalytics,// تحليل سيرفر
-  offline,        // أوفلاين بدون بيانات
+  serverAI, // AI سيرفر (Groq/MIMO)
+  serverAnalytics, // تحليل سيرفر
+  offline, // أوفلاين بدون بيانات
 }
 
 class AIResponseV2 {
@@ -66,7 +66,8 @@ class AIRouterV2 {
     String message, {
     bool isOnline = false,
     Map<String, dynamic>? analyticsData,
-    Future<String?> Function(String intent, Map<String, dynamic> params)? serverExecutor,
+    Future<String?> Function(String intent, Map<String, dynamic> params)?
+        serverExecutor,
   }) async {
     final norm = EpiNLPEngine.normalize(message);
     final intentResult = EpiNLPEngine.detectIntent(norm);
@@ -88,7 +89,8 @@ class AIRouterV2 {
       // محاولة السيرفر أولاً
       if (isOnline && serverExecutor != null) {
         try {
-          final serverResult = await serverExecutor(intentResult.intent, analyticsData ?? {});
+          final serverResult =
+              await serverExecutor(intentResult.intent, analyticsData ?? {});
           if (serverResult != null && serverResult.isNotEmpty) {
             return AIResponseV2(
               text: serverResult,
@@ -106,7 +108,8 @@ class AIRouterV2 {
       }
 
       // Fallback محلي للتحليلات
-      final localResult = _analyticsEngine.processQuery(message, analyticsData ?? {});
+      final localResult =
+          _analyticsEngine.processQuery(message, analyticsData ?? {});
       if (localResult.confidence > 0.3) {
         return AIResponseV2(
           text: localResult.response,
@@ -138,7 +141,8 @@ class AIRouterV2 {
       // أونلاين → أرسل للسيرفر
       if (serverExecutor != null) {
         try {
-          final serverResult = await serverExecutor(intentResult.intent, analyticsData ?? {});
+          final serverResult =
+              await serverExecutor(intentResult.intent, analyticsData ?? {});
           if (serverResult != null) {
             return AIResponseV2(
               text: serverResult,
@@ -165,12 +169,34 @@ class AIRouterV2 {
   /// هل الاستعلام استشارة صحية؟
   bool _isHealthConsultation(String intent) {
     const healthIntents = {
-      'age_query', 'vaccine_list', 'schedule_query', 'dose_count',
-      'side_effects', 'emergency', 'location', 'cost', 'campaigns',
-      'vaccine_types', 'myths', 'special_cases', 'nutrition', 'cold_chain',
-      'travel', 'history', 'benefits', 'diseases', 'child_sick', 'reminder',
-      'greeting', 'feedback', 'negation', 'clarification', 'comparison',
-      'follow_up', 'general_question', 'default',
+      'age_query',
+      'vaccine_list',
+      'schedule_query',
+      'dose_count',
+      'side_effects',
+      'emergency',
+      'location',
+      'cost',
+      'campaigns',
+      'vaccine_types',
+      'myths',
+      'special_cases',
+      'nutrition',
+      'cold_chain',
+      'travel',
+      'history',
+      'benefits',
+      'diseases',
+      'child_sick',
+      'reminder',
+      'greeting',
+      'feedback',
+      'negation',
+      'clarification',
+      'comparison',
+      'follow_up',
+      'general_question',
+      'default',
     };
     return healthIntents.contains(intent);
   }
@@ -178,8 +204,12 @@ class AIRouterV2 {
   /// هل الاستعلام تحليل بيانات؟
   bool _isAnalyticsQuery(String intent) {
     const analyticsIntents = {
-      'query_submissions', 'query_shortages', 'query_analytics',
-      'analyze_trend', 'query_health', 'query_governorates',
+      'query_submissions',
+      'query_shortages',
+      'query_analytics',
+      'analyze_trend',
+      'query_health',
+      'query_governorates',
       'generate_report',
     };
     return analyticsIntents.contains(intent);
@@ -188,16 +218,19 @@ class AIRouterV2 {
   /// هل الاستعلام إداري؟
   bool _isAdminQuery(String intent) {
     const adminIntents = {
-      'query_users', 'ask_guide', 'supervision', 'management',
+      'query_users',
+      'ask_guide',
+      'supervision',
+      'management',
     };
     return adminIntents.contains(intent);
   }
 
   /// حالة النظام
   Map<String, dynamic> get status => {
-    'health_engine': 'active',
-    'analytics_engine': 'active',
-    'child_profile': healthContext.child.hasBasicInfo ? 'loaded' : 'empty',
-    'conversation_turns': healthContext.turnCount,
-  };
+        'health_engine': 'active',
+        'analytics_engine': 'active',
+        'child_profile': healthContext.child.hasBasicInfo ? 'loaded' : 'empty',
+        'conversation_turns': healthContext.turnCount,
+      };
 }

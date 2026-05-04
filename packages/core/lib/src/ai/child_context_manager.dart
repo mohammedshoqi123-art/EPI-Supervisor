@@ -19,7 +19,8 @@ class ChildProfile {
 
   ChildProfile();
 
-  bool get hasBasicInfo => ageMonths != null || ageWeeks != null || ageDays != null;
+  bool get hasBasicInfo =>
+      ageMonths != null || ageWeeks != null || ageDays != null;
 
   int get totalWeeks {
     if (ageWeeks != null) return ageWeeks!;
@@ -50,17 +51,17 @@ class ChildProfile {
   }
 
   Map<String, dynamic> toJson() => {
-    'name': name,
-    'ageMonths': ageMonths,
-    'ageWeeks': ageWeeks,
-    'ageDays': ageDays,
-    'gender': gender,
-    'isPremature': isPremature,
-    'hasChronicDisease': hasChronicDisease,
-    'chronicDiseaseType': chronicDiseaseType,
-    'givenVaccines': givenVaccines,
-    'mentionedSymptoms': mentionedSymptoms,
-  };
+        'name': name,
+        'ageMonths': ageMonths,
+        'ageWeeks': ageWeeks,
+        'ageDays': ageDays,
+        'gender': gender,
+        'isPremature': isPremature,
+        'hasChronicDisease': hasChronicDisease,
+        'chronicDiseaseType': chronicDiseaseType,
+        'givenVaccines': givenVaccines,
+        'mentionedSymptoms': mentionedSymptoms,
+      };
 
   factory ChildProfile.fromJson(Map<String, dynamic> j) {
     final p = ChildProfile();
@@ -73,7 +74,8 @@ class ChildProfile {
     p.hasChronicDisease = j['hasChronicDisease'] as bool? ?? false;
     p.chronicDiseaseType = j['chronicDiseaseType'] as String?;
     p.givenVaccines = List<String>.from(j['givenVaccines'] as List? ?? []);
-    p.mentionedSymptoms = List<String>.from(j['mentionedSymptoms'] as List? ?? []);
+    p.mentionedSymptoms =
+        List<String>.from(j['mentionedSymptoms'] as List? ?? []);
     return p;
   }
 
@@ -94,12 +96,12 @@ class ChildProfile {
 
 /// حالة المحادثة
 enum ConversationPhase {
-  greeting,        // بداية المحادثة
-  collecting,      // جمع معلومات
-  consulting,      // تقديم استشارة
-  followUp,        // متابعة
-  clarification,   // طلب توضيح
-  emergency,       // حالة طوارئ
+  greeting, // بداية المحادثة
+  collecting, // جمع معلومات
+  consulting, // تقديم استشارة
+  followUp, // متابعة
+  clarification, // طلب توضيح
+  emergency, // حالة طوارئ
 }
 
 /// دورة محادثة واحدة
@@ -205,7 +207,9 @@ class ChildContextManager {
       return;
     }
     // ولد اليوم
-    if (n.contains('ولده') || n.contains('ولد اليوم') || n.contains('مولود جديد')) {
+    if (n.contains('ولده') ||
+        n.contains('ولد اليوم') ||
+        n.contains('مولود جديد')) {
       child.ageDays = 0;
       child.ageWeeks = 0;
       child.ageMonths = 0;
@@ -226,8 +230,10 @@ class ChildContextManager {
       return;
     }
     // عمره سنه
-    if (n.contains('عمره سنه') || n.contains('عمرها سنه') ||
-        n.contains('سنه وحده') || n.contains('سنة واحدة')) {
+    if (n.contains('عمره سنه') ||
+        n.contains('عمرها سنه') ||
+        n.contains('سنه وحده') ||
+        n.contains('سنة واحدة')) {
       child.ageMonths = 12;
       child.lastUpdated = DateTime.now();
       return;
@@ -245,25 +251,48 @@ class ChildContextManager {
   }
 
   void _extractChildName(String n) {
-    final nameMatch = RegExp(r'(?:اسمه|اسمها|سميته|سميتها|يسمونه|يسمونها)\s+(\w+)').firstMatch(n);
+    final nameMatch =
+        RegExp(r'(?:اسمه|اسمها|سميته|سميتها|يسمونه|يسمونها)\s+(\w+)')
+            .firstMatch(n);
     if (nameMatch != null) child.name = nameMatch.group(1);
   }
 
   void _extractSymptoms(String n) {
     final symptoms = {
-      'حراره': 'حرارة', 'سخونه': 'حرارة', 'حمى': 'حرارة', 'يرتفع': 'حرارة',
-      'اسهال': 'إسهال', 'ماء ابيض': 'إسهال',
-      'قيء': 'قيء', 'يرجع': 'قيء',
-      'سعال': 'سعال', 'كحه': 'سعال', 'كحة': 'سعال',
-      'زكام': 'زكام', 'رشح': 'زكام', 'انفلونزا': 'زكام',
-      'طفح': 'طفح جلدي', 'حبوب': 'طفح جلدي',
-      'الم': 'ألم', 'يتالم': 'ألم', 'يتألم': 'ألم', 'وجع': 'ألم',
-      'تورم': 'تورم', 'انتفاخ': 'تورم', 'ينتفخ': 'تورم',
-      'يبكي': 'بكاء', 'بكاء': 'بكاء', 'صار يبكي': 'بكاء',
-      'تشنج': 'تشنجات', 'نوبه': 'تشنجات',
-      'ما ياكل': 'رفض الطعام', 'يرفض': 'رفض الطعام',
-      'نعاس': 'نعاس', 'تعبان': 'تعب عام',
-      'احمرار': 'احمرار', 'احمر': 'احمرار',
+      'حراره': 'حرارة',
+      'سخونه': 'حرارة',
+      'حمى': 'حرارة',
+      'يرتفع': 'حرارة',
+      'اسهال': 'إسهال',
+      'ماء ابيض': 'إسهال',
+      'قيء': 'قيء',
+      'يرجع': 'قيء',
+      'سعال': 'سعال',
+      'كحه': 'سعال',
+      'كحة': 'سعال',
+      'زكام': 'زكام',
+      'رشح': 'زكام',
+      'انفلونزا': 'زكام',
+      'طفح': 'طفح جلدي',
+      'حبوب': 'طفح جلدي',
+      'الم': 'ألم',
+      'يتالم': 'ألم',
+      'يتألم': 'ألم',
+      'وجع': 'ألم',
+      'تورم': 'تورم',
+      'انتفاخ': 'تورم',
+      'ينتفخ': 'تورم',
+      'يبكي': 'بكاء',
+      'بكاء': 'بكاء',
+      'صار يبكي': 'بكاء',
+      'تشنج': 'تشنجات',
+      'نوبه': 'تشنجات',
+      'ما ياكل': 'رفض الطعام',
+      'يرفض': 'رفض الطعام',
+      'نعاس': 'نعاس',
+      'تعبان': 'تعب عام',
+      'احمرار': 'احمرار',
+      'احمر': 'احمرار',
     };
     for (final e in symptoms.entries) {
       if (n.contains(e.key) && !child.mentionedSymptoms.contains(e.value)) {
@@ -297,16 +326,21 @@ class ChildContextManager {
 
   void _extractVaccineHistory(String n) {
     final vaccines = {
-      'bcg': 'bcg', 'بي سي جي': 'bcg',
-      'شلل': 'opv', 'بوليو': 'opv',
+      'bcg': 'bcg',
+      'بي سي جي': 'bcg',
+      'شلل': 'opv',
+      'بوليو': 'opv',
       'خماسي': 'penta',
       'رئوي': 'pcv',
       'روتا': 'rota',
-      'حصبه': 'mr', 'حصبة': 'mr',
+      'حصبه': 'mr',
+      'حصبة': 'mr',
     };
     for (final e in vaccines.entries) {
-      if (n.contains(e.key) && RegExp(r'اخذ|عطوه|خذ|طعموه|سوى|اخد').hasMatch(n)) {
-        if (!child.givenVaccines.contains(e.value)) child.givenVaccines.add(e.value);
+      if (n.contains(e.key) &&
+          RegExp(r'اخذ|عطوه|خذ|طعموه|سوى|اخد').hasMatch(n)) {
+        if (!child.givenVaccines.contains(e.value))
+          child.givenVaccines.add(e.value);
       }
     }
   }
@@ -315,12 +349,19 @@ class ChildContextManager {
   ({bool needs, String question, List<String> options}) needsClarification(
       String normalized, String intent) {
     // عمر الطفل غير محدد
-    if ((intent == 'age_query' || intent == 'vaccine_list') && !child.hasBasicInfo) {
+    if ((intent == 'age_query' || intent == 'vaccine_list') &&
+        !child.hasBasicInfo) {
       if (!normalized.contains(RegExp(r'عمر|شهر|اسبوع|سن|عند|عنده|يوم'))) {
         return (
           needs: true,
           question: '📅 عشان أقدر أعطيك تطعيمات طفلك بالضبط، كم عمره؟',
-          options: ['عمره شهر', 'عمره 3 شهور', 'عمره 6 شهور', 'عمره 9 شهور', 'عمره سنة'],
+          options: [
+            'عمره شهر',
+            'عمره 3 شهور',
+            'عمره 6 شهور',
+            'عمره 9 شهور',
+            'عمره سنة'
+          ],
         );
       }
     }
@@ -332,17 +373,30 @@ class ChildContextManager {
         return (
           needs: true,
           question: '⚠️ عن أي تطعيم تسأل عن الآثار الجانبية؟',
-          options: ['الخماسي', 'BCG', 'الحصبة', 'الروتا', 'الرئوي', 'شلل الأطفال'],
+          options: [
+            'الخماسي',
+            'BCG',
+            'الحصبة',
+            'الروتا',
+            'الرئوي',
+            'شلل الأطفال'
+          ],
         );
       }
     }
 
     // سؤال مبهم
-    if (normalized.length < 8 && !_isGreeting(normalized) && !_isYesNo(normalized)) {
+    if (normalized.length < 8 &&
+        !_isGreeting(normalized) &&
+        !_isYesNo(normalized)) {
       return (
         needs: true,
         question: '🤔 ممكن توضح أكثر وش تقصد؟',
-        options: ['وش تطعيمات طفلي؟', 'وش الآثار الجانبية؟', 'هل التطعيم مجاني؟'],
+        options: [
+          'وش تطعيمات طفلي؟',
+          'وش الآثار الجانبية؟',
+          'هل التطعيم مجاني؟'
+        ],
       );
     }
 
@@ -350,7 +404,8 @@ class ChildContextManager {
   }
 
   bool _isGreeting(String n) => RegExp(r'مرحب|سلام|هلا|صباح|مساء').hasMatch(n);
-  bool _isYesNo(String n) => RegExp(r'^(نعم|لا|ايه|اي|يب|ايوه|مو|ايوا)$').hasMatch(n);
+  bool _isYesNo(String n) =>
+      RegExp(r'^(نعم|لا|ايه|اي|يب|ايوه|مو|ايوا)$').hasMatch(n);
 
   String? _detectAnyVaccine(String n) {
     final v = {
@@ -371,7 +426,8 @@ class ChildContextManager {
 
   /// هل السؤال متابعة؟
   bool isFollowUpQuestion(String normalized) {
-    return RegExp(r'^(نعم|ايوه|ايه|اي|يب|اشرح|وضح|بالتفصيل|تفاصيل|كم|ليه|ليش|طيب|تمام|واضح|فهمت|اوكي)')
+    return RegExp(
+            r'^(نعم|ايوه|ايه|اي|يب|اشرح|وضح|بالتفصيل|تفاصيل|كم|ليه|ليش|طيب|تمام|واضح|فهمت|اوكي)')
         .hasMatch(normalized);
   }
 
@@ -382,9 +438,12 @@ class ChildContextManager {
     if (child.gender != null) buf.writeln('الجنس: ${child.gender}');
     if (child.name != null) buf.writeln('الاسم: ${child.name}');
     if (child.isPremature) buf.writeln('مبتسر: نعم');
-    if (child.hasChronicDisease) buf.writeln('مرض مزمن: ${child.chronicDiseaseType}');
-    if (child.mentionedSymptoms.isNotEmpty) buf.writeln('الأعراض: ${child.mentionedSymptoms.join(", ")}');
-    if (child.givenVaccines.isNotEmpty) buf.writeln('تطعيمات أخذها: ${child.givenVaccines.join(", ")}');
+    if (child.hasChronicDisease)
+      buf.writeln('مرض مزمن: ${child.chronicDiseaseType}');
+    if (child.mentionedSymptoms.isNotEmpty)
+      buf.writeln('الأعراض: ${child.mentionedSymptoms.join(", ")}');
+    if (child.givenVaccines.isNotEmpty)
+      buf.writeln('تطعيمات أخذها: ${child.givenVaccines.join(", ")}');
     return buf.toString().trim();
   }
 

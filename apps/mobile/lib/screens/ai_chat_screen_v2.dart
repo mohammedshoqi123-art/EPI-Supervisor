@@ -241,7 +241,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
           if (template != null) 'template': template,
         }).timeout(const Duration(seconds: 45));
 
-        final reply = resp['reply'] as String? ?? resp['message'] as String? ?? '';
+        final reply =
+            resp['reply'] as String? ?? resp['message'] as String? ?? '';
         final source = resp['source'] as String? ?? 'unknown';
 
         setState(() {
@@ -716,12 +717,18 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
             crossAxisSpacing: 12,
             childAspectRatio: 2.2,
             children: [
-              _reportCard(cs, '📊', 'daily', 'يومي مختصر', const Color(0xFF1976D2)),
-              _reportCard(cs, '💉', 'coverage', 'تقرير التغطية', const Color(0xFF388E3C)),
-              _reportCard(cs, '⚠️', 'shortages', 'النواقص والتبريد', const Color(0xFFD32F2F)),
-              _reportCard(cs, '🛡️', 'polio', 'حملات الشلل', const Color(0xFF7B1FA2)),
-              _reportCard(cs, '📝', 'supervision', 'أداء الإشراف', const Color(0xFFF57C00)),
-              _reportCard(cs, '🎯', 'targets', 'المستهدفات', const Color(0xFF0097A7)),
+              _reportCard(
+                  cs, '📊', 'daily', 'يومي مختصر', const Color(0xFF1976D2)),
+              _reportCard(cs, '💉', 'coverage', 'تقرير التغطية',
+                  const Color(0xFF388E3C)),
+              _reportCard(cs, '⚠️', 'shortages', 'النواقص والتبريد',
+                  const Color(0xFFD32F2F)),
+              _reportCard(
+                  cs, '🛡️', 'polio', 'حملات الشلل', const Color(0xFF7B1FA2)),
+              _reportCard(cs, '📝', 'supervision', 'أداء الإشراف',
+                  const Color(0xFFF57C00)),
+              _reportCard(
+                  cs, '🎯', 'targets', 'المستهدفات', const Color(0xFF0097A7)),
             ],
           ),
           const SizedBox(height: 28),
@@ -1114,7 +1121,8 @@ class _AiChatScreenV2State extends ConsumerState<AiChatScreenV2>
 
     for (final match in exp.allMatches(text)) {
       if (match.start > start) {
-        spans.add(TextSpan(text: text.substring(start, match.start), style: baseStyle));
+        spans.add(TextSpan(
+            text: text.substring(start, match.start), style: baseStyle));
       }
 
       final String matched = match.group(0)!;

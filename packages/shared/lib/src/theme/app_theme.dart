@@ -411,9 +411,12 @@ class AppTheme {
           borderRadius: radiusMedium,
           borderSide: const BorderSide(color: Color(0xFFEF4444)),
         ),
-        labelStyle: const TextStyle(fontFamily: fontSecondary, color: darkTextSecondary),
-        hintStyle: const TextStyle(fontFamily: fontSecondary, color: darkTextHint),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        labelStyle: const TextStyle(
+            fontFamily: fontSecondary, color: darkTextSecondary),
+        hintStyle:
+            const TextStyle(fontFamily: fontSecondary, color: darkTextHint),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       dividerTheme: const DividerThemeData(
         color: darkBorder,
@@ -432,7 +435,8 @@ class AppTheme {
         type: BottomNavigationBarType.fixed,
         elevation: 8,
         selectedLabelStyle: TextStyle(fontFamily: fontSecondary, fontSize: 11),
-        unselectedLabelStyle: TextStyle(fontFamily: fontSecondary, fontSize: 11),
+        unselectedLabelStyle:
+            TextStyle(fontFamily: fontSecondary, fontSize: 11),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,

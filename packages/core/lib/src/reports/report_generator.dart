@@ -680,7 +680,6 @@ class ReportGenerator {
                   ),
                 ),
                 pw.SizedBox(height: 16),
-
                 ...items.map((c) => _buildChallengeCard(c)),
               ],
             ),
@@ -1037,8 +1036,18 @@ class ReportGenerator {
 
   static String _formatDateArabic(DateTime date) {
     const months = [
-      'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+      'يناير',
+      'فبراير',
+      'مارس',
+      'أبريل',
+      'مايو',
+      'يونيو',
+      'يوليو',
+      'أغسطس',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر',
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }

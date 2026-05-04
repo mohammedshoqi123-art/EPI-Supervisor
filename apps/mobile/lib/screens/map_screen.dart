@@ -25,7 +25,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
   MapViewMode _viewMode = MapViewMode.individual;
   Map<String, dynamic>? _selectedSubmission;
   Map<String, dynamic>? _selectedCluster;
-  MapColorMode _colorMode = MapColorMode.status; // ═══ ألوان حسب الدور أو الحالة ═══
+  MapColorMode _colorMode =
+      MapColorMode.status; // ═══ ألوان حسب الدور أو الحالة ═══
 
   // ─── Filter state ────────────────────────────────────────────
   String? _filterFormId;
@@ -120,18 +121,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
       return;
     }
 
-    double minLat = points.first.latitude,
-        maxLat = points.first.latitude;
-    double minLng = points.first.longitude,
-        maxLng = points.first.longitude;
+    double minLat = points.first.latitude, maxLat = points.first.latitude;
+    double minLng = points.first.longitude, maxLng = points.first.longitude;
     for (final p in points) {
       if (p.latitude < minLat) minLat = p.latitude;
       if (p.latitude > maxLat) maxLat = p.latitude;
       if (p.longitude < minLng) minLng = p.longitude;
       if (p.longitude > maxLng) maxLng = p.longitude;
     }
-    _mapController.move(
-        LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2),
+    _mapController.move(LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2),
         MapHelpers.calculateFitZoom(points));
   }
 
@@ -158,19 +156,16 @@ class _MapScreenState extends ConsumerState<MapScreen>
       // Search
       if (_searchCtrl.text.isNotEmpty) {
         final q = _searchCtrl.text.toLowerCase();
-        final name =
-            (s['profiles']?['full_name'] ?? s['submitter_name'] ?? '')
-                .toString()
-                .toLowerCase();
-        final gov = (s['governorates']?['name_ar'] ??
-                s['governorate_name'] ??
-                '')
+        final name = (s['profiles']?['full_name'] ?? s['submitter_name'] ?? '')
             .toString()
             .toLowerCase();
-        final form =
-            (s['forms']?['title_ar'] ?? s['form_title'] ?? '')
+        final gov =
+            (s['governorates']?['name_ar'] ?? s['governorate_name'] ?? '')
                 .toString()
                 .toLowerCase();
+        final form = (s['forms']?['title_ar'] ?? s['form_title'] ?? '')
+            .toString()
+            .toLowerCase();
         if (!name.contains(q) && !gov.contains(q) && !form.contains(q)) {
           return false;
         }
@@ -196,9 +191,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       final name = s['profiles']?['full_name'] ?? s['submitter_name'];
       if (id != null && name != null) map[id] = name.toString();
     }
-    return map.entries
-        .map((e) => {'id': e.key, 'name': e.value})
-        .toList()
+    return map.entries.map((e) => {'id': e.key, 'name': e.value}).toList()
       ..sort((a, b) => a['name']!.compareTo(b['name']!));
   }
 
@@ -222,14 +215,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
             onZoomIn: () {
               setState(
                   () => _currentZoom = (_currentZoom + 1).clamp(4.0, 18.0));
-              _mapController.move(
-                  _mapController.camera.center, _currentZoom);
+              _mapController.move(_mapController.camera.center, _currentZoom);
             },
             onZoomOut: () {
               setState(
                   () => _currentZoom = (_currentZoom - 1).clamp(4.0, 18.0));
-              _mapController.move(
-                  _mapController.camera.center, _currentZoom);
+              _mapController.move(_mapController.camera.center, _currentZoom);
             },
           ),
         ],
@@ -258,8 +249,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
                       color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child:
-                        const Icon(Icons.map_rounded, color: Colors.white, size: 22),
+                    child: const Icon(Icons.map_rounded,
+                        color: Colors.white, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -284,8 +275,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   ),
                   // Filter button with badge
                   GestureDetector(
-                    onTap: () =>
-                        setState(() => _showFilters = !_showFilters),
+                    onTap: () => setState(() => _showFilters = !_showFilters),
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -355,7 +345,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            _colorMode == MapColorMode.role ? 'الدور' : 'الحالة',
+                            _colorMode == MapColorMode.role
+                                ? 'الدور'
+                                : 'الحالة',
                             style: const TextStyle(
                               fontFamily: 'Tajawal',
                               fontSize: 11,
@@ -384,12 +376,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981)
-                            .withValues(alpha: 0.15),
+                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                            color: const Color(0xFF10B981)
-                                .withValues(alpha: 0.3)),
+                            color:
+                                const Color(0xFF10B981).withValues(alpha: 0.3)),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -433,10 +424,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
             .valueOrNull ??
         [];
     final supervisors = _getSupervisors(allSubs);
-    final forms = ref
-            .read(formsProvider)
-            .valueOrNull ??
-        [];
+    final forms = ref.read(formsProvider).valueOrNull ?? [];
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -459,10 +447,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
             style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
             decoration: InputDecoration(
               hintText: 'بحث: اسم مشرف، محافظة، نموذج...',
-              hintStyle:
-                  const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-              prefixIcon:
-                  const Icon(Icons.search_rounded, size: 20, color: Color(0xFF9CA3AF)),
+              hintStyle: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+              prefixIcon: const Icon(Icons.search_rounded,
+                  size: 20, color: Color(0xFF9CA3AF)),
               suffixIcon: _searchCtrl.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear_rounded, size: 18),
@@ -476,8 +463,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
           ),
           const SizedBox(height: 10),
@@ -493,8 +480,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   items: forms
                       .map((f) => DropdownMenuItem(
                             value: f['id'] as String? ?? '',
-                            child: Text(
-                                f['title_ar'] as String? ?? '',
+                            child: Text(f['title_ar'] as String? ?? '',
                                 style: const TextStyle(
                                     fontFamily: 'Tajawal', fontSize: 12),
                                 overflow: TextOverflow.ellipsis),
@@ -519,8 +505,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                 overflow: TextOverflow.ellipsis),
                           ))
                       .toList(),
-                  onChanged: (v) =>
-                      setState(() => _filterSupervisorId = v),
+                  onChanged: (v) => setState(() => _filterSupervisorId = v),
                 ),
               ),
             ],
@@ -561,8 +546,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                             style: TextStyle(
                                 fontFamily: 'Tajawal', fontSize: 12))),
                   ],
-                  onChanged: (v) =>
-                      setState(() => _filterStatus = v),
+                  onChanged: (v) => setState(() => _filterStatus = v),
                 ),
               ),
               const SizedBox(width: 8),
@@ -574,8 +558,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444)
-                          .withValues(alpha: 0.1),
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Row(
@@ -673,12 +656,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
     // ═══ Show role-based or status-based stats depending on color mode ═══
     if (_colorMode == MapColorMode.role) {
-      final central = subs.where((s) =>
-          (s['profiles']?['role'] ?? s['submitter_role'] ?? '') == 'central').length;
-      final gov = subs.where((s) =>
-          (s['profiles']?['role'] ?? s['submitter_role'] ?? '') == 'governorate').length;
-      final dist = subs.where((s) =>
-          (s['profiles']?['role'] ?? s['submitter_role'] ?? '') == 'district').length;
+      final central = subs
+          .where((s) =>
+              (s['profiles']?['role'] ?? s['submitter_role'] ?? '') ==
+              'central')
+          .length;
+      final gov = subs
+          .where((s) =>
+              (s['profiles']?['role'] ?? s['submitter_role'] ?? '') ==
+              'governorate')
+          .length;
+      final dist = subs
+          .where((s) =>
+              (s['profiles']?['role'] ?? s['submitter_role'] ?? '') ==
+              'district')
+          .length;
 
       return Positioned(
         top: _showFilters ? 340 : 155,
@@ -686,17 +678,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
         right: 16,
         child: Row(
           children: [
-            _statCard('الكل', '${subs.length}',
-                Icons.description_rounded, const Color(0xFF6366F1)),
+            _statCard('الكل', '${subs.length}', Icons.description_rounded,
+                const Color(0xFF6366F1)),
             const SizedBox(width: 8),
-            _statCard('مركزي', '$central',
-                Icons.account_balance_rounded, const Color(0xFF3B82F6)),
+            _statCard('مركزي', '$central', Icons.account_balance_rounded,
+                const Color(0xFF3B82F6)),
             const SizedBox(width: 8),
-            _statCard('محافظة', '$gov',
-                Icons.location_city_rounded, const Color(0xFF10B981)),
+            _statCard('محافظة', '$gov', Icons.location_city_rounded,
+                const Color(0xFF10B981)),
             const SizedBox(width: 8),
-            _statCard('مديرية', '$dist',
-                Icons.map_rounded, const Color(0xFFF59E0B)),
+            _statCard(
+                'مديرية', '$dist', Icons.map_rounded, const Color(0xFFF59E0B)),
           ],
         ),
       );
@@ -704,8 +696,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
     // Status mode (default)
     final drafts = subs.where((s) => s['status'] == 'draft').length;
-    final submitted =
-        subs.where((s) => s['status'] == 'submitted').length;
+    final submitted = subs.where((s) => s['status'] == 'submitted').length;
 
     return Positioned(
       top: _showFilters ? 340 : 155,
@@ -713,24 +704,23 @@ class _MapScreenState extends ConsumerState<MapScreen>
       right: 16,
       child: Row(
         children: [
-          _statCard('الإرساليات', '${subs.length}',
-              Icons.description_rounded, const Color(0xFF3B82F6)),
+          _statCard('الإرساليات', '${subs.length}', Icons.description_rounded,
+              const Color(0xFF3B82F6)),
           const SizedBox(width: 8),
-          _statCard('بإحداثيات', '$withGps',
-              Icons.gps_fixed_rounded, const Color(0xFF10B981)),
+          _statCard('بإحداثيات', '$withGps', Icons.gps_fixed_rounded,
+              const Color(0xFF10B981)),
           const SizedBox(width: 8),
-          _statCard('مرسلة', '$submitted',
-              Icons.send_rounded, const Color(0xFF6366F1)),
+          _statCard('مرسلة', '$submitted', Icons.send_rounded,
+              const Color(0xFF6366F1)),
           const SizedBox(width: 8),
-          _statCard('مسودات', '$drafts',
-              Icons.edit_note_rounded, const Color(0xFFFB8C00)),
+          _statCard('مسودات', '$drafts', Icons.edit_note_rounded,
+              const Color(0xFFFB8C00)),
         ],
       ),
     );
   }
 
-  Widget _statCard(
-      String label, String value, IconData icon, Color color) {
+  Widget _statCard(String label, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -804,9 +794,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
       grouped.putIfAbsent(govId, () => []).add(sub);
       if (!govMeta.containsKey(govId)) {
         govMeta[govId] = {
-          'name': sub['governorates']?['name_ar'] ??
-              sub['governorate_name'] ??
-              '',
+          'name':
+              sub['governorates']?['name_ar'] ?? sub['governorate_name'] ?? '',
           'lat': sub['gps_lat'],
           'lng': sub['gps_lng'],
         };
@@ -878,8 +867,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
       final lat = (sub['gps_lat'] as num).toDouble();
       final lng = (sub['gps_lng'] as num).toDouble();
       final status = sub['status'] as String? ?? 'draft';
-      final role = (sub['profiles']?['role'] ?? sub['submitter_role'] ?? '')
-          .toString();
+      final role =
+          (sub['profiles']?['role'] ?? sub['submitter_role'] ?? '').toString();
       // ═══ Color by mode: status or role ═══
       final color = _colorMode == MapColorMode.role
           ? MapHelpers.roleColor(role)
@@ -902,12 +891,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
-              border: Border.all(
-                  color: Colors.white, width: isSelected ? 2 : 1.5),
+              border:
+                  Border.all(color: Colors.white, width: isSelected ? 2 : 1.5),
               boxShadow: [
                 BoxShadow(
-                    color: color.withValues(
-                        alpha: isSelected ? 0.5 : 0.3),
+                    color: color.withValues(alpha: isSelected ? 0.5 : 0.3),
                     blurRadius: isSelected ? 10 : 4)
               ],
             ),
@@ -929,19 +917,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final lat = sub['gps_lat'] as double?;
     final lng = sub['gps_lng'] as double?;
     final status = sub['status'] as String? ?? 'draft';
-    final role = (sub['profiles']?['role'] ?? sub['submitter_role'] ?? '')
-        .toString();
-    final govName = sub['governorates']?['name_ar'] ??
-        sub['governorate_name'] ??
-        '';
-    final distName = sub['districts']?['name_ar'] ??
-        sub['district_name'] ??
-        '';
-    final formTitle =
-        sub['forms']?['title_ar'] ?? sub['form_title'] ?? '';
-    final supervisorName = sub['profiles']?['full_name'] ??
-        sub['submitter_name'] ??
-        '';
+    final role =
+        (sub['profiles']?['role'] ?? sub['submitter_role'] ?? '').toString();
+    final govName =
+        sub['governorates']?['name_ar'] ?? sub['governorate_name'] ?? '';
+    final distName = sub['districts']?['name_ar'] ?? sub['district_name'] ?? '';
+    final formTitle = sub['forms']?['title_ar'] ?? sub['form_title'] ?? '';
+    final supervisorName =
+        sub['profiles']?['full_name'] ?? sub['submitter_name'] ?? '';
     final createdAt = sub['created_at'] as String? ?? '';
     final data = sub['data'] as Map<String, dynamic>? ?? {};
 
@@ -982,17 +965,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
                       child: Text(
                           formTitle.isNotEmpty
                               ? formTitle
-                              : (govName.isNotEmpty
-                                  ? govName
-                                  : 'إرسالية'),
+                              : (govName.isNotEmpty ? govName : 'إرسالية'),
                           style: const TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 15,
                               fontWeight: FontWeight.w700))),
                   // Status or Role badge
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: (_colorMode == MapColorMode.role
                               ? MapHelpers.roleColor(role)
@@ -1014,8 +995,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   ),
                   const SizedBox(width: 8),
                   GestureDetector(
-                      onTap: () =>
-                          setState(() => _selectedSubmission = null),
+                      onTap: () => setState(() => _selectedSubmission = null),
                       child: const Icon(Icons.close_rounded,
                           size: 18, color: Colors.grey)),
                 ],
@@ -1071,8 +1051,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 10,
-                        color: const Color(0xFF00897B)
-                            .withValues(alpha: 0.7))),
+                        color: const Color(0xFF00897B).withValues(alpha: 0.7))),
               ),
             ],
           ),
@@ -1106,15 +1085,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final status = sub['status'] as String? ?? 'draft';
     final formTitle =
         sub['forms']?['title_ar'] ?? sub['form_title'] ?? 'إرسالية';
-    final supervisorName = sub['profiles']?['full_name'] ??
-        sub['submitter_name'] ??
-        '';
-    final govName = sub['governorates']?['name_ar'] ??
-        sub['governorate_name'] ??
-        '';
-    final distName = sub['districts']?['name_ar'] ??
-        sub['district_name'] ??
-        '';
+    final supervisorName =
+        sub['profiles']?['full_name'] ?? sub['submitter_name'] ?? '';
+    final govName =
+        sub['governorates']?['name_ar'] ?? sub['governorate_name'] ?? '';
+    final distName = sub['districts']?['name_ar'] ?? sub['district_name'] ?? '';
     final lat = sub['gps_lat'] as double?;
     final lng = sub['gps_lng'] as double?;
     final createdAt = sub['created_at'] as String? ?? '';
@@ -1127,8 +1102,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+        constraints:
+            BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1173,8 +1148,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                   fontFamily: 'Tajawal',
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color:
-                                      MapHelpers.statusColor(status))),
+                                  color: MapHelpers.statusColor(status))),
                         ),
                       ],
                     ),
@@ -1218,14 +1192,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: const Color(0xFFE2E8F0)),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: Column(
                           children: data.entries
                               .map((e) => Padding(
-                                    padding:
-                                        const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.only(bottom: 8),
                                     child: Row(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -1236,17 +1208,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                                 style: const TextStyle(
                                                     fontFamily: 'Tajawal',
                                                     fontSize: 11,
-                                                    color:
-                                                        Color(0xFF9CA3AF)))),
+                                                    color: Color(0xFF9CA3AF)))),
                                         Expanded(
-                                            child: Text(
-                                                '${e.value}',
+                                            child: Text('${e.value}',
                                                 style: const TextStyle(
                                                     fontFamily: 'Tajawal',
                                                     fontSize: 12,
                                                     fontWeight:
-                                                        FontWeight
-                                                            .w600))),
+                                                        FontWeight.w600))),
                                       ],
                                     ),
                                   ))
@@ -1293,8 +1262,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                           Navigator.pop(ctx);
                           context.go('/submission/${sub['id']}');
                         },
-                        icon: const Icon(Icons.open_in_new_rounded,
-                            size: 18),
+                        icon: const Icon(Icons.open_in_new_rounded, size: 18),
                         label: const Text('فتح الاستمارة كاملة',
                             style: TextStyle(
                                 fontFamily: 'Cairo',
@@ -1302,8 +1270,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00897B),
                           foregroundColor: Colors.white,
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14)),
                         ),
@@ -1369,15 +1336,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
   Widget _buildClusterPanel() {
     final cluster = _selectedCluster!;
     final name = cluster['name'] as String? ?? '';
-    final subs =
-        cluster['submissions'] as List<Map<String, dynamic>>;
+    final subs = cluster['submissions'] as List<Map<String, dynamic>>;
     final byStatus = <String, int>{};
     final supervisors = <String>{};
     for (final s in subs) {
       final st = s['status'] as String? ?? 'draft';
       byStatus[st] = (byStatus[st] ?? 0) + 1;
-      final supName =
-          s['profiles']?['full_name'] ?? s['submitter_name'];
+      final supName = s['profiles']?['full_name'] ?? s['submitter_name'];
       if (supName != null) supervisors.add(supName.toString());
     }
 
@@ -1441,16 +1406,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     ],
                   )),
                   GestureDetector(
-                      onTap: () =>
-                          setState(() => _selectedCluster = null),
+                      onTap: () => setState(() => _selectedCluster = null),
                       child: const Icon(Icons.close_rounded,
                           size: 18, color: Colors.grey)),
                 ],
               ),
               const SizedBox(height: 16),
               ...byStatus.entries.map((e) {
-                final pct =
-                    subs.isEmpty ? 0.0 : e.value / subs.length;
+                final pct = subs.isEmpty ? 0.0 : e.value / subs.length;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
@@ -1480,8 +1443,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                   fontFamily: 'Cairo',
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
-                                  color:
-                                      MapHelpers.statusColor(e.key)))),
+                                  color: MapHelpers.statusColor(e.key)))),
                     ],
                   ),
                 );
@@ -1493,8 +1455,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 10,
-                        color: const Color(0xFF00897B)
-                            .withValues(alpha: 0.7))),
+                        color: const Color(0xFF00897B).withValues(alpha: 0.7))),
               ),
             ],
           ),
@@ -1507,15 +1468,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   void _showClusterDetailSheet(Map<String, dynamic> cluster) {
     final name = cluster['name'] as String? ?? '';
-    final subs =
-        cluster['submissions'] as List<Map<String, dynamic>>;
+    final subs = cluster['submissions'] as List<Map<String, dynamic>>;
 
     // Group by supervisor
     final bySupervisor = <String, List<Map<String, dynamic>>>{};
     for (final s in subs) {
-      final supName = s['profiles']?['full_name'] ??
-          s['submitter_name'] ??
-          'غير معروف';
+      final supName =
+          s['profiles']?['full_name'] ?? s['submitter_name'] ?? 'غير معروف';
       bySupervisor.putIfAbsent(supName, () => []).add(s);
     }
 
@@ -1524,8 +1483,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+        constraints:
+            BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1563,8 +1522,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
             Flexible(
               child: ListView(
                 shrinkWrap: true,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
                   // By supervisor section
                   const Text('حسب المشرف',
@@ -1580,8 +1538,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: const Color(0xFFE2E8F0)),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: Row(
                           children: [
@@ -1590,22 +1547,18 @@ class _MapScreenState extends ConsumerState<MapScreen>
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(e.key,
                                       style: const TextStyle(
                                           fontFamily: 'Tajawal',
                                           fontSize: 13,
-                                          fontWeight:
-                                              FontWeight.w600)),
-                                  Text(
-                                      '${e.value.length} إرسالية',
+                                          fontWeight: FontWeight.w600)),
+                                  Text('${e.value.length} إرسالية',
                                       style: const TextStyle(
                                           fontFamily: 'Tajawal',
                                           fontSize: 11,
-                                          color:
-                                              Color(0xFF9CA3AF))),
+                                          color: Color(0xFF9CA3AF))),
                                 ],
                               ),
                             ),
@@ -1623,15 +1576,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
                           color: Color(0xFF1A2332))),
                   const SizedBox(height: 8),
                   ...subs.map((s) {
-                    final status =
-                        s['status'] as String? ?? 'draft';
-                    final formTitle = s['forms']?['title_ar'] ??
-                        s['form_title'] ??
+                    final status = s['status'] as String? ?? 'draft';
+                    final formTitle =
+                        s['forms']?['title_ar'] ?? s['form_title'] ?? '';
+                    final supName = s['profiles']?['full_name'] ??
+                        s['submitter_name'] ??
                         '';
-                    final supName =
-                        s['profiles']?['full_name'] ??
-                            s['submitter_name'] ??
-                            '';
                     final date = s['created_at'] as String? ?? '';
 
                     return GestureDetector(
@@ -1644,10 +1594,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius:
-                              BorderRadius.circular(12),
-                          border: Border.all(
-                              color: const Color(0xFFE2E8F0)),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: Row(
                           children: [
@@ -1655,69 +1603,49 @@ class _MapScreenState extends ConsumerState<MapScreen>
                               width: 8,
                               height: 8,
                               decoration: BoxDecoration(
-                                  color: MapHelpers.statusColor(
-                                      status),
+                                  color: MapHelpers.statusColor(status),
                                   shape: BoxShape.circle),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment
-                                        .start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                       formTitle.isNotEmpty
                                           ? formTitle
                                           : 'إرسالية',
                                       style: const TextStyle(
-                                          fontFamily:
-                                              'Tajawal',
+                                          fontFamily: 'Tajawal',
                                           fontSize: 12,
-                                          fontWeight:
-                                              FontWeight
-                                                  .w600)),
+                                          fontWeight: FontWeight.w600)),
                                   Text(
                                       '$supName${date.isNotEmpty ? ' — ${MapHelpers.formatDate(date)}' : ''}',
                                       style: const TextStyle(
-                                          fontFamily:
-                                              'Tajawal',
+                                          fontFamily: 'Tajawal',
                                           fontSize: 10,
-                                          color: Color(
-                                              0xFF9CA3AF))),
+                                          color: Color(0xFF9CA3AF))),
                                 ],
                               ),
                             ),
                             Container(
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: MapHelpers.statusColor(
-                                        status)
+                                color: MapHelpers.statusColor(status)
                                     .withValues(alpha: 0.1),
-                                borderRadius:
-                                    BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text(
-                                  MapHelpers.statusLabel(
-                                      status),
+                              child: Text(MapHelpers.statusLabel(status),
                                   style: TextStyle(
                                       fontFamily: 'Tajawal',
                                       fontSize: 9,
-                                      fontWeight:
-                                          FontWeight.w600,
-                                      color: MapHelpers
-                                          .statusColor(
-                                              status))),
+                                      fontWeight: FontWeight.w600,
+                                      color: MapHelpers.statusColor(status))),
                             ),
                             const SizedBox(width: 6),
-                            const Icon(
-                                Icons
-                                    .arrow_forward_ios_rounded,
-                                size: 14,
-                                color: Color(0xFFCBD5E1)),
+                            const Icon(Icons.arrow_forward_ios_rounded,
+                                size: 14, color: Color(0xFFCBD5E1)),
                           ],
                         ),
                       ),

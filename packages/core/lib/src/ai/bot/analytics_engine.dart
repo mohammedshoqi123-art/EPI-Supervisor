@@ -9,12 +9,12 @@ import 'real_data_kb.dart';
 
 /// نوع التحليل المطلوب
 enum AnalysisType {
-  comparison,   // مقارنة
-  trend,        // اتجاه
-  prediction,   // تنبؤ
-  ranking,      // ترتيب
-  gapAnalysis,  // تحليل فجوات
-  kpi,          // مؤشرات أداء
+  comparison, // مقارنة
+  trend, // اتجاه
+  prediction, // تنبؤ
+  ranking, // ترتيب
+  gapAnalysis, // تحليل فجوات
+  kpi, // مؤشرات أداء
   recommendation, // توصيات
 }
 
@@ -41,7 +41,6 @@ class AnalysisResult {
 
 /// محرك التحليل والتنبوه المتقدم
 class AnalyticsEngine {
-
   // ══════════════════════════════════════════════════════════════════
   //  القسم ١: تحليل حملات شلل الأطفال
   // ══════════════════════════════════════════════════════════════════
@@ -64,7 +63,8 @@ class AnalyticsEngine {
     buf.writeln('📅 الفترة: ${campaign.period}');
     buf.writeln('');
     buf.writeln('━━━━ النتائج الرئيسية ━━━━');
-    buf.writeln('💉 إجمالي المطعمين: ${_formatNumber(campaign.totalVaccinated)} طفل');
+    buf.writeln(
+        '💉 إجمالي المطعمين: ${_formatNumber(campaign.totalVaccinated)} طفل');
     buf.writeln('📈 نسبة التغطية: ${campaign.coverageRate}%');
     buf.writeln('📉 نسبة التلف: ${campaign.wastageRate}%');
     buf.writeln('');
@@ -75,20 +75,26 @@ class AnalyticsEngine {
 
     buf.writeln('🏆 أفضل 5 محافظات:');
     for (int i = 0; i < 5 && i < sorted.length; i++) {
-      buf.writeln('  ${i + 1}. ${sorted[i].name}: ${sorted[i].coverage}% — ${sorted[i].rating}');
+      buf.writeln(
+          '  ${i + 1}. ${sorted[i].name}: ${sorted[i].coverage}% — ${sorted[i].rating}');
     }
 
     buf.writeln('');
     buf.writeln('⚠️ أضعف 3 محافظات:');
     final weakest = sorted.reversed.take(3).toList();
     for (int i = 0; i < weakest.length; i++) {
-      buf.writeln('  ❌ ${weakest[i].name}: ${weakest[i].coverage}% — ${weakest[i].rating}');
+      buf.writeln(
+          '  ❌ ${weakest[i].name}: ${weakest[i].coverage}% — ${weakest[i].rating}');
     }
 
     // تحليل الأداء
-    final excellent = campaign.governorates.values.where((g) => g.coverage >= 100).length;
-    final good = campaign.governorates.values.where((g) => g.coverage >= 95 && g.coverage < 100).length;
-    final poor = campaign.governorates.values.where((g) => g.coverage < 95).length;
+    final excellent =
+        campaign.governorates.values.where((g) => g.coverage >= 100).length;
+    final good = campaign.governorates.values
+        .where((g) => g.coverage >= 95 && g.coverage < 100)
+        .length;
+    final poor =
+        campaign.governorates.values.where((g) => g.coverage < 95).length;
 
     buf.writeln('');
     buf.writeln('📋 تقييم الأداء:');
@@ -98,7 +104,8 @@ class AnalyticsEngine {
 
     return AnalysisResult(
       title: 'تحليل ${campaign.round}',
-      summary: 'التغطية ${campaign.coverageRate}% — ${campaign.totalVaccinated} طفل مطعم',
+      summary:
+          'التغطية ${campaign.coverageRate}% — ${campaign.totalVaccinated} طفل مطعم',
       details: buf.toString(),
       keyFindings: [
         'إجمالي المطعمين: ${_formatNumber(campaign.totalVaccinated)}',
@@ -107,7 +114,9 @@ class AnalyticsEngine {
         'أدنى تغطية: ${sorted.last.name} (${sorted.last.coverage}%)',
       ],
       recommendations: poor > 0
-          ? ['التركيز على المحافظات المتدنية: ${weakest.map((g) => g.name).join("، ")}']
+          ? [
+              'التركيز على المحافظات المتدنية: ${weakest.map((g) => g.name).join("، ")}'
+            ]
           : [],
       type: AnalysisType.kpi,
     );
@@ -125,20 +134,25 @@ class AnalyticsEngine {
 
     // جدول المقارنة
     buf.writeln('┌─────────────┬──────────────┬──────────────┬──────────────┐');
-    buf.writeln('│ المعيار      │ ${campaigns[0].round.substring(0, 10).padLeft(10)} │ ${campaigns.length > 1 ? campaigns[1].round.substring(0, 10).padLeft(10) : "─" * 10} │ التغيير     │');
+    buf.writeln(
+        '│ المعيار      │ ${campaigns[0].round.substring(0, 10).padLeft(10)} │ ${campaigns.length > 1 ? campaigns[1].round.substring(0, 10).padLeft(10) : "─" * 10} │ التغيير     │');
     buf.writeln('├─────────────┼──────────────┼──────────────┼──────────────┤');
 
     // إجمالي المطعمين
     final diff1 = campaigns.length > 1
         ? campaigns[1].totalVaccinated - campaigns[0].totalVaccinated
         : 0;
-    buf.writeln('│ المطعمين     │ ${_formatNumber(campaigns[0].totalVaccinated).padLeft(12)} │ ${campaigns.length > 1 ? _formatNumber(campaigns[1].totalVaccinated).padLeft(12) : "─" * 12} │ ${diff1 > 0 ? "+" : ""}${_formatNumber(diff1).padLeft(10)} │');
+    buf.writeln(
+        '│ المطعمين     │ ${_formatNumber(campaigns[0].totalVaccinated).padLeft(12)} │ ${campaigns.length > 1 ? _formatNumber(campaigns[1].totalVaccinated).padLeft(12) : "─" * 12} │ ${diff1 > 0 ? "+" : ""}${_formatNumber(diff1).padLeft(10)} │');
 
     // التغطية
     final diff2 = campaigns.length > 1
         ? campaigns[1].coverageRate - campaigns[0].coverageRate
         : 0.0;
-    buf.writeln('│ التغطية      │ ${"${campaigns[0].coverageRate}%".padLeft(12)} │ ${campaigns.length > 1 ? "${campaigns[1].coverageRate}%".padLeft(12) : "─" * 12} │ ${diff2 > 0 ? "+" : ""}${diff2.toStringAsFixed(0)}%'.padLeft(10) + ' │');
+    buf.writeln(
+        '│ التغطية      │ ${"${campaigns[0].coverageRate}%".padLeft(12)} │ ${campaigns.length > 1 ? "${campaigns[1].coverageRate}%".padLeft(12) : "─" * 12} │ ${diff2 > 0 ? "+" : ""}${diff2.toStringAsFixed(0)}%'
+                .padLeft(10) +
+            ' │');
 
     buf.writeln('└─────────────┴──────────────┴──────────────┴──────────────┘');
 
@@ -146,9 +160,11 @@ class AnalyticsEngine {
     buf.writeln('');
     buf.writeln('📈 تحليل الاتجاه:');
     if (diff1 > 0) {
-      buf.writeln('  ✅ ارتفاع عدد المطعمين بنسبة ${((diff1 / campaigns[0].totalVaccinated) * 100).toStringAsFixed(1)}%');
+      buf.writeln(
+          '  ✅ ارتفاع عدد المطعمين بنسبة ${((diff1 / campaigns[0].totalVaccinated) * 100).toStringAsFixed(1)}%');
     } else if (diff1 < 0) {
-      buf.writeln('  ⚠️ انخفاض عدد المطعمين بنسبة ${((diff1.abs() / campaigns[0].totalVaccinated) * 100).toStringAsFixed(1)}%');
+      buf.writeln(
+          '  ⚠️ انخفاض عدد المطعمين بنسبة ${((diff1.abs() / campaigns[0].totalVaccinated) * 100).toStringAsFixed(1)}%');
     }
 
     if (diff2 > 0) {
@@ -163,14 +179,20 @@ class AnalyticsEngine {
         final c1 = campaigns[0].governorates[gov]?.coverage ?? 0;
         final c2 = campaigns[1].governorates[gov]?.coverage ?? 0;
         final change = c2 - c1;
-        final arrow = change > 0 ? '📈' : change < 0 ? '📉' : '➡️';
-        buf.writeln('  $arrow $gov: $c1% → $c2% (${change > 0 ? "+" : ""}${change.toStringAsFixed(0)}%)');
+        final arrow = change > 0
+            ? '📈'
+            : change < 0
+                ? '📉'
+                : '➡️';
+        buf.writeln(
+            '  $arrow $gov: $c1% → $c2% (${change > 0 ? "+" : ""}${change.toStringAsFixed(0)}%)');
       }
     }
 
     return AnalysisResult(
       title: 'مقارنة حملات شلل الأطفال',
-      summary: 'مقارنة ${campaigns.length} حملات — ${diff1 > 0 ? "تحسن" : diff1 < 0 ? "انخفاض" : "استقرار"}',
+      summary:
+          'مقارنة ${campaigns.length} حملات — ${diff1 > 0 ? "تحسن" : diff1 < 0 ? "انخفاض" : "استقرار"}',
       details: buf.toString(),
       keyFindings: [
         'تغيير عدد المطعمين: ${diff1 > 0 ? "+" : ""}${_formatNumber(diff1)}',
@@ -196,7 +218,8 @@ class AnalyticsEngine {
     // اتجاه الجلسات
     buf.writeln('📈 اتجاه عدد الجلسات:');
     for (final phase in siaData) {
-      buf.writeln('  📅 ${phase.phase} (${phase.period}): ${phase.totalSessions} جلسة | ${phase.totalWorkers} عامل');
+      buf.writeln(
+          '  📅 ${phase.phase} (${phase.period}): ${phase.totalSessions} جلسة | ${phase.totalWorkers} عامل');
     }
 
     // حساب التغيير
@@ -206,7 +229,8 @@ class AnalyticsEngine {
 
     buf.writeln('');
     buf.writeln('📊 التغيير من المرحلة الأولى إلى الأخيرة:');
-    buf.writeln('  الجلسات: $firstSessions → $lastSessions (${change > 0 ? "+" : ""}${change.toStringAsFixed(1)}%)');
+    buf.writeln(
+        '  الجلسات: $firstSessions → $lastSessions (${change > 0 ? "+" : ""}${change.toStringAsFixed(1)}%)');
 
     // أفضل وأضعف المحافظات
     buf.writeln('');
@@ -216,12 +240,14 @@ class AnalyticsEngine {
       ..sort((a, b) => b.sessions.compareTo(a.sessions));
 
     for (int i = 0; i < 5 && i < sortedGovs.length; i++) {
-      buf.writeln('  ${i + 1}. ${sortedGovs[i].name}: ${sortedGovs[i].sessions} جلسة');
+      buf.writeln(
+          '  ${i + 1}. ${sortedGovs[i].name}: ${sortedGovs[i].sessions} جلسة');
     }
 
     return AnalysisResult(
       title: 'تحليل النشاط الايصالي',
-      summary: '${siaData.length} مراحل — ${change > 0 ? "تحسن" : "استقرار"} في عدد الجلسات',
+      summary:
+          '${siaData.length} مراحل — ${change > 0 ? "تحسن" : "استقرار"} في عدد الجلسات',
       details: buf.toString(),
       keyFindings: [
         'الجلسات ارتفعت من $firstSessions إلى $lastSessions',
@@ -253,8 +279,10 @@ class AnalyticsEngine {
 
     buf.writeln('📈 تحليل الاتجاه:');
     buf.writeln('  التغطية الحالية: $lastRate%');
-    buf.writeln('  معدل التحسن: ${avgImprovement.toStringAsFixed(1)} نقطة/جولة');
-    buf.writeln('  التنبؤ للجولة القادمة: ${predictedRate.toStringAsFixed(0)}%');
+    buf.writeln(
+        '  معدل التحسن: ${avgImprovement.toStringAsFixed(1)} نقطة/جولة');
+    buf.writeln(
+        '  التنبؤ للجولة القادمة: ${predictedRate.toStringAsFixed(0)}%');
     buf.writeln('');
 
     // تنبؤ لكل محافظة
@@ -278,16 +306,22 @@ class AnalyticsEngine {
       ..sort((a, b) => b.value.compareTo(a.value));
 
     for (final entry in sortedPredictions) {
-      final emoji = entry.value >= 95 ? '🟢' : entry.value >= 90 ? '🟡' : '🔴';
+      final emoji = entry.value >= 95
+          ? '🟢'
+          : entry.value >= 90
+              ? '🟡'
+              : '🔴';
       buf.writeln('  $emoji ${entry.key}: ${entry.value.toStringAsFixed(0)}%');
     }
 
     buf.writeln('');
-    buf.writeln('⚠️ تنبيه: هذه التنبؤات مبنية على الاتجاهات السابقة وقد تختلف في الواقع');
+    buf.writeln(
+        '⚠️ تنبيه: هذه التنبؤات مبنية على الاتجاهات السابقة وقد تختلف في الواقع');
 
     return AnalysisResult(
       title: 'تنبؤ حملات شلل الأطفال',
-      summary: 'التنبؤ: ${predictedRate.toStringAsFixed(0)}% تغطية — ${avgImprovement > 0 ? "تحسن" : "استقرار"}',
+      summary:
+          'التنبؤ: ${predictedRate.toStringAsFixed(0)}% تغطية — ${avgImprovement > 0 ? "تحسن" : "استقرار"}',
       details: buf.toString(),
       keyFindings: [
         'معدل التحسن: ${avgImprovement.toStringAsFixed(1)} نقطة مئوية/جولة',
@@ -312,20 +346,24 @@ class AnalyticsEngine {
 
     // بناءً على البيانات الحالية
     final avgMr1 = coverageByGov.isNotEmpty
-        ? coverageByGov.map((c) => c.mr1Coverage).reduce((a, b) => a + b) / coverageByGov.length
+        ? coverageByGov.map((c) => c.mr1Coverage).reduce((a, b) => a + b) /
+            coverageByGov.length
         : 82.0;
     final avgPenta1 = coverageByGov.isNotEmpty
-        ? coverageByGov.map((c) => c.penta1Coverage).reduce((a, b) => a + b) / coverageByGov.length
+        ? coverageByGov.map((c) => c.penta1Coverage).reduce((a, b) => a + b) /
+            coverageByGov.length
         : 94.0;
     final avgPenta3 = coverageByGov.isNotEmpty
-        ? coverageByGov.map((c) => c.penta3Coverage).reduce((a, b) => a + b) / coverageByGov.length
+        ? coverageByGov.map((c) => c.penta3Coverage).reduce((a, b) => a + b) /
+            coverageByGov.length
         : 85.0;
 
     buf.writeln('━━━━ التوقعات لـ 2026 ━━━━');
     buf.writeln('');
     buf.writeln('💉 MR1 (الحصبة الأولى):');
     buf.writeln('  الحالي: ${avgMr1.toStringAsFixed(1)}%');
-    buf.writeln('  المتوقع: ${(avgMr1 + 3).toStringAsFixed(0)}% (بافتراض تحسن 3 نقاط)');
+    buf.writeln(
+        '  المتوقع: ${(avgMr1 + 3).toStringAsFixed(0)}% (بافتراض تحسن 3 نقاط)');
     buf.writeln('');
     buf.writeln('💉 Penta1 (الخماسي الأولى):');
     buf.writeln('  الحالي: ${avgPenta1.toStringAsFixed(1)}%');
@@ -335,11 +373,13 @@ class AnalyticsEngine {
     buf.writeln('  الحالي: ${avgPenta3.toStringAsFixed(1)}%');
     buf.writeln('  المتوقع: ${(avgPenta3 + 2.5).toStringAsFixed(0)}%');
     buf.writeln('');
-    buf.writeln('📌 فجوة التسرب المتوقعة: ${(avgPenta1 + 1.5 - avgPenta3 - 2.5).abs().toStringAsFixed(1)}%');
+    buf.writeln(
+        '📌 فجوة التسرب المتوقعة: ${(avgPenta1 + 1.5 - avgPenta3 - 2.5).abs().toStringAsFixed(1)}%');
 
     return AnalysisResult(
       title: 'تنبؤ التغطية الروتينية 2026',
-      summary: 'MR1: ${(avgMr1 + 3).toStringAsFixed(0)}% | Penta3: ${(avgPenta3 + 2.5).toStringAsFixed(0)}%',
+      summary:
+          'MR1: ${(avgMr1 + 3).toStringAsFixed(0)}% | Penta3: ${(avgPenta3 + 2.5).toStringAsFixed(0)}%',
       details: buf.toString(),
       keyFindings: [
         'MR1 يحتاج تحسن 8+ نقاط للوصول للهدف (90%)',
@@ -382,8 +422,13 @@ class AnalyticsEngine {
     buf.writeln('');
     for (final cov in coverageByGov) {
       final gap = cov.penta1Coverage - cov.penta3Coverage;
-      final emoji = gap < 5 ? '🟢' : gap < 10 ? '🟡' : '🔴';
-      buf.writeln('  $emoji ${cov.governorate}: Penta1 ${cov.penta1Coverage}% → Penta3 ${cov.penta3Coverage}% (فجوة ${gap.toStringAsFixed(1)}%)');
+      final emoji = gap < 5
+          ? '🟢'
+          : gap < 10
+              ? '🟡'
+              : '🔴';
+      buf.writeln(
+          '  $emoji ${cov.governorate}: Penta1 ${cov.penta1Coverage}% → Penta3 ${cov.penta3Coverage}% (فجوة ${gap.toStringAsFixed(1)}%)');
     }
 
     return AnalysisResult(
@@ -432,7 +477,9 @@ class AnalyticsEngine {
       buf.writeln('   • سقطرى: 4-6 طفل/جلسة — مراجعة الجدولة');
     }
 
-    if (context.contains('روتين') || context.contains('تغطي') || context.contains('خماسي')) {
+    if (context.contains('روتين') ||
+        context.contains('تغطي') ||
+        context.contains('خماسي')) {
       buf.writeln('━━━━ توصيات التغطية الروتينية ━━━━');
       buf.writeln('');
       buf.writeln('1️⃣ أولوية المكلا:');
@@ -448,7 +495,9 @@ class AnalyticsEngine {
       buf.writeln('   • إشراك القادة المجتمعيين');
     }
 
-    if (context.contains('ايصال') || context.contains('نشاط') || context.contains('جلس')) {
+    if (context.contains('ايصال') ||
+        context.contains('نشاط') ||
+        context.contains('جلس')) {
       buf.writeln('━━━━ توصيات النشاط الايصالي ━━━━');
       buf.writeln('');
       buf.writeln('1️⃣ توسيع النطاق:');
@@ -494,18 +543,26 @@ class AnalyticsEngine {
 
   /// تحليل الاستفسار وتحديد نوع التحليل المطلوب
   static AnalysisResult? analyzeQuery(String query) {
-    final norm = query.toLowerCase()
-        .replaceAll('أ', 'ا').replaceAll('إ', 'ا').replaceAll('آ', 'ا')
-        .replaceAll('ة', 'ه').replaceAll('ى', 'ي');
+    final norm = query
+        .toLowerCase()
+        .replaceAll('أ', 'ا')
+        .replaceAll('إ', 'ا')
+        .replaceAll('آ', 'ا')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ى', 'ي');
 
     // حملات شلل الأطفال
     if (norm.contains('شلل') && norm.contains('تحلي')) {
       return analyzePolioCampaign(polioCampaignsData.length - 1);
     }
-    if (norm.contains('شلل') && norm.contains('قارن') || norm.contains('مقارنه') && norm.contains('شلل')) {
+    if (norm.contains('شلل') && norm.contains('قارن') ||
+        norm.contains('مقارنه') && norm.contains('شلل')) {
       return comparePolioCampaigns([0, polioCampaignsData.length - 1]);
     }
-    if (norm.contains('شلل') && (norm.contains('تنب') || norm.contains('توقع') || norm.contains('قادم'))) {
+    if (norm.contains('شلل') &&
+        (norm.contains('تنب') ||
+            norm.contains('توقع') ||
+            norm.contains('قادم'))) {
       return predictNextCampaignCoverage();
     }
 
@@ -515,27 +572,41 @@ class AnalyticsEngine {
     }
 
     // التغطية الروتينية
-    if (norm.contains('تغطي') && (norm.contains('روتين') || norm.contains('شهري') || norm.contains('خماسي'))) {
+    if (norm.contains('تغطي') &&
+        (norm.contains('روتين') ||
+            norm.contains('شهري') ||
+            norm.contains('خماسي'))) {
       return predictRoutineCoverage();
     }
 
     // فجوات
-    if (norm.contains('فجوه') || norm.contains('فجوة') || norm.contains('تسرب') || norm.contains('نقص')) {
+    if (norm.contains('فجوه') ||
+        norm.contains('فجوة') ||
+        norm.contains('تسرب') ||
+        norm.contains('نقص')) {
       return analyzeCoverageGaps();
     }
 
     // توصيات
-    if (norm.contains('توص') || norm.contains('نصيح') || norm.contains('اقتراح') || norm.contains('وش نسوي')) {
+    if (norm.contains('توص') ||
+        norm.contains('نصيح') ||
+        norm.contains('اقتراح') ||
+        norm.contains('وش نسوي')) {
       return generateSmartRecommendations(norm);
     }
 
     // تنبؤات عامة
-    if (norm.contains('تنب') || norm.contains('توقع') || norm.contains('2026') || norm.contains('قادم')) {
+    if (norm.contains('تنب') ||
+        norm.contains('توقع') ||
+        norm.contains('2026') ||
+        norm.contains('قادم')) {
       return predictNextCampaignCoverage();
     }
 
     // KPI
-    if (norm.contains('مؤشر') || norm.contains('اداء') || norm.contains('kpi')) {
+    if (norm.contains('مؤشر') ||
+        norm.contains('اداء') ||
+        norm.contains('kpi')) {
       return analyzePolioCampaign(polioCampaignsData.length - 1);
     }
 
@@ -548,9 +619,9 @@ class AnalyticsEngine {
 
   static String _formatNumber(int n) {
     return n.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},',
-    );
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},',
+        );
   }
 
   /// الحصول على ملخص سريع للوضع الحالي

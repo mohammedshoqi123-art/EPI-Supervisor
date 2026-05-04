@@ -112,12 +112,15 @@ class SmartAlertsEngine {
   /// Generate executive briefing based on current data
   static ExecutiveBriefing generateBriefing(Map<String, dynamic> data) {
     final alerts = analyzeAlerts(data);
-    final criticalCount = alerts.where((a) => a.severity == AlertSeverity.critical).length;
-    final highCount = alerts.where((a) => a.severity == AlertSeverity.high).length;
+    final criticalCount =
+        alerts.where((a) => a.severity == AlertSeverity.critical).length;
+    final highCount =
+        alerts.where((a) => a.severity == AlertSeverity.high).length;
 
     // Build summary
     final buffer = StringBuffer();
-    buffer.writeln('📋 الملخص التنفيذي — ${DateTime.now().toString().substring(0, 10)}');
+    buffer.writeln(
+        '📋 الملخص التنفيذي — ${DateTime.now().toString().substring(0, 10)}');
     buffer.writeln();
 
     // KPIs
@@ -126,14 +129,17 @@ class SmartAlertsEngine {
     buffer.writeln('📊 المؤشرات الرئيسية:');
     buffer.writeln('  • الإرساليات الإجمالية: ${subs['total'] ?? 0}');
     buffer.writeln('  • الإرساليات اليوم: ${subs['today'] ?? 0}');
-    buffer.writeln('  • النواقص النشطة: ${shorts['pending'] ?? shorts['total'] ?? 0}');
-    buffer.writeln('  • النواقص الحرجة: ${(shorts['bySeverity'] as Map?)?['critical'] ?? 0}');
+    buffer.writeln(
+        '  • النواقص النشطة: ${shorts['pending'] ?? shorts['total'] ?? 0}');
+    buffer.writeln(
+        '  • النواقص الحرجة: ${(shorts['bySeverity'] as Map?)?['critical'] ?? 0}');
     buffer.writeln();
 
     // Critical alerts
     if (criticalCount > 0) {
       buffer.writeln('🚨 تنبيهات حرجة ($criticalCount):');
-      for (final alert in alerts.where((a) => a.severity == AlertSeverity.critical)) {
+      for (final alert
+          in alerts.where((a) => a.severity == AlertSeverity.critical)) {
         buffer.writeln('  • ${alert.title}: ${alert.message}');
       }
       buffer.writeln();
@@ -142,7 +148,8 @@ class SmartAlertsEngine {
     // High priority alerts
     if (highCount > 0) {
       buffer.writeln('⚠️ تنبيهات عالية الأولوية ($highCount):');
-      for (final alert in alerts.where((a) => a.severity == AlertSeverity.high)) {
+      for (final alert
+          in alerts.where((a) => a.severity == AlertSeverity.high)) {
         buffer.writeln('  • ${alert.title}: ${alert.message}');
       }
       buffer.writeln();
@@ -170,9 +177,12 @@ class SmartAlertsEngine {
   // CHECK FUNCTIONS
   // ═══════════════════════════════════════════════════════════
 
-  static void _checkShortages(Map<String, dynamic> data, List<SmartAlert> alerts) {
+  static void _checkShortages(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
     final shorts = data['shortages'] as Map<String, dynamic>? ?? {};
-    final critical = (shorts['bySeverity'] as Map<String, dynamic>?)?['critical'] as int? ?? 0;
+    final critical =
+        (shorts['bySeverity'] as Map<String, dynamic>?)?['critical'] as int? ??
+            0;
     final total = shorts['total'] as int? ?? 0;
     final pending = shorts['pending'] as int? ?? 0;
 
@@ -180,7 +190,8 @@ class SmartAlertsEngine {
       alerts.add(SmartAlert(
         type: 'critical_shortage',
         title: 'نواقص حرجة',
-        message: 'يوجد $critical نقص حرج يحتاج معالجة فورية من إجمالي $total نقص',
+        message:
+            'يوجد $critical نقص حرج يحتاج معالجة فورية من إجمالي $total نقص',
         severity: AlertSeverity.critical,
         action: 'عالج النواقص الحرجة فوراً. تواصل مع الجهات المعنية للتوريد.',
       ));
@@ -197,7 +208,8 @@ class SmartAlertsEngine {
     }
   }
 
-  static void _checkCoverage(Map<String, dynamic> data, List<SmartAlert> alerts) {
+  static void _checkCoverage(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
     final coverage = data['coverage'] as Map<String, dynamic>? ?? {};
     final penta3Rate = coverage['penta3_rate'] as double? ?? 0;
     final mr1Rate = coverage['mr1_rate'] as double? ?? 0;
@@ -206,7 +218,8 @@ class SmartAlertsEngine {
       alerts.add(SmartAlert(
         type: 'low_coverage',
         title: 'تغطية Penta3 منخفضة',
-        message: 'نسبة تغطية Penta3 هي ${penta3Rate.toStringAsFixed(1)}% (أقل من المستهدف 90%)',
+        message:
+            'نسبة تغطية Penta3 هي ${penta3Rate.toStringAsFixed(1)}% (أقل من المستهدف 90%)',
         severity: AlertSeverity.high,
         action: 'حدد المناطق ذات التغطية المنخفضة ونفذ تدخلات مستهدفة.',
       ));
@@ -216,14 +229,16 @@ class SmartAlertsEngine {
       alerts.add(SmartAlert(
         type: 'low_coverage',
         title: 'تغطية الحصبة منخفضة',
-        message: 'نسبة تغطية MR1 هي ${mr1Rate.toStringAsFixed(1)}% — خطر تفشي الحصبة',
+        message:
+            'نسبة تغطية MR1 هي ${mr1Rate.toStringAsFixed(1)}% — خطر تفشي الحصبة',
         severity: AlertSeverity.high,
         action: 'عزز حملات التطعيم ضد الحصبة في المناطق المتأثرة.',
       ));
     }
   }
 
-  static void _checkDropout(Map<String, dynamic> data, List<SmartAlert> alerts) {
+  static void _checkDropout(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
     final coverage = data['coverage'] as Map<String, dynamic>? ?? {};
     final dropoutRate = coverage['dropout_rate'] as double? ?? 0;
 
@@ -231,7 +246,8 @@ class SmartAlertsEngine {
       alerts.add(SmartAlert(
         type: 'high_dropout',
         title: 'معدل تسرب مرتفع جداً',
-        message: 'معدل التسرب ${dropoutRate.toStringAsFixed(1)}% (المستهدف < 10%)',
+        message:
+            'معدل التسرب ${dropoutRate.toStringAsFixed(1)}% (المستهدف < 10%)',
         severity: AlertSeverity.critical,
         action: 'نفذ نظام تتبع المتسربين فوراً. حدد أسباب التسرب في كل منطقة.',
       ));
@@ -239,17 +255,20 @@ class SmartAlertsEngine {
       alerts.add(SmartAlert(
         type: 'high_dropout',
         title: 'معدل تسرب مرتفع',
-        message: 'معدل التسرب ${dropoutRate.toStringAsFixed(1)}% أعلى من المستهدف',
+        message:
+            'معدل التسرب ${dropoutRate.toStringAsFixed(1)}% أعلى من المستهدف',
         severity: AlertSeverity.high,
         action: 'راجع أسباب التسرب ونفذ متابعة نشطة للمتسربين.',
       ));
     }
   }
 
-  static void _checkDataQuality(Map<String, dynamic> data, List<SmartAlert> alerts) {
+  static void _checkDataQuality(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
     final subs = data['submissions'] as Map<String, dynamic>? ?? {};
     final total = subs['total'] as int? ?? 0;
-    final rejected = (subs['byStatus'] as Map<String, dynamic>?)?['rejected'] as int? ?? 0;
+    final rejected =
+        (subs['byStatus'] as Map<String, dynamic>?)?['rejected'] as int? ?? 0;
 
     if (total > 0 && rejected > 0) {
       final rejectRate = (rejected / total * 100);
@@ -257,15 +276,18 @@ class SmartAlertsEngine {
         alerts.add(SmartAlert(
           type: 'data_quality',
           title: 'نسبة رفض مرتفعة',
-          message: 'نسبة الرفض ${rejectRate.toStringAsFixed(1)}% من إجمالي الإرساليات',
+          message:
+              'نسبة الرفض ${rejectRate.toStringAsFixed(1)}% من إجمالي الإرساليات',
           severity: AlertSeverity.high,
-          action: 'درب المدخلين على البيانات. راجع أخطاء الإدخال الأكثر شيوعاً.',
+          action:
+              'درب المدخلين على البيانات. راجع أخطاء الإدخال الأكثر شيوعاً.',
         ));
       } else if (rejectRate > 8) {
         alerts.add(SmartAlert(
           type: 'data_quality',
           title: 'جودة بيانات تحتاج تحسين',
-          message: 'نسبة الرفض ${rejectRate.toStringAsFixed(1)}% — أعلى من المقبول',
+          message:
+              'نسبة الرفض ${rejectRate.toStringAsFixed(1)}% — أعلى من المقبول',
           severity: AlertSeverity.medium,
           action: 'راجع الاستمارات المرفوضة وحدد أنماط الأخطاء.',
         ));
@@ -273,12 +295,14 @@ class SmartAlertsEngine {
     }
   }
 
-  static void _checkSubmissionTrend(Map<String, dynamic> data, List<SmartAlert> alerts) {
+  static void _checkSubmissionTrend(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
     final subs = data['submissions'] as Map<String, dynamic>? ?? {};
     final dailyCounts = subs['dailyCounts'] as List? ?? [];
 
     if (dailyCounts.length >= 5) {
-      final counts = dailyCounts.map<num>((e) => e['count'] as num? ?? 0).toList();
+      final counts =
+          dailyCounts.map<num>((e) => e['count'] as num? ?? 0).toList();
       final regression = LocalAnalyticsEngine.linearRegression(counts);
 
       if (regression.slope < -1) {
@@ -287,7 +311,8 @@ class SmartAlertsEngine {
           title: 'تراجع في الإرساليات',
           message: 'هناك تراجع واضح في عدد الإرساليات اليومية (اتجاه تنازلي)',
           severity: AlertSeverity.high,
-          action: 'تحقق من أسباب التراجع: نقص العمالة؟ مشاكل تقنية؟ ضعف التغطية؟',
+          action:
+              'تحقق من أسباب التراجع: نقص العمالة؟ مشاكل تقنية؟ ضعف التغطية؟',
         ));
       }
 
@@ -304,7 +329,8 @@ class SmartAlertsEngine {
     }
   }
 
-  static void _checkOutbreakRisk(Map<String, dynamic> data, List<SmartAlert> alerts) {
+  static void _checkOutbreakRisk(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
     final coverage = data['coverage'] as Map<String, dynamic>? ?? {};
     final mr1Rate = coverage['mr1_rate'] as double? ?? 0;
     final govData = data['governorates'] as List? ?? [];
@@ -314,9 +340,11 @@ class SmartAlertsEngine {
       alerts.add(SmartAlert(
         type: 'outbreak_risk',
         title: 'خطر تفشي الحصبة',
-        message: 'تغطية MR1 أقل من 80% — خطر تفشي مرتفع. المناعة الجماعية تحتاج 95%.',
+        message:
+            'تغطية MR1 أقل من 80% — خطر تفشي مرتفع. المناعة الجماعية تحتاج 95%.',
         severity: AlertSeverity.critical,
-        action: 'نفذ حملة تطعيم طارئة ضد الحصبة. ركز على المناطق ذات التغطية الأقل.',
+        action:
+            'نفذ حملة تطعيم طارئة ضد الحصبة. ركز على المناطق ذات التغطية الأقل.',
       ));
     }
 
@@ -330,26 +358,30 @@ class SmartAlertsEngine {
       alerts.add(SmartAlert(
         type: 'outbreak_risk',
         title: 'خطر تفشي شلل الأطفال',
-        message: '$lowCoverageGovs محافظات بتغطية أقل من 80% — خطر تفشي شلل الأطفال',
+        message:
+            '$lowCoverageGovs محافظات بتغطية أقل من 80% — خطر تفشي شلل الأطفال',
         severity: AlertSeverity.critical,
         action: 'نفذ حملات تطعيم تكميلية فورية في المحافظات المتأثرة.',
       ));
     }
   }
 
-  static void _checkPositiveTrends(Map<String, dynamic> data, List<SmartAlert> alerts) {
+  static void _checkPositiveTrends(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
     final subs = data['submissions'] as Map<String, dynamic>? ?? {};
     final dailyCounts = subs['dailyCounts'] as List? ?? [];
 
     if (dailyCounts.length >= 5) {
-      final counts = dailyCounts.map<num>((e) => e['count'] as num? ?? 0).toList();
+      final counts =
+          dailyCounts.map<num>((e) => e['count'] as num? ?? 0).toList();
       final regression = LocalAnalyticsEngine.linearRegression(counts);
 
       if (regression.slope > 1) {
         alerts.add(SmartAlert(
           type: 'positive_trend',
           title: 'تحسن في الإرساليات',
-          message: 'هناك تحسن ملحوظ في عدد الإرساليات اليومية (اتجاه تصاعدي) 🎉',
+          message:
+              'هناك تحسن ملحوظ في عدد الإرساليات اليومية (اتجاه تصاعدي) 🎉',
           severity: AlertSeverity.info,
           action: 'استمر في الأساليب الحالية. شجع الفريق على الاستمرار.',
         ));
@@ -364,7 +396,8 @@ class SmartAlertsEngine {
       alerts.add(SmartAlert(
         type: 'positive_trend',
         title: 'نسبة حل النواقص ممتازة',
-        message: '${(resolved / total * 100).toStringAsFixed(0)}% من النواقص تم حلها 🎉',
+        message:
+            '${(resolved / total * 100).toStringAsFixed(0)}% من النواقص تم حلها 🎉',
         severity: AlertSeverity.info,
         action: 'حافظ على الوتيرة. ركز على النواقص المتبقية.',
       ));
@@ -375,7 +408,8 @@ class SmartAlertsEngine {
   // RECOMMENDATIONS
   // ═══════════════════════════════════════════════════════════
 
-  static List<String> _generateRecommendations(List<SmartAlert> alerts, Map<String, dynamic> data) {
+  static List<String> _generateRecommendations(
+      List<SmartAlert> alerts, Map<String, dynamic> data) {
     final recommendations = <String>[];
 
     for (final alert in alerts) {
@@ -388,14 +422,16 @@ class SmartAlertsEngine {
     final subs = data['submissions'] as Map<String, dynamic>? ?? {};
     final today = subs['today'] as int? ?? 0;
     if (today == 0) {
-      recommendations.add('لا توجد إرساليات اليوم — تحقق من حالة الفرق الميدانية.');
+      recommendations
+          .add('لا توجد إرساليات اليوم — تحقق من حالة الفرق الميدانية.');
     }
 
     return recommendations.toSet().toList(); // Remove duplicates
   }
 
   /// Get supervision visit priorities based on alert data
-  static List<SupervisionPriority> getSupervisionPriorities(Map<String, dynamic> data) {
+  static List<SupervisionPriority> getSupervisionPriorities(
+      Map<String, dynamic> data) {
     final priorities = <SupervisionPriority>[];
     final govData = data['governorates'] as List? ?? [];
 
@@ -407,11 +443,14 @@ class SmartAlertsEngine {
       final submissionsCount = (g['submissions_count'] as num?)?.toInt() ?? 0;
 
       double urgencyScore = 0;
-      if (penta3Rate < 70) urgencyScore += 3;
-      else if (penta3Rate < 80) urgencyScore += 2;
+      if (penta3Rate < 70)
+        urgencyScore += 3;
+      else if (penta3Rate < 80)
+        urgencyScore += 2;
       else if (penta3Rate < 90) urgencyScore += 1;
 
-      if (dropoutRate > 20) urgencyScore += 3;
+      if (dropoutRate > 20)
+        urgencyScore += 3;
       else if (dropoutRate > 10) urgencyScore += 2;
 
       if (submissionsCount < 5) urgencyScore += 2;
@@ -420,7 +459,8 @@ class SmartAlertsEngine {
         priorities.add(SupervisionPriority(
           governorate: name,
           urgencyScore: urgencyScore,
-          reason: _buildPriorityReason(penta3Rate, dropoutRate, submissionsCount),
+          reason:
+              _buildPriorityReason(penta3Rate, dropoutRate, submissionsCount),
           suggestedDate: _suggestVisitDate(urgencyScore),
         ));
       }
@@ -430,10 +470,13 @@ class SmartAlertsEngine {
     return priorities;
   }
 
-  static String _buildPriorityReason(double penta3, double dropout, int submissions) {
+  static String _buildPriorityReason(
+      double penta3, double dropout, int submissions) {
     final reasons = <String>[];
-    if (penta3 < 80) reasons.add('تغطية Penta3 منخفضة (${penta3.toStringAsFixed(0)}%)');
-    if (dropout > 10) reasons.add('تسرب مرتفع (${dropout.toStringAsFixed(0)}%)');
+    if (penta3 < 80)
+      reasons.add('تغطية Penta3 منخفضة (${penta3.toStringAsFixed(0)}%)');
+    if (dropout > 10)
+      reasons.add('تسرب مرتفع (${dropout.toStringAsFixed(0)}%)');
     if (submissions < 5) reasons.add('إرساليات قليلة ($submissions)');
     return reasons.join('، ');
   }

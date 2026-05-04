@@ -708,19 +708,21 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('تم حفظ وتحديث الاستمارة في قاعدة البيانات بنجاح ✅'),
+              content:
+                  Text('تم حفظ وتحديث الاستمارة في قاعدة البيانات بنجاح ✅'),
               backgroundColor: Colors.green,
             ),
           );
         }
       } else {
         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(
-               content: Text('الرجاء إنشاء النموذج الأساسي أولاً من الشاشة السابقة.'),
-               backgroundColor: Colors.orange,
-             ),
-           );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('الرجاء إنشاء النموذج الأساسي أولاً من الشاشة السابقة.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
         }
       }
     } catch (e) {

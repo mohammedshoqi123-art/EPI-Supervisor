@@ -160,7 +160,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  SliverList _buildDashboardContent(Map<String, dynamic> data, int localDrafts) {
+  SliverList _buildDashboardContent(
+      Map<String, dynamic> data, int localDrafts) {
     final submissions = data['submissions'] as Map<String, dynamic>? ?? {};
     final total = submissions['total'] as int? ?? 0;
     final today = submissions['today'] as int? ?? 0;
@@ -225,22 +226,80 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   // Readiness criteria keys
   static const _readinessCriteriaKeys = [
-    'budget_received', 'routine_vaccines_available', 'medicines_available',
-    'reproductive_supplies_available', 'staff_available', 'preparatory_meeting_held',
+    'budget_received',
+    'routine_vaccines_available',
+    'medicines_available',
+    'reproductive_supplies_available',
+    'staff_available',
+    'preparatory_meeting_held',
   ];
 
   // Compliance sections (yes/no fields)
   static const _yesNoSections = {
-    'معلومات الفريق': ['has_activity_plan', 'has_doctor_or_trained', 'wearing_uniform'],
-    'بيئة العمل والتنسيق': ['suitable_location', 'community_coordination', 'has_speaker', 'has_transport', 'previous_visit'],
-    'السجلات والوثائق': ['complete_records', 'daily_work_forms', 'correct_data_entry', 'next_visit_noted'],
+    'معلومات الفريق': [
+      'has_activity_plan',
+      'has_doctor_or_trained',
+      'wearing_uniform'
+    ],
+    'بيئة العمل والتنسيق': [
+      'suitable_location',
+      'community_coordination',
+      'has_speaker',
+      'has_transport',
+      'previous_visit'
+    ],
+    'السجلات والوثائق': [
+      'complete_records',
+      'daily_work_forms',
+      'correct_data_entry',
+      'next_visit_noted'
+    ],
     'بطاقات التحصين': ['child_vaccination_cards', 'women_vaccination_cards'],
-    'جودة الخدمة': ['good_acceptance', 'safe_vaccination', 'respiratory_rate_check', 'muac_measurement', 'ors_provision', 'clean_delivery_kit', 'nutrition_assessment'],
-    'الفيتامينات والإحالة': ['vitamin_a_children', 'vitamin_a_women', 'facility_referral', 'correct_medication', 'nutrition_counseling'],
-    'التعامل مع اللقاحات': ['vaccine_disposal', 'safety_box_usage', 'cold_chain_proper'],
-    'الإمدادات والمعدات': ['family_planning_available', 'folic_iron_stock', 'fetal_stethoscope', 'bp_device', 'muac_tape', 'height_board', 'thermometer', 'scale', 'daily_supply_tracking'],
-    'سياسة الالتحاق بالركب': ['has_vaccine_carrier', 'vaccines_sufficient', 'correct_vaccine_site', 'catch_up_knowledge', 'catch_up_training', 'catch_up_2to5_registration', 'team_target_knowledge'],
-    'تتبع المتخلفين': ['has_defaulter_mechanism', 'has_previous_vaccination_records'],
+    'جودة الخدمة': [
+      'good_acceptance',
+      'safe_vaccination',
+      'respiratory_rate_check',
+      'muac_measurement',
+      'ors_provision',
+      'clean_delivery_kit',
+      'nutrition_assessment'
+    ],
+    'الفيتامينات والإحالة': [
+      'vitamin_a_children',
+      'vitamin_a_women',
+      'facility_referral',
+      'correct_medication',
+      'nutrition_counseling'
+    ],
+    'التعامل مع اللقاحات': [
+      'vaccine_disposal',
+      'safety_box_usage',
+      'cold_chain_proper'
+    ],
+    'الإمدادات والمعدات': [
+      'family_planning_available',
+      'folic_iron_stock',
+      'fetal_stethoscope',
+      'bp_device',
+      'muac_tape',
+      'height_board',
+      'thermometer',
+      'scale',
+      'daily_supply_tracking'
+    ],
+    'سياسة الالتحاق بالركب': [
+      'has_vaccine_carrier',
+      'vaccines_sufficient',
+      'correct_vaccine_site',
+      'catch_up_knowledge',
+      'catch_up_training',
+      'catch_up_2to5_registration',
+      'team_target_knowledge'
+    ],
+    'تتبع المتخلفين': [
+      'has_defaulter_mechanism',
+      'has_previous_vaccination_records'
+    ],
     'الآثار الجانبية': ['aefi_knowledge', 'aefi_mothers_info'],
   };
 
@@ -270,13 +329,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       final db = ref.read(databaseServiceProvider);
 
       // Fetch readiness submissions
-      final readinessSubs = await db.getSubmissions(formId: _readinessFormId, limit: 500);
+      final readinessSubs =
+          await db.getSubmissions(formId: _readinessFormId, limit: 500);
       if (readinessSubs.isNotEmpty) {
         readinessData = _processReadinessData(readinessSubs);
       }
 
       // Fetch supervision submissions
-      final supervisionSubs = await db.getSubmissions(formId: _supervisionFormId, limit: 500);
+      final supervisionSubs =
+          await db.getSubmissions(formId: _supervisionFormId, limit: 500);
       if (supervisionSubs.isNotEmpty) {
         complianceData = _processComplianceData(supervisionSubs);
         serviceNumbersData = _processServiceNumbersData(supervisionSubs);
@@ -317,7 +378,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  List<ReadinessGovData> _processReadinessData(List<Map<String, dynamic>> subs) {
+  List<ReadinessGovData> _processReadinessData(
+      List<Map<String, dynamic>> subs) {
     final govAsync = ref.read(governoratesProvider);
     final govNames = <String, String>{};
     for (final g in (govAsync.valueOrNull ?? [])) {
@@ -332,7 +394,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       if (govId == null) continue;
       final existing = latestByGov[govId];
       if (existing == null ||
-          (s['created_at'] as String? ?? '').compareTo(existing['created_at'] as String? ?? '') > 0) {
+          (s['created_at'] as String? ?? '')
+                  .compareTo(existing['created_at'] as String? ?? '') >
+              0) {
         latestByGov[govId] = s;
       }
     }
@@ -368,7 +432,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       });
   }
 
-  List<ComplianceSectionData> _processComplianceData(List<Map<String, dynamic>> subs) {
+  List<ComplianceSectionData> _processComplianceData(
+      List<Map<String, dynamic>> subs) {
     final realSubs = subs.where((s) {
       final d = s['data'] as Map<String, dynamic>? ?? {};
       return d['governorate_id'] != null;
@@ -393,7 +458,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     }).toList();
   }
 
-  List<ServiceNumberData> _processServiceNumbersData(List<Map<String, dynamic>> subs) {
+  List<ServiceNumberData> _processServiceNumbersData(
+      List<Map<String, dynamic>> subs) {
     final realSubs = subs.where((s) {
       final d = s['data'] as Map<String, dynamic>? ?? {};
       return d['governorate_id'] != null;
@@ -424,7 +490,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return subs
         .where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
-          return d['challenges'] != null || d['actions_taken'] != null || d['recommendations'] != null;
+          return d['challenges'] != null ||
+              d['actions_taken'] != null ||
+              d['recommendations'] != null;
         })
         .take(20)
         .map((s) {

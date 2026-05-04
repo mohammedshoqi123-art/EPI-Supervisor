@@ -18,41 +18,80 @@ const _readinessCriteria = [
   ('budget_received', 'الميزانية المالية', Icons.attach_money_rounded),
   ('routine_vaccines_available', 'اللقاحات الروتينية', Icons.vaccines_rounded),
   ('medicines_available', 'الأدوية', Icons.medication_rounded),
-  ('reproductive_supplies_available', 'الصحة الإنجابية', Icons.pregnant_woman_rounded),
+  (
+    'reproductive_supplies_available',
+    'الصحة الإنجابية',
+    Icons.pregnant_woman_rounded
+  ),
   ('staff_available', 'الكادر الصحي', Icons.people_rounded),
   ('preparatory_meeting_held', 'الاجتماع التحضيري', Icons.groups_rounded),
 ];
 
 const _yesNoSections = {
   'معلومات الفريق': [
-    'has_activity_plan', 'has_doctor_or_trained', 'wearing_uniform',
+    'has_activity_plan',
+    'has_doctor_or_trained',
+    'wearing_uniform',
   ],
   'بيئة العمل والتنسيق': [
-    'suitable_location', 'community_coordination', 'has_speaker',
-    'has_transport', 'previous_visit',
+    'suitable_location',
+    'community_coordination',
+    'has_speaker',
+    'has_transport',
+    'previous_visit',
   ],
   'السجلات والوثائق': [
-    'complete_records', 'daily_work_forms', 'correct_data_entry', 'next_visit_noted',
+    'complete_records',
+    'daily_work_forms',
+    'correct_data_entry',
+    'next_visit_noted',
   ],
   'بطاقات التحصين': ['child_vaccination_cards', 'women_vaccination_cards'],
   'جودة الخدمة': [
-    'good_acceptance', 'safe_vaccination', 'respiratory_rate_check',
-    'muac_measurement', 'ors_provision', 'clean_delivery_kit', 'nutrition_assessment',
+    'good_acceptance',
+    'safe_vaccination',
+    'respiratory_rate_check',
+    'muac_measurement',
+    'ors_provision',
+    'clean_delivery_kit',
+    'nutrition_assessment',
   ],
   'الفيتامينات والإحالة': [
-    'vitamin_a_children', 'vitamin_a_women', 'facility_referral',
-    'correct_medication', 'nutrition_counseling',
+    'vitamin_a_children',
+    'vitamin_a_women',
+    'facility_referral',
+    'correct_medication',
+    'nutrition_counseling',
   ],
-  'التعامل مع اللقاحات': ['vaccine_disposal', 'safety_box_usage', 'cold_chain_proper'],
+  'التعامل مع اللقاحات': [
+    'vaccine_disposal',
+    'safety_box_usage',
+    'cold_chain_proper'
+  ],
   'الإمدادات والمعدات': [
-    'family_planning_available', 'folic_iron_stock', 'fetal_stethoscope',
-    'bp_device', 'muac_tape', 'height_board', 'thermometer', 'scale', 'daily_supply_tracking',
+    'family_planning_available',
+    'folic_iron_stock',
+    'fetal_stethoscope',
+    'bp_device',
+    'muac_tape',
+    'height_board',
+    'thermometer',
+    'scale',
+    'daily_supply_tracking',
   ],
   'سياسة الالتحاق بالركب': [
-    'has_vaccine_carrier', 'vaccines_sufficient', 'correct_vaccine_site',
-    'catch_up_knowledge', 'catch_up_training', 'catch_up_2to5_registration', 'team_target_knowledge',
+    'has_vaccine_carrier',
+    'vaccines_sufficient',
+    'correct_vaccine_site',
+    'catch_up_knowledge',
+    'catch_up_training',
+    'catch_up_2to5_registration',
+    'team_target_knowledge',
   ],
-  'تتبع المتخلفين': ['has_defaulter_mechanism', 'has_previous_vaccination_records'],
+  'تتبع المتخلفين': [
+    'has_defaulter_mechanism',
+    'has_previous_vaccination_records'
+  ],
   'الآثار الجانبية': ['aefi_knowledge', 'aefi_mothers_info'],
 };
 
@@ -131,8 +170,9 @@ final _readinessSubsProvider =
   final cache = await ref.watch(offlineDataCacheProvider.future);
   return cache.getList(
     'readiness_subs_integrated',
-    () => ref.read(databaseServiceProvider).getSubmissions(
-          formId: _readinessFormId, limit: 500),
+    () => ref
+        .read(databaseServiceProvider)
+        .getSubmissions(formId: _readinessFormId, limit: 500),
     maxAge: const Duration(hours: 2),
   );
 });
@@ -142,8 +182,9 @@ final _supervisionSubsProvider =
   final cache = await ref.watch(offlineDataCacheProvider.future);
   return cache.getList(
     'supervision_subs_integrated',
-    () => ref.read(databaseServiceProvider).getSubmissions(
-          formId: _supervisionFormId, limit: 500),
+    () => ref
+        .read(databaseServiceProvider)
+        .getSubmissions(formId: _supervisionFormId, limit: 500),
     maxAge: const Duration(hours: 2),
   );
 });
@@ -224,8 +265,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           indicatorSize: TabBarIndicatorSize.label,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, fontSize: 13),
-          unselectedLabelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w400, fontSize: 12),
+          labelStyle: const TextStyle(
+              fontFamily: 'Tajawal', fontWeight: FontWeight.w700, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(
+              fontFamily: 'Tajawal', fontWeight: FontWeight.w400, fontSize: 12),
           indicator: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             color: Colors.white.withValues(alpha: 0.15),
@@ -286,13 +329,15 @@ class _ReadinessTab extends ConsumerWidget {
           final existing = latestByGov[govId];
           if (existing == null ||
               (s['created_at'] as String? ?? '')
-                  .compareTo(existing['created_at'] as String? ?? '') > 0) {
+                      .compareTo(existing['created_at'] as String? ?? '') >
+                  0) {
             latestByGov[govId] = s;
           }
         }
 
         if (latestByGov.isEmpty) {
-          return const _Empty(icon: Icons.assessment_outlined, msg: 'لا توجد بيانات جاهزية');
+          return const _Empty(
+              icon: Icons.assessment_outlined, msg: 'لا توجد بيانات جاهزية');
         }
 
         // Build analysis data
@@ -335,7 +380,9 @@ class _ReadinessTab extends ConsumerWidget {
             criteria: criteria,
             reasons: d['postponement_reasons'] as String?,
             postponedDate: d['postponed_launch_date'] as String?,
-            lastUpdated: DateTime.tryParse(sub['created_at'] as String? ?? '') ?? DateTime(2000),
+            lastUpdated:
+                DateTime.tryParse(sub['created_at'] as String? ?? '') ??
+                    DateTime(2000),
             supervisorTitle: d['supervisor_title'] as String? ?? '',
             submissionCount: countByGov[govId] ?? 1,
           ));
@@ -343,7 +390,12 @@ class _ReadinessTab extends ConsumerWidget {
 
         // Sort: worst first
         govData.sort((a, b) {
-          final order = {_ReadyStatus.notReady: 0, _ReadyStatus.partial: 1, _ReadyStatus.unknown: 2, _ReadyStatus.ready: 3};
+          final order = {
+            _ReadyStatus.notReady: 0,
+            _ReadyStatus.partial: 1,
+            _ReadyStatus.unknown: 2,
+            _ReadyStatus.ready: 3
+          };
           final cmp = (order[a.status] ?? 9).compareTo(order[b.status] ?? 9);
           return cmp != 0 ? cmp : a.score.compareTo(b.score);
         });
@@ -351,9 +403,12 @@ class _ReadinessTab extends ConsumerWidget {
         // AI Insights
         final insights = _buildInsights(govData, criteriaFails);
 
-        final ready = govData.where((g) => g.status == _ReadyStatus.ready).length;
-        final partial = govData.where((g) => g.status == _ReadyStatus.partial).length;
-        final notReady = govData.where((g) => g.status == _ReadyStatus.notReady).length;
+        final ready =
+            govData.where((g) => g.status == _ReadyStatus.ready).length;
+        final partial =
+            govData.where((g) => g.status == _ReadyStatus.partial).length;
+        final notReady =
+            govData.where((g) => g.status == _ReadyStatus.notReady).length;
 
         return RefreshIndicator(
           onRefresh: () async {
@@ -371,7 +426,10 @@ class _ReadinessTab extends ConsumerWidget {
                 const SizedBox(width: 8),
                 _Chip(label: 'غير جاهزة', count: notReady, color: Colors.red),
                 const SizedBox(width: 8),
-                _Chip(label: 'الإجمالي', count: govData.length, color: Colors.blue),
+                _Chip(
+                    label: 'الإجمالي',
+                    count: govData.length,
+                    color: Colors.blue),
               ]),
               const SizedBox(height: 16),
 
@@ -383,7 +441,10 @@ class _ReadinessTab extends ConsumerWidget {
 
               // Governorate table
               const Text('جدول جاهزية المحافظات',
-                  style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.w700)),
+                  style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               ...govData.map((g) => _ReadinessGovCard(data: g)),
             ],
@@ -409,7 +470,8 @@ class _ReadinessTab extends ConsumerWidget {
     }
 
     // Not-ready governorates
-    final notReady = govData.where((g) => g.status == _ReadyStatus.notReady).toList();
+    final notReady =
+        govData.where((g) => g.status == _ReadyStatus.notReady).toList();
     if (notReady.isNotEmpty) {
       insights.add(
           '🔴 ${notReady.length} محافظة غير جاهزة: ${notReady.map((g) => g.govName).join("، ")}');
@@ -460,7 +522,8 @@ class _ComplianceTab extends ConsumerWidget {
         if (realSubs.isEmpty) {
           return const _Empty(
               icon: Icons.analytics_outlined,
-              msg: 'لا توجد إرساليات إشراف\nستظهر التحليلات عند إدخال استمارات إشراف');
+              msg:
+                  'لا توجد إرساليات إشراف\nستظهر التحليلات عند إدخال استمارات إشراف');
         }
 
         final govNames = <String, String>{};
@@ -495,7 +558,10 @@ class _ComplianceTab extends ConsumerWidget {
                   sub: 'في ${byGov.length} محافظة'),
               const SizedBox(height: 16),
               const Text('المحافظات (اضغط للتفاصيل)',
-                  style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700)),
+                  style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               ...byGov.entries.map((e) {
                 final govName = govNames[e.key] ?? 'غير محدد';
@@ -552,14 +618,16 @@ class _NumbersTab extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const _Empty(icon: Icons.numbers, msg: 'لا توجد بيانات أعداد مطابقة'),
+              const _Empty(
+                  icon: Icons.numbers, msg: 'لا توجد بيانات أعداد مطابقة'),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                  border:
+                      Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -568,17 +636,24 @@ class _NumbersTab extends ConsumerWidget {
                       Icon(Icons.bug_report, size: 16, color: Colors.orange),
                       SizedBox(width: 6),
                       Text('تشخيص: المفاتيح الموجودة في البيانات',
-                          style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700)),
+                          style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700)),
                     ]),
                     const SizedBox(height: 8),
                     Text(
                       allKeys.join('، '),
-                      style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                      style:
+                          const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'عدد الإرساليات: ${subs.length}',
-                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.grey.shade600),
+                      style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 11,
+                          color: Colors.grey.shade600),
                     ),
                   ],
                 ),
@@ -613,7 +688,9 @@ class _NumbersTab extends ConsumerWidget {
         }
 
         final grandTotal = totals.values.fold<int>(0, (s, v) => s + v);
-        final maxVal = totals.values.isEmpty ? 1 : totals.values.reduce((a, b) => a > b ? a : b);
+        final maxVal = totals.values.isEmpty
+            ? 1
+            : totals.values.reduce((a, b) => a > b ? a : b);
 
         return RefreshIndicator(
           onRefresh: () async {
@@ -633,9 +710,11 @@ class _NumbersTab extends ConsumerWidget {
               ..._serviceNumberFields.entries.map((entry) {
                 final total = totals[entry.key] ?? 0;
                 final count = counts[entry.key] ?? 0;
-                final avg = count > 0 ? (total / count).toStringAsFixed(1) : '0';
+                final avg =
+                    count > 0 ? (total / count).toStringAsFixed(1) : '0';
                 final ratio = maxVal > 0 ? total / maxVal : 0.0;
-                return _NumberCard(label: entry.value, total: total, avg: avg, ratio: ratio);
+                return _NumberCard(
+                    label: entry.value, total: total, avg: avg, ratio: ratio);
               }),
             ],
           ),
@@ -664,11 +743,15 @@ class _ChallengesTab extends ConsumerWidget {
       data: (subs) {
         final realSubs = subs.where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
-          return d['challenges'] != null || d['actions_taken'] != null || d['recommendations'] != null;
+          return d['challenges'] != null ||
+              d['actions_taken'] != null ||
+              d['recommendations'] != null;
         }).toList();
 
         if (realSubs.isEmpty) {
-          return const _Empty(icon: Icons.description_outlined, msg: 'لا توجد تحديات أو توصيات مسجلة');
+          return const _Empty(
+              icon: Icons.description_outlined,
+              msg: 'لا توجد تحديات أو توصيات مسجلة');
         }
 
         return RefreshIndicator(
@@ -682,34 +765,69 @@ class _ChallengesTab extends ConsumerWidget {
             itemBuilder: (_, i) {
               final d = realSubs[i]['data'] as Map<String, dynamic>? ?? {};
               final sup = d['supervisor_name'] as String? ?? 'غير محدد';
-              final date = (realSubs[i]['created_at'] as String? ?? '').substring(0, 10);
+              final date =
+                  (realSubs[i]['created_at'] as String? ?? '').substring(0, 10);
               return Card(
                 margin: const EdgeInsets.only(bottom: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.indigo.withValues(alpha: 0.1),
-                          child: Text(sup.isNotEmpty ? sup[0] : '?',
-                              style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.w700))),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(sup, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600)),
-                        Text(date, style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey.shade500)),
-                      ])),
-                    ]),
-                    const SizedBox(height: 14),
-                    if ((d['challenges'] as String?)?.trim().isNotEmpty ?? false)
-                      _TextBlock(title: 'التحديات', text: d['challenges'], icon: Icons.warning_amber_rounded, color: Colors.red),
-                    if ((d['actions_taken'] as String?)?.trim().isNotEmpty ?? false)
-                      _TextBlock(title: 'الإجراءات المتخذة', text: d['actions_taken'], icon: Icons.build_rounded, color: Colors.blue),
-                    if ((d['recommendations'] as String?)?.trim().isNotEmpty ?? false)
-                      _TextBlock(title: 'التوصيات', text: d['recommendations'], icon: Icons.lightbulb_rounded, color: Colors.green),
-                  ]),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          CircleAvatar(
+                              radius: 18,
+                              backgroundColor:
+                                  Colors.indigo.withValues(alpha: 0.1),
+                              child: Text(sup.isNotEmpty ? sup[0] : '?',
+                                  style: const TextStyle(
+                                      color: Colors.indigo,
+                                      fontWeight: FontWeight.w700))),
+                          const SizedBox(width: 10),
+                          Expanded(
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                Text(sup,
+                                    style: const TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.w600)),
+                                Text(date,
+                                    style: TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontSize: 12,
+                                        color: Colors.grey.shade500)),
+                              ])),
+                        ]),
+                        const SizedBox(height: 14),
+                        if ((d['challenges'] as String?)?.trim().isNotEmpty ??
+                            false)
+                          _TextBlock(
+                              title: 'التحديات',
+                              text: d['challenges'],
+                              icon: Icons.warning_amber_rounded,
+                              color: Colors.red),
+                        if ((d['actions_taken'] as String?)
+                                ?.trim()
+                                .isNotEmpty ??
+                            false)
+                          _TextBlock(
+                              title: 'الإجراءات المتخذة',
+                              text: d['actions_taken'],
+                              icon: Icons.build_rounded,
+                              color: Colors.blue),
+                        if ((d['recommendations'] as String?)
+                                ?.trim()
+                                .isNotEmpty ??
+                            false)
+                          _TextBlock(
+                              title: 'التوصيات',
+                              text: d['recommendations'],
+                              icon: Icons.lightbulb_rounded,
+                              color: Colors.green),
+                      ]),
                 ),
               );
             },
@@ -758,7 +876,10 @@ class _GovDrillCard extends StatelessWidget {
   final String govName;
   final List<Map<String, dynamic>> submissions;
   final Map<String, String> distNames;
-  const _GovDrillCard({required this.govName, required this.submissions, required this.distNames});
+  const _GovDrillCard(
+      {required this.govName,
+      required this.submissions,
+      required this.distNames});
 
   @override
   Widget build(BuildContext context) {
@@ -772,23 +893,39 @@ class _GovDrillCard extends StatelessWidget {
             context,
             MaterialPageRoute(
                 builder: (_) => _DistrictListScreen(
-                    govName: govName, submissions: submissions, distNames: distNames))),
+                    govName: govName,
+                    submissions: submissions,
+                    distNames: distNames))),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(children: [
             Row(children: [
               Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.location_city_rounded, color: Colors.blue, size: 22)),
+                  decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.location_city_rounded,
+                      color: Colors.blue, size: 22)),
               const SizedBox(width: 12),
               Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(govName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.w700)),
-                Text('${submissions.length} زيارة • التزام ${(avgPct * 100).toStringAsFixed(0)}%',
-                    style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey.shade500)),
-              ])),
-              const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(govName,
+                        style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700)),
+                    Text(
+                        '${submissions.length} زيارة • التزام ${(avgPct * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 12,
+                            color: Colors.grey.shade500)),
+                  ])),
+              const Icon(Icons.arrow_forward_ios_rounded,
+                  size: 16, color: Colors.grey),
             ]),
             const SizedBox(height: 8),
             ClipRRect(
@@ -797,8 +934,11 @@ class _GovDrillCard extends StatelessWidget {
                     value: avgPct,
                     minHeight: 5,
                     backgroundColor: Colors.grey.shade200,
-                    valueColor: AlwaysStoppedAnimation(
-                        avgPct > 0.8 ? Colors.green : avgPct > 0.5 ? Colors.orange : Colors.red))),
+                    valueColor: AlwaysStoppedAnimation(avgPct > 0.8
+                        ? Colors.green
+                        : avgPct > 0.5
+                            ? Colors.orange
+                            : Colors.red))),
           ]),
         ),
       ),
@@ -810,7 +950,10 @@ class _DistrictListScreen extends StatelessWidget {
   final String govName;
   final List<Map<String, dynamic>> submissions;
   final Map<String, String> distNames;
-  const _DistrictListScreen({required this.govName, required this.submissions, required this.distNames});
+  const _DistrictListScreen(
+      {required this.govName,
+      required this.submissions,
+      required this.distNames});
 
   @override
   Widget build(BuildContext context) {
@@ -822,26 +965,41 @@ class _DistrictListScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(govName, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700))),
+      appBar: AppBar(
+          title: Text(govName,
+              style: const TextStyle(
+                  fontFamily: 'Cairo', fontWeight: FontWeight.w700))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text('المديريات (${byDist.length})',
-              style: const TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.w700)),
+              style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           ...byDist.entries.map((e) {
-            final distName = distNames[e.key] ?? (e.key == 'unknown' ? 'غير محدد' : 'مديرية ${e.key.substring(0, 6)}');
+            final distName = distNames[e.key] ??
+                (e.key == 'unknown'
+                    ? 'غير محدد'
+                    : 'مديرية ${e.key.substring(0, 6)}');
             final avgPct = _calcAvgCompliance(e.value);
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: ListTile(
                 leading: CircleAvatar(
                     backgroundColor: Colors.teal.withValues(alpha: 0.1),
-                    child: const Icon(Icons.map_rounded, color: Colors.teal, size: 20)),
-                title: Text(distName, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600)),
-                subtitle: Text('${e.value.length} زيارة • ${(avgPct * 100).toStringAsFixed(0)}% التزام',
-                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+                    child: const Icon(Icons.map_rounded,
+                        color: Colors.teal, size: 20)),
+                title: Text(distName,
+                    style: const TextStyle(
+                        fontFamily: 'Cairo', fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                    '${e.value.length} زيارة • ${(avgPct * 100).toStringAsFixed(0)}% التزام',
+                    style:
+                        const TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
                 trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
                 onTap: () => Navigator.push(
                     context,
@@ -872,11 +1030,18 @@ class _SupervisorListScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(title, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700))),
+      appBar: AppBar(
+          title: Text(title,
+              style: const TextStyle(
+                  fontFamily: 'Cairo', fontWeight: FontWeight.w700))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('المشرفون', style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.w700)),
+          const Text('المشرفون',
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           ...bySup.entries.map((e) {
             final avgPct = _calcAvgCompliance(e.value);
@@ -888,20 +1053,30 @@ class _SupervisorListScreen extends StatelessWidget {
                 leading: CircleAvatar(
                     backgroundColor: Colors.indigo.withValues(alpha: 0.1),
                     child: Text(e.key.isNotEmpty ? e.key[0] : '?',
-                        style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.w700))),
-                title: Text(e.key, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600)),
-                subtitle: Text('$role • ${(avgPct * 100).toStringAsFixed(0)}% التزام',
-                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+                        style: const TextStyle(
+                            color: Colors.indigo,
+                            fontWeight: FontWeight.w700))),
+                title: Text(e.key,
+                    style: const TextStyle(
+                        fontFamily: 'Cairo', fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                    '$role • ${(avgPct * 100).toStringAsFixed(0)}% التزام',
+                    style:
+                        const TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
                 onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (_) => _FullComplianceScreen(title: e.key, submissions: e.value))),
+                        builder: (_) => _FullComplianceScreen(
+                            title: e.key, submissions: e.value))),
               ),
             );
           }),
           const Divider(height: 32),
           const Text('تحليل الالتزام التفصيلي',
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.w700)),
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           _ComplianceSectionAnalysis(submissions: submissions),
         ],
@@ -918,11 +1093,18 @@ class _FullComplianceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('تحليل: $title', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700))),
+      appBar: AppBar(
+          title: Text('تحليل: $title',
+              style: const TextStyle(
+                  fontFamily: 'Cairo', fontWeight: FontWeight.w700))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('${submissions.length} إرسالية', style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, color: Colors.grey.shade500)),
+          Text('${submissions.length} إرسالية',
+              style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 13,
+                  color: Colors.grey.shade500)),
           const SizedBox(height: 16),
           _ComplianceSectionAnalysis(submissions: submissions),
         ],
@@ -964,45 +1146,90 @@ class _ComplianceSectionAnalysis extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))]),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2))
+              ]),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Expanded(child: Text(section.key,
-                  style: const TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.w700))),
+              Expanded(
+                  child: Text(section.key,
+                      style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700))),
               Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                       color: _pctColor(secPct).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12)),
                   child: Text('${(secPct * 100).toStringAsFixed(0)}%',
-                      style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.w700, color: _pctColor(secPct)))),
+                      style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _pctColor(secPct)))),
             ]),
             const SizedBox(height: 4),
             ClipRRect(
                 borderRadius: BorderRadius.circular(3),
                 child: LinearProgressIndicator(
-                    value: secPct, minHeight: 5, backgroundColor: Colors.grey.shade200,
+                    value: secPct,
+                    minHeight: 5,
+                    backgroundColor: Colors.grey.shade200,
                     valueColor: AlwaysStoppedAnimation(_pctColor(secPct)))),
             const SizedBox(height: 10),
             ...fields.map((key) {
               final stats = fieldStats[key];
-              if (stats == null || stats.total == 0) return const SizedBox.shrink();
+              if (stats == null || stats.total == 0)
+                return const SizedBox.shrink();
               final pct = stats.yes / stats.total;
               final label = _fieldLabels[key] ?? key;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(children: [
-                  Expanded(flex: 5, child: Text(label, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                  Expanded(
+                      flex: 5,
+                      child: Text(label,
+                          style: const TextStyle(
+                              fontFamily: 'Tajawal', fontSize: 12),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis)),
                   const SizedBox(width: 8),
-                  Expanded(flex: 3, child: Row(children: [
-                    Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(value: pct, minHeight: 8, backgroundColor: Colors.grey.shade200,
-                            valueColor: AlwaysStoppedAnimation(pct == 1.0 ? Colors.green : pct >= 0.5 ? Colors.orange : Colors.red)))),
-                    const SizedBox(width: 6),
-                    SizedBox(width: 36, child: Text('${(pct * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.w600,
-                            color: pct == 1.0 ? Colors.green : pct >= 0.5 ? Colors.orange : Colors.red))),
-                  ])),
+                  Expanded(
+                      flex: 3,
+                      child: Row(children: [
+                        Expanded(
+                            child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                    value: pct,
+                                    minHeight: 8,
+                                    backgroundColor: Colors.grey.shade200,
+                                    valueColor:
+                                        AlwaysStoppedAnimation(pct == 1.0
+                                            ? Colors.green
+                                            : pct >= 0.5
+                                                ? Colors.orange
+                                                : Colors.red)))),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                            width: 36,
+                            child: Text('${(pct * 100).toStringAsFixed(0)}%',
+                                style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: pct == 1.0
+                                        ? Colors.green
+                                        : pct >= 0.5
+                                            ? Colors.orange
+                                            : Colors.red))),
+                      ])),
                 ]),
               );
             }),
@@ -1033,8 +1260,11 @@ double _calcAvgCompliance(List<Map<String, dynamic>> subs) {
   return totalFields > 0 ? totalYes / totalFields : 0.0;
 }
 
-Color _pctColor(double pct) =>
-    pct > 0.8 ? Colors.green : pct > 0.5 ? Colors.orange : Colors.red;
+Color _pctColor(double pct) => pct > 0.8
+    ? Colors.green
+    : pct > 0.5
+        ? Colors.orange
+        : Colors.red;
 
 class _Chip extends StatelessWidget {
   final String label;
@@ -1052,8 +1282,15 @@ class _Chip extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: color.withValues(alpha: 0.25))),
         child: Column(children: [
-          Text('$count', style: TextStyle(fontFamily: 'Cairo', fontSize: 20, fontWeight: FontWeight.w800, color: color)),
-          Text(label, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11), textAlign: TextAlign.center),
+          Text('$count',
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: color)),
+          Text(label,
+              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11),
+              textAlign: TextAlign.center),
         ]),
       ),
     );
@@ -1064,24 +1301,39 @@ class _HeaderBar extends StatelessWidget {
   final IconData icon;
   final String label, value, sub;
   final Color color;
-  const _HeaderBar({required this.icon, required this.label, required this.value, required this.sub, this.color = Colors.blue});
+  const _HeaderBar(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      required this.sub,
+      this.color = Colors.blue});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.7)]),
+          gradient:
+              LinearGradient(colors: [color, color.withValues(alpha: 0.7)]),
           borderRadius: BorderRadius.circular(16)),
       child: Row(children: [
         Icon(icon, color: Colors.white, size: 32),
         const SizedBox(width: 16),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(fontFamily: 'Tajawal', color: Colors.white70, fontSize: 13)),
-          Text(value, style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800)),
+          Text(label,
+              style: const TextStyle(
+                  fontFamily: 'Tajawal', color: Colors.white70, fontSize: 13)),
+          Text(value,
+              style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800)),
         ]),
         const Spacer(),
-        Text(sub, style: const TextStyle(fontFamily: 'Tajawal', color: Colors.white70, fontSize: 12)),
+        Text(sub,
+            style: const TextStyle(
+                fontFamily: 'Tajawal', color: Colors.white70, fontSize: 12)),
       ]),
     );
   }
@@ -1096,7 +1348,10 @@ class _InsightsBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [Colors.indigo.withValues(alpha: 0.06), Colors.purple.withValues(alpha: 0.04)]),
+          gradient: LinearGradient(colors: [
+            Colors.indigo.withValues(alpha: 0.06),
+            Colors.purple.withValues(alpha: 0.04)
+          ]),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: Colors.indigo.withValues(alpha: 0.15))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1104,12 +1359,17 @@ class _InsightsBox extends StatelessWidget {
           Icon(Icons.auto_awesome_rounded, color: Colors.indigo, size: 20),
           SizedBox(width: 8),
           Text('تحليلات ذكية',
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.w700, color: Colors.indigo)),
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.indigo)),
         ]),
         const SizedBox(height: 10),
         ...insights.map((insight) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Text(insight, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13)))),
+            child: Text(insight,
+                style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13)))),
       ]),
     );
   }
@@ -1137,41 +1397,102 @@ class _ReadinessGovCard extends StatelessWidget {
         onTap: () => showModalBottomSheet(
           context: context,
           isScrollControlled: true,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
           builder: (_) => DraggableScrollableSheet(
-            initialChildSize: 0.6, maxChildSize: 0.9, minChildSize: 0.4, expand: false,
+            initialChildSize: 0.6,
+            maxChildSize: 0.9,
+            minChildSize: 0.4,
+            expand: false,
             builder: (_, ctrl) => ListView(
-              controller: ctrl, padding: const EdgeInsets.all(24),
+              controller: ctrl,
+              padding: const EdgeInsets.all(24),
               children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                Center(
+                    child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 20),
-                Text(data.govName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 24, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+                Text(data.govName,
+                    style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800),
+                    textAlign: TextAlign.center),
                 const SizedBox(height: 8),
-                Center(child: Text('${data.score} من ${data.total} معايير مكتملة', style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, color: Colors.grey.shade600))),
+                Center(
+                    child: Text('${data.score} من ${data.total} معايير مكتملة',
+                        style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 13,
+                            color: Colors.grey.shade600))),
                 const SizedBox(height: 20),
-                const Text('معايير الجاهزية', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700)),
+                const Text('معايير الجاهزية',
+                    style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 ..._readinessCriteria.map((c) {
                   final val = data.criteria[c.$1];
-                  final ic = val == true ? Icons.check_circle_rounded : val == false ? Icons.cancel_rounded : Icons.help_outline_rounded;
-                  final col = val == true ? Colors.green : val == false ? Colors.red : Colors.grey;
-                  return Padding(padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(children: [Icon(ic, color: col, size: 20), const SizedBox(width: 8), Expanded(child: Text(c.$2, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14)))]));
+                  final ic = val == true
+                      ? Icons.check_circle_rounded
+                      : val == false
+                          ? Icons.cancel_rounded
+                          : Icons.help_outline_rounded;
+                  final col = val == true
+                      ? Colors.green
+                      : val == false
+                          ? Colors.red
+                          : Colors.grey;
+                  return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(children: [
+                        Icon(ic, color: col, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                            child: Text(c.$2,
+                                style: const TextStyle(
+                                    fontFamily: 'Tajawal', fontSize: 14)))
+                      ]));
                 }),
                 if (hasReasons) ...[
                   const SizedBox(height: 16),
-                  const Text('أسباب التأجيل', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700)),
+                  const Text('أسباب التأجيل',
+                      style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  Container(width: double.infinity, padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.withValues(alpha: 0.2))),
-                    child: Text(data.reasons!, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14))),
+                  Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: Colors.red.withValues(alpha: 0.2))),
+                      child: Text(data.reasons!,
+                          style: const TextStyle(
+                              fontFamily: 'Tajawal', fontSize: 14))),
                 ],
                 const SizedBox(height: 16),
                 Row(children: [
-                  Text(data.supervisorTitle ?? 'غير محدد', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey.shade500)),
+                  Text(data.supervisorTitle ?? 'غير محدد',
+                      style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 12,
+                          color: Colors.grey.shade500)),
                   const Spacer(),
-                  Text('${data.lastUpdated.day}/${data.lastUpdated.month}/${data.lastUpdated.year}',
-                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey.shade500)),
+                  Text(
+                      '${data.lastUpdated.day}/${data.lastUpdated.month}/${data.lastUpdated.year}',
+                      style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 12,
+                          color: Colors.grey.shade500)),
                 ]),
               ],
             ),
@@ -1181,31 +1502,78 @@ class _ReadinessGovCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: Column(children: [
             Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(data.govName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700)),
-                Text('${data.score}/${data.total} معايير • ${data.submissionCount} إرسالية',
-                    style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.grey.shade500)),
-              ])),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(data.govName,
+                        style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700)),
+                    Text(
+                        '${data.score}/${data.total} معايير • ${data.submissionCount} إرسالية',
+                        style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 11,
+                            color: Colors.grey.shade500)),
+                  ])),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.3))),
-                child: Text('$icon $text', style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: color.withValues(alpha: 0.3))),
+                child: Text('$icon $text',
+                    style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: color)),
               ),
             ]),
             const SizedBox(height: 10),
-            Row(children: _readinessCriteria.map((c) {
+            Row(
+                children: _readinessCriteria.map((c) {
               final val = data.criteria[c.$1];
-              final col = val == true ? Colors.green : val == false ? Colors.red : Colors.grey.shade300;
-              return Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 2), height: 6, decoration: BoxDecoration(color: col, borderRadius: BorderRadius.circular(3))));
+              final col = val == true
+                  ? Colors.green
+                  : val == false
+                      ? Colors.red
+                      : Colors.grey.shade300;
+              return Expanded(
+                  child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      height: 6,
+                      decoration: BoxDecoration(
+                          color: col, borderRadius: BorderRadius.circular(3))));
             }).toList()),
             if (hasReasons && data.status == _ReadyStatus.notReady) ...[
               const SizedBox(height: 8),
-              Container(width: double.infinity, padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.withValues(alpha: 0.15))),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Icon(Icons.info_outline, size: 14, color: Colors.red), const SizedBox(width: 6),
-                  Expanded(child: Text('سبب: ${data.reasons}', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.red), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                ])),
+              Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: Colors.red.withValues(alpha: 0.15))),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline,
+                            size: 14, color: Colors.red),
+                        const SizedBox(width: 6),
+                        Expanded(
+                            child: Text('سبب: ${data.reasons}',
+                                style: const TextStyle(
+                                    fontFamily: 'Tajawal',
+                                    fontSize: 11,
+                                    color: Colors.red),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis)),
+                      ])),
             ],
           ]),
         ),
@@ -1218,7 +1586,11 @@ class _NumberCard extends StatelessWidget {
   final String label, avg;
   final int total;
   final double ratio;
-  const _NumberCard({required this.label, required this.total, required this.avg, required this.ratio});
+  const _NumberCard(
+      {required this.label,
+      required this.total,
+      required this.avg,
+      required this.ratio});
 
   @override
   Widget build(BuildContext context) {
@@ -1229,15 +1601,34 @@ class _NumberCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Column(children: [
           Row(children: [
-            Expanded(child: Text(label, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14, fontWeight: FontWeight.w600))),
+            Expanded(
+                child: Text(label,
+                    style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600))),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('$total', style: const TextStyle(fontFamily: 'Cairo', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.teal)),
-              Text('متوسط: $avg/زيارة', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.grey.shade500)),
+              Text('$total',
+                  style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.teal)),
+              Text('متوسط: $avg/زيارة',
+                  style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      color: Colors.grey.shade500)),
             ]),
           ]),
           const SizedBox(height: 8),
-          ClipRRect(borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(value: ratio, minHeight: 6, backgroundColor: Colors.grey.shade200, valueColor: const AlwaysStoppedAnimation(Colors.teal))),
+          ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                  value: ratio,
+                  minHeight: 6,
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: const AlwaysStoppedAnimation(Colors.teal))),
         ]),
       ),
     );
@@ -1249,7 +1640,11 @@ class _TextBlock extends StatelessWidget {
   final String? text;
   final IconData icon;
   final Color color;
-  const _TextBlock({required this.title, this.text, required this.icon, required this.color});
+  const _TextBlock(
+      {required this.title,
+      this.text,
+      required this.icon,
+      required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -1261,10 +1656,19 @@ class _TextBlock extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: color.withValues(alpha: 0.15))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [Icon(icon, size: 16, color: color), const SizedBox(width: 6),
-          Text(title, style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700, color: color))]),
+        Row(children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(title,
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: color))
+        ]),
         const SizedBox(height: 6),
-        Text(text ?? '', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14)),
+        Text(text ?? '',
+            style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14)),
       ]),
     );
   }
@@ -1275,12 +1679,22 @@ class _ErrRetry extends StatelessWidget {
   final VoidCallback onRetry;
   const _ErrRetry({required this.msg, required this.onRetry});
   @override
-  Widget build(BuildContext context) => Center(child: Padding(padding: const EdgeInsets.all(32),
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Icon(Icons.error_outline, size: 48, color: Colors.red), const SizedBox(height: 12),
-      Text(msg, style: const TextStyle(fontFamily: 'Tajawal'), textAlign: TextAlign.center), const SizedBox(height: 16),
-      ElevatedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Tajawal'))),
-    ])));
+  Widget build(BuildContext context) => Center(
+      child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 12),
+            Text(msg,
+                style: const TextStyle(fontFamily: 'Tajawal'),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('إعادة المحاولة',
+                    style: TextStyle(fontFamily: 'Tajawal'))),
+          ])));
 }
 
 class _Empty extends StatelessWidget {
@@ -1288,9 +1702,17 @@ class _Empty extends StatelessWidget {
   final String msg;
   const _Empty({this.icon = Icons.inbox_rounded, required this.msg});
   @override
-  Widget build(BuildContext context) => Center(child: Padding(padding: const EdgeInsets.all(32),
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 64, color: Colors.grey.shade300), const SizedBox(height: 16),
-      Text(msg, style: TextStyle(fontFamily: 'Tajawal', fontSize: 16, color: Colors.grey.shade500), textAlign: TextAlign.center),
-    ])));
+  Widget build(BuildContext context) => Center(
+      child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(msg,
+                style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 16,
+                    color: Colors.grey.shade500),
+                textAlign: TextAlign.center),
+          ])));
 }

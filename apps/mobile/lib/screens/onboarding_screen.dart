@@ -40,8 +40,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       accentColor: Color(0xFF64FFDA),
       icon: Icons.assignment_rounded,
       title: 'نماذج ذكية\nتتفاعل معك',
-      subtitle:
-          'املأ الاستمارات الميدانية إلكترونياً مع دعم GPS، صور توثيقية، '
+      subtitle: 'املأ الاستمارات الميدانية إلكترونياً مع دعم GPS، صور توثيقية، '
           'وحفظ تلقائي — حتى بدون إنترنت',
       features: ['حفظ تلقائي', 'GPS تلقائي', 'صور توثيقية'],
     ),
@@ -50,8 +49,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       accentColor: Color(0xFF82B1FF),
       icon: Icons.cloud_sync_rounded,
       title: 'مزامنة ذكية\nبلا انقطاع',
-      subtitle:
-          'بياناتك في أمان — تُحفظ محلياً أولاً ثم تتم المزامنة '
+      subtitle: 'بياناتك في أمان — تُحفظ محلياً أولاً ثم تتم المزامنة '
           'تلقائياً فور عودة الاتصال. لا تفقد أي إرسالية',
       features: ['حفظ محلي آمن', 'مزامنة تلقائية', 'عمل بدون إنترنت'],
     ),
@@ -60,8 +58,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       accentColor: Color(0xFFEA80FC),
       icon: Icons.insights_rounded,
       title: 'تحليلات لحظية\nقرارات أذكى',
-      subtitle:
-          'لوحة تحكم تفاعلية مع خرائط، نسب أداء، تقارير PDF، '
+      subtitle: 'لوحة تحكم تفاعلية مع خرائط، نسب أداء، تقارير PDF، '
           'ومساعد ذكي يحلل البيانات ويقترح الحلول',
       features: ['خرائط تفاعلية', 'تقارير PDF', 'مساعد ذكي'],
     ),
@@ -441,7 +438,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isLast ? Icons.rocket_launch_rounded : Icons.arrow_forward_rounded,
+                  isLast
+                      ? Icons.rocket_launch_rounded
+                      : Icons.arrow_forward_rounded,
                   color: page.gradient.first,
                   size: 18,
                 ),

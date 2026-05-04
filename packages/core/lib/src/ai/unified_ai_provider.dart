@@ -210,7 +210,8 @@ class UnifiedAIProvider {
       final systemPrompt = _buildSystemPrompt(ragContext: ragContext);
       // Add knowledge base context
       final kbContext = EpiKnowledgeBase.getRelevantContext(message);
-      final fullPrompt = systemPrompt + (kbContext.isNotEmpty ? '\n\n$kbContext' : '');
+      final fullPrompt =
+          systemPrompt + (kbContext.isNotEmpty ? '\n\n$kbContext' : '');
 
       final resp = await _groq!.chat(
         message,
@@ -244,7 +245,8 @@ class UnifiedAIProvider {
       try {
         final systemPrompt = _buildSystemPrompt(ragContext: ragContext);
         final kbContext = EpiKnowledgeBase.getRelevantContext(message);
-        final fullPrompt = systemPrompt + (kbContext.isNotEmpty ? '\n\n$kbContext' : '');
+        final fullPrompt =
+            systemPrompt + (kbContext.isNotEmpty ? '\n\n$kbContext' : '');
 
         final resp = await _zai!.chat(
           message,
@@ -267,7 +269,8 @@ class UnifiedAIProvider {
       try {
         final systemPrompt = _buildSystemPrompt(ragContext: ragContext);
         final kbContext = EpiKnowledgeBase.getRelevantContext(message);
-        final fullPrompt = systemPrompt + (kbContext.isNotEmpty ? '\n\n$kbContext' : '');
+        final fullPrompt =
+            systemPrompt + (kbContext.isNotEmpty ? '\n\n$kbContext' : '');
 
         final resp = await _openRouter!.chat(
           message,
@@ -310,7 +313,8 @@ class UnifiedAIProvider {
     );
   }
 
-  String _buildSystemPrompt({String ragContext = '', String extraContext = ''}) {
+  String _buildSystemPrompt(
+      {String ragContext = '', String extraContext = ''}) {
     var prompt =
         '''أنت "مساعد EPI" — متخصص في برنامج التطعيم الموسع في اليمن ومنصة مشرف EPI.
 

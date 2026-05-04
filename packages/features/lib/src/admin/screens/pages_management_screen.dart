@@ -142,8 +142,7 @@ class _PagesManagementScreenState extends ConsumerState<PagesManagementScreen> {
                 : pages.where((p) {
                     final title =
                         (p['title_ar'] ?? '').toString().toLowerCase();
-                    final slug =
-                        (p['slug'] ?? '').toString().toLowerCase();
+                    final slug = (p['slug'] ?? '').toString().toLowerCase();
                     return title.contains(_searchQuery.toLowerCase()) ||
                         slug.contains(_searchQuery.toLowerCase());
                   }).toList();

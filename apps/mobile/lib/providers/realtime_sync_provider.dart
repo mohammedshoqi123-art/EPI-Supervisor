@@ -80,7 +80,8 @@ class RealtimeSyncService {
         schema: 'public',
         table: 'governorates',
         callback: (payload) {
-          debugPrint('[RealtimeSync] Governorates changed: ${payload.eventType}');
+          debugPrint(
+              '[RealtimeSync] Governorates changed: ${payload.eventType}');
           _changeController.add('governorates');
         },
       );
@@ -117,7 +118,8 @@ class RealtimeSyncService {
 
       final isActive = record['is_active'] as bool? ?? true;
       if (!isActive) {
-        debugPrint('[RealtimeSync] ⚠️ Current user deactivated — forcing logout');
+        debugPrint(
+            '[RealtimeSync] ⚠️ Current user deactivated — forcing logout');
         Supabase.instance.client.auth.signOut();
       }
     } catch (e) {

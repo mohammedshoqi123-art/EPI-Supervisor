@@ -31,7 +31,8 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
 
   // On web, skip Hive initialization entirely (online-only mode)
   if (kIsWeb) {
-    debugPrint('[offlineManagerProvider] Web mode — online-only, skipping Hive');
+    debugPrint(
+        '[offlineManagerProvider] Web mode — online-only, skipping Hive');
     manager.updateConnectivity(true);
     return manager;
   }
@@ -75,7 +76,6 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
   });
   return manager;
 });
-
 
 /// Offline-first data cache — stores Supabase query results locally.
 final offlineDataCacheProvider = FutureProvider<OfflineDataCache>((ref) async {
@@ -228,7 +228,8 @@ final governoratesProvider = FutureProvider<List<Map<String, dynamic>>>((
   final allGovs = await cache.getList(
     'governorates',
     () => ref.read(databaseServiceProvider).getGovernorates(),
-    maxAge: const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
+    maxAge:
+        const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
   );
   // ═══ FIX: Filter out inactive governorates client-side ═══
   return allGovs.where((g) => g['is_active'] != false).toList();
@@ -303,9 +304,9 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
       await db.setActiveCampaign(campaign.value);
 
       // ═══ FIX: DO NOT invalidate the persistent cache here! ═══
-      // Calling cache.invalidate() deletes the Hive entries for forms, 
+      // Calling cache.invalidate() deletes the Hive entries for forms,
       // preventing offline access to the "other" campaign type.
-      // Instead, we only invalidate the Riverpod providers themselves. 
+      // Instead, we only invalidate the Riverpod providers themselves.
       // This clears the app's memory but preserves the disk cache (Hive).
 
       // Invalidate all providers that depend on campaign
@@ -314,12 +315,12 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
       _ref.invalidate(submissionTrendProvider);
       _ref.invalidate(governorateRankingProvider);
       _ref.invalidate(shortagesProvider);
-      
+
       if (kDebugMode) {
-        print('[CampaignNotifier] Campaign changed to ${campaign.value} - Providers invalidated');
+        print(
+            '[CampaignNotifier] Campaign changed to ${campaign.value} - Providers invalidated');
       }
     } catch (e) {
-
       debugPrint('[CampaignNotifier] Save failed: $e');
     }
   }
@@ -339,7 +340,8 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
     () => ref
         .read(databaseServiceProvider)
         .getForms(campaignType: campaign.value),
-    maxAge: const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
+    maxAge:
+        const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
   );
   // ═══ FIX: Filter out inactive forms client-side as extra safety ═══
   // RLS should handle this, but cache might have stale data
@@ -349,8 +351,8 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
 /// ═══ PERFORMANCE: AutoDispose family — cleans up unused filter instances ═══
 /// Each unique SubmissionsFilter gets its own provider that disposes
 /// when no widgets are watching it. Prevents memory buildup.
-final submissionsProvider =
-    FutureProvider.family.autoDispose<List<Map<String, dynamic>>, SubmissionsFilter>((
+final submissionsProvider = FutureProvider.family
+    .autoDispose<List<Map<String, dynamic>>, SubmissionsFilter>((
   ref,
   filter,
 ) async {
@@ -487,7 +489,8 @@ final dashboardAnalyticsProvider =
           startDate: filter.startDate,
           endDate: filter.endDate,
         ),
-    maxAge: const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
+    maxAge:
+        const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
   );
 });
 
@@ -633,7 +636,8 @@ final smartAlertsEngineProvider = Provider<SmartAlertsEngine>((ref) {
 });
 
 /// AI Model Selection — user-chosen or auto-selected provider
-final aiModelSelectionProvider = StateNotifierProvider<AIModelSelectionNotifier, AIModelSelection>((ref) {
+final aiModelSelectionProvider =
+    StateNotifierProvider<AIModelSelectionNotifier, AIModelSelection>((ref) {
   return AIModelSelectionNotifier();
 });
 
@@ -648,7 +652,8 @@ class AIModelSelection {
     this.autoSelect = true,
   });
 
-  AIModelSelection copyWith({String? provider, String? model, bool? autoSelect}) {
+  AIModelSelection copyWith(
+      {String? provider, String? model, bool? autoSelect}) {
     return AIModelSelection(
       provider: provider ?? this.provider,
       model: model ?? this.model,
@@ -680,17 +685,20 @@ class AIModelSelectionNotifier extends StateNotifier<AIModelSelection> {
     final topIntent = intents.first.intent;
 
     // Deep analysis → use powerful model
-    if (['generate_report', 'analyze_trend', 'query_analytics'].contains(topIntent)) {
+    if (['generate_report', 'analyze_trend', 'query_analytics']
+        .contains(topIntent)) {
       return 'openrouter'; // DeepSeek/GPT-4 for reports
     }
 
     // Quick query → use fast model
-    if (['query_submissions', 'query_shortages', 'query_governorates'].contains(topIntent)) {
+    if (['query_submissions', 'query_shortages', 'query_governorates']
+        .contains(topIntent)) {
       return 'groq'; // Fastest
     }
 
     // Knowledge questions → Z AI or Groq
-    if (['query_vaccination', 'query_campaign', 'query_aefi', 'query_coverage'].contains(topIntent)) {
+    if (['query_vaccination', 'query_campaign', 'query_aefi', 'query_coverage']
+        .contains(topIntent)) {
       return 'zai'; // Z AI good for knowledge
     }
 

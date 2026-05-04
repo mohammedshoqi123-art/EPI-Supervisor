@@ -35,7 +35,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   bool _showFilters = false;
 
   // ═══ Sort state ═══
-  String _sortBy = 'date_desc'; // date_desc, date_asc, name_asc, name_desc, status
+  String _sortBy =
+      'date_desc'; // date_desc, date_asc, name_asc, name_desc, status
 
   // ═══ Pagination state per tab ═══
   static const int _pageSize = 20;
@@ -188,8 +189,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       // Paginate
       final start = page * _pageSize;
       final end = (start + _pageSize).clamp(0, filtered.length);
-      final pageItems =
-          start < filtered.length ? filtered.sublist(start, end).cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
+      final pageItems = start < filtered.length
+          ? filtered.sublist(start, end).cast<Map<String, dynamic>>()
+          : <Map<String, dynamic>>[];
 
       setState(() {
         _draftItems = pageItems;
@@ -225,8 +227,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       // Paginate
       final start = page * _pageSize;
       final end = (start + _pageSize).clamp(0, filtered.length);
-      final pageItems =
-          start < filtered.length ? filtered.sublist(start, end).cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
+      final pageItems = start < filtered.length
+          ? filtered.sublist(start, end).cast<Map<String, dynamic>>()
+          : <Map<String, dynamic>>[];
 
       setState(() {
         _pendingItems = pageItems;
@@ -274,8 +277,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       // Paginate
       final start = page * _pageSize;
       final end = (start + _pageSize).clamp(0, filtered.length);
-      final pageItems =
-          start < filtered.length ? filtered.sublist(start, end).cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
+      final pageItems = start < filtered.length
+          ? filtered.sublist(start, end).cast<Map<String, dynamic>>()
+          : <Map<String, dynamic>>[];
 
       setState(() {
         _submittedItems = pageItems;
@@ -298,10 +302,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     // Search query
     if (_searchQuery.isNotEmpty) {
       result = result.where((item) {
-        final title =
-            (item['form_title'] ?? item['forms']?['title_ar'] ?? '')
-                .toString()
-                .toLowerCase();
+        final title = (item['form_title'] ?? item['forms']?['title_ar'] ?? '')
+            .toString()
+            .toLowerCase();
         final userName =
             (item['profiles']?['full_name'] ?? item['user_name'] ?? '')
                 .toString()
@@ -322,10 +325,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     // Supervisor name filter
     if (_filterSupervisorName != null && _filterSupervisorName!.isNotEmpty) {
       result = result.where((item) {
-        final name =
-            (item['profiles']?['full_name'] ?? item['user_name'] ?? '')
-                .toString()
-                .toLowerCase();
+        final name = (item['profiles']?['full_name'] ?? item['user_name'] ?? '')
+            .toString()
+            .toLowerCase();
         return name.contains(_filterSupervisorName!);
       }).toList();
     }
@@ -630,8 +632,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: () =>
-                      setState(() => _showFilters = !_showFilters),
+                  onTap: () => setState(() => _showFilters = !_showFilters),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
@@ -1060,9 +1061,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                           style: TextStyle(
                             fontFamily: 'Cairo',
                             fontWeight: FontWeight.w700,
-                            color: isCurrent
-                                ? Colors.white
-                                : AppTheme.textPrimary,
+                            color:
+                                isCurrent ? Colors.white : AppTheme.textPrimary,
                           ),
                         ),
                       ),
@@ -1150,7 +1150,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
             ),
             const SizedBox(height: 16),
             _buildSortOption('date_desc', Icons.access_time, 'الأحدث أولاً'),
-            _buildSortOption('date_asc', Icons.access_time_filled, 'الأقدم أولاً'),
+            _buildSortOption(
+                'date_asc', Icons.access_time_filled, 'الأقدم أولاً'),
             _buildSortOption('name_asc', Icons.sort_by_alpha, 'الاسم (أ-ي)'),
             _buildSortOption('name_desc', Icons.sort_by_alpha, 'الاسم (ي-أ)'),
             _buildSortOption('status', Icons.category, 'حسب الحالة'),
@@ -1326,9 +1327,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         return _filterChip(
           label: 'النموذج',
           value: _filterFormId != null
-              ? forms
-                  .firstWhere((f) => f['id'] == _filterFormId,
-                      orElse: () => {'title_ar': 'كل النماذج'})['title_ar']
+              ? forms.firstWhere((f) => f['id'] == _filterFormId,
+                  orElse: () => {'title_ar': 'كل النماذج'})['title_ar']
               : null,
           onTap: () => _showFormPicker(forms),
           onClear: _filterFormId != null
@@ -1438,8 +1438,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                 _filterSupervisorName = null;
                 _refreshKey++;
               }),
-              child: const Icon(Icons.close,
-                  size: 16, color: AppTheme.errorColor),
+              child:
+                  const Icon(Icons.close, size: 16, color: AppTheme.errorColor),
             ),
         ],
       ),
@@ -1521,8 +1521,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         title: 'اختر النموذج',
         items: [
           const _PickerItem(id: null, label: 'الكل'),
-          ...forms.map((f) =>
-              _PickerItem(id: f['id'], label: f['title_ar'] ?? 'نموذج')),
+          ...forms.map(
+              (f) => _PickerItem(id: f['id'], label: f['title_ar'] ?? 'نموذج')),
         ],
         selectedId: _filterFormId,
         onSelected: (id) {
@@ -1547,8 +1547,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         title: 'اختر المحافظة',
         items: [
           const _PickerItem(id: null, label: 'الكل'),
-          ...govs.map((g) =>
-              _PickerItem(id: g['id'], label: g['name_ar'] ?? 'محافظة')),
+          ...govs.map(
+              (g) => _PickerItem(id: g['id'], label: g['name_ar'] ?? 'محافظة')),
         ],
         selectedId: _filterGovernorate,
         onSelected: (id) {
@@ -1574,8 +1574,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         title: 'اختر المديرية',
         items: [
           const _PickerItem(id: null, label: 'الكل'),
-          ...districts.map((d) =>
-              _PickerItem(id: d['id'], label: d['name_ar'] ?? 'مديرية')),
+          ...districts.map(
+              (d) => _PickerItem(id: d['id'], label: d['name_ar'] ?? 'مديرية')),
         ],
         selectedId: _filterDistrict,
         onSelected: (id) {
@@ -1607,8 +1607,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         title: 'اختر الصفة',
         items: [
           const _PickerItem(id: null, label: 'الكل'),
-          ...roles.map(
-              (r) => _PickerItem(id: r, label: roleNames[r] ?? r)),
+          ...roles.map((r) => _PickerItem(id: r, label: roleNames[r] ?? r)),
         ],
         selectedId: _filterSupervisorRole,
         onSelected: (id) {
@@ -1953,7 +1952,8 @@ class _PendingTile extends StatelessWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.sync, size: 12, color: AppTheme.infoColor),
+                              Icon(Icons.sync,
+                                  size: 12, color: AppTheme.infoColor),
                               SizedBox(width: 4),
                               Text(
                                 'بانتظار المزامنة',

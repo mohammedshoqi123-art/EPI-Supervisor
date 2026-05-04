@@ -49,7 +49,8 @@ enum UserRole {
 
   /// Viewing scope — analytics data visibility
   bool get canViewAllGovernorates => hierarchyLevel >= 4; // admin + central
-  bool get canViewAllDistricts => hierarchyLevel >= 3; // admin + central + governorate
+  bool get canViewAllDistricts =>
+      hierarchyLevel >= 3; // admin + central + governorate
 
   /// Edit permissions — can only edit their own submissions
   bool get canExport => true; // all roles

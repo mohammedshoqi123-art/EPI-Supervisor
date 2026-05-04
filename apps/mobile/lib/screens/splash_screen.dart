@@ -53,14 +53,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           await ref.read(authStateProvider.future).timeout(
             const Duration(seconds: 20),
             onTimeout: () {
-              debugPrint('[Splash] Profile load timed out — going to dashboard anyway');
+              debugPrint(
+                  '[Splash] Profile load timed out — going to dashboard anyway');
               throw TimeoutException('Profile load timed out');
             },
           );
         } catch (_) {
           // ═══ القاعدة الذهبية: فشل Profile ≠ فشل دخول ═══
           // المستخدم مصادق → روح للداشبورد
-          debugPrint('[Splash] Profile failed but user is authenticated — proceeding');
+          debugPrint(
+              '[Splash] Profile failed but user is authenticated — proceeding');
         }
 
         if (!mounted || _hasNavigated) return;

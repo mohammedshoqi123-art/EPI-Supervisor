@@ -46,8 +46,7 @@ Future<void> main() async {
 
   // ═══ الخطوة 2: تهيئة Connectivity ═══
   try {
-    await ConnectivityUtils.initialize()
-        .timeout(const Duration(seconds: 5));
+    await ConnectivityUtils.initialize().timeout(const Duration(seconds: 5));
   } catch (_) {}
 
   // ═══ الخطوة 3: تهيئة Supabase مُزامنة (await) قبل runApp ═══
@@ -107,7 +106,8 @@ Future<void> _initSupabase() async {
     }
   }
 
-  debugPrint('[Init] ⚠️ Supabase failed after $maxRetries attempts — running offline');
+  debugPrint(
+      '[Init] ⚠️ Supabase failed after $maxRetries attempts — running offline');
 }
 
 class EpiSupervisorApp extends ConsumerStatefulWidget {

@@ -10,12 +10,12 @@ class Vaccine {
   final String nameAr;
   final String nameEn;
   final String description;
-  final int dueWeeks;        // weeks after birth
-  final int dueMonths;      // months after birth
-  final String doseNumber;  // الجرعة الأولى، الثانية، etc.
-  final String route;       // intramuscular, oral, subcutaneous
-  final String site;        // injection site
-  final String color;       // hex color for UI
+  final int dueWeeks; // weeks after birth
+  final int dueMonths; // months after birth
+  final String doseNumber; // الجرعة الأولى، الثانية، etc.
+  final String route; // intramuscular, oral, subcutaneous
+  final String site; // injection site
+  final String color; // hex color for UI
   final String iconEmoji;
   final List<String> sideEffects;
   final List<String> contraindications;

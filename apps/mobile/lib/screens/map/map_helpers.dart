@@ -2,9 +2,50 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:epi_core/epi_core.dart';
 
+/// ═══ Color mode for map markers ═══
+enum MapColorMode {
+  status,  // Color by submission status
+  role,    // Color by supervisor role
+}
+
 /// Map utility helpers — colors, formatting, cluster logic
 class MapHelpers {
   MapHelpers._();
+
+  // ═══ Role colors: مركزي = أزرق، محافظة = أخضر، مديرية = برتقالي ═══
+  static Color roleColor(String? role) {
+    switch (role) {
+      case 'admin':
+        return const Color(0xFF8B5CF6); // بنفسجي
+      case 'central':
+        return const Color(0xFF3B82F6); // أزرق
+      case 'governorate':
+        return const Color(0xFF10B981); // أخضر
+      case 'district':
+        return const Color(0xFFF59E0B); // برتقالي
+      case 'data_entry':
+        return const Color(0xFFEF4444); // أحمر
+      default:
+        return const Color(0xFF6B7280); // رمادي
+    }
+  }
+
+  static String roleLabel(String? role) {
+    switch (role) {
+      case 'admin':
+        return 'مدير النظام';
+      case 'central':
+        return 'مركزي';
+      case 'governorate':
+        return 'محافظة';
+      case 'district':
+        return 'مديرية';
+      case 'data_entry':
+        return 'إدخال بيانات';
+      default:
+        return 'غير محدد';
+    }
+  }
 
   static Color statusColor(String? status) {
     switch (status) {

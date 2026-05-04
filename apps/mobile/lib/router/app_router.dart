@@ -220,11 +220,13 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final connectivityAsync = ref.watch(connectivityProvider);
-    final isOnline =
-        connectivityAsync.valueOrNull ?? ConnectivityUtils.isOnline;
-    final pendingAsync = ref.watch(syncPendingCountProvider);
-    final pendingCount = pendingAsync.valueOrNull ?? 0;
+    // ═══ PERFORMANCE: use .select() to minimize rebuild scope ═══
+    final isOnline = ref.watch(
+      connectivityProvider.select((v) => v.valueOrNull ?? ConnectivityUtils.isOnline),
+    );
+    final pendingCount = ref.watch(
+      syncPendingCountProvider.select((v) => v.valueOrNull ?? 0),
+    );
 
     return Scaffold(
       key: _scaffoldKey,

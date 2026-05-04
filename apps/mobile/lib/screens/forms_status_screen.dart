@@ -1274,46 +1274,51 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       pending = offline.pendingCount;
       drafts = offline.getDraftFormIds().length;
 
+      // ═══ FIX: Get submitted count directly from submissions provider ═══
+      // Uses the same data source as the submitted tab — no analytics limit
       try {
         final campaign = ref.read(campaignProvider);
-        final analytics = await ref
-            .read(
-              dashboardAnalyticsProvider(
-                AnalyticsFilter(campaignType: campaign.value),
-              ).future,
-            )
+        final allSubs = await ref
+            .read(submissionsProvider(
+              SubmissionsFilter(
+                campaignType: campaign.value,
+                limit: 999999,
+                offset: 0,
+              ),
+            ).future)
             .timeout(
-              const Duration(seconds: 5),
+              const Duration(seconds: 10),
               onTimeout: () => throw Exception('timeout'),
             );
-        final subs = analytics['submissions'] as Map<String, dynamic>? ?? {};
-        final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
-        submitted = (byStatus['submitted'] as int? ?? 0) +
-            (byStatus['reviewed'] as int? ?? 0) +
-            (byStatus['approved'] as int? ?? 0) +
-            (byStatus['rejected'] as int? ?? 0);
+        submitted = allSubs
+            .where((s) =>
+                s['status'] == 'submitted' ||
+                s['status'] == 'reviewed' ||
+                s['status'] == 'approved' ||
+                s['status'] == 'rejected')
+            .length;
       } catch (_) {
-        final cache =
-            await ref.read(offlineDataCacheProvider.future).timeout(
-                  const Duration(seconds: 3),
-                  onTimeout: () => throw Exception('timeout'),
-                );
-        final campaign = ref.read(campaignProvider);
-        final allFilter = SubmissionsFilter(
-          campaignType: campaign.value,
-          limit: 100,
-          offset: 0,
-        );
-        final cachedSubs = cache.getCachedDataList(allFilter.cacheKey) ??
-            cache.getCachedDataList('submissions');
-        if (cachedSubs != null) {
-          submitted = cachedSubs
-              .where((s) =>
-                  s['status'] == 'submitted' ||
-                  s['status'] == 'reviewed' ||
-                  s['status'] == 'approved' ||
-                  s['status'] == 'rejected')
-              .length;
+        // Fallback: try analytics API
+        try {
+          final campaign = ref.read(campaignProvider);
+          final analytics = await ref
+              .read(
+                dashboardAnalyticsProvider(
+                  AnalyticsFilter(campaignType: campaign.value),
+                ).future,
+              )
+              .timeout(
+                const Duration(seconds: 5),
+                onTimeout: () => throw Exception('timeout'),
+              );
+          final subs = analytics['submissions'] as Map<String, dynamic>? ?? {};
+          final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
+          submitted = (byStatus['submitted'] as int? ?? 0) +
+              (byStatus['reviewed'] as int? ?? 0) +
+              (byStatus['approved'] as int? ?? 0) +
+              (byStatus['rejected'] as int? ?? 0);
+        } catch (_) {
+          submitted = 0;
         }
       }
     } catch (e) {

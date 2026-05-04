@@ -25,6 +25,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
   MapViewMode _viewMode = MapViewMode.individual;
   Map<String, dynamic>? _selectedSubmission;
   Map<String, dynamic>? _selectedCluster;
+  MapColorMode _colorMode = MapColorMode.status; // ═══ ألوان حسب الدور أو الحالة ═══
 
   // ─── Filter state ────────────────────────────────────────────
   String? _filterFormId;
@@ -330,6 +331,50 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   const SizedBox(width: 8),
                   _iconBtn(Icons.refresh_rounded, onTap: _refresh),
                   const SizedBox(width: 8),
+                  // ═══ Toggle color mode: status ↔ role ═══
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _colorMode = _colorMode == MapColorMode.status
+                            ? MapColorMode.role
+                            : MapColorMode.status;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _colorMode == MapColorMode.role
+                            ? const Color(0xFF3B82F6).withValues(alpha: 0.3)
+                            : Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _colorMode == MapColorMode.role
+                                ? Icons.people_rounded
+                                : Icons.flag_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _colorMode == MapColorMode.role ? 'الدور' : 'الحالة',
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   _iconBtn(
                       _showStats
                           ? Icons.info_rounded
@@ -632,6 +677,39 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final subs = _getFilteredSubmissions();
     final withGps =
         subs.where((s) => s['gps_lat'] != null && s['gps_lng'] != null).length;
+
+    // ═══ Show role-based or status-based stats depending on color mode ═══
+    if (_colorMode == MapColorMode.role) {
+      final central = subs.where((s) =>
+          (s['profiles']?['role'] ?? s['submitter_role'] ?? '') == 'central').length;
+      final gov = subs.where((s) =>
+          (s['profiles']?['role'] ?? s['submitter_role'] ?? '') == 'governorate').length;
+      final dist = subs.where((s) =>
+          (s['profiles']?['role'] ?? s['submitter_role'] ?? '') == 'district').length;
+
+      return Positioned(
+        top: _showFilters ? 340 : 155,
+        left: 16,
+        right: 16,
+        child: Row(
+          children: [
+            _statCard('الكل', '${subs.length}',
+                Icons.description_rounded, const Color(0xFF6366F1)),
+            const SizedBox(width: 8),
+            _statCard('مركزي', '$central',
+                Icons.account_balance_rounded, const Color(0xFF3B82F6)),
+            const SizedBox(width: 8),
+            _statCard('محافظة', '$gov',
+                Icons.location_city_rounded, const Color(0xFF10B981)),
+            const SizedBox(width: 8),
+            _statCard('مديرية', '$dist',
+                Icons.map_rounded, const Color(0xFFF59E0B)),
+          ],
+        ),
+      );
+    }
+
+    // Status mode (default)
     final drafts = subs.where((s) => s['status'] == 'draft').length;
     final submitted =
         subs.where((s) => s['status'] == 'submitted').length;
@@ -807,7 +885,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
       final lat = (sub['gps_lat'] as num).toDouble();
       final lng = (sub['gps_lng'] as num).toDouble();
       final status = sub['status'] as String? ?? 'draft';
-      final color = MapHelpers.statusColor(status);
+      final role = (sub['profiles']?['role'] ?? sub['submitter_role'] ?? '')
+          .toString();
+      // ═══ Color by mode: status or role ═══
+      final color = _colorMode == MapColorMode.role
+          ? MapHelpers.roleColor(role)
+          : MapHelpers.statusColor(status);
       final isSelected = _selectedSubmission?['id'] == sub['id'];
 
       return Marker(
@@ -853,6 +936,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final lat = sub['gps_lat'] as double?;
     final lng = sub['gps_lng'] as double?;
     final status = sub['status'] as String? ?? 'draft';
+    final role = (sub['profiles']?['role'] ?? sub['submitter_role'] ?? '')
+        .toString();
     final govName = sub['governorates']?['name_ar'] ??
         sub['governorate_name'] ??
         '';
@@ -895,7 +980,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
                       width: 10,
                       height: 10,
                       decoration: BoxDecoration(
-                          color: MapHelpers.statusColor(status),
+                          color: _colorMode == MapColorMode.role
+                              ? MapHelpers.roleColor(role)
+                              : MapHelpers.statusColor(status),
                           shape: BoxShape.circle)),
                   const SizedBox(width: 10),
                   Expanded(
@@ -909,21 +996,28 @@ class _MapScreenState extends ConsumerState<MapScreen>
                               fontFamily: 'Cairo',
                               fontSize: 15,
                               fontWeight: FontWeight.w700))),
-                  // Status badge
+                  // Status or Role badge
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: MapHelpers.statusColor(status)
+                      color: (_colorMode == MapColorMode.role
+                              ? MapHelpers.roleColor(role)
+                              : MapHelpers.statusColor(status))
                           .withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(MapHelpers.statusLabel(status),
+                    child: Text(
+                        _colorMode == MapColorMode.role
+                            ? MapHelpers.roleLabel(role)
+                            : MapHelpers.statusLabel(status),
                         style: TextStyle(
                             fontFamily: 'Tajawal',
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: MapHelpers.statusColor(status))),
+                            color: _colorMode == MapColorMode.role
+                                ? MapHelpers.roleColor(role)
+                                : MapHelpers.statusColor(status))),
                   ),
                   const SizedBox(width: 8),
                   GestureDetector(

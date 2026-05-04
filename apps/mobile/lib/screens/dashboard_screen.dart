@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,19 +49,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     _pulseAnim.repeat(reverse: true);
 
     // ═══ FIX #1: Auto-refresh dashboard when internet returns ═══
+    // ═══ PERFORMANCE: Debounced to prevent rapid invalidation cascade ═══
     ref.listen(connectivityProvider, (prev, next) {
       final wasOffline = prev?.valueOrNull == false;
       final isNowOnline = next.valueOrNull == true;
       if (wasOffline && isNowOnline && mounted) {
-        final campaign = ref.read(campaignProvider);
-        ref.invalidate(dashboardAnalyticsProvider(
-          AnalyticsFilter(campaignType: campaign.value),
-        ));
-        ref.invalidate(submissionTrendProvider);
-        ref.invalidate(governorateRankingProvider);
-        ref.invalidate(notificationCountProvider);
-        ref.invalidate(syncPendingCountProvider);
-        ref.invalidate(localDraftCountProvider);
+        _debouncedRefresh();
       }
     });
 
@@ -74,7 +68,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   @override
+  // ═══ Debounce refresh — prevents cascade invalidations ═══
+  Timer? _refreshDebounce;
+  void _debouncedRefresh() {
+    _refreshDebounce?.cancel();
+    _refreshDebounce = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      final campaign = ref.read(campaignProvider);
+      ref.invalidate(dashboardAnalyticsProvider(
+        AnalyticsFilter(campaignType: campaign.value),
+      ));
+      ref.invalidate(submissionTrendProvider);
+      ref.invalidate(governorateRankingProvider);
+      ref.invalidate(notificationCountProvider);
+      ref.invalidate(syncPendingCountProvider);
+      ref.invalidate(localDraftCountProvider);
+    });
+  }
+
+  @override
   void dispose() {
+    _refreshDebounce?.cancel();
     _headerAnim.dispose();
     _cardsAnim.dispose();
     _pulseAnim.dispose();

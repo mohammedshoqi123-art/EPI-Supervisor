@@ -190,13 +190,25 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       try {
         final syncService = await ref.read(syncServiceProvider.future);
         _syncSub = syncService.syncState.listen((state) {
-          // When sync finishes, refresh all analytics providers
+          // ═══ PERFORMANCE: Only invalidate if user is on analytics screen ═══
+          // Use a debounce to avoid rapid invalidations during batch sync
           if (!state.isSyncing && mounted) {
-            ref.invalidate(_readinessSubsProvider);
-            ref.invalidate(_supervisionSubsProvider);
+            _debouncedRefresh();
           }
         });
       } catch (_) {}
+    });
+  }
+
+  // ═══ Debounce refresh — prevents rapid invalidations ═══
+  Timer? _refreshDebounce;
+  void _debouncedRefresh() {
+    _refreshDebounce?.cancel();
+    _refreshDebounce = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        ref.invalidate(_readinessSubsProvider);
+        ref.invalidate(_supervisionSubsProvider);
+      }
     });
   }
 
@@ -528,10 +540,63 @@ class _NumbersTab extends ConsumerWidget {
           msg: 'فشل تحميل البيانات',
           onRetry: () => ref.invalidate(_supervisionSubsProvider)),
       data: (subs) {
+        // ═══ FIX: Accept all supervision subs — check both data-level and top-level fields ═══
         final realSubs = subs.where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
-          return d['governorate_id'] != null;
+          // Accept if has governorate_id anywhere, or if has any service number field
+          if (d['governorate_id'] != null) return true;
+          if (s['governorate_id'] != null) return true;
+          // Also accept if has any numeric service field
+          for (final key in _serviceNumberFields.keys) {
+            if (d[key] is num) return true;
+          }
+          return false;
         }).toList();
+
+        if (realSubs.isEmpty && subs.isNotEmpty) {
+          // ═══ Debug: show available keys to help diagnose field name mismatches ═══
+          final allKeys = <String>{};
+          for (final s in subs.take(3)) {
+            final d = s['data'] as Map<String, dynamic>? ?? {};
+            allKeys.addAll(d.keys);
+          }
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const _Empty(icon: Icons.numbers, msg: 'لا توجد بيانات أعداد مطابقة'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(children: [
+                      Icon(Icons.bug_report, size: 16, color: Colors.orange),
+                      SizedBox(width: 6),
+                      Text('تشخيص: المفاتيح الموجودة في البيانات',
+                          style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700)),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text(
+                      allKeys.join('، '),
+                      style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'عدد الإرساليات: ${subs.length}',
+                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
 
         if (realSubs.isEmpty) {
           return const _Empty(icon: Icons.numbers, msg: 'لا توجد بيانات أعداد');
@@ -542,10 +607,18 @@ class _NumbersTab extends ConsumerWidget {
         for (final s in realSubs) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
           for (final key in _serviceNumberFields.keys) {
-            final val = d[key];
+            // Check both data-level and top-level
+            final val = d[key] ?? s[key];
             if (val is num) {
               totals[key] = (totals[key] ?? 0) + val.toInt();
               counts[key] = (counts[key] ?? 0) + 1;
+            } else if (val is String) {
+              // Try parsing string numbers
+              final parsed = int.tryParse(val);
+              if (parsed != null) {
+                totals[key] = (totals[key] ?? 0) + parsed;
+                counts[key] = (counts[key] ?? 0) + 1;
+              }
             }
           }
         }

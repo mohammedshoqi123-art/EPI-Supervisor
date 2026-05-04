@@ -343,8 +343,11 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   );
 });
 
+/// ═══ PERFORMANCE: AutoDispose family — cleans up unused filter instances ═══
+/// Each unique SubmissionsFilter gets its own provider that disposes
+/// when no widgets are watching it. Prevents memory buildup.
 final submissionsProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, SubmissionsFilter>((
+    FutureProvider.family.autoDispose<List<Map<String, dynamic>>, SubmissionsFilter>((
   ref,
   filter,
 ) async {
@@ -419,7 +422,7 @@ class AnalyticsFilter {
 }
 
 final dashboardAnalyticsProvider =
-    FutureProvider.family<Map<String, dynamic>, AnalyticsFilter>((
+    FutureProvider.family.autoDispose<Map<String, dynamic>, AnalyticsFilter>((
   ref,
   filter,
 ) async {
@@ -502,8 +505,8 @@ final localDraftCountProvider = StreamProvider<int>((ref) async* {
 // NOTIFICATIONS — reactive unread count with polling
 // ═══════════════════════════════════════════════════════════════
 
-/// Reactive notification unread count — polls every 60s when online.
-/// Used by dashboard header badge and notification icon.
+/// Reactive notification unread count — polls every 120s when online.
+/// ═══ PERFORMANCE: Increased interval from 60s to 120s to reduce rebuilds ═══
 final notificationCountProvider = StreamProvider<int>((ref) async* {
   // Emit 0 immediately
   yield 0;
@@ -520,8 +523,8 @@ final notificationCountProvider = StreamProvider<int>((ref) async* {
     yield 0;
   }
 
-  // Poll every 60 seconds
-  yield* Stream.periodic(const Duration(seconds: 60), (_) async {
+  // Poll every 120 seconds (was 60s — reduced for performance)
+  yield* Stream.periodic(const Duration(seconds: 120), (_) async {
     try {
       if (ConnectivityUtils.isOnline) {
         await NotificationService.loadFromDB(refresh: true);

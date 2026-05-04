@@ -171,7 +171,7 @@ class SubmissionsFilter {
     this.governorateId,
     this.districtId,
     this.campaignType,
-    this.limit = 2000, // ═══平衡: يكفي لمعظم الحالات + يحمّل للأوفلاين ═══
+    this.limit = 500, // ═══ PERFORMANCE: Reduced from 2000 — 500足够 for most cases, protects offline cache ═══
     this.offset = 0,
   });
 
@@ -398,12 +398,12 @@ final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
     // Submitted count from cache or server — uses cached data, no extra fetch
     final cache = await ref.read(offlineDataCacheProvider.future);
     final campaign = ref.read(campaignProvider);
-    final filter = SubmissionsFilter(campaignType: campaign.value, limit: 2000);
+    final filter = SubmissionsFilter(campaignType: campaign.value, limit: 500);
     final subs = await cache.getList(
       filter.cacheKey,
       () => ref.read(databaseServiceProvider).getSubmissions(
             campaignType: campaign.value,
-            limit: 2000,
+            limit: 500,
           ),
       maxAge: const Duration(hours: 2),
     );

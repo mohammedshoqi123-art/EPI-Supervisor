@@ -104,7 +104,7 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
     final start = safePage * _pageSize;
     final end = (start + _pageSize).clamp(0, filtered.length);
     final pageItems =
-        start < filtered.length ? filtered.sublist(start, end) : [];
+        start < filtered.length ? filtered.sublist(start, end).cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
 
     setState(() {
       _pageItems = pageItems;

@@ -196,7 +196,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       final start = page * _pageSize;
       final end = (start + _pageSize).clamp(0, filtered.length);
       final pageItems =
-          start < filtered.length ? filtered.sublist(start, end) : [];
+          start < filtered.length ? filtered.sublist(start, end).cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
 
       setState(() {
         _draftItems = pageItems;
@@ -233,7 +233,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       final start = page * _pageSize;
       final end = (start + _pageSize).clamp(0, filtered.length);
       final pageItems =
-          start < filtered.length ? filtered.sublist(start, end) : [];
+          start < filtered.length ? filtered.sublist(start, end).cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
 
       setState(() {
         _pendingItems = pageItems;
@@ -282,7 +282,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       final start = page * _pageSize;
       final end = (start + _pageSize).clamp(0, filtered.length);
       final pageItems =
-          start < filtered.length ? filtered.sublist(start, end) : [];
+          start < filtered.length ? filtered.sublist(start, end).cast<Map<String, dynamic>>() : <Map<String, dynamic>>[];
 
       setState(() {
         _submittedItems = pageItems;

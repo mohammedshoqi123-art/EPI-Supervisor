@@ -132,14 +132,12 @@ final forceRefreshProvider = Provider<Future<void> Function(String cacheKey)>((
 });
 
 /// Pending items count for UI badges and banners.
-/// Uses .distinct() to skip rebuilds when count hasn't changed.
+/// ═══ PERFORMANCE: Single poll every 300s, uses .distinct() to skip rebuilds ═══
 final syncPendingCountProvider = StreamProvider<int>((ref) async* {
   final offline = await ref.watch(offlineManagerProvider.future);
-  // Emit current count immediately
   yield offline.pendingCount;
-  // Poll every 120s — distinct() prevents rebuilds when count is the same
   yield* Stream.periodic(
-    const Duration(seconds: 120),
+    const Duration(seconds: 300),
     (_) => offline.pendingCount,
   ).distinct();
 });
@@ -173,7 +171,7 @@ class SubmissionsFilter {
     this.governorateId,
     this.districtId,
     this.campaignType,
-    this.limit = 999999, // ═══ FIX #2: No practical limit ═══
+    this.limit = 500, // ═══ PERFORMANCE: Default 500, use 999999 only when explicitly needed ═══
     this.offset = 0,
   });
 
@@ -369,6 +367,53 @@ final submissionsProvider =
   );
 });
 
+/// ═══ PERFORMANCE: Dedicated stats provider — avoids loading all submissions ═══
+/// Returns {drafts: N, pending: N, submitted: N} using optimized queries.
+class FormStats {
+  final int drafts;
+  final int pending;
+  final int submitted;
+  const FormStats({this.drafts = 0, this.pending = 0, this.submitted = 0});
+}
+
+final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
+  int drafts = 0, pending = 0, submitted = 0;
+
+  try {
+    // Drafts + pending from local storage (fast)
+    final offline = await ref.read(offlineManagerProvider.future).timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => throw Exception('timeout'),
+        );
+    pending = offline.pendingCount;
+    drafts = offline.getDraftFormIds().length;
+  } catch (_) {}
+
+  try {
+    // Submitted count from cache or server
+    final cache = await ref.read(offlineDataCacheProvider.future);
+    final campaign = ref.read(campaignProvider);
+    final filter = SubmissionsFilter(campaignType: campaign.value, limit: 500);
+    final subs = await cache.getList(
+      filter.cacheKey,
+      () => ref.read(databaseServiceProvider).getSubmissions(
+            campaignType: campaign.value,
+            limit: 500,
+          ),
+      maxAge: const Duration(hours: 2),
+    );
+    submitted = subs
+        .where((s) =>
+            s['status'] == 'submitted' ||
+            s['status'] == 'reviewed' ||
+            s['status'] == 'approved' ||
+            s['status'] == 'rejected')
+        .length;
+  } catch (_) {}
+
+  return FormStats(drafts: drafts, pending: pending, submitted: submitted);
+});
+
 /// Analytics filter for passing governorate/district/date/form filters to the provider.
 class AnalyticsFilter {
   final String? governorateId;
@@ -478,18 +523,13 @@ final governorateRankingProvider = FutureProvider<List<Map<String, dynamic>>>((
 // ═══════════════════════════════════════════════════════════════
 
 /// Provides the count of locally saved drafts (Hive) — not server drafts.
-/// Dashboard uses this to show accurate draft count.
+/// ═══ PERFORMANCE: Poll every 300s (was 60s), cached in-memory ═══
 final localDraftCountProvider = StreamProvider<int>((ref) async* {
-  // Emit 0 immediately
   yield 0;
-
   try {
     final offline = await ref.watch(offlineManagerProvider.future);
-    // Initial count
     yield offline.getDraftFormIds().length;
-
-    // Poll every 30s to keep draft badge updated
-    yield* Stream.periodic(const Duration(seconds: 60), (_) {
+    yield* Stream.periodic(const Duration(seconds: 300), (_) {
       try {
         return offline.getDraftFormIds().length;
       } catch (_) {
@@ -505,26 +545,19 @@ final localDraftCountProvider = StreamProvider<int>((ref) async* {
 // NOTIFICATIONS — reactive unread count with polling
 // ═══════════════════════════════════════════════════════════════
 
-/// Reactive notification unread count — polls every 120s when online.
-/// ═══ PERFORMANCE: Increased interval from 60s to 120s to reduce rebuilds ═══
+/// Reactive notification unread count — polls every 300s when online.
+/// ═══ PERFORMANCE: 300s interval (was 60s), only fetches when online ═══
 final notificationCountProvider = StreamProvider<int>((ref) async* {
-  // Emit 0 immediately
   yield 0;
-
-  // Load from DB and start polling
   final api = ref.read(apiClientProvider);
   NotificationService.init(api);
-
-  // Initial load
   try {
     await NotificationService.loadFromDB(refresh: true);
     yield NotificationService.unreadCount;
   } catch (_) {
     yield 0;
   }
-
-  // Poll every 120 seconds (was 60s — reduced for performance)
-  yield* Stream.periodic(const Duration(seconds: 120), (_) async {
+  yield* Stream.periodic(const Duration(seconds: 300), (_) async {
     try {
       if (ConnectivityUtils.isOnline) {
         await NotificationService.loadFromDB(refresh: true);

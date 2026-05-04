@@ -26,6 +26,9 @@ class OfflineDataCache {
   final Map<String, _CacheEntry> _memoryCache = {};
   static const int _maxMemoryEntries = 100;
 
+  // ═══ PERFORMANCE: Track in-flight background refreshes to prevent duplicates ═══
+  final Set<String> _refreshingKeys = {};
+
   OfflineDataCache(this._offline, this._encryption);
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -214,11 +217,17 @@ class OfflineDataCache {
     String key,
     Future<List<Map<String, dynamic>>> Function() fetchFn,
   ) {
+    // ═══ PERFORMANCE: Skip if already refreshing this key ═══
+    if (_refreshingKeys.contains(key)) return;
+    _refreshingKeys.add(key);
+
     fetchFn().then((data) async {
       await _saveToCache(key, data);
+      _refreshingKeys.remove(key);
       if (kDebugMode)
         print('[OfflineDataCache] Background refresh complete for $key');
     }).catchError((e) {
+      _refreshingKeys.remove(key);
       if (kDebugMode)
         print('[OfflineDataCache] Background refresh failed for $key: $e');
     });
@@ -228,9 +237,15 @@ class OfflineDataCache {
     String key,
     Future<Map<String, dynamic>> Function() fetchFn,
   ) {
+    // ═══ PERFORMANCE: Skip if already refreshing this key ═══
+    if (_refreshingKeys.contains(key)) return;
+    _refreshingKeys.add(key);
+
     fetchFn().then((data) async {
       await _saveToCache(key, data);
+      _refreshingKeys.remove(key);
     }).catchError((e) {
+      _refreshingKeys.remove(key);
       if (kDebugMode)
         print('[OfflineDataCache] Background refresh failed for $key: $e');
     });

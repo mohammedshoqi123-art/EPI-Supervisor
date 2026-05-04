@@ -52,10 +52,11 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
 
     try {
       final campaign = ref.read(campaignProvider);
+      // ═══ PERFORMANCE: Use 500 limit — cached for 2h ═══
       final filter = SubmissionsFilter(
         status: _statusFilter,
         campaignType: campaign.value,
-        limit: 999999,
+        limit: 500,
         offset: 0,
       );
 

@@ -46,7 +46,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       const Duration(milliseconds: 200),
       () => _cardsAnim.forward(),
     );
+    // ═══ PERFORMANCE: Pulse briefly then stop — was infinite repeat (60fps rebuilds) ═══
     _pulseAnim.repeat(reverse: true);
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted) _pulseAnim.stop();
+    });
 
     // ═══ FIX #1: Auto-refresh dashboard when internet returns ═══
     // ═══ PERFORMANCE: Debounced to prevent rapid invalidation cascade ═══
@@ -97,18 +101,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    // ═══ PERFORMANCE: Use .select() to minimize rebuild scope ═══
     final analytics = ref.watch(
       dashboardAnalyticsProvider(
         AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
       ),
     );
     final authState = ref.watch(authStateProvider);
-    final pendingAsync = ref.watch(syncPendingCountProvider);
-    final pendingCount = pendingAsync.valueOrNull ?? 0;
-    final notifAsync = ref.watch(notificationCountProvider);
-    final unreadNotifs = notifAsync.valueOrNull ?? 0;
-    final localDraftsAsync = ref.watch(localDraftCountProvider);
-    final localDrafts = localDraftsAsync.valueOrNull ?? 0;
+    final pendingCount = ref.watch(
+      syncPendingCountProvider.select((v) => v.valueOrNull ?? 0),
+    );
+    final unreadNotifs = ref.watch(
+      notificationCountProvider.select((v) => v.valueOrNull ?? 0),
+    );
+    final localDrafts = ref.watch(
+      localDraftCountProvider.select((v) => v.valueOrNull ?? 0),
+    );
 
     return Scaffold(
       body: RefreshIndicator(

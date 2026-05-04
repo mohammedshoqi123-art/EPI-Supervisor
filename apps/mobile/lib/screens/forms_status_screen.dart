@@ -120,8 +120,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   }
 
   void _refreshAll() {
-    ref.invalidate(submissionsProvider);
     ref.invalidate(formsProvider);
+    ref.invalidate(formStatsProvider);
     setState(() {
       _refreshKey++;
       _draftItems.clear();
@@ -254,9 +254,10 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     setState(() => _submittedLoading = true);
     try {
       final campaign = ref.read(campaignProvider);
+      // ═══ PERFORMANCE: Use reasonable limit — cached data is reused ═══
       final filter = SubmissionsFilter(
         campaignType: campaign.value,
-        limit: 999999,
+        limit: 500,
         offset: 0,
       );
       final data = await ref.read(submissionsProvider(filter).future);
@@ -1200,131 +1201,64 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildStatsSection() {
-    return FutureBuilder<Map<String, int>>(
-      key: ValueKey('stats_$_refreshKey'),
-      future: _loadStats(),
-      builder: (context, snapshot) {
-        final stats =
-            snapshot.data ?? {'drafts': 0, 'pending': 0, 'submitted': 0};
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  title: 'المسودات',
-                  count: stats['drafts']!,
-                  icon: Icons.edit_note,
-                  color: AppTheme.warningColor,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFB8C00), Color(0xFFF57C00)],
-                  ),
-                  onTap: () {
-                    _tabController.animateTo(0);
-                    _draftTotal = stats['drafts']!;
-                  },
-                ),
+    // ═══ PERFORMANCE: Use dedicated stats provider — no full data load ═══
+    final statsAsync = ref.watch(formStatsProvider);
+    final stats = statsAsync.valueOrNull ?? const FormStats();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Expanded(
+            child: _StatCard(
+              title: 'المسودات',
+              count: stats.drafts,
+              icon: Icons.edit_note,
+              color: AppTheme.warningColor,
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFB8C00), Color(0xFFF57C00)],
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatCard(
-                  title: 'قيد المزامنة',
-                  count: stats['pending']!,
-                  icon: Icons.sync,
-                  color: AppTheme.infoColor,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
-                  ),
-                  onTap: () {
-                    _tabController.animateTo(1);
-                    _pendingTotal = stats['pending']!;
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatCard(
-                  title: 'المرسلة',
-                  count: stats['submitted']!,
-                  icon: Icons.check_circle,
-                  color: AppTheme.successColor,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
-                  ),
-                  onTap: () {
-                    _tabController.animateTo(2);
-                    _submittedTotal = stats['submitted']!;
-                  },
-                ),
-              ),
-            ],
+              onTap: () {
+                _tabController.animateTo(0);
+                _draftTotal = stats.drafts;
+              },
+            ),
           ),
-        );
-      },
-    );
-  }
-
-  Future<Map<String, int>> _loadStats() async {
-    int drafts = 0, pending = 0, submitted = 0;
-    try {
-      final offline = await ref.read(offlineManagerProvider.future).timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => throw Exception('timeout'),
-          );
-      pending = offline.pendingCount;
-      drafts = offline.getDraftFormIds().length;
-
-      // ═══ FIX: Get submitted count directly from submissions provider ═══
-      // Uses the same data source as the submitted tab — no analytics limit
-      try {
-        final campaign = ref.read(campaignProvider);
-        final allSubs = await ref
-            .read(submissionsProvider(
-              SubmissionsFilter(
-                campaignType: campaign.value,
-                limit: 999999,
-                offset: 0,
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatCard(
+              title: 'قيد المزامنة',
+              count: stats.pending,
+              icon: Icons.sync,
+              color: AppTheme.infoColor,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
               ),
-            ).future)
-            .timeout(
-              const Duration(seconds: 10),
-              onTimeout: () => throw Exception('timeout'),
-            );
-        submitted = allSubs
-            .where((s) =>
-                s['status'] == 'submitted' ||
-                s['status'] == 'reviewed' ||
-                s['status'] == 'approved' ||
-                s['status'] == 'rejected')
-            .length;
-      } catch (_) {
-        // Fallback: try analytics API
-        try {
-          final campaign = ref.read(campaignProvider);
-          final analytics = await ref
-              .read(
-                dashboardAnalyticsProvider(
-                  AnalyticsFilter(campaignType: campaign.value),
-                ).future,
-              )
-              .timeout(
-                const Duration(seconds: 5),
-                onTimeout: () => throw Exception('timeout'),
-              );
-          final subs = analytics['submissions'] as Map<String, dynamic>? ?? {};
-          final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
-          submitted = (byStatus['submitted'] as int? ?? 0) +
-              (byStatus['reviewed'] as int? ?? 0) +
-              (byStatus['approved'] as int? ?? 0) +
-              (byStatus['rejected'] as int? ?? 0);
-        } catch (_) {
-          submitted = 0;
-        }
-      }
-    } catch (e) {
-      debugPrint('[FormsStatusScreen] Stats load error: $e');
-    }
-    return {'drafts': drafts, 'pending': pending, 'submitted': submitted};
+              onTap: () {
+                _tabController.animateTo(1);
+                _pendingTotal = stats.pending;
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatCard(
+              title: 'المرسلة',
+              count: stats.submitted,
+              icon: Icons.check_circle,
+              color: AppTheme.successColor,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
+              ),
+              onTap: () {
+                _tabController.animateTo(2);
+                _submittedTotal = stats.submitted;
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════

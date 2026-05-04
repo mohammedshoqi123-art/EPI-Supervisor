@@ -7,7 +7,7 @@ export 'vaccination_service.dart';
 // smart_nlp.dart يحتوي IntentResult الذي يتعارض مع epi_nlp_engine.dart
 // نصدر فقط ما نحتاجه
 export 'smart_nlp.dart' hide IntentResult;
-export 'context_manager.dart' hide ChildProfile, ConversationTurn;
+export 'context_manager.dart' hide ChildProfile, ConversationTurn, ConversationPhase;
 export 'knowledge_base.dart';
 export 'real_data_kb.dart';
 export 'advanced_immunization_kb.dart';

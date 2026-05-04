@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../router/app_router.dart';
 import 'user_form_sheet.dart';
 
 /// إدارة المستخدمين — User Management (Add + Edit + Delete)
@@ -26,6 +27,15 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
   void initState() {
     super.initState();
     _loadAll();
+
+    // ═══ Auto-refresh when internet returns ═══
+    ref.listen(connectivityProvider, (prev, next) {
+      final wasOffline = prev?.valueOrNull == false;
+      final isNowOnline = next.valueOrNull == true;
+      if (wasOffline && isNowOnline && mounted) {
+        _loadAll();
+      }
+    });
   }
 
   @override

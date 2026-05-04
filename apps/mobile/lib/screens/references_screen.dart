@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:epi_shared/epi_shared.dart';
 import '../providers/app_providers.dart';
+import '../router/app_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// References & Resources page — downloadable books, guides, and manuals.
@@ -21,6 +22,15 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
   void initState() {
     super.initState();
     _loadReferences();
+
+    // ═══ Auto-refresh when internet returns ═══
+    ref.listen(connectivityProvider, (prev, next) {
+      final wasOffline = prev?.valueOrNull == false;
+      final isNowOnline = next.valueOrNull == true;
+      if (wasOffline && isNowOnline && mounted) {
+        _loadReferences();
+      }
+    });
   }
 
   Future<void> _loadReferences() async {

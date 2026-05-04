@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:epi_core/epi_core.dart';
 import 'package:epi_shared/epi_shared.dart';
 import '../providers/app_providers.dart';
+import '../router/app_router.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -20,6 +21,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   void initState() {
     super.initState();
     _loadNotifications();
+
+    // ═══ Auto-refresh when internet returns ═══
+    ref.listen(connectivityProvider, (prev, next) {
+      final wasOffline = prev?.valueOrNull == false;
+      final isNowOnline = next.valueOrNull == true;
+      if (wasOffline && isNowOnline && mounted) {
+        _loadNotifications();
+      }
+    });
   }
 
   Future<void> _loadNotifications() async {

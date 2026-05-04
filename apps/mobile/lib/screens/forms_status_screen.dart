@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:epi_shared/epi_shared.dart';
 import '../providers/app_providers.dart';
+import '../router/app_router.dart';
 
 /// Comprehensive forms status dashboard showing:
 /// - Stats cards (drafts, submitted, synced, unsynced)

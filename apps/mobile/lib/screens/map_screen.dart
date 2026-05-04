@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
+import '../router/app_router.dart';
 import 'map/map_helpers.dart';
 import 'map/map_controls.dart';
 

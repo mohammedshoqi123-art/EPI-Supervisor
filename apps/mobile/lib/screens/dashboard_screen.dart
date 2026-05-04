@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
+import '../router/app_router.dart';
 import 'dashboard_header.dart';
 import 'dashboard_charts.dart';
 import 'dashboard_report.dart';

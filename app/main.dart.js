@@ -68603,7 +68603,7 @@ s=12
 return A.o(a.b4(0,$.hP().ge7(),t.Bo),$async$$1)
 case 12:m=a1
 l=a.b4(0,$.iz(),t.yx)
-k=A.ahr(l.c,2000,0)
+k=A.ahr(l.c,500,0)
 s=13
 return A.o(m.ks(k.gafG(),new A.byd(a,l),B.kd),$async$$1)
 case 13:j=a1
@@ -68628,7 +68628,7 @@ A.byc.prototype={
 $0(){return A.S(A.dW("timeout"))},
 $S:43}
 A.byd.prototype={
-$0(){return this.a.b4(0,$.lw(),t.Js).anW(this.b.c,2000)},
+$0(){return this.a.b4(0,$.lw(),t.Js).anW(this.b.c,500)},
 $S:44}
 A.bye.prototype={
 $1(a){var s="status",r=J.O(a)
@@ -73981,7 +73981,7 @@ var $async$q2=A.v(function(a3,a4){if(a3===1){p=a4
 s=q}while(true)switch(s){case 0:o.K(new A.bj0(o))
 q=3
 n=o.gaX().b4(0,$.iz(),t.yx)
-m=A.ahr(n.c,2000,0)
+m=A.ahr(n.c,500,0)
 e=o.gaX()
 d=$.axF().$1(m)
 c=d.ch
@@ -75040,7 +75040,7 @@ this.auN()},
 ab9(){var s,r,q=u.w
 A.p2()
 s=this.gaX()
-r=$.axF().$1(A.ahr(this.gaX().b4(0,$.iz(),t.yx).c,2000,0))
+r=$.axF().$1(A.ahr(this.gaX().b4(0,$.iz(),t.yx).c,500,0))
 if(s.e==null)A.S(A.a3(q))
 s.geZ().dS(r)
 s=this.gaX()
@@ -75072,7 +75072,7 @@ if(i>n)n=i
 h=j.b
 if(h<m)m=h
 if(h>l)l=h}g.w.BO(new A.hZ((o+n)/2,(m+l)/2),A.c3Y(p))},
-KH(){var s,r=A.dz(this.gaX().b4(0,$.axF().$1(A.ahr(this.gaX().b4(0,$.iz(),t.yx).c,2000,0)),t.Fu))
+KH(){var s,r=A.dz(this.gaX().b4(0,$.axF().$1(A.ahr(this.gaX().b4(0,$.iz(),t.yx).c,500,0)),t.Fu))
 if(r==null)r=A.a([],t._)
 s=J.dF(r,new A.bmi(this))
 return A.H(s,!0,s.$ti.i("p.E"))},
@@ -75109,7 +75109,7 @@ if(n===B.nM||n===B.nN||n===B.nO){n=B.eY.O(0.15)
 l=A.a0(20)
 B.j.L(s,A.a([A.aw(A.a([A.a6(o,B.bsZ,B.y,o,o,new A.a2(n,o,A.cY(B.eY.O(0.3),B.T,1),l,o,o,B.I),o,o,o,o,B.ww,o,o,o)],m),B.F,B.x,B.B,o)],m))}if(p.CW)B.j.L(s,A.a([B.b3,p.ay0()],m))
 return A.hD(o,A.nY(!0,new A.ao(B.f2,A.ax(s,B.a8,B.x,B.B),o),B.aW,!0),o,o,0,0,0,o)},
-ay0(){var s,r,q,p,o,n,m=this,l=null,k=t.Fu,j=A.dz(m.gaX().b4(0,$.axF().$1(A.ahr(m.gaX().b4(0,$.iz(),t.yx).c,2000,0)),k)),i=m.aFo(j==null?A.a([],t._):j),h=A.dz(m.gaX().b4(0,$.mj(),k))
+ay0(){var s,r,q,p,o,n,m=this,l=null,k=t.Fu,j=A.dz(m.gaX().b4(0,$.axF().$1(A.ahr(m.gaX().b4(0,$.iz(),t.yx).c,500,0)),k)),i=m.aFo(j==null?A.a([],t._):j),h=A.dz(m.gaX().b4(0,$.mj(),k))
 if(h==null)h=A.a([],t._)
 k=A.a0(16)
 s=A.a([new A.bl(0,B.a6,B.R.O(0.08),B.hk,12)],t.R)

@@ -56,7 +56,7 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
       final filter = SubmissionsFilter(
         status: _statusFilter,
         campaignType: campaign.value,
-        limit: 500,
+        limit: 2000,
         offset: 0,
       );
 

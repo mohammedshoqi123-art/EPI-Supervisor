@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:epi_shared/epi_shared.dart';
+import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import '../router/app_router.dart';
 
-/// Comprehensive forms status dashboard showing:
-/// - Stats cards (drafts, submitted, synced, unsynced)
-/// - Draft list with continue/edit actions
-/// - Pending sync queue
-/// - Recently submitted forms
+/// ═══ Forms Status Dashboard ═══
+/// Shows 3 tabs: المسودات (Drafts) | قيد المزامنة (Pending Sync) | المرسلة (Submitted)
+/// Each tab has page-based pagination (20 per page) with next/prev navigation.
 class FormsStatusScreen extends ConsumerStatefulWidget {
   const FormsStatusScreen({super.key});
 
@@ -18,11 +18,13 @@ class FormsStatusScreen extends ConsumerStatefulWidget {
   ConsumerState<FormsStatusScreen> createState() => _FormsStatusScreenState();
 }
 
-class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
+class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   StreamSubscription? _syncSub;
   int _refreshKey = 0;
 
-  // ═══ FIX #4: Search & filter state ═══
+  // Search & filter state
   final _searchController = TextEditingController();
   String _searchQuery = '';
   String? _filterFormId;
@@ -31,6 +33,27 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
   String? _filterSupervisorRole;
   String? _filterSupervisorName;
   bool _showFilters = false;
+
+  // ═══ Sort state ═══
+  String _sortBy = 'date_desc'; // date_desc, date_asc, name_asc, name_desc, status
+
+  // ═══ Pagination state per tab ═══
+  static const int _pageSize = 20;
+  // Drafts tab
+  List<Map<String, dynamic>> _draftItems = [];
+  int _draftPage = 0;
+  bool _draftLoading = false;
+  int _draftTotal = 0;
+  // Pending sync tab
+  List<Map<String, dynamic>> _pendingItems = [];
+  int _pendingPage = 0;
+  bool _pendingLoading = false;
+  int _pendingTotal = 0;
+  // Submitted tab
+  List<Map<String, dynamic>> _submittedItems = [];
+  int _submittedPage = 0;
+  bool _submittedLoading = false;
+  int _submittedTotal = 0;
 
   bool get _hasActiveFilters =>
       _filterFormId != null ||
@@ -52,46 +75,406 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _listenForSyncCompletion();
 
-    // ═══ FIX #1: Auto-refresh when internet returns ═══
+    // Auto-refresh when internet returns
     ref.listen(connectivityProvider, (prev, next) {
       final wasOffline = prev?.valueOrNull == false;
       final isNowOnline = next.valueOrNull == true;
       if (wasOffline && isNowOnline && mounted) {
-        ref.invalidate(submissionsProvider(
-          SubmissionsFilter(campaignType: ref.read(campaignProvider).value),
-        ));
-        ref.invalidate(formsProvider);
-        ref.invalidate(dashboardAnalyticsProvider(
-          AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
-        ));
-        setState(() => _refreshKey++);
+        _refreshAll();
       }
     });
+
+    // Load initial data for the first tab
+    _loadDraftsPage(0);
   }
 
-  /// Auto-refresh stats when sync completes — so submitted forms appear immediately.
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging) return;
+    HapticFeedback.selectionClick();
+    // Load data for the new tab if empty
+    switch (_tabController.index) {
+      case 0:
+        if (_draftItems.isEmpty) _loadDraftsPage(0);
+        break;
+      case 1:
+        if (_pendingItems.isEmpty) _loadPendingPage(0);
+        break;
+      case 2:
+        if (_submittedItems.isEmpty) _loadSubmittedPage(0);
+        break;
+    }
+  }
+
   void _listenForSyncCompletion() {
     ref.read(syncServiceProvider.future).then((service) {
       _syncSub = service.syncState.listen((state) {
-        // When sync finishes (isSyncing goes false after a sync), refresh everything
         if (!state.isSyncing && mounted) {
-          // Invalidate cached providers so fresh data is fetched
-          ref.invalidate(submissionsProvider);
-          ref.invalidate(formsProvider);
-          setState(() => _refreshKey++);
+          _refreshAll();
         }
       });
     }).catchError((_) {});
   }
 
+  void _refreshAll() {
+    ref.invalidate(submissionsProvider);
+    ref.invalidate(formsProvider);
+    setState(() {
+      _refreshKey++;
+      _draftItems.clear();
+      _pendingItems.clear();
+      _submittedItems.clear();
+      _draftPage = 0;
+      _pendingPage = 0;
+      _submittedPage = 0;
+    });
+    // Reload current tab
+    switch (_tabController.index) {
+      case 0:
+        _loadDraftsPage(0);
+        break;
+      case 1:
+        _loadPendingPage(0);
+        break;
+      case 2:
+        _loadSubmittedPage(0);
+        break;
+    }
+  }
+
   @override
   void dispose() {
     _syncSub?.cancel();
+    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DATA LOADING — Drafts (from local Hive storage)
+  // ═══════════════════════════════════════════════════════════════
+
+  Future<void> _loadDraftsPage(int page) async {
+    setState(() => _draftLoading = true);
+    try {
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => throw Exception('timeout'),
+          );
+      final allDrafts = offline.getAllDrafts();
+
+      // Enrich drafts with form titles from forms provider
+      List<Map<String, dynamic>> forms = [];
+      try {
+        forms = await ref.read(formsProvider.future);
+      } catch (_) {}
+
+      final enrichedDrafts = allDrafts.map((draft) {
+        final formId = draft['form_id'] ?? '';
+        final form = forms.firstWhere(
+          (f) => f['id'] == formId,
+          orElse: () => {'title_ar': 'مسودة'},
+        );
+        return {
+          ...draft,
+          'form_title': form['title_ar'] ?? 'مسودة',
+          'formId': formId,
+        };
+      }).toList();
+
+      // Apply filters
+      var filtered = _applyFilters(enrichedDrafts);
+      _draftTotal = filtered.length;
+
+      // Apply sorting
+      filtered = _applySorting(filtered);
+
+      // Paginate
+      final start = page * _pageSize;
+      final end = (start + _pageSize).clamp(0, filtered.length);
+      final pageItems =
+          start < filtered.length ? filtered.sublist(start, end) : [];
+
+      setState(() {
+        _draftItems = pageItems;
+        _draftPage = page;
+        _draftLoading = false;
+      });
+    } catch (e) {
+      setState(() => _draftLoading = false);
+      debugPrint('[FormsStatusScreen] Drafts load error: $e');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DATA LOADING — Pending Sync (from offline queue)
+  // ═══════════════════════════════════════════════════════════════
+
+  Future<void> _loadPendingPage(int page) async {
+    setState(() => _pendingLoading = true);
+    try {
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => throw Exception('timeout'),
+          );
+      final allPending = await offline.getPendingItems();
+
+      // Apply filters
+      var filtered = _applyFilters(allPending);
+      _pendingTotal = filtered.length;
+
+      // Apply sorting
+      filtered = _applySorting(filtered);
+
+      // Paginate
+      final start = page * _pageSize;
+      final end = (start + _pageSize).clamp(0, filtered.length);
+      final pageItems =
+          start < filtered.length ? filtered.sublist(start, end) : [];
+
+      setState(() {
+        _pendingItems = pageItems;
+        _pendingPage = page;
+        _pendingLoading = false;
+      });
+    } catch (e) {
+      setState(() => _pendingLoading = false);
+      debugPrint('[FormsStatusScreen] Pending load error: $e');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DATA LOADING — Submitted (from Supabase)
+  // ═══════════════════════════════════════════════════════════════
+
+  Future<void> _loadSubmittedPage(int page) async {
+    setState(() => _submittedLoading = true);
+    try {
+      final campaign = ref.read(campaignProvider);
+      final filter = SubmissionsFilter(
+        campaignType: campaign.value,
+        limit: 999999,
+        offset: 0,
+      );
+      final data = await ref.read(submissionsProvider(filter).future);
+
+      // Filter only submitted/reviewed/approved/rejected
+      var allSubmitted = data
+          .where((s) =>
+              s['status'] == 'submitted' ||
+              s['status'] == 'reviewed' ||
+              s['status'] == 'approved' ||
+              s['status'] == 'rejected')
+          .toList();
+
+      // Apply filters
+      var filtered = _applyServerFilters(allSubmitted);
+      _submittedTotal = filtered.length;
+
+      // Apply sorting
+      filtered = _applySorting(filtered);
+
+      // Paginate
+      final start = page * _pageSize;
+      final end = (start + _pageSize).clamp(0, filtered.length);
+      final pageItems =
+          start < filtered.length ? filtered.sublist(start, end) : [];
+
+      setState(() {
+        _submittedItems = pageItems;
+        _submittedPage = page;
+        _submittedLoading = false;
+      });
+    } catch (e) {
+      setState(() => _submittedLoading = false);
+      debugPrint('[FormsStatusScreen] Submitted load error: $e');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // FILTERING & SORTING
+  // ═══════════════════════════════════════════════════════════════
+
+  List<Map<String, dynamic>> _applyFilters(List<Map<String, dynamic>> items) {
+    var result = items;
+
+    // Search query
+    if (_searchQuery.isNotEmpty) {
+      result = result.where((item) {
+        final title =
+            (item['form_title'] ?? item['forms']?['title_ar'] ?? '')
+                .toString()
+                .toLowerCase();
+        final userName =
+            (item['profiles']?['full_name'] ?? item['user_name'] ?? '')
+                .toString()
+                .toLowerCase();
+        return title.contains(_searchQuery) || userName.contains(_searchQuery);
+      }).toList();
+    }
+
+    // Form filter
+    if (_filterFormId != null) {
+      result = result
+          .where((item) =>
+              item['form_id'] == _filterFormId ||
+              item['formId'] == _filterFormId)
+          .toList();
+    }
+
+    // Supervisor name filter
+    if (_filterSupervisorName != null && _filterSupervisorName!.isNotEmpty) {
+      result = result.where((item) {
+        final name =
+            (item['profiles']?['full_name'] ?? item['user_name'] ?? '')
+                .toString()
+                .toLowerCase();
+        return name.contains(_filterSupervisorName!);
+      }).toList();
+    }
+
+    return result;
+  }
+
+  List<Map<String, dynamic>> _applyServerFilters(
+      List<Map<String, dynamic>> items) {
+    var result = items;
+
+    // Search query
+    if (_searchQuery.isNotEmpty) {
+      result = result.where((item) {
+        final title =
+            (item['forms']?['title_ar'] ?? '').toString().toLowerCase();
+        final userName =
+            (item['profiles']?['full_name'] ?? '').toString().toLowerCase();
+        return title.contains(_searchQuery) || userName.contains(_searchQuery);
+      }).toList();
+    }
+
+    // Form filter
+    if (_filterFormId != null) {
+      result = result.where((s) => s['form_id'] == _filterFormId).toList();
+    }
+
+    // Governorate filter
+    if (_filterGovernorate != null) {
+      result = result
+          .where((s) => s['governorate_id'] == _filterGovernorate)
+          .toList();
+    }
+
+    // District filter
+    if (_filterDistrict != null) {
+      result =
+          result.where((s) => s['district_id'] == _filterDistrict).toList();
+    }
+
+    // Supervisor role filter
+    if (_filterSupervisorRole != null) {
+      result = result.where((s) {
+        final role = (s['profiles']?['role'] ?? '').toString().toLowerCase();
+        return role == _filterSupervisorRole;
+      }).toList();
+    }
+
+    // Supervisor name filter
+    if (_filterSupervisorName != null && _filterSupervisorName!.isNotEmpty) {
+      result = result.where((s) {
+        final name =
+            (s['profiles']?['full_name'] ?? '').toString().toLowerCase();
+        return name.contains(_filterSupervisorName!);
+      }).toList();
+    }
+
+    return result;
+  }
+
+  List<Map<String, dynamic>> _applySorting(List<Map<String, dynamic>> items) {
+    final sorted = List<Map<String, dynamic>>.from(items);
+    sorted.sort((a, b) {
+      switch (_sortBy) {
+        case 'date_desc':
+          final da = _parseDate(a['created_at'] ?? a['submitted_at'] ?? '');
+          final db = _parseDate(b['created_at'] ?? b['submitted_at'] ?? '');
+          return db.compareTo(da);
+        case 'date_asc':
+          final da = _parseDate(a['created_at'] ?? a['submitted_at'] ?? '');
+          final db = _parseDate(b['created_at'] ?? b['submitted_at'] ?? '');
+          return da.compareTo(db);
+        case 'name_asc':
+          final na = (a['forms']?['title_ar'] ?? a['form_title'] ?? '')
+              .toString()
+              .toLowerCase();
+          final nb = (b['forms']?['title_ar'] ?? b['form_title'] ?? '')
+              .toString()
+              .toLowerCase();
+          return na.compareTo(nb);
+        case 'name_desc':
+          final na = (a['forms']?['title_ar'] ?? a['form_title'] ?? '')
+              .toString()
+              .toLowerCase();
+          final nb = (b['forms']?['title_ar'] ?? b['form_title'] ?? '')
+              .toString()
+              .toLowerCase();
+          return nb.compareTo(na);
+        case 'status':
+          final sa = (a['status'] ?? '').toString();
+          final sb = (b['status'] ?? '').toString();
+          return sa.compareTo(sb);
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }
+
+  DateTime _parseDate(String dateStr) {
+    return DateTime.tryParse(dateStr) ?? DateTime(2000);
+  }
+
+  void _onSearchChanged(String query) {
+    setState(() {
+      _searchQuery = query.toLowerCase();
+      _refreshKey++;
+    });
+    // Reload current tab with new search
+    _reloadCurrentTab();
+  }
+
+  void _reloadCurrentTab() {
+    switch (_tabController.index) {
+      case 0:
+        _loadDraftsPage(0);
+        break;
+      case 1:
+        _loadPendingPage(0);
+        break;
+      case 2:
+        _loadSubmittedPage(0);
+        break;
+    }
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _filterFormId = null;
+      _filterGovernorate = null;
+      _filterDistrict = null;
+      _filterSupervisorRole = null;
+      _filterSupervisorName = null;
+      _searchController.clear();
+      _searchQuery = '';
+      _refreshKey++;
+    });
+    _reloadCurrentTab();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -100,43 +483,155 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
         title: 'حالة الاستمارات',
         showBackButton: false,
         actions: [
+          // Sort button
+          IconButton(
+            icon: const Icon(Icons.sort_rounded),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _showSortSheet();
+            },
+            tooltip: 'ترتيب',
+          ),
+          // Refresh button
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              ref.invalidate(
-                submissionsProvider(
-                  SubmissionsFilter(
-                    campaignType: ref.read(campaignProvider).value,
-                  ),
-                ),
-              );
-              ref.invalidate(formsProvider);
-              setState(() {}); // Force stats rebuild
-            },
+            onPressed: _refreshAll,
             tooltip: 'تحديث',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Stats summary cards
+          // ═══ Stats summary cards ═══
           _buildStatsSection(),
+
+          // ═══ Tab Bar ═══
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppTheme.backgroundLight,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: AppTheme.textSecondary,
+              labelStyle: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+              indicator: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppTheme.primaryColor, AppTheme.primaryDark],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              splashBorderRadius: BorderRadius.circular(12),
+              tabs: [
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.edit_note, size: 18),
+                      const SizedBox(width: 6),
+                      const Text('المسودات'),
+                      if (_draftTotal > 0) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$_draftTotal',
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.sync, size: 18),
+                      const SizedBox(width: 6),
+                      const Text('المزامنة'),
+                      if (_pendingTotal > 0) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$_pendingTotal',
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.send, size: 18),
+                      const SizedBox(width: 6),
+                      const Text('المرسلة'),
+                      if (_submittedTotal > 0) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$_submittedTotal',
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
 
           // ═══ Search bar + Filter toggle ═══
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
                 Expanded(
                   child: EpiSearchBar(
                     controller: _searchController,
                     hint: 'بحث في الاستمارات...',
-                    onChanged: (query) {
-                      setState(() {
-                        _searchQuery = query.toLowerCase();
-                        _refreshKey++;
-                      });
-                    },
+                    onChanged: _onSearchChanged,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -148,8 +643,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
                         horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: _hasActiveFilters
-                          ? AppTheme.primaryColor
-                              .withValues(alpha: 0.15)
+                          ? AppTheme.primaryColor.withValues(alpha: 0.15)
                           : AppTheme.backgroundLight,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
@@ -198,15 +692,53 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
           // ═══ Advanced filter panel ═══
           if (_showFilters) _buildAdvancedFilter(),
 
-          // ═══ Submissions list (direct — no tabs) ═══
+          // ═══ Active sort indicator ═══
+          if (_sortBy != 'date_desc')
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(Icons.sort, size: 14, color: AppTheme.textHint),
+                  const SizedBox(width: 4),
+                  Text(
+                    'ترتيب: ${_getSortLabel()}',
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      color: AppTheme.textHint,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() => _sortBy = 'date_desc');
+                      _reloadCurrentTab();
+                    },
+                    child: const Text(
+                      'إعادة',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        color: AppTheme.errorColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // ═══ Tab Content ═══
           Expanded(
-            child: _SubmittedTab(
-              searchQuery: _searchQuery,
-              filterFormId: _filterFormId,
-              filterGovernorate: _filterGovernorate,
-              filterDistrict: _filterDistrict,
-              filterSupervisorRole: _filterSupervisorRole,
-              filterSupervisorName: _filterSupervisorName,
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // Tab 1: Drafts
+                _buildDraftsTab(),
+                // Tab 2: Pending Sync
+                _buildPendingTab(),
+                // Tab 3: Submitted
+                _buildSubmittedTab(),
+              ],
             ),
           ),
         ],
@@ -214,7 +746,586 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
     );
   }
 
-  // ═══ FIX #4: Advanced filter panel ═══
+  // ═══════════════════════════════════════════════════════════════
+  // TAB: DRAFTS
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildDraftsTab() {
+    if (_draftLoading && _draftItems.isEmpty) {
+      return const EpiLoading.shimmer();
+    }
+
+    if (_draftItems.isEmpty) {
+      return ListView(
+        children: const [
+          SizedBox(height: 80),
+          EpiEmptyState(
+            icon: Icons.edit_note,
+            title: 'لا توجد مسودات',
+            subtitle: 'الاستمارات المحفوظة محلياً ستظهر هنا',
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _loadDraftsPage(0),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _draftItems.length,
+              itemBuilder: (context, index) {
+                final draft = _draftItems[index];
+                return _DraftTile(
+                  title: draft['form_title'] ?? 'مسودة',
+                  formId: draft['formId'] ?? draft['form_id'] ?? '',
+                  date: draft['saved_at'] ?? draft['created_at'],
+                  onTap: () {
+                    final draftId = draft['draft_id'];
+                    final formId = draft['formId'] ?? draft['form_id'];
+                    if (draftId != null && formId != null) {
+                      context.go('/forms/fill/$formId?draftId=$draftId');
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+        // Pagination controls
+        _buildPaginationControls(
+          currentPage: _draftPage,
+          totalItems: _draftTotal,
+          isLoading: _draftLoading,
+          onNext: () => _loadDraftsPage(_draftPage + 1),
+          onPrev: () => _loadDraftsPage(_draftPage - 1),
+          onPage: (p) => _loadDraftsPage(p),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TAB: PENDING SYNC
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildPendingTab() {
+    if (_pendingLoading && _pendingItems.isEmpty) {
+      return const EpiLoading.shimmer();
+    }
+
+    if (_pendingItems.isEmpty) {
+      return ListView(
+        children: const [
+          SizedBox(height: 80),
+          EpiEmptyState(
+            icon: Icons.cloud_done,
+            title: 'لا توجد عناصر للمزامنة',
+            subtitle: 'الاستمارات بانتظار المزامنة ستظهر هنا',
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _loadPendingPage(0),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _pendingItems.length,
+              itemBuilder: (context, index) {
+                final item = _pendingItems[index];
+                return _PendingTile(
+                  title: item['form_title'] ??
+                      item['forms']?['title_ar'] ??
+                      'استمارة',
+                  status: item['status'] ?? 'pending',
+                  date: item['created_at'],
+                  retryCount: item['retry_count'] ?? 0,
+                  onTap: () {
+                    // Show details or retry
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+        _buildPaginationControls(
+          currentPage: _pendingPage,
+          totalItems: _pendingTotal,
+          isLoading: _pendingLoading,
+          onNext: () => _loadPendingPage(_pendingPage + 1),
+          onPrev: () => _loadPendingPage(_pendingPage - 1),
+          onPage: (p) => _loadPendingPage(p),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TAB: SUBMITTED
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildSubmittedTab() {
+    if (_submittedLoading && _submittedItems.isEmpty) {
+      return const EpiLoading.shimmer();
+    }
+
+    if (_submittedItems.isEmpty) {
+      return ListView(
+        children: const [
+          SizedBox(height: 80),
+          EpiEmptyState(
+            icon: Icons.send,
+            title: 'لا توجد إرساليات',
+            subtitle: 'الاستمارات المُرسلة ستظهر هنا',
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _loadSubmittedPage(0),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _submittedItems.length,
+              itemBuilder: (context, index) {
+                final sub = _submittedItems[index];
+                return _SubmittedTile(
+                  title: sub['forms']?['title_ar'] ?? 'نموذج',
+                  status: sub['status'] ?? 'submitted',
+                  date: sub['submitted_at'] ?? sub['created_at'],
+                  userName: sub['profiles']?['full_name'],
+                  isOffline: sub['is_offline'] == true,
+                  onTap: () =>
+                      context.go('/forms/status/submission/${sub['id']}'),
+                );
+              },
+            ),
+          ),
+        ),
+        _buildPaginationControls(
+          currentPage: _submittedPage,
+          totalItems: _submittedTotal,
+          isLoading: _submittedLoading,
+          onNext: () => _loadSubmittedPage(_submittedPage + 1),
+          onPrev: () => _loadSubmittedPage(_submittedPage - 1),
+          onPage: (p) => _loadSubmittedPage(p),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // PAGINATION CONTROLS — عشرين بالصفحة + التالي/السابق
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildPaginationControls({
+    required int currentPage,
+    required int totalItems,
+    required bool isLoading,
+    required VoidCallback onNext,
+    required VoidCallback onPrev,
+    required ValueChanged<int> onPage,
+  }) {
+    final totalPages = (totalItems / _pageSize).ceil();
+    final hasPrev = currentPage > 0;
+    final hasNext = currentPage < totalPages - 1;
+
+    if (totalPages <= 1) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            // Previous button
+            _NavButton(
+              icon: Icons.arrow_forward_ios,
+              label: 'السابق',
+              enabled: hasPrev && !isLoading,
+              onTap: onPrev,
+            ),
+
+            // Page indicator + quick jump
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _showPagePicker(
+                  currentPage: currentPage,
+                  totalPages: totalPages,
+                  onPage: onPage,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isLoading)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      Text(
+                        'صفحة ${currentPage + 1} من $totalPages',
+                        style: const TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    Text(
+                      '$totalItems استمارة',
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 10,
+                        color: AppTheme.textHint,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Next button
+            _NavButton(
+              icon: Icons.arrow_back_ios,
+              label: 'التالي',
+              enabled: hasNext && !isLoading,
+              onTap: onNext,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPagePicker({
+    required int currentPage,
+    required int totalPages,
+    required ValueChanged<int> onPage,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'اختر الصفحة',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: totalPages,
+                itemBuilder: (context, index) {
+                  final isCurrent = index == currentPage;
+                  final startItem = index * _pageSize + 1;
+                  final endItem =
+                      ((index + 1) * _pageSize).clamp(0, _submittedTotal);
+                  return ListTile(
+                    leading: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: isCurrent
+                            ? AppTheme.primaryColor
+                            : AppTheme.backgroundLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${index + 1}',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w700,
+                            color: isCurrent
+                                ? Colors.white
+                                : AppTheme.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      'صفحة ${index + 1}',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontWeight:
+                            isCurrent ? FontWeight.w700 : FontWeight.normal,
+                        color: isCurrent
+                            ? AppTheme.primaryColor
+                            : AppTheme.textPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '$startItem - $endItem',
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        color: AppTheme.textHint,
+                      ),
+                    ),
+                    trailing: isCurrent
+                        ? const Icon(Icons.check_circle,
+                            color: AppTheme.primaryColor)
+                        : null,
+                    onTap: () {
+                      Navigator.pop(context);
+                      onPage(index);
+                    },
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SORT SHEET
+  // ═══════════════════════════════════════════════════════════════
+
+  String _getSortLabel() {
+    switch (_sortBy) {
+      case 'date_desc':
+        return 'الأحدث أولاً';
+      case 'date_asc':
+        return 'الأقدم أولاً';
+      case 'name_asc':
+        return 'الاسم (أ-ي)';
+      case 'name_desc':
+        return 'الاسم (ي-أ)';
+      case 'status':
+        return 'حسب الحالة';
+      default:
+        return 'الأحدث أولاً';
+    }
+  }
+
+  void _showSortSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'ترتيب حسب',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildSortOption('date_desc', Icons.access_time, 'الأحدث أولاً'),
+            _buildSortOption('date_asc', Icons.access_time_filled, 'الأقدم أولاً'),
+            _buildSortOption('name_asc', Icons.sort_by_alpha, 'الاسم (أ-ي)'),
+            _buildSortOption('name_desc', Icons.sort_by_alpha, 'الاسم (ي-أ)'),
+            _buildSortOption('status', Icons.category, 'حسب الحالة'),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortOption(String value, IconData icon, String label) {
+    final isSelected = _sortBy == value;
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: isSelected ? AppTheme.primaryColor : AppTheme.textSecondary,
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Tajawal',
+          fontSize: 15,
+          fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+          color: isSelected ? AppTheme.primaryColor : AppTheme.textPrimary,
+        ),
+      ),
+      trailing: isSelected
+          ? const Icon(Icons.check_circle, color: AppTheme.primaryColor)
+          : null,
+      onTap: () {
+        setState(() => _sortBy = value);
+        Navigator.pop(context);
+        _reloadCurrentTab();
+      },
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // STATS SECTION
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildStatsSection() {
+    return FutureBuilder<Map<String, int>>(
+      key: ValueKey('stats_$_refreshKey'),
+      future: _loadStats(),
+      builder: (context, snapshot) {
+        final stats =
+            snapshot.data ?? {'drafts': 0, 'pending': 0, 'submitted': 0};
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  title: 'المسودات',
+                  count: stats['drafts']!,
+                  icon: Icons.edit_note,
+                  color: AppTheme.warningColor,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFB8C00), Color(0xFFF57C00)],
+                  ),
+                  onTap: () {
+                    _tabController.animateTo(0);
+                    _draftTotal = stats['drafts']!;
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatCard(
+                  title: 'قيد المزامنة',
+                  count: stats['pending']!,
+                  icon: Icons.sync,
+                  color: AppTheme.infoColor,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
+                  ),
+                  onTap: () {
+                    _tabController.animateTo(1);
+                    _pendingTotal = stats['pending']!;
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatCard(
+                  title: 'المرسلة',
+                  count: stats['submitted']!,
+                  icon: Icons.check_circle,
+                  color: AppTheme.successColor,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
+                  ),
+                  onTap: () {
+                    _tabController.animateTo(2);
+                    _submittedTotal = stats['submitted']!;
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<Map<String, int>> _loadStats() async {
+    int drafts = 0, pending = 0, submitted = 0;
+    try {
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => throw Exception('timeout'),
+          );
+      pending = offline.pendingCount;
+      drafts = offline.getDraftFormIds().length;
+
+      try {
+        final campaign = ref.read(campaignProvider);
+        final analytics = await ref
+            .read(
+              dashboardAnalyticsProvider(
+                AnalyticsFilter(campaignType: campaign.value),
+              ).future,
+            )
+            .timeout(
+              const Duration(seconds: 5),
+              onTimeout: () => throw Exception('timeout'),
+            );
+        final subs = analytics['submissions'] as Map<String, dynamic>? ?? {};
+        final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
+        submitted = (byStatus['submitted'] as int? ?? 0) +
+            (byStatus['reviewed'] as int? ?? 0) +
+            (byStatus['approved'] as int? ?? 0) +
+            (byStatus['rejected'] as int? ?? 0);
+      } catch (_) {
+        final cache =
+            await ref.read(offlineDataCacheProvider.future).timeout(
+                  const Duration(seconds: 3),
+                  onTimeout: () => throw Exception('timeout'),
+                );
+        final campaign = ref.read(campaignProvider);
+        final allFilter = SubmissionsFilter(
+          campaignType: campaign.value,
+          limit: 100,
+          offset: 0,
+        );
+        final cachedSubs = cache.getCachedDataList(allFilter.cacheKey) ??
+            cache.getCachedDataList('submissions');
+        if (cachedSubs != null) {
+          submitted = cachedSubs
+              .where((s) =>
+                  s['status'] == 'submitted' ||
+                  s['status'] == 'reviewed' ||
+                  s['status'] == 'approved' ||
+                  s['status'] == 'rejected')
+              .length;
+        }
+      }
+    } catch (e) {
+      debugPrint('[FormsStatusScreen] Stats load error: $e');
+    }
+    return {'drafts': drafts, 'pending': pending, 'submitted': submitted};
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ADVANCED FILTER PANEL
+  // ═══════════════════════════════════════════════════════════════
+
   Widget _buildAdvancedFilter() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -234,7 +1345,6 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with clear all
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -261,24 +1371,14 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
             ],
           ),
           const SizedBox(height: 12),
-
-          // Form filter
           _buildFormDropdown(),
           const SizedBox(height: 10),
-
-          // Governorate filter
           _buildGovernorateDropdown(),
           const SizedBox(height: 10),
-
-          // District filter
           _buildDistrictDropdown(),
           const SizedBox(height: 10),
-
-          // Supervisor role filter
           _buildSupervisorRoleDropdown(),
           const SizedBox(height: 10),
-
-          // Supervisor name search
           _buildSupervisorNameSearch(),
         ],
       ),
@@ -296,9 +1396,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
           value: _filterFormId != null
               ? forms
                   .firstWhere((f) => f['id'] == _filterFormId,
-                      orElse: () => {'title_ar': 'كل النماذج'})
-                  .values
-                  .first
+                      orElse: () => {'title_ar': 'كل النماذج'})['title_ar']
               : null,
           onTap: () => _showFormPicker(forms),
           onClear: _filterFormId != null
@@ -356,13 +1454,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
   }
 
   Widget _buildSupervisorRoleDropdown() {
-    const roles = [
-      'admin',
-      'central',
-      'governorate',
-      'district',
-      'data_entry',
-    ];
+    const roles = ['admin', 'central', 'governorate', 'district', 'data_entry'];
     return _filterChip(
       label: 'صفة المشرف',
       value: _filterSupervisorRole,
@@ -392,8 +1484,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
             child: TextField(
               decoration: const InputDecoration(
                 hintText: 'اسم المشرف...',
-                hintStyle:
-                    TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+                hintStyle: TextStyle(fontFamily: 'Tajawal', fontSize: 13),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
@@ -405,6 +1496,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
                       value.isEmpty ? null : value.toLowerCase();
                   _refreshKey++;
                 });
+                _reloadCurrentTab();
               },
             ),
           ),
@@ -480,25 +1572,11 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
                     size: 16, color: AppTheme.errorColor),
               )
             else
-              const Icon(Icons.arrow_drop_down,
-                  color: AppTheme.textSecondary),
+              const Icon(Icons.arrow_drop_down, color: AppTheme.textSecondary),
           ],
         ),
       ),
     );
-  }
-
-  void _clearAllFilters() {
-    setState(() {
-      _filterFormId = null;
-      _filterGovernorate = null;
-      _filterDistrict = null;
-      _filterSupervisorRole = null;
-      _filterSupervisorName = null;
-      _searchController.clear();
-      _searchQuery = '';
-      _refreshKey++;
-    });
   }
 
   void _showFormPicker(List<Map<String, dynamic>> forms) {
@@ -511,8 +1589,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
         title: 'اختر النموذج',
         items: [
           const _PickerItem(id: null, label: 'الكل'),
-          ...forms.map(
-              (f) => _PickerItem(id: f['id'], label: f['title_ar'] ?? 'نموذج')),
+          ...forms.map((f) =>
+              _PickerItem(id: f['id'], label: f['title_ar'] ?? 'نموذج')),
         ],
         selectedId: _filterFormId,
         onSelected: (id) {
@@ -521,6 +1599,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
             _refreshKey++;
           });
           Navigator.pop(context);
+          _reloadCurrentTab();
         },
       ),
     );
@@ -543,10 +1622,11 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
         onSelected: (id) {
           setState(() {
             _filterGovernorate = id;
-            _filterDistrict = null; // Reset district when gov changes
+            _filterDistrict = null;
             _refreshKey++;
           });
           Navigator.pop(context);
+          _reloadCurrentTab();
         },
       ),
     );
@@ -572,6 +1652,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
             _refreshKey++;
           });
           Navigator.pop(context);
+          _reloadCurrentTab();
         },
       ),
     );
@@ -580,7 +1661,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
   void _showRolePicker(List<String> roles) {
     final roleNames = {
       'admin': 'مدير النظام',
-      'central': 'مركزي',
+      'central': 'ركزي',
       'governorate': 'محافظة',
       'district': 'مديرية',
       'data_entry': 'إدخال بيانات',
@@ -604,185 +1685,15 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
             _refreshKey++;
           });
           Navigator.pop(context);
+          _reloadCurrentTab();
         },
       ),
     );
   }
-
-  // ═══ FIX #4: Form filter dropdown (old — replaced by advanced) ═══
-  Widget _buildFormFilter() {
-    final formsAsync = ref.watch(formsProvider);
-    return formsAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (forms) {
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              isExpanded: true,
-              value: _filterFormId,
-              hint: const Text(
-                'اختر النموذج...',
-                style: TextStyle(fontFamily: 'Tajawal', fontSize: 13),
-              ),
-              items: [
-                const DropdownMenuItem<String>(
-                  value: null,
-                  child: Text('الكل',
-                      style: TextStyle(fontFamily: 'Tajawal')),
-                ),
-                ...forms.map((f) => DropdownMenuItem<String>(
-                      value: f['id'] as String,
-                      child: Text(
-                        f['title_ar'] ?? 'نموذج',
-                        style: const TextStyle(
-                            fontFamily: 'Tajawal', fontSize: 13),
-                      ),
-                    )),
-              ],
-              onChanged: (value) {
-                setState(() {
-                  _filterFormId = value;
-                  _refreshKey++;
-                });
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildStatsSection() {
-    return FutureBuilder<Map<String, int>>(
-      key: ValueKey('stats_$_refreshKey'),
-      future: _loadStats(),
-      builder: (context, snapshot) {
-        final stats =
-            snapshot.data ?? {'drafts': 0, 'pending': 0, 'submitted': 0};
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  title: 'المسودات',
-                  count: stats['drafts']!,
-                  icon: Icons.edit_note,
-                  color: AppTheme.warningColor,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFB8C00), Color(0xFFF57C00)],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatCard(
-                  title: 'قيد المزامنة',
-                  count: stats['pending']!,
-                  icon: Icons.sync,
-                  color: AppTheme.infoColor,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1E88E5), Color(0xFF1565C0)],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatCard(
-                  title: 'المرسلة',
-                  count: stats['submitted']!,
-                  icon: Icons.check_circle,
-                  color: AppTheme.successColor,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF43A047), Color(0xFF2E7D32)],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  /// FIX: Use analytics API (same source as dashboard) for submitted count.
-  /// Local cache for drafts/pending, server for submitted — matches dashboard.
-  Future<Map<String, int>> _loadStats() async {
-    int drafts = 0, pending = 0, submitted = 0;
-    try {
-      final offline = await ref.read(offlineManagerProvider.future).timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => throw Exception('timeout'),
-          );
-      pending = offline.pendingCount;
-
-      // Drafts from local storage
-      final draftIds = offline.getDraftFormIds();
-      drafts = draftIds.length;
-
-      // Submitted count from analytics (same source as dashboard)
-      try {
-        final campaign = ref.read(campaignProvider);
-        final analytics = await ref
-            .read(
-              dashboardAnalyticsProvider(
-                AnalyticsFilter(campaignType: campaign.value),
-              ).future,
-            )
-            .timeout(
-              const Duration(seconds: 5),
-              onTimeout: () => throw Exception('timeout'),
-            );
-        final subs = analytics['submissions'] as Map<String, dynamic>? ?? {};
-        final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
-        submitted = (byStatus['submitted'] as int? ?? 0) +
-            (byStatus['reviewed'] as int? ?? 0) +
-            (byStatus['approved'] as int? ?? 0) +
-            (byStatus['rejected'] as int? ?? 0);
-      } catch (_) {
-        // Fallback: try local cache
-        final cache = await ref.read(offlineDataCacheProvider.future).timeout(
-              const Duration(seconds: 3),
-              onTimeout: () => throw Exception('timeout'),
-            );
-        final campaign = ref.read(campaignProvider);
-        final allFilter = SubmissionsFilter(
-          campaignType: campaign.value,
-          limit: 100,
-          offset: 0,
-        );
-        final cachedSubs = cache.getCachedDataList(allFilter.cacheKey) ??
-            cache.getCachedDataList('submissions');
-        if (cachedSubs != null) {
-          submitted = cachedSubs
-              .where(
-                (s) =>
-                    s['status'] == 'submitted' ||
-                    s['status'] == 'reviewed' ||
-                    s['status'] == 'approved' ||
-                    s['status'] == 'rejected',
-              )
-              .length;
-        }
-      }
-    } catch (e) {
-      debugPrint('[FormsStatusScreen] Stats load error: $e');
-    }
-
-    return {'drafts': drafts, 'pending': pending, 'submitted': submitted};
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// STAT CARD
+// STAT CARD — مع دعم الضغط للانتقال للتبويب
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _StatCard extends StatelessWidget {
@@ -791,6 +1702,7 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final LinearGradient gradient;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.title,
@@ -798,199 +1710,379 @@ class _StatCard extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.gradient,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: Colors.white, size: 22),
+            const SizedBox(height: 8),
+            Text(
+              '$count',
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              title,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NAV BUTTON — أزرار التالي/السابق
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _NavButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _NavButton({
+    required this.icon,
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: enabled
+              ? AppTheme.primaryColor.withValues(alpha: 0.1)
+              : AppTheme.backgroundLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: enabled
+                ? AppTheme.primaryColor.withValues(alpha: 0.3)
+                : Colors.grey.shade200,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: enabled ? AppTheme.primaryColor : AppTheme.textHint,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: enabled ? AppTheme.primaryColor : AppTheme.textHint,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DRAFT TILE
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _DraftTile extends StatelessWidget {
+  final String title;
+  final String formId;
+  final String? date;
+  final VoidCallback onTap;
+
+  const _DraftTile({
+    required this.title,
+    required this.formId,
+    this.date,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        gradient: gradient,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.3),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 12,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 3),
           ),
         ],
+        border: Border.all(
+          color: AppTheme.warningColor.withValues(alpha: 0.2),
+        ),
       ),
-      child: Column(
-        children: [
-          Icon(icon, color: Colors.white, size: 22),
-          const SizedBox(height: 8),
-          Text(
-            '$count',
-            style: const TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppTheme.warningColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.edit_note,
+                  color: AppTheme.warningColor,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const EpiStatusChip(status: 'draft', small: true),
+                        if (date != null) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatDate(date!),
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 10,
+                              color: AppTheme.textHint,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primarySurface,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.edit,
+                  size: 16,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 10,
-              color: Colors.white.withValues(alpha: 0.9),
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+        ),
       ),
     );
+  }
+
+  String _formatDate(String dateStr) {
+    final d = DateTime.tryParse(dateStr);
+    if (d == null) return dateStr;
+    return '${d.day}/${d.month}/${d.year} - ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SUBMISSIONS LIST
+// PENDING TILE
 // ═══════════════════════════════════════════════════════════════════════════
 
-class _SubmittedTab extends ConsumerWidget {
-  final String searchQuery;
-  final String? filterFormId;
-  final String? filterGovernorate;
-  final String? filterDistrict;
-  final String? filterSupervisorRole;
-  final String? filterSupervisorName;
+class _PendingTile extends StatelessWidget {
+  final String title;
+  final String status;
+  final String? date;
+  final int retryCount;
+  final VoidCallback onTap;
 
-  const _SubmittedTab({
-    this.searchQuery = '',
-    this.filterFormId,
-    this.filterGovernorate,
-    this.filterDistrict,
-    this.filterSupervisorRole,
-    this.filterSupervisorName,
+  const _PendingTile({
+    required this.title,
+    required this.status,
+    this.date,
+    required this.retryCount,
+    required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final submissions = ref.watch(
-      submissionsProvider(
-        SubmissionsFilter(campaignType: ref.read(campaignProvider).value),
-      ),
-    );
-
-    return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(
-        submissionsProvider(
-          SubmissionsFilter(campaignType: ref.read(campaignProvider).value),
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(
+          color: AppTheme.infoColor.withValues(alpha: 0.2),
         ),
       ),
-      child: submissions.when(
-        loading: () => const EpiLoading.shimmer(),
-        error: (e, _) => EpiErrorWidget(
-          message: e.toString(),
-          onRetry: () => ref.invalidate(
-            submissionsProvider(
-              SubmissionsFilter(campaignType: ref.read(campaignProvider).value),
-            ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppTheme.infoColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: AppTheme.infoColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.infoColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.sync, size: 12, color: AppTheme.infoColor),
+                              SizedBox(width: 4),
+                              Text(
+                                'بانتظار المزامنة',
+                                style: TextStyle(
+                                  fontFamily: 'Tajawal',
+                                  fontSize: 11,
+                                  color: AppTheme.infoColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (retryCount > 0) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            'محاولة $retryCount',
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 10,
+                              color: AppTheme.errorColor,
+                            ),
+                          ),
+                        ],
+                        if (date != null) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatDate(date!),
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 10,
+                              color: AppTheme.textHint,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 14,
+                color: AppTheme.textHint,
+              ),
+            ],
           ),
         ),
-        data: (data) {
-          final submitted = data
-              .where(
-                (s) =>
-                    s['status'] == 'submitted' ||
-                    s['status'] == 'reviewed' ||
-                    s['status'] == 'approved' ||
-                    s['status'] == 'rejected',
-              )
-              .toList();
-
-          // ═══ FIX #4: Apply all filters ═══
-          var filtered = submitted;
-
-          // Filter by form ID
-          if (filterFormId != null) {
-            filtered =
-                filtered.where((s) => s['form_id'] == filterFormId).toList();
-          }
-
-          // Filter by governorate
-          if (filterGovernorate != null) {
-            filtered = filtered
-                .where((s) => s['governorate_id'] == filterGovernorate)
-                .toList();
-          }
-
-          // Filter by district
-          if (filterDistrict != null) {
-            filtered = filtered
-                .where((s) => s['district_id'] == filterDistrict)
-                .toList();
-          }
-
-          // Filter by supervisor role
-          if (filterSupervisorRole != null) {
-            filtered = filtered.where((s) {
-              final role =
-                  (s['profiles']?['role'] ?? '').toString().toLowerCase();
-              return role == filterSupervisorRole;
-            }).toList();
-          }
-
-          // Filter by supervisor name
-          if (filterSupervisorName != null && filterSupervisorName!.isNotEmpty) {
-            filtered = filtered.where((s) {
-              final name =
-                  (s['profiles']?['full_name'] ?? '').toString().toLowerCase();
-              return name.contains(filterSupervisorName!);
-            }).toList();
-          }
-
-          // Filter by search query (title + userName)
-          if (searchQuery.isNotEmpty) {
-            filtered = filtered.where((s) {
-              final title =
-                  (s['forms']?['title_ar'] ?? '').toString().toLowerCase();
-              final userName =
-                  (s['profiles']?['full_name'] ?? '').toString().toLowerCase();
-              return title.contains(searchQuery) ||
-                  userName.contains(searchQuery);
-            }).toList();
-          }
-
-          if (filtered.isEmpty) {
-            return ListView(
-              children: const [
-                SizedBox(height: 120),
-                EpiEmptyState(
-                  icon: Icons.send,
-                  title: 'لا توجد إرساليات',
-                  subtitle: 'الاستمارات المُرسلة ستظهر هنا',
-                ),
-              ],
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: filtered.length,
-            itemBuilder: (context, index) {
-              final sub = filtered[index];
-              return _SubmittedTile(
-                title: sub['forms']?['title_ar'] ?? 'نموذج',
-                status: sub['status'] ?? 'submitted',
-                date: sub['submitted_at'] ?? sub['created_at'],
-                userName: sub['profiles']?['full_name'],
-                isOffline: sub['is_offline'] == true,
-                onTap: () =>
-                    context.go('/forms/status/submission/${sub['id']}'),
-              );
-            },
-          );
-        },
       ),
     );
   }
+
+  String _formatDate(String dateStr) {
+    final d = DateTime.tryParse(dateStr);
+    if (d == null) return dateStr;
+    return '${d.day}/${d.month}/${d.year}';
+  }
 }
 
-// WIDGETS
+// ═══════════════════════════════════════════════════════════════════════════
+// SUBMITTED TILE
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _SubmittedTile extends StatelessWidget {
@@ -1170,7 +2262,7 @@ class _SubmittedTile extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PICKER SHEET — Reusable bottom sheet for filter selection
+// PICKER SHEET
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _PickerItem {

@@ -66,6 +66,8 @@ const navSections: NavSection[] = [
     items: [
       { icon: FileSearch, label: 'النماذج', href: '/forms' },
       { icon: FileStack, label: 'الإرساليات', href: '/submissions' },
+      { icon: MapPin, label: 'المحافظات', href: '/governorates', roles: ['admin', 'central', 'governorate', 'district'] },
+      { icon: AlertTriangle, label: 'النواقص', href: '/shortages', roles: ['admin', 'central', 'governorate', 'district'] },
     ],
   },
   {

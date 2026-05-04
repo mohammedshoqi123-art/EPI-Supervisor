@@ -27,6 +27,8 @@ const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
 const ReferencesPage = lazy(() => import('@/pages/ReferencesPage'))
 const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
 const ScheduledReportsPage = lazy(() => import('@/pages/ScheduledReportsPage'))
+const GovernoratesPage = lazy(() => import('@/pages/GovernoratesPage'))
+const ShortagesPage = lazy(() => import('@/pages/ShortagesPage'))
 const PublicDashboardPage = lazy(() => import('@/pages/PublicDashboardPage'))
 
 function PageLoader() {
@@ -73,6 +75,8 @@ export default function App() {
         {/* Routes for admin, central, governorate, district — management level */}
         <Route element={<ProtectedRoute allowedRoles={['admin', 'central', 'governorate', 'district']} />}>
           <Route element={<AppLayout />}>
+            <Route path="governorates" element={<Suspense fallback={<PageLoader />}><GovernoratesPage /></Suspense>} />
+            <Route path="shortages" element={<Suspense fallback={<PageLoader />}><ShortagesPage /></Suspense>} />
             <Route path="insights" element={<Suspense fallback={<PageLoader />}><AIInsightsPage /></Suspense>} />
             <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
             <Route path="scheduled-reports" element={<Suspense fallback={<PageLoader />}><ScheduledReportsPage /></Suspense>} />

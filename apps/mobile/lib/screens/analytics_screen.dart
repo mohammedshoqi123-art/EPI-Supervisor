@@ -168,6 +168,19 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     _tab = TabController(length: 4, vsync: this);
     // Listen to sync service — invalidate analytics providers after each sync
     _listenToSync();
+
+    // ═══ FIX #1: Auto-refresh analytics when internet returns ═══
+    ref.listen(connectivityProvider, (prev, next) {
+      final wasOffline = prev?.valueOrNull == false;
+      final isNowOnline = next.valueOrNull == true;
+      if (wasOffline && isNowOnline && mounted) {
+        ref.invalidate(_readinessSubsProvider);
+        ref.invalidate(_supervisionSubsProvider);
+        ref.invalidate(dashboardAnalyticsProvider(
+          AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
+        ));
+      }
+    });
   }
 
   void _listenToSync() {

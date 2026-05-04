@@ -57,6 +57,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
     _fabAnimation =
         CurvedAnimation(parent: _fabAnimController, curve: Curves.easeInOut);
     _fabAnimController.forward();
+
+    // ═══ FIX #1: Auto-refresh map when internet returns ═══
+    ref.listen(connectivityProvider, (prev, next) {
+      final wasOffline = prev?.valueOrNull == false;
+      final isNowOnline = next.valueOrNull == true;
+      if (wasOffline && isNowOnline && mounted) {
+        _refresh();
+      }
+    });
   }
 
   @override
@@ -74,8 +83,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   void _refresh() {
     HapticFeedback.mediumImpact();
-    ref.invalidate(submissionsProvider(
-        SubmissionsFilter(campaignType: ref.read(campaignProvider).value)));
+    ref.invalidate(submissionsProvider(SubmissionsFilter(
+      campaignType: ref.read(campaignProvider).value,
+      limit: 999999, // ═══ FIX #2: Load all submissions for map ═══
+    )));
     ref.invalidate(governoratesProvider);
   }
 
@@ -132,9 +143,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
   // ─── Data helpers ────────────────────────────────────────────
 
   List<Map<String, dynamic>> _getFilteredSubmissions() {
+    // ═══ FIX #2: Load all submissions for map (no 20-item limit) ═══
     final allSubs = ref
             .read(submissionsProvider(SubmissionsFilter(
-                campaignType: ref.read(campaignProvider).value)))
+              campaignType: ref.read(campaignProvider).value,
+              limit: 999999,
+            )))
             .valueOrNull ??
         [];
 
@@ -371,9 +385,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
   // ─── Filter Bar ──────────────────────────────────────────────
 
   Widget _buildFilterBar() {
+    // ═══ FIX #2: Load all submissions for map filters ═══
     final allSubs = ref
             .read(submissionsProvider(SubmissionsFilter(
-                campaignType: ref.read(campaignProvider).value)))
+              campaignType: ref.read(campaignProvider).value,
+              limit: 999999,
+            )))
             .valueOrNull ??
         [];
     final supervisors = _getSupervisors(allSubs);

@@ -173,7 +173,7 @@ class SubmissionsFilter {
     this.governorateId,
     this.districtId,
     this.campaignType,
-    this.limit = 20,
+    this.limit = 999999, // ═══ FIX #2: No practical limit ═══
     this.offset = 0,
   });
 

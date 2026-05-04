@@ -373,18 +373,27 @@ class AuthRepository {
     final fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.$ext';
     final storagePath = 'avatars/$userId/$fileName';
 
-    await _client!.storage.from('avatars').uploadBinary(
-          storagePath,
-          fileBytes,
-          fileOptions: FileOptions(contentType: 'image/$ext', upsert: true),
-        );
+    try {
+      // ═══ FIX #3: Try uploading to Supabase Storage ═══
+      await _client!.storage.from('avatars').uploadBinary(
+            storagePath,
+            fileBytes,
+            fileOptions:
+                FileOptions(contentType: 'image/$ext', upsert: true),
+          );
 
-    final publicUrl =
-        _client!.storage.from('avatars').getPublicUrl(storagePath);
+      final publicUrl =
+          _client!.storage.from('avatars').getPublicUrl(storagePath);
 
-    await updateProfile(avatarUrl: publicUrl);
-
-    return publicUrl;
+      await updateProfile(avatarUrl: publicUrl);
+      return publicUrl;
+    } catch (e) {
+      // ═══ FIX #3: Fallback — store as base64 data URL in profile ═══
+      debugPrint('[Auth] Storage upload failed, using base64 fallback: $e');
+      final base64Image = 'data:image/$ext;base64,${base64Encode(fileBytes)}';
+      await updateProfile(avatarUrl: base64Image);
+      return base64Image;
+    }
   }
 
   void dispose() {

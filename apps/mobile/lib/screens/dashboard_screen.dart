@@ -46,6 +46,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
     _pulseAnim.repeat(reverse: true);
 
+    // ═══ FIX #1: Auto-refresh dashboard when internet returns ═══
+    ref.listen(connectivityProvider, (prev, next) {
+      final wasOffline = prev?.valueOrNull == false;
+      final isNowOnline = next.valueOrNull == true;
+      if (wasOffline && isNowOnline && mounted) {
+        final campaign = ref.read(campaignProvider);
+        ref.invalidate(dashboardAnalyticsProvider(
+          AnalyticsFilter(campaignType: campaign.value),
+        ));
+        ref.invalidate(submissionTrendProvider);
+        ref.invalidate(governorateRankingProvider);
+        ref.invalidate(notificationCountProvider);
+        ref.invalidate(syncPendingCountProvider);
+        ref.invalidate(localDraftCountProvider);
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(syncServiceProvider.future).then((service) {
         if (service.currentState.pendingCount > 0) {

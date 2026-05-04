@@ -17,17 +17,57 @@ class FormsStatusScreen extends ConsumerStatefulWidget {
   ConsumerState<FormsStatusScreen> createState() => _FormsStatusScreenState();
 }
 
-class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen> {
   StreamSubscription? _syncSub;
   int _refreshKey = 0;
+
+  // ═══ FIX #4: Search & filter state ═══
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  String? _filterFormId;
+  String? _filterGovernorate;
+  String? _filterDistrict;
+  String? _filterSupervisorRole;
+  String? _filterSupervisorName;
+  bool _showFilters = false;
+
+  bool get _hasActiveFilters =>
+      _filterFormId != null ||
+      _filterGovernorate != null ||
+      _filterDistrict != null ||
+      _filterSupervisorRole != null ||
+      _filterSupervisorName != null;
+
+  int get _activeFilterCount {
+    int c = 0;
+    if (_filterFormId != null) c++;
+    if (_filterGovernorate != null) c++;
+    if (_filterDistrict != null) c++;
+    if (_filterSupervisorRole != null) c++;
+    if (_filterSupervisorName != null) c++;
+    return c;
+  }
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     _listenForSyncCompletion();
+
+    // ═══ FIX #1: Auto-refresh when internet returns ═══
+    ref.listen(connectivityProvider, (prev, next) {
+      final wasOffline = prev?.valueOrNull == false;
+      final isNowOnline = next.valueOrNull == true;
+      if (wasOffline && isNowOnline && mounted) {
+        ref.invalidate(submissionsProvider(
+          SubmissionsFilter(campaignType: ref.read(campaignProvider).value),
+        ));
+        ref.invalidate(formsProvider);
+        ref.invalidate(dashboardAnalyticsProvider(
+          AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
+        ));
+        setState(() => _refreshKey++);
+      }
+    });
   }
 
   /// Auto-refresh stats when sync completes — so submitted forms appear immediately.
@@ -48,7 +88,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   @override
   void dispose() {
     _syncSub?.cancel();
-    _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -80,49 +120,542 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         children: [
           // Stats summary cards
           _buildStatsSection(),
-          // Tab bar
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: AppTheme.backgroundLight,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                color: AppTheme.primaryColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              indicatorSize: TabBarIndicatorSize.tab,
-              labelColor: Colors.white,
-              unselectedLabelColor: AppTheme.textSecondary,
-              labelStyle: const TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 12,
-              ),
-              dividerHeight: 0,
-              tabs: const [
-                Tab(text: 'المسودات'),
-                Tab(text: 'قيد المزامنة'),
-                Tab(text: 'المرسلة'),
+
+          // ═══ Search bar + Filter toggle ═══
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: EpiSearchBar(
+                    controller: _searchController,
+                    hint: 'بحث في الاستمارات...',
+                    onChanged: (query) {
+                      setState(() {
+                        _searchQuery = query.toLowerCase();
+                        _refreshKey++;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () =>
+                      setState(() => _showFilters = !_showFilters),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _hasActiveFilters
+                          ? AppTheme.primaryColor
+                              .withValues(alpha: 0.15)
+                          : AppTheme.backgroundLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _hasActiveFilters
+                            ? AppTheme.primaryColor
+                            : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.tune_rounded,
+                          size: 18,
+                          color: _hasActiveFilters
+                              ? AppTheme.primaryColor
+                              : AppTheme.textSecondary,
+                        ),
+                        if (_activeFilterCount > 0) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$_activeFilterCount',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          // Tab content
+
+          // ═══ Advanced filter panel ═══
+          if (_showFilters) _buildAdvancedFilter(),
+
+          // ═══ Submissions list (direct — no tabs) ═══
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [_DraftsTab(), _PendingSyncTab(), _SubmittedTab()],
+            child: _SubmittedTab(
+              searchQuery: _searchQuery,
+              filterFormId: _filterFormId,
+              filterGovernorate: _filterGovernorate,
+              filterDistrict: _filterDistrict,
+              filterSupervisorRole: _filterSupervisorRole,
+              filterSupervisorName: _filterSupervisorName,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // ═══ FIX #4: Advanced filter panel ═══
+  Widget _buildAdvancedFilter() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with clear all
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'فلاتر متقدمة',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (_hasActiveFilters)
+                GestureDetector(
+                  onTap: _clearAllFilters,
+                  child: const Text(
+                    'مسح الكل',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 12,
+                      color: AppTheme.errorColor,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Form filter
+          _buildFormDropdown(),
+          const SizedBox(height: 10),
+
+          // Governorate filter
+          _buildGovernorateDropdown(),
+          const SizedBox(height: 10),
+
+          // District filter
+          _buildDistrictDropdown(),
+          const SizedBox(height: 10),
+
+          // Supervisor role filter
+          _buildSupervisorRoleDropdown(),
+          const SizedBox(height: 10),
+
+          // Supervisor name search
+          _buildSupervisorNameSearch(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormDropdown() {
+    final formsAsync = ref.watch(formsProvider);
+    return formsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (forms) {
+        return _filterChip(
+          label: 'النموذج',
+          value: _filterFormId != null
+              ? forms
+                  .firstWhere((f) => f['id'] == _filterFormId,
+                      orElse: () => {'title_ar': 'كل النماذج'})
+                  .values
+                  .first
+              : null,
+          onTap: () => _showFormPicker(forms),
+          onClear: _filterFormId != null
+              ? () => setState(() {
+                    _filterFormId = null;
+                    _refreshKey++;
+                  })
+              : null,
+        );
+      },
+    );
+  }
+
+  Widget _buildGovernorateDropdown() {
+    final govsAsync = ref.watch(governoratesProvider);
+    return govsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (govs) {
+        return _filterChip(
+          label: 'المحافظة',
+          value: _filterGovernorate,
+          onTap: () => _showGovPicker(govs),
+          onClear: _filterGovernorate != null
+              ? () => setState(() {
+                    _filterGovernorate = null;
+                    _filterDistrict = null;
+                    _refreshKey++;
+                  })
+              : null,
+        );
+      },
+    );
+  }
+
+  Widget _buildDistrictDropdown() {
+    final districtsAsync = ref.watch(districtsProvider(_filterGovernorate));
+    return districtsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (districts) {
+        return _filterChip(
+          label: 'المديرية',
+          value: _filterDistrict,
+          onTap: () => _showDistrictPicker(districts),
+          onClear: _filterDistrict != null
+              ? () => setState(() {
+                    _filterDistrict = null;
+                    _refreshKey++;
+                  })
+              : null,
+        );
+      },
+    );
+  }
+
+  Widget _buildSupervisorRoleDropdown() {
+    const roles = [
+      'admin',
+      'central',
+      'governorate',
+      'district',
+      'data_entry',
+    ];
+    return _filterChip(
+      label: 'صفة المشرف',
+      value: _filterSupervisorRole,
+      onTap: () => _showRolePicker(roles),
+      onClear: _filterSupervisorRole != null
+          ? () => setState(() {
+                _filterSupervisorRole = null;
+                _refreshKey++;
+              })
+          : null,
+    );
+  }
+
+  Widget _buildSupervisorNameSearch() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundLight,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.person_search,
+              size: 18, color: AppTheme.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              decoration: const InputDecoration(
+                hintText: 'اسم المشرف...',
+                hintStyle:
+                    TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+              onChanged: (value) {
+                setState(() {
+                  _filterSupervisorName =
+                      value.isEmpty ? null : value.toLowerCase();
+                  _refreshKey++;
+                });
+              },
+            ),
+          ),
+          if (_filterSupervisorName != null)
+            GestureDetector(
+              onTap: () => setState(() {
+                _filterSupervisorName = null;
+                _refreshKey++;
+              }),
+              child: const Icon(Icons.close,
+                  size: 16, color: AppTheme.errorColor),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    String? value,
+    required VoidCallback onTap,
+    VoidCallback? onClear,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: value != null
+              ? AppTheme.primaryColor.withValues(alpha: 0.1)
+              : AppTheme.backgroundLight,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: value != null
+                ? AppTheme.primaryColor.withValues(alpha: 0.3)
+                : Colors.grey.shade300,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 10,
+                      color: AppTheme.textHint,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value ?? 'الكل',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 13,
+                      fontWeight:
+                          value != null ? FontWeight.w600 : FontWeight.normal,
+                      color: value != null
+                          ? AppTheme.primaryColor
+                          : AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onClear != null)
+              GestureDetector(
+                onTap: onClear,
+                child: const Icon(Icons.close,
+                    size: 16, color: AppTheme.errorColor),
+              )
+            else
+              const Icon(Icons.arrow_drop_down,
+                  color: AppTheme.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _filterFormId = null;
+      _filterGovernorate = null;
+      _filterDistrict = null;
+      _filterSupervisorRole = null;
+      _filterSupervisorName = null;
+      _searchController.clear();
+      _searchQuery = '';
+      _refreshKey++;
+    });
+  }
+
+  void _showFormPicker(List<Map<String, dynamic>> forms) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _PickerSheet(
+        title: 'اختر النموذج',
+        items: [
+          const _PickerItem(id: null, label: 'الكل'),
+          ...forms.map(
+              (f) => _PickerItem(id: f['id'], label: f['title_ar'] ?? 'نموذج')),
+        ],
+        selectedId: _filterFormId,
+        onSelected: (id) {
+          setState(() {
+            _filterFormId = id;
+            _refreshKey++;
+          });
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  void _showGovPicker(List<Map<String, dynamic>> govs) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _PickerSheet(
+        title: 'اختر المحافظة',
+        items: [
+          const _PickerItem(id: null, label: 'الكل'),
+          ...govs.map((g) =>
+              _PickerItem(id: g['id'], label: g['name_ar'] ?? 'محافظة')),
+        ],
+        selectedId: _filterGovernorate,
+        onSelected: (id) {
+          setState(() {
+            _filterGovernorate = id;
+            _filterDistrict = null; // Reset district when gov changes
+            _refreshKey++;
+          });
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  void _showDistrictPicker(List<Map<String, dynamic>> districts) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _PickerSheet(
+        title: 'اختر المديرية',
+        items: [
+          const _PickerItem(id: null, label: 'الكل'),
+          ...districts.map((d) =>
+              _PickerItem(id: d['id'], label: d['name_ar'] ?? 'مديرية')),
+        ],
+        selectedId: _filterDistrict,
+        onSelected: (id) {
+          setState(() {
+            _filterDistrict = id;
+            _refreshKey++;
+          });
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  void _showRolePicker(List<String> roles) {
+    final roleNames = {
+      'admin': 'مدير النظام',
+      'central': 'مركزي',
+      'governorate': 'محافظة',
+      'district': 'مديرية',
+      'data_entry': 'إدخال بيانات',
+    };
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _PickerSheet(
+        title: 'اختر الصفة',
+        items: [
+          const _PickerItem(id: null, label: 'الكل'),
+          ...roles.map(
+              (r) => _PickerItem(id: r, label: roleNames[r] ?? r)),
+        ],
+        selectedId: _filterSupervisorRole,
+        onSelected: (id) {
+          setState(() {
+            _filterSupervisorRole = id;
+            _refreshKey++;
+          });
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  // ═══ FIX #4: Form filter dropdown (old — replaced by advanced) ═══
+  Widget _buildFormFilter() {
+    final formsAsync = ref.watch(formsProvider);
+    return formsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (forms) {
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: _filterFormId,
+              hint: const Text(
+                'اختر النموذج...',
+                style: TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+              ),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('الكل',
+                      style: TextStyle(fontFamily: 'Tajawal')),
+                ),
+                ...forms.map((f) => DropdownMenuItem<String>(
+                      value: f['id'] as String,
+                      child: Text(
+                        f['title_ar'] ?? 'نموذج',
+                        style: const TextStyle(
+                            fontFamily: 'Tajawal', fontSize: 13),
+                      ),
+                    )),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _filterFormId = value;
+                  _refreshKey++;
+                });
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -313,295 +846,26 @@ class _StatCard extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DRAFTS TAB
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _DraftsTab extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _loadDrafts(ref),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const EpiLoading.shimmer();
-        }
-
-        final drafts = snapshot.data ?? [];
-
-        if (drafts.isEmpty) {
-          return const EpiEmptyState(
-            icon: Icons.edit_note,
-            title: 'لا توجد مسودات',
-            subtitle: 'المسودات المحفوظة ستظهر هنا تلقائياً',
-          );
-        }
-
-        return RefreshIndicator(
-          onRefresh: () async {
-            (context as Element).markNeedsBuild();
-          },
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: drafts.length,
-            itemBuilder: (context, index) {
-              final draft = drafts[index];
-              return _DraftTile(
-                formTitle: draft['form_title'] as String? ?? 'نموذج',
-                savedAt: draft['saved_at'] as String?,
-                fieldCount: draft['field_count'] as int? ?? 0,
-                onContinue: () => context.go('/forms/fill/${draft['form_id']}?draftId=${draft['draft_id']}'),
-                onDelete: () =>
-                    _deleteDraft(context, ref, draft['draft_id'] as String),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  /// FIX: Load drafts from local storage only — no Supabase calls.
-  Future<List<Map<String, dynamic>>> _loadDrafts(WidgetRef ref) async {
-    try {
-      final offline = await ref.read(offlineManagerProvider.future).timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => throw Exception('timeout'),
-          );
-
-      // Get all drafts from local storage
-      final offlineDrafts = offline.getAllDrafts();
-      final drafts = <Map<String, dynamic>>[];
-
-      // Try to get form titles from cache (no network call)
-      final cache = await ref.read(offlineDataCacheProvider.future).timeout(
-            const Duration(seconds: 3),
-            onTimeout: () => throw Exception('timeout'),
-          );
-      final cachedForms = cache.getCachedDataList('forms_all') ?? [];
-
-      for (final draft in offlineDrafts) {
-        final draftId = draft['draft_id'] as String;
-        final formId = draft['form_id'] as String;
-
-        // Find title from cached forms
-        String formTitle = 'نموذج';
-        for (final f in cachedForms) {
-          if (f['id'] == formId) {
-            formTitle = f['title_ar'] ?? 'نموذج';
-            break;
-          }
-        }
-
-        drafts.add({
-          'draft_id': draftId,
-          'form_id': formId,
-          'form_title': formTitle,
-          'saved_at': draft['saved_at'],
-          'field_count': (draft['data'] as Map?)?.length ?? 0,
-          'data': draft['data'],
-        });
-      }
-
-      // Sort by saved_at descending
-      drafts.sort((a, b) {
-        final aDate = DateTime.tryParse(a['saved_at'] ?? '') ?? DateTime(2000);
-        final bDate = DateTime.tryParse(b['saved_at'] ?? '') ?? DateTime(2000);
-        return bDate.compareTo(aDate);
-      });
-
-      return drafts;
-    } catch (e) {
-      debugPrint('[DraftsTab] Load error: $e');
-      return [];
-    }
-  }
-
-  void _deleteDraft(BuildContext context, WidgetRef ref, String draftId) async {
-    final confirm = await context.showConfirmDialog(
-      title: 'حذف المسودة',
-      message: 'هل أنت متأكد من حذف هذه المسودة؟ لا يمكن التراجع.',
-      confirmText: 'حذف',
-      isDangerous: true,
-    );
-    if (confirm == true) {
-      try {
-        final offline = await ref.read(offlineManagerProvider.future);
-        await offline.removeDraft(draftId);
-        if (context.mounted) {
-          context.showSuccess('تم حذف المسودة');
-          (context as Element).markNeedsBuild();
-        }
-      } catch (e) {
-        if (context.mounted) context.showError('فشل الحذف');
-      }
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PENDING SYNC TAB
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _PendingSyncTab extends ConsumerStatefulWidget {
-  @override
-  ConsumerState<_PendingSyncTab> createState() => _PendingSyncTabState();
-}
-
-class _PendingSyncTabState extends ConsumerState<_PendingSyncTab> {
-  List<Map<String, dynamic>> _pendingItems = [];
-  bool _isSyncing = false;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    // FIX: Use postFrameCallback to avoid reading providers before they're ready
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadPending();
-    });
-  }
-
-  Future<void> _loadPending() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-    try {
-      final offline = await ref.read(offlineManagerProvider.future).timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => throw Exception('timeout'),
-          );
-      final items = await offline.getPendingItems().timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => <Map<String, dynamic>>[],
-          );
-      if (mounted)
-        setState(() {
-          _pendingItems = items;
-          _isLoading = false;
-        });
-    } catch (e) {
-      debugPrint('[PendingSyncTab] Load error: $e');
-      if (mounted)
-        setState(() {
-          _pendingItems = [];
-          _isLoading = false;
-        });
-    }
-  }
-
-  /// FIX: Better sync with proper error handling and timeout
-  Future<void> _syncNow() async {
-    if (_isSyncing) return;
-    setState(() => _isSyncing = true);
-
-    try {
-      final syncService = await ref.read(syncServiceProvider.future).timeout(
-            const Duration(seconds: 10),
-            onTimeout: () => throw Exception('انتهت مهلة تحميل خدمة المزامنة'),
-          );
-
-      final result = await syncService.sync().timeout(
-            const Duration(minutes: 2),
-            onTimeout: () =>
-                throw Exception('انتهت مهلة المزامنة - تحقق من الاتصال'),
-          );
-
-      if (mounted) {
-        final msg =
-            'تمت المزامنة: ${result.synced} ناجح، ${result.failed} فاشل';
-        context.showSuccess(msg);
-        await _loadPending();
-      }
-    } catch (e) {
-      debugPrint('[PendingSyncTab] Sync error: $e');
-      if (mounted) context.showError('فشلت المزامنة: $e');
-    } finally {
-      if (mounted) setState(() => _isSyncing = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const EpiLoading.shimmer();
-    }
-
-    if (_pendingItems.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _loadPending,
-        child: ListView(
-          children: const [
-            SizedBox(height: 120),
-            EpiEmptyState(
-              icon: Icons.cloud_done,
-              title: 'لا توجد عناصر معلقة',
-              subtitle: 'جميع الاستمارات متزامنة مع الخادم',
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        // Sync button
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _isSyncing ? null : _syncNow,
-              icon: _isSyncing
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.sync, size: 20),
-              label: Text(
-                _isSyncing
-                    ? 'جاري المزامنة...'
-                    : 'مزامنة الكل (${_pendingItems.length})',
-                style: const TextStyle(fontFamily: 'Tajawal'),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.infoColor,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-          ),
-        ),
-        // Items list
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: _loadPending,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _pendingItems.length,
-              itemBuilder: (context, index) {
-                final item = _pendingItems[index];
-                return _PendingSyncTile(
-                  offlineId: item['offline_id'] ?? 'unknown',
-                  formId: item['form_id'] ?? '',
-                  createdAt: item['created_at'],
-                  retryCount: item['retry_count'] ?? 0,
-                );
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SUBMITTED TAB
+// SUBMISSIONS LIST
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _SubmittedTab extends ConsumerWidget {
+  final String searchQuery;
+  final String? filterFormId;
+  final String? filterGovernorate;
+  final String? filterDistrict;
+  final String? filterSupervisorRole;
+  final String? filterSupervisorName;
+
+  const _SubmittedTab({
+    this.searchQuery = '',
+    this.filterFormId,
+    this.filterGovernorate,
+    this.filterDistrict,
+    this.filterSupervisorRole,
+    this.filterSupervisorName,
+  });
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final submissions = ref.watch(
@@ -637,7 +901,60 @@ class _SubmittedTab extends ConsumerWidget {
               )
               .toList();
 
-          if (submitted.isEmpty) {
+          // ═══ FIX #4: Apply all filters ═══
+          var filtered = submitted;
+
+          // Filter by form ID
+          if (filterFormId != null) {
+            filtered =
+                filtered.where((s) => s['form_id'] == filterFormId).toList();
+          }
+
+          // Filter by governorate
+          if (filterGovernorate != null) {
+            filtered = filtered
+                .where((s) => s['governorate_id'] == filterGovernorate)
+                .toList();
+          }
+
+          // Filter by district
+          if (filterDistrict != null) {
+            filtered = filtered
+                .where((s) => s['district_id'] == filterDistrict)
+                .toList();
+          }
+
+          // Filter by supervisor role
+          if (filterSupervisorRole != null) {
+            filtered = filtered.where((s) {
+              final role =
+                  (s['profiles']?['role'] ?? '').toString().toLowerCase();
+              return role == filterSupervisorRole;
+            }).toList();
+          }
+
+          // Filter by supervisor name
+          if (filterSupervisorName != null && filterSupervisorName!.isNotEmpty) {
+            filtered = filtered.where((s) {
+              final name =
+                  (s['profiles']?['full_name'] ?? '').toString().toLowerCase();
+              return name.contains(filterSupervisorName!);
+            }).toList();
+          }
+
+          // Filter by search query (title + userName)
+          if (searchQuery.isNotEmpty) {
+            filtered = filtered.where((s) {
+              final title =
+                  (s['forms']?['title_ar'] ?? '').toString().toLowerCase();
+              final userName =
+                  (s['profiles']?['full_name'] ?? '').toString().toLowerCase();
+              return title.contains(searchQuery) ||
+                  userName.contains(searchQuery);
+            }).toList();
+          }
+
+          if (filtered.isEmpty) {
             return ListView(
               children: const [
                 SizedBox(height: 120),
@@ -652,9 +969,9 @@ class _SubmittedTab extends ConsumerWidget {
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: submitted.length,
+            itemCount: filtered.length,
             itemBuilder: (context, index) {
-              final sub = submitted[index];
+              final sub = filtered[index];
               return _SubmittedTile(
                 title: sub['forms']?['title_ar'] ?? 'نموذج',
                 status: sub['status'] ?? 'submitted',
@@ -674,336 +991,6 @@ class _SubmittedTab extends ConsumerWidget {
 
 // WIDGETS
 // ═══════════════════════════════════════════════════════════════════════════
-
-class _DraftTile extends StatelessWidget {
-  final String formTitle;
-  final String? savedAt;
-  final int fieldCount;
-  final VoidCallback onContinue;
-  final VoidCallback onDelete;
-
-  const _DraftTile({
-    required this.formTitle,
-    this.savedAt,
-    required this.fieldCount,
-    required this.onContinue,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-        border: Border.all(color: AppTheme.warningColor.withValues(alpha: 0.2)),
-      ),
-      child: InkWell(
-        onTap: onContinue,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFB8C00), Color(0xFFF57C00)],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.warningColor.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.edit_note,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      formTitle,
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.warningColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'مسودة',
-                            style: TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontSize: 11,
-                              color: AppTheme.warningColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '$fieldCount حقول',
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 11,
-                            color: AppTheme.textHint,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (savedAt != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'آخر حفظ: ${_formatDate(savedAt!)}',
-                        style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 10,
-                          color: AppTheme.textHint,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Column(
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.play_arrow,
-                      color: AppTheme.primaryColor,
-                    ),
-                    onPressed: onContinue,
-                    tooltip: 'متابعة التعبئة',
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.delete_outline,
-                      color: AppTheme.errorColor,
-                      size: 20,
-                    ),
-                    onPressed: onDelete,
-                    tooltip: 'حذف',
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(String dateStr) {
-    final d = DateTime.tryParse(dateStr);
-    if (d == null) return dateStr;
-    final now = DateTime.now();
-    final diff = now.difference(d);
-    if (diff.inMinutes < 1) return 'الآن';
-    if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
-    if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
-    return '${d.day}/${d.month}/${d.year}';
-  }
-}
-
-class _PendingSyncTile extends StatelessWidget {
-  final String offlineId;
-  final String formId;
-  final String? createdAt;
-  final int retryCount;
-
-  const _PendingSyncTile({
-    required this.offlineId,
-    required this.formId,
-    this.createdAt,
-    required this.retryCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasErrors = retryCount > 0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-        border: Border.all(
-          color: hasErrors
-              ? AppTheme.errorColor.withValues(alpha: 0.3)
-              : AppTheme.infoColor.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: hasErrors
-                      ? [const Color(0xFFE53935), const Color(0xFFC62828)]
-                      : [const Color(0xFF1E88E5), const Color(0xFF1565C0)],
-                ),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        (hasErrors ? AppTheme.errorColor : AppTheme.infoColor)
-                            .withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Icon(
-                hasErrors ? Icons.sync_problem : Icons.cloud_upload,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'استمارة في الانتظار',
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: (hasErrors
-                                  ? AppTheme.errorColor
-                                  : AppTheme.infoColor)
-                              .withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          hasErrors
-                              ? 'فشل ($retryCount محاولات)'
-                              : 'في الانتظار',
-                          style: TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 11,
-                            color: hasErrors
-                                ? AppTheme.errorColor
-                                : AppTheme.infoColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (createdAt != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'تم الإنشاء: ${_formatDate(createdAt!)}',
-                      style: const TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 10,
-                        color: AppTheme.textHint,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 2),
-                  Text(
-                    'ID: ${offlineId.substring(0, 8)}...',
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 9,
-                      color: AppTheme.textHint,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: hasErrors ? AppTheme.errorColor : AppTheme.infoColor,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        (hasErrors ? AppTheme.errorColor : AppTheme.infoColor)
-                            .withValues(alpha: 0.4),
-                    blurRadius: 6,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(String dateStr) {
-    final d = DateTime.tryParse(dateStr);
-    if (d == null) return dateStr;
-    final now = DateTime.now();
-    final diff = now.difference(d);
-    if (diff.inMinutes < 1) return 'الآن';
-    if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
-    if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
-    return '${d.day}/${d.month}/${d.year}';
-  }
-}
 
 class _SubmittedTile extends StatelessWidget {
   final String title;
@@ -1178,5 +1165,84 @@ class _SubmittedTile extends StatelessWidget {
     final d = DateTime.tryParse(dateStr);
     if (d == null) return dateStr;
     return '${d.day}/${d.month}/${d.year} - ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PICKER SHEET — Reusable bottom sheet for filter selection
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _PickerItem {
+  final String? id;
+  final String label;
+
+  const _PickerItem({required this.id, required this.label});
+}
+
+class _PickerSheet extends StatelessWidget {
+  final String title;
+  final List<_PickerItem> items;
+  final String? selectedId;
+  final ValueChanged<String?> onSelected;
+
+  const _PickerSheet({
+    required this.title,
+    required this.items,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final isSelected = item.id == selectedId;
+                return ListTile(
+                  title: Text(
+                    item.label,
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 14,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.normal,
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : AppTheme.textPrimary,
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle,
+                          color: AppTheme.primaryColor)
+                      : null,
+                  onTap: () => onSelected(item.id),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

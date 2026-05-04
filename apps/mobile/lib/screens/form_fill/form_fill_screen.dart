@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -395,11 +396,38 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     }
 
     try {
+      // ═══ FIX #3: Convert photos to base64 for offline storage & sync ═══
+      final Map<String, dynamic> dataWithPhotos =
+          Map<String, dynamic>.from(_formData);
+
+      // Find photo fields and convert XFile paths to base64
+      for (final field in _allFields) {
+        final key = field['key'] as String? ?? '';
+        final type = field['type'] as String? ?? 'text';
+        if (type == 'photo' && dataWithPhotos.containsKey(key)) {
+          final paths = dataWithPhotos[key] as List?;
+          if (paths != null && paths.isNotEmpty) {
+            final List<String> base64Photos = [];
+            for (final path in paths) {
+              try {
+                final file = XFile(path.toString());
+                final bytes = await file.readAsBytes();
+                base64Photos.add(base64Encode(bytes));
+              } catch (e) {
+                if (kDebugMode) print('[Submit] Photo encode failed: $e');
+              }
+            }
+            dataWithPhotos[key] = base64Photos;
+          }
+        }
+      }
+
       final submissionData = {
         'form_id': widget.formId,
-        'data': Map<String, dynamic>.from(_formData),
+        'data': dataWithPhotos,
         if (_gpsLat != null) 'gps_lat': _gpsLat,
         if (_gpsLng != null) 'gps_lng': _gpsLng,
+        'photos_count': _pickedPhotos.length,
         'created_at': DateTime.now().toIso8601String(),
       };
 

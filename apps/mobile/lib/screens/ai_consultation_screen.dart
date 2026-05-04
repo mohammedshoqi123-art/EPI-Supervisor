@@ -5,16 +5,14 @@
 ///  - بطاقة بيانات الطفل (Child Profile Card)
 ///  - معرف مصدر الرد (NLP محلي / AI سيرفر)
 ///  - ربط بيانات النظام (من صفحة التحليلات)
+///  - تكامل مع AIRouterV2 للذكاء الاصطناعي
 /// ═══════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-// ═══ استيراد المكونات الجديدة ═══
-// import 'package:epi_core/src/ai/ai_router_v2.dart';
-// import 'package:epi_core/src/ai/local_health_consultation.dart';
-// import 'package:epi_core/src/ai/child_context_manager.dart';
+import 'package:epi_core/epi_core.dart';
+import '../providers/app_providers.dart';
 
 /// ═══════════════════════════════════════════════════════════════════
 ///  نماذج البيانات
@@ -72,34 +70,41 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
   int? _childAgeMonths;
   String? _childGender;
 
+  // ═══ AI Router v2 — التكامل مع محرك الذكاء الاصطناعي ═══
+  late AIRouterV2 _aiRouter;
+
   @override
   void initState() {
     super.initState();
+    _aiRouter = AIRouterV2();
+    _initConnectivity();
     _initChat();
   }
 
+  /// مراقبة حالة الاتصال
+  void _initConnectivity() {
+    _isOnline = ConnectivityUtils.isOnline;
+    ConnectivityUtils.onConnectivityChanged.listen((online) {
+      if (mounted) {
+        setState(() => _isOnline = online);
+      }
+    });
+  }
+
   void _initChat() {
-    // رسالة ترحيب
+    // رسالة ترحيب من AIRouterV2
+    final welcome = _aiRouter.getWelcome();
+    final quickReplies = welcome.quickReplies
+        .map((qr) => QuickReplyData(text: qr.text, emoji: qr.emoji))
+        .toList();
+
     setState(() {
       _messages.add(ChatMessage(
-        text: '🌟 مرحباً! أنا مساعد التحصين الذكي 🇾🇪\n\n'
-            '💉 تطعيمات طفلك (حسب عمره وحالته)\n'
-            '⚠️ الآثار الجانبية (حرارة، تورم، تشنجات)\n'
-            '🦠 الأمراض التي تحمي منها التطعيمات\n'
-            '👶 حالات خاصة (مبتسرين، سكري، قلب)\n'
-            '🏥 الإشراف وإدارة المستوى الوسيط\n'
-            '📊 تحليلات النظام (أونلاين)\n\n'
-            '💡 قولي عمر طفلك وأعطيك تطعيماته!',
+        text: welcome.text,
         source: MsgSource.botLocal,
-        quickReplies: const [
-          QuickReplyData(text: 'تطعيمات طفلي', emoji: '💉'),
-          QuickReplyData(text: 'الآثار الجانبية', emoji: '⚠️'),
-          QuickReplyData(text: 'هل مجاني؟', emoji: '💰'),
-          QuickReplyData(text: 'وين أطعم؟', emoji: '📍'),
-          QuickReplyData(text: 'حالات خاصة', emoji: '👶'),
-          QuickReplyData(text: 'جدول التحصين', emoji: '📅'),
-          QuickReplyData(text: 'تحليلات النظام', emoji: '📊'),
-        ],
+        intent: welcome.intent,
+        confidence: welcome.confidence,
+        quickReplies: quickReplies,
       ));
     });
   }
@@ -122,17 +127,98 @@ class _AIConsultationScreenState extends ConsumerState<AIConsultationScreen> {
     _controller.clear();
     _scrollToBottom();
 
-    // ═══ المعالجة ═══
-    // TODO: ربط بـ AIRouterV2.process(text, isOnline: _isOnline, analyticsData: ...)
-    // حالياً: محاكاة الرد
-    Future.delayed(Duration(milliseconds: 300 + text.length * 10), () {
-      final response = _processLocally(text);
-      setState(() {
-        _messages.add(response);
-        _isTyping = false;
+    // ═══ المعالجة عبر AIRouterV2 ═══
+    _processWithAI(text);
+  }
+
+  /// معالجة الرسالة عبر AIRouterV2 مع fallback محلي
+  Future<void> _processWithAI(String text) async {
+    try {
+      // محاولة معالجة عبر AIRouterV2
+      final response = await _aiRouter.process(
+        text,
+        isOnline: _isOnline,
+        analyticsData: null, // يمكن ربط بيانات التحليلات لاحقاً
+      ).timeout(const Duration(seconds: 10), onTimeout: () {
+        // Fallback للمعالجة المحلية عند انتهاء المهلة
+        return _processLocallyAsAIRResponse(text);
       });
-      _scrollToBottom();
-    });
+
+      // استخراج بيانات الطفل من الاستجابة
+      if (response.metadata != null) {
+        final age = response.metadata!['childAgeMonths'];
+        if (age is int) {
+          _childAgeMonths = age;
+          _showChildCard = true;
+        }
+        final gender = response.metadata!['childGender'];
+        if (gender is String) {
+          _childGender = gender;
+        }
+      }
+
+      // تحويل QuickReplies
+      final quickReplies = response.quickReplies
+          .map((qr) => QuickReplyData(text: qr.text, emoji: qr.emoji))
+          .toList();
+
+      // تحديد مصدر الرسالة
+      MsgSource source;
+      switch (response.source) {
+        case ResponseSource.healthLocal:
+          source = MsgSource.botLocal;
+          break;
+        case ResponseSource.analyticsLocal:
+          source = MsgSource.botLocal;
+          break;
+        case ResponseSource.serverAI:
+        case ResponseSource.serverAnalytics:
+          source = MsgSource.botServer;
+          break;
+        case ResponseSource.offline:
+          source = MsgSource.system;
+          break;
+      }
+
+      if (mounted) {
+        setState(() {
+          _messages.add(ChatMessage(
+            text: response.text,
+            source: source,
+            intent: response.intent,
+            confidence: response.confidence,
+            quickReplies: quickReplies,
+          ));
+          _isTyping = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      debugPrint('[AIConsultation] AIRouterV2 error: $e');
+      // Fallback للمعالجة المحلية
+      final fallbackResponse = _processLocally(text);
+      if (mounted) {
+        setState(() {
+          _messages.add(fallbackResponse);
+          _isTyping = false;
+        });
+        _scrollToBottom();
+      }
+    }
+  }
+
+  /// تحويل الاستجابة المحلية إلى AIResponseV2
+  AIResponseV2 _processLocallyAsAIRResponse(String text) {
+    final localResponse = _processLocally(text);
+    return AIResponseV2(
+      text: localResponse.text,
+      source: ResponseSource.healthLocal,
+      confidence: 0.7,
+      intent: localResponse.intent ?? 'local_fallback',
+      quickReplies: localResponse.quickReplies
+          .map((qr) => QuickReply(text: qr.text, emoji: qr.emoji))
+          .toList(),
+    );
   }
 
   /// معالجة محلية مؤقتة (للاختبار)

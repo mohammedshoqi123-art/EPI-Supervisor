@@ -19,6 +19,7 @@ import 'package:epi_shared/epi_shared.dart';
 
 import 'router/app_router.dart';
 import 'screens/onboarding_screen.dart';
+import 'providers/realtime_sync_provider.dart';
 
 final themeModeProvider = StateProvider<ThemeMode>((_) => ThemeMode.system);
 
@@ -124,6 +125,22 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
   void initState() {
     super.initState();
     _checkOnboarding();
+    // ═══ Start Realtime Sync — listen for admin dashboard changes ═══
+    _initRealtimeSync();
+  }
+
+  void _initRealtimeSync() {
+    // Delay to ensure Supabase is ready
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        try {
+          ref.read(realtimeSyncProvider);
+          debugPrint('[App] Realtime sync initialized');
+        } catch (e) {
+          debugPrint('[App] Realtime sync failed: $e');
+        }
+      }
+    });
   }
 
   Future<void> _checkOnboarding() async {

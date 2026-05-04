@@ -225,11 +225,13 @@ final governoratesProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
 ) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
-  return cache.getList(
+  final allGovs = await cache.getList(
     'governorates',
     () => ref.read(databaseServiceProvider).getGovernorates(),
     maxAge: const Duration(hours: 24),
   );
+  // ═══ FIX: Filter out inactive governorates client-side ═══
+  return allGovs.where((g) => g['is_active'] != false).toList();
 });
 
 final districtsProvider =
@@ -332,13 +334,16 @@ final campaignProvider = StateNotifierProvider<CampaignNotifier, CampaignType>(
 final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final campaign = ref.watch(campaignProvider);
   final cache = await ref.watch(offlineDataCacheProvider.future);
-  return cache.getList(
+  final allForms = await cache.getList(
     'forms_${campaign.value}',
     () => ref
         .read(databaseServiceProvider)
         .getForms(campaignType: campaign.value),
     maxAge: const Duration(hours: 24), // Forms change rarely — cache 24h
   );
+  // ═══ FIX: Filter out inactive forms client-side as extra safety ═══
+  // RLS should handle this, but cache might have stale data
+  return allForms.where((f) => f['is_active'] == true).toList();
 });
 
 /// ═══ PERFORMANCE: AutoDispose family — cleans up unused filter instances ═══

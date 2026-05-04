@@ -36,6 +36,7 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
   Future<void> _loadReferences() async {
     try {
       final db = ref.read(databaseServiceProvider);
+      // ═══ FIX: getReferences() already filters is_active=true via RLS ═══
       final data = await db.getReferences();
       if (mounted) {
         setState(() {

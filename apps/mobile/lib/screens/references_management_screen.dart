@@ -39,6 +39,8 @@ class _ReferencesManagementScreenState
     setState(() => _isLoading = true);
     try {
       final client = Supabase.instance.client;
+      // ═══ FIX: Admin sees ALL references (including inactive) ═══
+      // Non-admin sees only active ones (enforced by RLS)
       final data = await client
           .from('doc_references')
           .select('*')

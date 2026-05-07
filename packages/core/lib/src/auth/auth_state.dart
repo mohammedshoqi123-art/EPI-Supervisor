@@ -43,7 +43,7 @@ enum UserRole {
 
   /// Access: admin only for management features
   bool get canAccessAdminDashboard => this == UserRole.admin;
-  bool get canManageUsers => this == UserRole.admin;
+  bool get canManageUsers => hierarchyLevel >= 4; // admin + central
   bool get canManageForms => this == UserRole.admin;
   bool get canViewAuditLogs => this == UserRole.admin; // admin only
 

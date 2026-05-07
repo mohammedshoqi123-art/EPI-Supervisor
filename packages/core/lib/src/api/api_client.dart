@@ -56,7 +56,7 @@ class ApiClient {
           if (filters[key] is _NullFilterSentinel) {
             query = query.isFilter(key, null);
           } else if (filters[key] is _InFilterSentinel) {
-            query = query.in_(key, (filters[key] as _InFilterSentinel).values);
+            query = query.inFilter(key, (filters[key] as _InFilterSentinel).values);
           } else if (filters[key] != null) {
             query = query.eq(key, filters[key]);
           }
@@ -104,7 +104,7 @@ class ApiClient {
     if (values.isEmpty) return [];
     try {
       var query = _safeClient.from(table).select(select);
-      query = query.in_(column, values);
+      query = query.inFilter(column, values);
 
       if (extraFilters != null) {
         for (final key in extraFilters.keys) {
@@ -150,7 +150,7 @@ class ApiClient {
           if (filters[key] is _NullFilterSentinel) {
             query = query.isFilter(key, null);
           } else if (filters[key] is _InFilterSentinel) {
-            query = query.in_(key, (filters[key] as _InFilterSentinel).values);
+            query = query.inFilter(key, (filters[key] as _InFilterSentinel).values);
           } else if (filters[key] != null) {
             query = query.eq(key, filters[key]);
           }

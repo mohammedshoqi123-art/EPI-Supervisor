@@ -47,7 +47,7 @@ class RBACService {
       case RBACAction.manageUsers:
         return role.hierarchyLevel >= 4; // central+
       case RBACAction.manageForms:
-        return role == UserRole.admin; // admin only
+        return role.hierarchyLevel >= 4; // central+
       case RBACAction.exportData:
         return true; // all authenticated users
       case RBACAction.viewAnalytics:
@@ -63,7 +63,7 @@ class RBACService {
       case RBACAction.manageDistricts:
         return role == UserRole.admin;
       case RBACAction.viewAuditLogs:
-        return role == UserRole.admin; // admin only
+        return role.hierarchyLevel >= 4; // central+
       case RBACAction.useAI:
         return true; // all authenticated users
     }

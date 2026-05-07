@@ -172,7 +172,7 @@ final _readinessSubsProvider =
     'readiness_subs_integrated',
     () => ref
         .read(databaseServiceProvider)
-        .getSubmissions(formId: _readinessFormId, limit: 500),
+        .getSubmissions(formId: _readinessFormId, limit: 200),
     maxAge: const Duration(hours: 2),
   );
 });
@@ -184,7 +184,7 @@ final _supervisionSubsProvider =
     'supervision_subs_integrated',
     () => ref
         .read(databaseServiceProvider)
-        .getSubmissions(formId: _supervisionFormId, limit: 500),
+        .getSubmissions(formId: _supervisionFormId, limit: 200),
     maxAge: const Duration(hours: 2),
   );
 });

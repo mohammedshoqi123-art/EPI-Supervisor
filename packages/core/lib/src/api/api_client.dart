@@ -17,6 +17,11 @@ class ApiClient {
   /// Usage: ApiClient.select('table', filters: {'deleted_at': ApiClient.isNull})
   static const isNull = _NullFilterSentinel();
 
+  /// Helper to create an IN filter for select queries.
+  /// Usage: ApiClient.select('table', filters: {'form_id': ApiClient.inList(['a','b'])})
+  static _InFilterSentinel inList(List<dynamic> values) =>
+      _InFilterSentinel(values);
+
   /// Lazy initialization — don't crash if Supabase isn't set up yet.
   SupabaseClient get _safeClient {
     if (_client == null) {
@@ -50,6 +55,8 @@ class ApiClient {
         for (final key in filters.keys) {
           if (filters[key] is _NullFilterSentinel) {
             query = query.isFilter(key, null);
+          } else if (filters[key] is _InFilterSentinel) {
+            query = query.in_(key, (filters[key] as _InFilterSentinel).values);
           } else if (filters[key] != null) {
             query = query.eq(key, filters[key]);
           }
@@ -78,6 +85,81 @@ class ApiClient {
         'Unexpected error in select: ${e.runtimeType}',
         code: 'unknown',
       );
+    }
+  }
+
+  /// ═══ PERFORMANCE: Select with IN filter — single query instead of N loops ═══
+  /// Usage: selectIn('table', 'form_id', ['id1', 'id2', ...])
+  Future<List<Map<String, dynamic>>> selectIn(
+    String table,
+    String column,
+    List<dynamic> values, {
+    String select = '*',
+    Map<String, dynamic>? extraFilters,
+    String? orderBy,
+    bool ascending = true,
+    int? limit,
+    int? offset,
+  }) async {
+    if (values.isEmpty) return [];
+    try {
+      var query = _safeClient.from(table).select(select);
+      query = query.in_(column, values);
+
+      if (extraFilters != null) {
+        for (final key in extraFilters.keys) {
+          if (extraFilters[key] is _NullFilterSentinel) {
+            query = query.isFilter(key, null);
+          } else if (extraFilters[key] != null) {
+            query = query.eq(key, extraFilters[key]);
+          }
+        }
+      }
+
+      dynamic finalQuery = query;
+      if (orderBy != null) {
+        finalQuery = finalQuery.order(orderBy, ascending: ascending);
+      }
+      if (limit != null) finalQuery = finalQuery.limit(limit);
+      if (offset != null)
+        finalQuery = finalQuery.range(offset, offset + (limit ?? 20) - 1);
+
+      return List<Map<String, dynamic>>.from(await finalQuery);
+    } on PostgrestException catch (e) {
+      throw _mapPostgrestException(e);
+    } catch (e, stack) {
+      _reportUnexpectedError(e, stack, context: 'selectIn($table)');
+      if (_isNetworkError(e)) throw const NetworkException();
+      throw ApiException(
+        'Unexpected error in selectIn: ${e.runtimeType}',
+        code: 'unknown',
+      );
+    }
+  }
+
+  /// ═══ PERFORMANCE: Count rows without fetching data ═══
+  Future<int> count(
+    String table, {
+    Map<String, dynamic>? filters,
+  }) async {
+    try {
+      var query = _safeClient.from(table).select('*');
+      if (filters != null) {
+        for (final key in filters.keys) {
+          if (filters[key] is _NullFilterSentinel) {
+            query = query.isFilter(key, null);
+          } else if (filters[key] is _InFilterSentinel) {
+            query = query.in_(key, (filters[key] as _InFilterSentinel).values);
+          } else if (filters[key] != null) {
+            query = query.eq(key, filters[key]);
+          }
+        }
+      }
+      final result = await query.count(CountOption.exact);
+      return result.count;
+    } catch (e) {
+      debugPrint('[ApiClient] count($table) error: $e');
+      return 0;
     }
   }
 
@@ -534,4 +616,11 @@ class ApiClient {
 /// Sentinel class for IS NULL filter support in [ApiClient.select].
 class _NullFilterSentinel {
   const _NullFilterSentinel();
+}
+
+/// Sentinel class for IN filter support in [ApiClient.select].
+/// Usage: ApiClient.select('table', filters: {'form_id': ApiClient.inList(['a','b'])})
+class _InFilterSentinel {
+  final List<dynamic> values;
+  const _InFilterSentinel(this.values);
 }

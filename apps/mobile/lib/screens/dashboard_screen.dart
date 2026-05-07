@@ -46,20 +46,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       const Duration(milliseconds: 200),
       () => _cardsAnim.forward(),
     );
-    // ═══ PERFORMANCE: Pulse briefly then stop — was infinite repeat (60fps rebuilds) ═══
-    _pulseAnim.repeat(reverse: true);
-    Future.delayed(const Duration(seconds: 4), () {
+    // ═══ PERFORMANCE FIX: Pulse once then stop — was infinite 60fps rebuilds ═══
+    _pulseAnim.forward();
+    Future.delayed(const Duration(seconds: 2), () {
       if (mounted) _pulseAnim.stop();
     });
 
     // ═══ NO auto-refresh on connectivity — user presses sync button ═══
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(syncServiceProvider.future).then((service) {
-        if (service.currentState.pendingCount > 0) {
-          service.sync().catchError((_) => SyncCycleResult.empty());
-        }
-      }).catchError((_) => null);
+      // ═══ PERFORMANCE: Background sync — don't block UI ═══
+      Future.microtask(() async {
+        try {
+          final service = await ref.read(syncServiceProvider.future);
+          if (service.currentState.pendingCount > 0) {
+            await service.sync();
+          }
+        } catch (_) {}
+      });
     });
   }
 
@@ -328,16 +332,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     try {
       final db = ref.read(databaseServiceProvider);
 
-      // Fetch readiness submissions
+      // Fetch readiness submissions — use cache, reasonable limit
       final readinessSubs =
-          await db.getSubmissions(formId: _readinessFormId, limit: 500);
+          await db.getSubmissions(formId: _readinessFormId, limit: 200);
       if (readinessSubs.isNotEmpty) {
         readinessData = _processReadinessData(readinessSubs);
       }
 
-      // Fetch supervision submissions
+      // Fetch supervision submissions — use cache, reasonable limit
       final supervisionSubs =
-          await db.getSubmissions(formId: _supervisionFormId, limit: 500);
+          await db.getSubmissions(formId: _supervisionFormId, limit: 200);
       if (supervisionSubs.isNotEmpty) {
         complianceData = _processComplianceData(supervisionSubs);
         serviceNumbersData = _processServiceNumbersData(supervisionSubs);

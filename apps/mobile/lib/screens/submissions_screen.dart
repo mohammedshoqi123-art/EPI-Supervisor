@@ -52,11 +52,12 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
 
     try {
       final campaign = ref.read(campaignProvider);
-      // ═══ PERFORMANCE: Use 2000 limit — cached for 7 days ═══
+      // ═══ PERFORMANCE: Cache-first — sync populates cache, this reads from it ═══
+      // Client-side pagination on cached data (fast after first sync)
       final filter = SubmissionsFilter(
         status: _statusFilter,
         campaignType: campaign.value,
-        limit: 2000,
+        limit: 500, // Reasonable limit for cache population
         offset: 0,
       );
 

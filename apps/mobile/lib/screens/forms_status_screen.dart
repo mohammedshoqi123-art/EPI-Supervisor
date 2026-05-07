@@ -253,7 +253,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       // ═══ PERFORMANCE: Use reasonable limit — cached data is reused ═══
       final filter = SubmissionsFilter(
         campaignType: campaign.value,
-        limit: 2000, // ═══ All submissions — cache handles performance ═══
+        limit: 500, // ═══ PERFORMANCE: Reduced, cache handles rest ═══
         offset: 0,
       );
       final data = await ref.read(submissionsProvider(filter).future);

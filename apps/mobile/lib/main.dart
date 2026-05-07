@@ -87,19 +87,19 @@ Future<void> _initSupabase() async {
           autoRefreshToken: true,
         ),
         realtimeClientOptions: const RealtimeClientOptions(
-          logLevel: RealtimeLogLevel.info,
+          logLevel: RealtimeLogLevel.warn, // ═══ PERFORMANCE: warn instead of info ═══
         ),
         storageOptions: const StorageClientOptions(
           retryAttempts: 3,
         ),
-      ).timeout(const Duration(seconds: 20));
+      ).timeout(const Duration(seconds: 15)); // ═══ Reduced from 20s ═══
 
       debugPrint('[Init] ✅ Supabase initialized (attempt $attempt)');
-      return; // ← نجاح، اخرج
+      return;
     } catch (e) {
       debugPrint('[Init] ❌ Supabase attempt $attempt/$maxRetries failed: $e');
       if (attempt < maxRetries) {
-        final delay = Duration(seconds: 3 * attempt); // 3s, 6s
+        final delay = Duration(seconds: 2 * attempt); // ═══ Reduced backoff ═══
         debugPrint('[Init] Retrying in ${delay.inSeconds}s...');
         await Future.delayed(delay);
       }

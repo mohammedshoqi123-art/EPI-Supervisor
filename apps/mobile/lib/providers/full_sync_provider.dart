@@ -84,15 +84,15 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         debugPrint('[FullSync] ❌ Forms: $e');
       }
 
-      // ═══ 4. Submissions (ALL — up to 2000) ═══
+      // ═══ 4. Submissions (limit 500 — cache handles the rest) ═══
       try {
         final subData = await db.getSubmissions(
           campaignType: campaign.value,
-          limit: 2000,
+          limit: 500, // ═══ PERFORMANCE: Reduced from 2000 ═══
         );
         final filter = SubmissionsFilter(
           campaignType: campaign.value,
-          limit: 2000,
+          limit: 500,
         );
         await cache.putList(filter.cacheKey, subData);
         submissions = subData.length;
@@ -111,20 +111,26 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         debugPrint('[FullSync] ❌ References: $e');
       }
 
-      // ═══ 6. Health Facilities (for each district) ═══
+      // ═══ 6. Health Facilities (ALL in single query — no N+1) ═══
       try {
-        // Get districts first
-        final allDists = await db.getDistricts();
-        for (final dist in allDists) {
-          final distId = dist['id'] as String?;
-          if (distId == null) continue;
-          try {
-            final facData = await db.getHealthFacilities(districtId: distId);
-            await cache.putList('facilities_$distId', facData);
-            facs += facData.length;
-          } catch (_) {}
+        // ═══ PERFORMANCE FIX: Single query instead of loop per district ═══
+        final facData = await db.getHealthFacilities();
+        await cache.putList('facilities_all', facData);
+        facs = facData.length;
+
+        // Also cache per-district for quick lookup
+        final byDistrict = <String, List<Map<String, dynamic>>>{};
+        for (final fac in facData) {
+          final distId = fac['district_id'] as String? ?? '';
+          if (distId.isNotEmpty) {
+            byDistrict.putIfAbsent(distId, () => []).add(fac);
+          }
         }
-        debugPrint('[FullSync] ✅ Facilities: $facs');
+        for (final entry in byDistrict.entries) {
+          await cache.putList('facilities_${entry.key}', entry.value);
+        }
+
+        debugPrint('[FullSync] ✅ Facilities: $facs (${byDistrict.length} districts)');
       } catch (e) {
         debugPrint('[FullSync] ❌ Facilities: $e');
       }

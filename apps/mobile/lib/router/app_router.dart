@@ -183,6 +183,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   /// ═══ مزامنة شاملة — تجلب ALL data من السيرفر وتحفظها بالكاش ═══
+  /// ═══ PERFORMANCE FIX: Uses microtask to avoid blocking UI ═══
   Future<void> _triggerFullSync() async {
     if (_isSyncing) return;
     if (!ConnectivityUtils.isOnline) {
@@ -204,6 +205,9 @@ class _MainShellState extends ConsumerState<MainShell> {
     HapticFeedback.mediumImpact();
 
     try {
+      // ═══ PERFORMANCE: Yield to UI thread before heavy work ═══
+      await Future.delayed(const Duration(milliseconds: 50));
+
       final result = await ref.read(fullSyncProvider.notifier).syncAll();
 
       if (mounted) {

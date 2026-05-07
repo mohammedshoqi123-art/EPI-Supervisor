@@ -39,11 +39,11 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
 
   // On mobile, initialize Hive with timeout
   try {
-    // ═══ FIX: timeout أطول (30 ثانية) للأجهزة البطيئة ═══
+    // ═══ PERFORMANCE FIX: Shorter timeout (15s) — fail fast, app still works ═══
     await manager.init().timeout(
-      const Duration(seconds: 60),
+      const Duration(seconds: 15),
       onTimeout: () {
-        debugPrint('[offlineManagerProvider] Hive init timed out after 60s');
+        debugPrint('[offlineManagerProvider] Hive init timed out after 15s');
         throw TimeoutException('Offline storage initialization timed out');
       },
     );
@@ -171,7 +171,7 @@ class SubmissionsFilter {
     this.governorateId,
     this.districtId,
     this.campaignType,
-    this.limit = 2000, // ═══ All submissions — cache handles performance ═══
+    this.limit = 200, // ═══ PERFORMANCE: Reduced from 2000 — use pagination ═══
     this.offset = 0,
   });
 
@@ -374,7 +374,7 @@ final submissionsProvider = FutureProvider.family
   );
 });
 
-/// ═══ PERFORMANCE: Dedicated stats provider — avoids loading all submissions ═══
+/// ═══ PERFORMANCE: Dedicated stats provider — uses count queries instead of loading all data ═══
 /// Returns {drafts: N, pending: N, submitted: N} using optimized queries.
 class FormStats {
   final int drafts;
@@ -397,25 +397,21 @@ final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
   } catch (_) {}
 
   try {
-    // Submitted count from cache or server — uses cached data, no extra fetch
-    final cache = await ref.read(offlineDataCacheProvider.future);
+    // ═══ PERFORMANCE FIX: Single count query instead of loading 2000 submissions ═══
+    final db = ref.read(databaseServiceProvider);
     final campaign = ref.read(campaignProvider);
-    final filter = SubmissionsFilter(campaignType: campaign.value, limit: 2000);
-    final subs = await cache.getList(
-      filter.cacheKey,
-      () => ref.read(databaseServiceProvider).getSubmissions(
-            campaignType: campaign.value,
-            limit: 2000,
-          ),
-      maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
-    );
-    submitted = subs
-        .where((s) =>
-            s['status'] == 'submitted' ||
-            s['status'] == 'reviewed' ||
-            s['status'] == 'approved' ||
-            s['status'] == 'rejected')
-        .length;
+
+    // Count submitted items using server-side count (no data transfer)
+    final submittedStatuses = ['submitted', 'reviewed', 'approved', 'rejected'];
+    for (final status in submittedStatuses) {
+      try {
+        final count = await db.getSubmissionsCount(
+          campaignType: campaign.value,
+          status: status,
+        );
+        submitted += count;
+      } catch (_) {}
+    }
   } catch (_) {}
 
   return FormStats(drafts: drafts, pending: pending, submitted: submitted);

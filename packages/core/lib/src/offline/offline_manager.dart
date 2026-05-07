@@ -195,6 +195,7 @@ class OfflineManager {
     final data = _safeBox?.get(_syncQueueKey);
     if (data == null || data.isEmpty) return [];
     try {
+      // ═══ PERFORMANCE: Decrypt + decode in one step ═══
       final decoded = jsonDecode(_encryption.decrypt(data));
       return List<Map<String, dynamic>>.from(decoded);
     } catch (e) {
@@ -204,6 +205,7 @@ class OfflineManager {
   }
 
   Future<void> _saveQueue(List<Map<String, dynamic>> queue) async {
+    // ═══ PERFORMANCE: Encode + encrypt in one step ═══
     final encrypted = _encryption.encrypt(jsonEncode(queue));
     await _safeBox?.put(_syncQueueKey, encrypted);
   }

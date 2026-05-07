@@ -81,7 +81,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     HapticFeedback.mediumImpact();
     ref.invalidate(submissionsProvider(SubmissionsFilter(
       campaignType: ref.read(campaignProvider).value,
-      limit: 2000, // ═══ FIX #2: Load all submissions for map ═══
+      limit: 500, // ═══ PERFORMANCE: Reduced for map rendering ═══
     )));
     ref.invalidate(governoratesProvider);
   }
@@ -140,7 +140,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final allSubs = ref
             .read(submissionsProvider(SubmissionsFilter(
               campaignType: ref.read(campaignProvider).value,
-              limit: 2000,
+              limit: 500, // ═══ PERFORMANCE: Reduced for map rendering ═══
             )))
             .valueOrNull ??
         [];
@@ -419,7 +419,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final allSubs = ref
             .read(submissionsProvider(SubmissionsFilter(
               campaignType: ref.read(campaignProvider).value,
-              limit: 2000,
+              limit: 500, // ═══ PERFORMANCE: Reduced for map rendering ═══
             )))
             .valueOrNull ??
         [];

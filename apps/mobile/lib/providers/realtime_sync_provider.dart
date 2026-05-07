@@ -13,11 +13,7 @@ import 'package:epi_core/epi_core.dart';
 
 class RealtimeSyncService {
   final Ref _ref;
-  RealtimeChannel? _formsChannel;
-  RealtimeChannel? _referencesChannel;
-  RealtimeChannel? _profilesChannel;
-  RealtimeChannel? _governoratesChannel;
-  RealtimeChannel? _districtsChannel;
+  RealtimeChannel? _channel;  // ═══ PERFORMANCE: Single channel instead of 5 ═══
   bool _isListening = false;
 
   /// Stream of change events — UI can listen to show "data changed" indicator
@@ -34,9 +30,11 @@ class RealtimeSyncService {
     try {
       final client = Supabase.instance.client;
 
-      // ═══ Listen for FORMS changes ═══
-      _formsChannel = client.channel('mobile-forms-sync');
-      _formsChannel!.onPostgresChanges(
+      // ═══ PERFORMANCE FIX: Single channel for all tables ═══
+      // Reduces from 5 WebSocket connections to 1
+      _channel = client.channel('mobile-sync');
+
+      _channel!.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'forms',
@@ -45,11 +43,8 @@ class RealtimeSyncService {
           _changeController.add('forms');
         },
       );
-      _formsChannel!.subscribe();
 
-      // ═══ Listen for REFERENCES changes ═══
-      _referencesChannel = client.channel('mobile-references-sync');
-      _referencesChannel!.onPostgresChanges(
+      _channel!.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'doc_references',
@@ -58,11 +53,8 @@ class RealtimeSyncService {
           _changeController.add('references');
         },
       );
-      _referencesChannel!.subscribe();
 
-      // ═══ Listen for PROFILES changes (user active/inactive) ═══
-      _profilesChannel = client.channel('mobile-profiles-sync');
-      _profilesChannel!.onPostgresChanges(
+      _channel!.onPostgresChanges(
         event: PostgresChangeEvent.update,
         schema: 'public',
         table: 'profiles',
@@ -71,11 +63,8 @@ class RealtimeSyncService {
           _checkCurrentUserActive(payload.newRecord);
         },
       );
-      _profilesChannel!.subscribe();
 
-      // ═══ Listen for GOVERNORATES changes ═══
-      _governoratesChannel = client.channel('mobile-govs-sync');
-      _governoratesChannel!.onPostgresChanges(
+      _channel!.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'governorates',
@@ -85,11 +74,8 @@ class RealtimeSyncService {
           _changeController.add('governorates');
         },
       );
-      _governoratesChannel!.subscribe();
 
-      // ═══ Listen for DISTRICTS changes ═══
-      _districtsChannel = client.channel('mobile-districts-sync');
-      _districtsChannel!.onPostgresChanges(
+      _channel!.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'districts',
@@ -98,10 +84,10 @@ class RealtimeSyncService {
           _changeController.add('districts');
         },
       );
-      _districtsChannel!.subscribe();
 
+      _channel!.subscribe();
       _isListening = true;
-      debugPrint('[RealtimeSync] ✅ Started listening for changes');
+      debugPrint('[RealtimeSync] ✅ Started listening (single channel)');
     } catch (e) {
       debugPrint('[RealtimeSync] ❌ Failed to start: $e');
     }
@@ -129,11 +115,7 @@ class RealtimeSyncService {
 
   /// Stop listening for changes
   void dispose() {
-    _formsChannel?.unsubscribe();
-    _referencesChannel?.unsubscribe();
-    _profilesChannel?.unsubscribe();
-    _governoratesChannel?.unsubscribe();
-    _districtsChannel?.unsubscribe();
+    _channel?.unsubscribe();
     _changeController.close();
     _isListening = false;
     debugPrint('[RealtimeSync] Stopped listening');

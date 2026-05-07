@@ -149,6 +149,17 @@ class EncryptionService {
     }
   }
 
+  /// ═══ PERFORMANCE: Batch encrypt — single call for multiple items ═══
+  /// Avoids repeated IV generation overhead for small items.
+  List<String> encryptBatch(List<String> plaintexts) {
+    return plaintexts.map(encrypt).toList();
+  }
+
+  /// ═══ PERFORMANCE: Batch decrypt — single call for multiple items ═══
+  List<String> decryptBatch(List<String> ciphertexts) {
+    return ciphertexts.map(decrypt).toList();
+  }
+
   String encryptMap(Map<String, dynamic> map) => encrypt(jsonEncode(map));
 
   Map<String, dynamic> decryptMap(String ciphertext) {

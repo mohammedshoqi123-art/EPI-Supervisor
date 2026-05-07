@@ -137,13 +137,14 @@ class ApiClient {
     }
   }
 
-  /// ═══ PERFORMANCE: Count rows without fetching data ═══
+  /// ═══ PERFORMANCE: Count rows without fetching full data ═══
+  /// Uses select with minimal column to count efficiently.
   Future<int> count(
     String table, {
     Map<String, dynamic>? filters,
   }) async {
     try {
-      var query = _safeClient.from(table).select('*');
+      var query = _safeClient.from(table).select('id');
       if (filters != null) {
         for (final key in filters.keys) {
           if (filters[key] is _NullFilterSentinel) {
@@ -155,8 +156,8 @@ class ApiClient {
           }
         }
       }
-      final result = await query.count(CountOption.exact);
-      return result.count;
+      final result = await query;
+      return result.length;
     } catch (e) {
       debugPrint('[ApiClient] count($table) error: $e');
       return 0;

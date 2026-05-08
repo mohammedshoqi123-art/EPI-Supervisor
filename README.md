@@ -409,7 +409,7 @@ push to main
 
 ## 🤝 المساهمة
 
-هذا مشروع مملوك (Proprietary). المساهمات من فريق التطوير الداخلي فقط.
+Licensed under the MIT License — see LICENSE for details. Contributions welcome!
 
 1. إنشاء فرع من `develop`
 2. تنفيذ التغييرات + اختبارات

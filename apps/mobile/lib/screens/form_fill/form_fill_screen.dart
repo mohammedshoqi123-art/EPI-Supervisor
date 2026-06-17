@@ -408,23 +408,37 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           Map<String, dynamic>.from(_formData);
 
       // Find photo fields and convert XFile paths to base64
+      // Fix: use compute() to offload base64 encoding to a background isolate
+      // to prevent UI jank when encoding multiple large photos.
       for (final field in _allFields) {
         final key = field['key'] as String? ?? '';
         final type = field['type'] as String? ?? 'text';
         if (type == 'photo' && dataWithPhotos.containsKey(key)) {
           final paths = dataWithPhotos[key] as List?;
           if (paths != null && paths.isNotEmpty) {
-            final List<String> base64Photos = [];
-            for (final path in paths) {
-              try {
-                final file = XFile(path.toString());
-                final bytes = await file.readAsBytes();
-                base64Photos.add(base64Encode(bytes));
-              } catch (e) {
-                if (kDebugMode) print('[Submit] Photo encode failed: $e');
+            // Encode photos in background isolate
+            final pathList = paths.map((p) => p.toString()).toList();
+            try {
+              final base64Photos = await compute(
+                _encodePhotosToBase64,
+                pathList,
+              );
+              dataWithPhotos[key] = base64Photos;
+            } catch (e) {
+              debugPrint('[Submit] Photo encode (isolate) failed: $e');
+              // Fallback: encode on main thread
+              final List<String> base64Photos = [];
+              for (final path in pathList) {
+                try {
+                  final file = XFile(path);
+                  final bytes = await file.readAsBytes();
+                  base64Photos.add(base64Encode(bytes));
+                } catch (e2) {
+                  debugPrint('[Submit] Photo encode (fallback) failed: $e2');
+                }
               }
+              dataWithPhotos[key] = base64Photos;
             }
-            dataWithPhotos[key] = base64Photos;
           }
         }
       }
@@ -647,4 +661,20 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                 ),
     );
   }
+}
+
+/// Top-level function for compute() — encodes photos to base64 in a background isolate.
+/// Must be top-level (not a class method) to be callable from compute().
+List<String> _encodePhotosToBase64(List<String> paths) {
+  final result = <String>[];
+  for (final path in paths) {
+    try {
+      final file = XFile(path);
+      final bytes = file.readAsBytesSync();
+      result.add(base64Encode(bytes));
+    } catch (_) {
+      // Skip failed photos — don't crash the isolate
+    }
+  }
+  return result;
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:epi_core/epi_core.dart';
@@ -22,8 +23,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isConfigured = false;
   String? _currentUserId;
   String? _currentUserName;
-  Timer? _pollTimer;
-  Timer? _typingTimer;
+  // Fix: replaced polling Timer with Supabase Realtime channel
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
@@ -32,10 +33,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_isConfigured) {
       _initUser();
       _loadMessages();
-      _pollTimer = Timer.periodic(
-        const Duration(seconds: 4),
-        (_) => _loadMessages(silent: true),
-      );
+      _subscribeToRealtime();
     } else {
       _isLoading = false;
     }
@@ -48,8 +46,43 @@ class _ChatScreenState extends State<ChatScreen> {
       _currentUserName = client.auth.currentUser?.userMetadata?['full_name'] ??
           client.auth.currentUser?.email?.split('@').first ??
           'مستخدم';
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Chat] _initUser error: $e');
       _currentUserName = 'مستخدم';
+    }
+  }
+
+  /// Subscribe to realtime changes on chat_messages table.
+  /// Replaces 4-second polling with instant push notifications.
+  void _subscribeToRealtime() {
+    try {
+      final client = Supabase.instance.client;
+      _channel = client.channel('chat-general');
+
+      _channel!.onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'chat_messages',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'room',
+          value: 'general',
+        ),
+        callback: (payload) {
+          // New message inserted — reload messages
+          if (mounted) {
+            _loadMessages(silent: true);
+          }
+        },
+      );
+
+      _channel!.subscribe();
+    } catch (e) {
+      debugPrint('[Chat] Realtime subscribe failed: $e');
+      // Fallback: if realtime fails, use polling with longer interval
+      Timer.periodic(const Duration(seconds: 10), (_) {
+        if (mounted) _loadMessages(silent: true);
+      });
     }
   }
 
@@ -57,8 +90,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
-    _pollTimer?.cancel();
-    _typingTimer?.cancel();
+    // Fix: unsubscribe from realtime channel instead of cancelling timer
+    _channel?.unsubscribe();
     super.dispose();
   }
 
@@ -103,6 +136,19 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty || !_isConfigured) return;
 
+    // Fix: validate message length to prevent oversized payloads
+    if (text.length > 1000) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('الرسالة طويلة جداً (الحد الأقصى 1000 حرف)'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isSending = true);
     _messageController.clear();
 
@@ -115,8 +161,10 @@ class _ChatScreenState extends State<ChatScreen> {
         'sender_name': _currentUserName,
         'content': text,
         'room': 'general',
-        'created_at': DateTime.now().toIso8601String(),
+        // Fix: let server set created_at to avoid time drift
       });
+      // Realtime subscription will auto-reload messages — no manual reload needed
+      // But as fallback, reload if realtime isn't working
       await _loadMessages(silent: true);
     } catch (e) {
       if (mounted) {

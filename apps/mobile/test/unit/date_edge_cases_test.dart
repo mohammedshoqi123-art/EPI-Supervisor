@@ -50,7 +50,7 @@ void main() {
     test('14-week vaccine due 98 days after birth', () {
       final birth = DateTime(2025, 1, 1);
       final due = calculateDueDate(birth, 14);
-      expect(due, equals(DateTime(2025, 4, 10)));
+      expect(due, equals(DateTime(2025, 4, 9)));
     });
   });
 

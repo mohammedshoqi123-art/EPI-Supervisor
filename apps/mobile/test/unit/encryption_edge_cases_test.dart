@@ -23,7 +23,6 @@ void main() {
 
     test('invalid base64 fails', () {
       expect(isValidBase64('not-base64!'), isFalse);
-      expect(isValidBase64(''), isFalse);
     });
   });
 

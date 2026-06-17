@@ -608,7 +608,7 @@ class ApiClient {
     SentryConfig.captureError(error, stack, context: context);
     assert(() {
       // ignore: avoid_print
-      print('ApiClient error [$context]: $error');
+      debugPrint('ApiClient error [$context]: $error');
       return true;
     }());
   }

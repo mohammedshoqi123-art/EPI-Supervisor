@@ -82,7 +82,7 @@ class OfflineDataCache {
     } catch (e) {
       // 4. Network failed — ALWAYS try stale cache (memory or disk), never rethrow empty
       if (kDebugMode) {
-        print(
+        debugPrint(
             '[OfflineDataCache] Network failed for $cacheKey, using stale cache: $e');
       }
 
@@ -235,11 +235,11 @@ class OfflineDataCache {
       await _saveToCache(key, data);
       _refreshingKeys.remove(key);
       if (kDebugMode)
-        print('[OfflineDataCache] Background refresh complete for $key');
+        debugPrint('[OfflineDataCache] Background refresh complete for $key');
     }).catchError((e) {
       _refreshingKeys.remove(key);
       if (kDebugMode)
-        print('[OfflineDataCache] Background refresh failed for $key: $e');
+        debugPrint('[OfflineDataCache] Background refresh failed for $key: $e');
     });
   }
 
@@ -257,7 +257,7 @@ class OfflineDataCache {
     }).catchError((e) {
       _refreshingKeys.remove(key);
       if (kDebugMode)
-        print('[OfflineDataCache] Background refresh failed for $key: $e');
+        debugPrint('[OfflineDataCache] Background refresh failed for $key: $e');
     });
   }
 
@@ -271,7 +271,7 @@ class OfflineDataCache {
     _memoryCache.remove(key);
     await _offline.removeCacheKey(key);
     if (kDebugMode)
-      print(
+      debugPrint(
         '[OfflineDataCache] Invalidated cache for $key (memory + persistent)',
       );
   }
@@ -304,7 +304,7 @@ class OfflineDataCache {
 
     final total = memoryKeys.length + persistentKeys.length;
     if (kDebugMode && total > 0) {
-      print('[OfflineDataCache] Invalidated $total keys by prefix "$prefix" '
+      debugPrint('[OfflineDataCache] Invalidated $total keys by prefix "$prefix" '
           '(memory: ${memoryKeys.length}, persistent: ${persistentKeys.length})');
     }
   }

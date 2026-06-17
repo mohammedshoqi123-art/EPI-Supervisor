@@ -1,0 +1,42 @@
+# Code owners — من يراجع ماذا في هذا المشروع
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ─── Default owner (كل شيء ليس مذكوراً بالأسفل) ───
+*                           @mohammedshoqi123-art
+
+# ─── Backend / Edge Functions / Database ───
+/supabase/                  @mohammedshoqi123-art
+/supabase/functions/        @mohammedshoqi123-art
+/supabase/migrations/       @mohammedshoqi123-art
+
+# ─── Mobile App (Flutter) ───
+/apps/mobile/               @mohammedshoqi123-art
+/apps/mobile/lib/           @mohammedshoqi123-art
+
+# ─── Admin Web (React) ───
+/apps/admin-web/            @mohammedshoqi123-art
+/apps/admin-web/src/        @mohammedshoqi123-art
+
+# ─── Shared core package (business logic, security, offline) ───
+/packages/core/             @mohammedshoqi123-art
+/packages/core/lib/src/security/    @mohammedshoqi123-art
+/packages/core/lib/src/offline/     @mohammedshoqi123-art
+/packages/core/lib/src/ai/          @mohammedshoqi123-art
+
+# ─── Shared UI package ───
+/packages/shared/           @mohammedshoqi123-art
+
+# ─── CI/CD & workflows ───
+/.github/                   @mohammedshoqi123-art
+/.github/workflows/         @mohammedshoqi123-art
+
+# ─── Medical content (vaccines, knowledge base) — requires medical review ───
+/packages/core/lib/src/ai/bot/vaccination_service.dart   @mohammedshoqi123-art
+/packages/core/lib/src/ai/bot/vaccine_model.dart         @mohammedshoqi123-art
+/supabase/functions/ai-chat-v3/knowledge_chunks.ts       @mohammedshoqi123-art
+/apps/admin-web/src/lib/local-knowledge.ts               @mohammedshoqi123-art
+
+# ─── Security-sensitive files ───
+/packages/core/lib/src/security/                          @mohammedshoqi123-art
+/supabase/migrations/                                     @mohammedshoqi123-art
+/.env.example                                             @mohammedshoqi123-art

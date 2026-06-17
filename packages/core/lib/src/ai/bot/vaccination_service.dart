@@ -10,6 +10,7 @@ class VaccinationService {
     // ──────────── عند الولادة ────────────
     Vaccine(
       id: 'bcg',
+      maxAgeMonths: 12,
       nameAr: 'بي سي جي (BCG)',
       nameEn: 'Bacillus Calmette-Guérin',
       description:
@@ -31,6 +32,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'hepb0',
+      maxAgeMonths: 60,
       nameAr: 'التهاب الكبد ب - جرعة الولادة',
       nameEn: 'Hepatitis B - Birth Dose',
       description:
@@ -47,6 +49,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'opv0',
+      maxAgeMonths: 60,
       nameAr: 'تطعيم شلل الأطفال الفموي - جرعة الولادة',
       nameEn: 'OPV0 - Oral Polio Vaccine Birth Dose',
       description:
@@ -65,6 +68,7 @@ class VaccinationService {
     // ──────────── عمر 6 أسابيع ────────────
     Vaccine(
       id: 'opv1',
+      maxAgeMonths: 60,
       nameAr: 'شلل الأطفال الفموي - الجرعة الأولى',
       nameEn: 'OPV1 - Oral Polio Vaccine Dose 1',
       description: 'الجرعة الأولى من تطعيم شلل الأطفال الفموي',
@@ -80,6 +84,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'pentavalent1',
+      maxAgeMonths: 60,
       nameAr: 'التطعيم الخماسي - الجرعة الأولى',
       nameEn: 'Pentavalent (DTP-HepB-Hib) Dose 1',
       description:
@@ -99,6 +104,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'pcv1',
+      maxAgeMonths: 60,
       nameAr: 'التطعيم الرئوي - الجرعة الأولى',
       nameEn: 'PCV1 - Pneumococcal Conjugate Vaccine',
       description:
@@ -115,6 +121,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'rv1',
+      maxAgeMonths: 24,
       nameAr: 'تطعيم الروتا فيروس - الجرعة الأولى',
       nameEn: 'Rotavirus Vaccine Dose 1',
       description: 'تطعيم فموي ضد فيروس الروتا المسبب للإسهال الشديد عند الرضع',
@@ -135,6 +142,7 @@ class VaccinationService {
     // ──────────── عمر 10 أسابيع ────────────
     Vaccine(
       id: 'opv2',
+      maxAgeMonths: 60,
       nameAr: 'شلل الأطفال الفموي - الجرعة الثانية',
       nameEn: 'OPV2 - Oral Polio Vaccine Dose 2',
       description: 'الجرعة الثانية من تطعيم شلل الأطفال الفموي',
@@ -150,6 +158,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'pentavalent2',
+      maxAgeMonths: 60,
       nameAr: 'التطعيم الخماسي - الجرعة الثانية',
       nameEn: 'Pentavalent Dose 2',
       description: 'الجرعة الثانية من التطعيم الخماسي',
@@ -165,6 +174,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'pcv2',
+      maxAgeMonths: 60,
       nameAr: 'التطعيم الرئوي - الجرعة الثانية',
       nameEn: 'PCV2',
       description: 'الجرعة الثانية من تطعيم المكورات الرئوية',
@@ -180,6 +190,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'rv2',
+      maxAgeMonths: 24,
       nameAr: 'تطعيم الروتا فيروس - الجرعة الثانية',
       nameEn: 'Rotavirus Vaccine Dose 2',
       description: 'الجرعة الثانية من تطعيم الروتا فيروس',
@@ -197,6 +208,7 @@ class VaccinationService {
     // ──────────── عمر 14 أسبوع ────────────
     Vaccine(
       id: 'opv3',
+      maxAgeMonths: 60,
       nameAr: 'شلل الأطفال الفموي - الجرعة الثالثة',
       nameEn: 'OPV3',
       description: 'الجرعة الثالثة من تطعيم شلل الأطفال الفموي',
@@ -212,6 +224,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'pentavalent3',
+      maxAgeMonths: 60,
       nameAr: 'التطعيم الخماسي - الجرعة الثالثة',
       nameEn: 'Pentavalent Dose 3',
       description: 'الجرعة الثالثة والأخيرة من التطعيم الخماسي',
@@ -227,6 +240,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'pcv3',
+      maxAgeMonths: 60,
       nameAr: 'التطعيم الرئوي - الجرعة الثالثة',
       nameEn: 'PCV3',
       description: 'الجرعة الثالثة من تطعيم المكورات الرئوية',
@@ -242,6 +256,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'ipv1',
+      maxAgeMonths: 60,
       nameAr: 'شلل الأطفال الحقني (IPV) - الجرعة الأولى',
       nameEn: 'Inactivated Polio Vaccine - Dose 1',
       description:
@@ -258,6 +273,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'ipv2',
+      maxAgeMonths: 60,
       nameAr: 'شلل الأطفال الحقني (IPV) - الجرعة الثانية',
       nameEn: 'Inactivated Polio Vaccine - Dose 2',
       description: 'الجرعة الثانية من تطعيم شلل الأطفال الحقني - يُعطى مع MR1',
@@ -275,6 +291,7 @@ class VaccinationService {
     // ──────────── عمر 9 أشهر ────────────
     Vaccine(
       id: 'mr1',
+      maxAgeMonths: 60,
       nameAr: 'الحصبة والحصبة الألمانية (MR) - الجرعة الأولى',
       nameEn: 'Measles-Rubella (MR) Dose 1',
       description:
@@ -292,6 +309,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'opv4',
+      maxAgeMonths: 60,
       nameAr: 'شلل الأطفال الفموي - الجرعة الرابعة',
       nameEn: 'OPV4 - Oral Polio Vaccine Dose 4',
       description:
@@ -310,6 +328,7 @@ class VaccinationService {
     // ──────────── عمر 9 أشهر (فيتامين أ) ────────────
     Vaccine(
       id: 'vitA_1',
+      maxAgeMonths: 60,
       nameAr: 'فيتامين أ - جرعة 9 أشهر',
       nameEn: 'Vitamin A - 100,000 IU (9 months)',
       description: 'كبسولة فيتامين أ (100,000 وحدة دولية) — الجرعة الأولى',
@@ -328,6 +347,7 @@ class VaccinationService {
     // ──────────── عمر 18 شهر ────────────
     Vaccine(
       id: 'mr2',
+      maxAgeMonths: 60,
       nameAr: 'الحصبة والحصبة الألمانية (MR) - الجرعة الثانية',
       nameEn: 'Measles-Rubella (MR) Dose 2',
       description:
@@ -345,6 +365,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'penta4',
+      maxAgeMonths: 60,
       nameAr: 'التطعيم الخماسي - الجرعة التعزيزية (Penta4)',
       nameEn: 'Pentavalent Booster (Penta4)',
       description:
@@ -362,6 +383,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'opv5',
+      maxAgeMonths: 60,
       nameAr: 'شلل الأطفال الفموي - الجرعة الخامسة',
       nameEn: 'OPV5 - Oral Polio Vaccine Dose 5',
       description:
@@ -378,6 +400,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'vitA_3',
+      maxAgeMonths: 60,
       nameAr: 'فيتامين أ - جرعة 18 شهر',
       nameEn: 'Vitamin A - 200,000 IU (18 months)',
       description:
@@ -397,6 +420,7 @@ class VaccinationService {
     // ──────────── عمر 6 سنوات (عند الالتحاق بالمدرسة) ────────────
     Vaccine(
       id: 'td_school',
+      maxAgeMonths: 84,
       nameAr: 'الكزاز والخناق (Td) - جرعة المدرسة',
       nameEn: 'Td School Entry Booster',
       description:
@@ -414,6 +438,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'mr_school',
+      maxAgeMonths: 84,
       nameAr: 'الحصبة والحصبة الألمانية (MR) - جرعة المدرسة',
       nameEn: 'MR School Entry Booster',
       description:
@@ -431,6 +456,7 @@ class VaccinationService {
     ),
     Vaccine(
       id: 'vitA_school',
+      maxAgeMonths: 84,
       nameAr: 'فيتامين أ - جرعة 6 سنوات',
       nameEn: 'Vitamin A - 200,000 IU (6 years)',
       description:
@@ -473,9 +499,13 @@ class VaccinationService {
     'أرخبيل سقطرى',
   ];
 
-  // ──── الحصول على التطعيمات حسب العمر ────────────
+  // ──── الحصول على التطعيمات حسب العمر (مع احترام الحد الأقصى للعمر) ────────────
   List<Vaccine> getVaccinesDueAtAge(int weeks, int months) {
     return allVaccines.where((v) {
+      // استبعاد اللقاحات التي تجاوزت الحد الأقصى للعمر
+      if (!v.canBeAdministeredAtAge(ageWeeks: weeks, ageMonths: months)) {
+        return false;
+      }
       if (v.dueMonths > 0) return months >= v.dueMonths;
       return weeks >= v.dueWeeks;
     }).toList();
@@ -494,6 +524,10 @@ class VaccinationService {
       int weeks, int months, List<String> givenIds) {
     return allVaccines.where((v) {
       if (givenIds.contains(v.id)) return false;
+      // استبعاد اللقاحات التي تجاوزت الحد الأقصى للعمر (لم تعد مطلوبة)
+      if (!v.canBeAdministeredAtAge(ageWeeks: weeks, ageMonths: months)) {
+        return false;
+      }
       if (v.dueMonths > 0) return months >= v.dueMonths;
       return weeks >= v.dueWeeks;
     }).toList();
@@ -518,6 +552,10 @@ class VaccinationService {
       int weeks, int months, List<String> givenIds) {
     return allVaccines.where((v) {
       if (givenIds.contains(v.id)) return false;
+      // استبعاد اللقاحات التي تجاوزت الحد الأقصى للعمر
+      if (!v.canBeAdministeredAtAge(ageWeeks: weeks, ageMonths: months)) {
+        return false;
+      }
       if (v.dueMonths > 0)
         return months >= v.dueMonths + 2; // أكثر من شهرين تأخير
       return weeks >= v.dueWeeks + 4; // أكثر من 4 أسابيع تأخير

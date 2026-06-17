@@ -339,7 +339,7 @@ class AdvancedCacheManager {
       _expiredCount++;
     }
     if (kDebugMode && expired.isNotEmpty) {
-      print('[Cache] Cleaned up ${expired.length} expired entries');
+      debugPrint('[Cache] Cleaned up ${expired.length} expired entries');
     }
   }
 

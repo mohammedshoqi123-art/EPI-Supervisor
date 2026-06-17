@@ -17,7 +17,7 @@ class EnvValidator {
   static void validate() {
     if (isOfflineMode) {
       if (kDebugMode) {
-        print('📴 Offline mode — skipping Supabase env validation');
+        debugPrint('📴 Offline mode — skipping Supabase env validation');
       }
       return;
     }
@@ -49,13 +49,17 @@ class EnvValidator {
 
     if (kDebugMode) {
       if (geminiKey.isEmpty || _isPlaceholder(geminiKey)) {
-        print('⚠️ Optional: GEMINI_API_KEY not configured');
+        debugPrint('⚠️ Optional: GEMINI_API_KEY not configured');
       }
       if (sentryDsn.isEmpty || _isPlaceholder(sentryDsn)) {
-        print('⚠️ Optional: SENTRY_DSN not configured');
+        debugPrint('⚠️ Optional: SENTRY_DSN not configured');
       }
       if (encKey.isEmpty || _isPlaceholder(encKey)) {
-        print('⚠️ Optional: ENCRYPTION_KEY not configured (using default)');
+        debugPrint(
+          '🚨 CRITICAL: ENCRYPTION_KEY is not configured. '
+          'Local storage encryption will FAIL at runtime — '
+          'pass --dart-define=ENCRYPTION_KEY=<32+ chars> when building.',
+        );
       }
     }
 

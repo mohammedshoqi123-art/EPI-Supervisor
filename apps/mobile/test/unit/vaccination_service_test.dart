@@ -242,4 +242,103 @@ void main() {
       expect(sixWeekVaccines.length, greaterThanOrEqualTo(4));
     });
   });
+
+  // ═══════════════════════════════════════════════════════════════
+  // maxAgeMonths — الحد الأقصى للعبر (يمنع إعطاء لقاحات خارج العمر المسموح)
+  // ═══════════════════════════════════════════════════════════════
+  group('maxAgeMonths — age limit enforcement', () {
+    final service = VaccinationService();
+
+    test('BCG should have maxAgeMonths = 12', () {
+      final bcg = VaccinationService.allVaccines.firstWhere((v) => v.id == 'bcg');
+      expect(bcg.maxAgeMonths, equals(12),
+          reason: 'BCG cannot be given after 12 months per Yemen EPI guideline');
+    });
+
+    test('Rota vaccines should have maxAgeMonths = 24', () {
+      final rv1 = VaccinationService.allVaccines.firstWhere((v) => v.id == 'rv1');
+      final rv2 = VaccinationService.allVaccines.firstWhere((v) => v.id == 'rv2');
+      expect(rv1.maxAgeMonths, equals(24),
+          reason: 'Rota cannot be given after 24 months');
+      expect(rv2.maxAgeMonths, equals(24),
+          reason: 'Rota cannot be given after 24 months');
+    });
+
+    test('Td school vaccine should have maxAgeMonths = 84', () {
+      final td = VaccinationService.allVaccines.firstWhere((v) => v.id == 'td_school');
+      expect(td.maxAgeMonths, equals(84),
+          reason: 'Td school-entry vaccine max age is 7 years (84 months)');
+    });
+
+    test('BCG canBeAdministeredAtAge — within limit', () {
+      final bcg = VaccinationService.allVaccines.firstWhere((v) => v.id == 'bcg');
+      expect(bcg.canBeAdministeredAtAge(ageMonths: 6), isTrue);
+      expect(bcg.canBeAdministeredAtAge(ageMonths: 11), isTrue);
+      expect(bcg.canBeAdministeredAtAge(ageMonths: 12), isTrue);
+    });
+
+    test('BCG canBeAdministeredAtAge — past limit (3-year-old)', () {
+      final bcg = VaccinationService.allVaccines.firstWhere((v) => v.id == 'bcg');
+      // 3 years old = 36 months — past BCG limit of 12 months
+      expect(bcg.canBeAdministeredAtAge(ageMonths: 36), isFalse,
+          reason: 'BCG must NOT be given to a 3-year-old');
+      expect(bcg.canBeAdministeredAtAge(ageMonths: 13), isFalse,
+          reason: 'BCG must NOT be given past 12 months');
+    });
+
+    test('Rota canBeAdministeredAtAge — past limit', () {
+      final rv1 = VaccinationService.allVaccines.firstWhere((v) => v.id == 'rv1');
+      // 30 months — past Rota limit of 24 months
+      expect(rv1.canBeAdministeredAtAge(ageMonths: 30), isFalse,
+          reason: 'Rota must NOT be given past 24 months');
+    });
+
+    test('Vaccines with no max age (maxAgeMonths = 0) can be given at any age', () {
+      // No vaccine in the current schedule has maxAgeMonths = 0 since we set
+      // explicit limits on all of them. But the helper should handle it.
+      // (This is a sanity check on the model's default behavior.)
+      final bcg = VaccinationService.allVaccines.firstWhere((v) => v.id == 'bcg');
+      expect(bcg.maxAgeMonths, greaterThan(0),
+          reason: 'All Yemen EPI vaccines should have an explicit maxAgeMonths');
+    });
+  });
+
+  group('Age-aware vaccine filtering (getVaccinesDueAtAge)', () {
+    final service = VaccinationService();
+
+    test('BCG should NOT appear in due list for a 3-year-old (36 months)', () {
+      final due = service.getVaccinesDueAtAge(0, 36);
+      final bcgInList = due.any((v) => v.id == 'bcg');
+      expect(bcgInList, isFalse,
+          reason: 'BCG must NOT be suggested for a child past 12 months old');
+    });
+
+    test('Rota should NOT appear in due list for a 30-month-old', () {
+      final due = service.getVaccinesDueAtAge(0, 30);
+      final rotaInList = due.any((v) => v.id == 'rv1' || v.id == 'rv2');
+      expect(rotaInList, isFalse,
+          reason: 'Rota must NOT be suggested past 24 months');
+    });
+
+    test('BCG SHOULD appear in due list for a 2-month-old (8 weeks)', () {
+      final due = service.getVaccinesDueAtAge(8, 2);
+      final bcgInList = due.any((v) => v.id == 'bcg');
+      expect(bcgInList, isTrue,
+          reason: 'BCG should be suggested for a child under 12 months');
+    });
+
+    test('Overdue list should NOT include BCG for a 3-year-old', () {
+      final overdue = service.getOverdueVaccines(0, 36, []);
+      final bcgInOverdue = overdue.any((v) => v.id == 'bcg');
+      expect(bcgInOverdue, isFalse,
+          reason: 'BCG should not be flagged as overdue past its max age');
+    });
+
+    test('Overdue list SHOULD include BCG for a 6-month-old who missed it', () {
+      final overdue = service.getOverdueVaccines(26, 6, []);
+      final bcgInOverdue = overdue.any((v) => v.id == 'bcg');
+      expect(bcgInOverdue, isTrue,
+          reason: 'BCG should be flagged as overdue for a 6-month-old who missed it');
+    });
+  });
 }

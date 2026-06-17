@@ -103,11 +103,14 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/admin-web
-        run: npm ci
+        # Use npm install instead of npm ci to handle cache drift gracefully.
+        # npm ci fails if node_modules cache from a previous build has deps
+        # that are no longer in package-lock.json.
+        run: npm install --no-audit --no-fund
 
       - name: Run Vitest
         working-directory: apps/admin-web
-    
+
         run: npm test
 
       - name: Build Admin Web

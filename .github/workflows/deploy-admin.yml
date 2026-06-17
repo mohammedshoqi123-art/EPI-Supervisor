@@ -26,7 +26,8 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/admin-web
-        run: npm ci
+        # Use npm install instead of npm ci to handle cache drift gracefully.
+        run: npm install --no-audit --no-fund
 
       - name: Build
         working-directory: apps/admin-web

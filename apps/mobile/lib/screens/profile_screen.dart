@@ -368,8 +368,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             onPressed: _isSaving
                 ? null
                 : () {
+                    final authState = ref.read(authStateProvider).valueOrNull;
+                    if (authState != null) {
+                      _initControllers(authState);
+                    }
                     setState(() => _isEditing = false);
-                    _initControllers();
                   },
           ),
           // Save button

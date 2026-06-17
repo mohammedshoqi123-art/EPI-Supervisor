@@ -159,10 +159,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         if (!notification.read) {
           await NotificationService.markAsRead(notification.id);
         }
-        // Fix: remove from local list immediately so it doesn't reappear
-        setState(() {
-          _notifications.removeWhere((n) => n.id == notification.id);
-        });
+        // Fix: trigger rebuild to update the list from NotificationService
+        if (mounted) {
+          setState(() {});
+        }
       },
       child: ListTile(
         leading: Container(

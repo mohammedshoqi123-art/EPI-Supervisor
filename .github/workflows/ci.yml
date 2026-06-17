@@ -67,10 +67,21 @@ jobs:
         working-directory: apps/mobile
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: apps/mobile
-    
-        run: flutter test 2>&1
+        run: |
+          flutter test --coverage 2>&1
+          if [ -f coverage/lcov.info ]; then
+            TOTAL=$(grep -c "^DA:" coverage/lcov.info 2>/dev/null || echo 0)
+            HIT=$(grep "^DA:" coverage/lcov.info | grep -v ",0$" | wc -l 2>/dev/null || echo 0)
+            if [ $TOTAL -gt 0 ]; then
+              PCT=$((HIT * 100 / TOTAL))
+              echo "📊 Test coverage: ${PCT}% (${HIT}/${TOTAL} lines)"
+              if [ $PCT -lt 50 ]; then
+                echo "::warning::Coverage ${PCT}% is below 50% threshold"
+              fi
+            fi
+          fi
 
   # ─── Admin Web Build & Test ──────────────────────────────
   admin-web:
@@ -155,6 +166,15 @@ jobs:
           cd $GITHUB_WORKSPACE/packages/shared && flutter pub get && dart run build_runner build --delete-conflicting-outputs
           cd $GITHUB_WORKSPACE/packages/features && flutter pub get
           cd $GITHUB_WORKSPACE/apps/mobile && flutter pub get
+
+      - name: Mask secrets in logs
+        run: |
+          echo "::add-mask::${{ secrets.ENCRYPTION_KEY }}"
+          echo "::add-mask::${{ secrets.GROQ_API_KEY }}"
+          echo "::add-mask::${{ secrets.HF_API_TOKEN }}"
+          echo "::add-mask::${{ secrets.SENTRY_DSN }}"
+          echo "::add-mask::${{ secrets.OPENROUTER_API_KEY }}"
+          echo "::add-mask::${{ secrets.ZAI_API_KEY }}"
 
       - name: Build APK (release)
         working-directory: apps/mobile

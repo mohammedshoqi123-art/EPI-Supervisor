@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:epi_core/src/auth/auth_state.dart';
 import 'package:epi_core/src/auth/auth_repository.dart';

@@ -172,11 +172,10 @@ void main() {
   group('LocalAnalyticsEngine — linearRegression', () {
     test('linearRegression of perfect linear data', () {
       // y = 2x + 1
-      final xs = [0, 1, 2, 3, 4];
-      final ys = [1, 3, 5, 7, 9];
       // Combine into single list of y values (the implementation takes one list)
       // Looking at the signature: linearRegression(List<num> data)
       // It treats data as y-values and uses index as x.
+      final ys = [1, 3, 5, 7, 9];
       final result = LocalAnalyticsEngine.linearRegression(ys);
       expect(result.slope, closeTo(2.0, 0.01));
       expect(result.intercept, closeTo(1.0, 0.01));
@@ -310,9 +309,6 @@ void main() {
         'users': {'active': 30, 'total': 50},
       };
       final insights = LocalAnalyticsEngine.generateInsights(data);
-      // At least one insight should mention the shortages
-      final hasShortageInsight = insights.any((s) =>
-          s.contains('shortage') || s.contains('nواقص') || s.contains('حرج'));
       // Insights might be in English or Arabic; just verify list is non-empty
       expect(insights.length, greaterThanOrEqualTo(0));
     });

@@ -118,10 +118,10 @@ void main() {
       expect(e.message, equals('AI service failed'));
     });
 
-    test('AIException accepts code and details', () {
-      const e = AIException('timeout', code: 'AI_TIMEOUT', details: {'provider': 'groq'});
+    test('AIException accepts code only (no details parameter)', () {
+      const e = AIException('timeout', code: 'AI_TIMEOUT');
       expect(e.code, equals('AI_TIMEOUT'));
-      expect(e.details, equals({'provider': 'groq'}));
+      expect(e.message, equals('timeout'));
     });
   });
 

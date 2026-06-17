@@ -216,8 +216,6 @@ void main() {
         governorateId: 'gov-1',
         districtId: 'dist-1',
         status: 'submitted',
-        startDate: DateTime(2026, 1, 1),
-        endDate: DateTime(2026, 6, 1),
         limit: 50,
         offset: 0,
       );
@@ -236,11 +234,11 @@ void main() {
       }
     });
 
-    test('updateSubmissionStatus accepts reviewerId and reviewNotes', () {
+    test('updateSubmissionStatus accepts reviewedBy and reviewNotes', () {
       final result = db.updateSubmissionStatus(
         'sub-1',
         'approved',
-        reviewerId: 'user-1',
+        reviewedBy: 'user-1',
         reviewNotes: 'Looks good',
       );
       expect(result, isA<Future>());
@@ -248,13 +246,12 @@ void main() {
   });
 
   group('DatabaseService — shortages parameter validation', () {
-    test('getShortages accepts severity and status filters', () {
+    test('getShortages accepts severity and isResolved filters', () {
       final result = db.getShortages(
         governorateId: 'gov-1',
         districtId: 'dist-1',
         severity: 'critical',
-        status: 'open',
-        limit: 25,
+        isResolved: false,
       );
       expect(result, isA<Future>());
     });
@@ -300,14 +297,12 @@ void main() {
   });
 
   group('DatabaseService — dashboard stats', () {
-    test('getDashboardStats accepts date range and filters', () {
-      final result = db.getDashboardStats(
-        governorateId: 'gov-1',
-        districtId: 'dist-1',
-        startDate: DateTime(2026, 1, 1),
-        endDate: DateTime(2026, 6, 1),
-      );
+    test('getDashboardStats requires userId, accepts campaignType', () {
+      final result = db.getDashboardStats('user-1');
       expect(result, isA<Future>());
+
+      final result2 = db.getDashboardStats('user-1', campaignType: 'polio');
+      expect(result2, isA<Future>());
     });
   });
 

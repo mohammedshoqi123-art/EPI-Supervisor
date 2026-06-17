@@ -174,6 +174,29 @@ class AppLocalizations {
     'error.forbidden': 'ممنوع',
     'error.validation': 'بيانات غير صحيحة',
     'error.timeout': 'انتهت مهلة الطلب',
+
+    // ═══ Chat ═══
+    'chat.title': 'المحادثة الداخلية',
+    'chat.placeholder': 'اكتب رسالتك...',
+    'chat.send': 'إرسال',
+    'chat.empty': 'لا توجد رسائل بعد',
+    'chat.too_long': 'الرسالة طويلة جداً (الحد الأقصى 1000 حرف)',
+
+    // ═══ Profile ═══
+    'profile.edit': 'تعديل',
+    'profile.save': 'حفظ',
+    'profile.cancel': 'إلغاء',
+    'profile.full_name': 'الاسم الكامل',
+    'profile.phone': 'رقم الجوال',
+    'profile.national_id': 'رقم الهوية',
+    'profile.role': 'الدور',
+    'profile.governorate': 'المحافظة',
+    'profile.district': 'المديرية',
+
+    // ═══ Onboarding ═══
+    'onboarding.welcome': 'مرحباً بك في منصة مشرف EPI',
+    'onboarding.start': 'ابدأ الاستخدام',
+    'onboarding.skip': 'تخطي',
   };
 
   /// English strings (for future use)

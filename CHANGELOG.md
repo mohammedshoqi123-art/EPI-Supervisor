@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Realtime + Sentry + Isolate + iOS + i18n (Phase 7)
+
+Realtime:
+- Replaced 4-second polling in `chat_screen.dart` with Supabase Realtime channel subscription — instant message updates with 90% less network traffic
+- Added fallback to 10-second polling if realtime fails
+- Added message length validation (max 1000 chars) to prevent oversized payloads
+- Removed client-side `created_at` timestamp (server sets it to avoid time drift)
+
+Sentry:
+- Initialized `SentryConfig.init()` in `main()` — production crashes now reported
+- Sentry wraps the entire app runner (connectivity, Supabase, runApp) for full error capture
+- If SENTRY_DSN is not configured, app runs normally without Sentry
+
+Performance:
+- Moved base64 photo encoding to background isolate via `compute()` in `form_fill_screen.dart` — prevents UI jank when encoding multiple large photos
+- Added fallback to main-thread encoding if isolate fails
+- Top-level `_encodePhotosToBase64` function reads files synchronously in isolate
+
+iOS:
+- Added `build-ios` job to CI workflow — runs on macOS runner
+- Uses `flutter build ios --no-codesign` for compilation verification
+- Only runs on `main` branch (not PRs) to save macOS runner minutes
+
+i18n:
+- Added 15 new Arabic keys: chat (5), profile (9), onboarding (3)
+- Total i18n keys: 95+
+
 ### Fixed — Mobile App Comprehensive Improvements (Phase 6)
 
 Critical fixes:

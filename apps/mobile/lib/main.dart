@@ -30,10 +30,11 @@ final supabaseInitProvider =
 enum SupabaseInitState { initial, initializing, ready, failed }
 
 /// ═══ FIX: تهيئة Supabase مُزامنة قبل runApp لتجنب race condition ═══
+/// Sentry يتم تهيئته أولاً لالتقاط أي أخطاء أثناء الإقلاع.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ═══ الخطوة 1: تحميل .env أولاً ═══
+  // ═══ الخطوة 1: تحميل .env أولاً (يحتوي على SENTRY_DSN) ═══
   try {
     final dotenv = await EnvLoader.load();
     if (dotenv.isNotEmpty) {
@@ -46,29 +47,31 @@ Future<void> main() async {
     debugPrint('[Init] ⚠️ Env load failed: $e');
   }
 
-  // ═══ الخطوة 2: تهيئة Connectivity ═══
-  try {
-    await ConnectivityUtils.initialize().timeout(const Duration(seconds: 5));
-  } catch (e) {
-    debugPrint('[Init] ⚠️ Connectivity init failed: $e');
-  }
-
-  // ═══ الخطوة 3: تهيئة Supabase مُزامنة (await) قبل runApp ═══
-  // هذا يحل مشكلة Race Condition: AuthRepository لن يجد _client = null
-  await _initSupabase();
-
-  // ═══ الخطوة 4: تشغيل التطبيق بعد التهيئة ═══
-  runApp(const ProviderScope(child: EpiSupervisorApp()));
-
-  // ═══ الخطوة 5: تهيئة الخدمات غير الحرجة في الخلفية ═══
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
+  // ═══ الخطوة 2: تهيئة Sentry (يلتقط كل الأخطاء بعدها) ═══
+  await SentryConfig.init(appRunner: () async {
+    // ═══ الخطوة 3: تهيئة Connectivity ═══
     try {
-      if (SupabaseConfig.isConfigured) {
-        NotificationService.init(ApiClient());
-      }
+      await ConnectivityUtils.initialize().timeout(const Duration(seconds: 5));
     } catch (e) {
-      debugPrint('[Init] ⚠️ NotificationService init failed: $e');
+      debugPrint('[Init] ⚠️ Connectivity init failed: $e');
     }
+
+    // ═══ الخطوة 4: تهيئة Supabase مُزامنة (await) قبل runApp ═══
+    await _initSupabase();
+
+    // ═══ الخطوة 5: تشغيل التطبيق بعد التهيئة ═══
+    runApp(const ProviderScope(child: EpiSupervisorApp()));
+
+    // ═══ الخطوة 6: تهيئة الخدمات غير الحرجة في الخلفية ═══
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (SupabaseConfig.isConfigured) {
+          NotificationService.init(ApiClient());
+        }
+      } catch (e) {
+        debugPrint('[Init] ⚠️ NotificationService init failed: $e');
+      }
+    });
   });
 }
 

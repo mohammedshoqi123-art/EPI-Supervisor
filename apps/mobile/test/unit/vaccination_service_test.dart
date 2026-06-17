@@ -110,8 +110,8 @@ void main() {
       final penta4 = VaccinationService.allVaccines.firstWhere(
         (v) => v.id == 'penta4',
       );
-      // Should mention the 5 diseases
-      expect(penta4.description, contains('5'));
+      // Should mention the 5 diseases (خماسي)
+      expect(penta4.nameAr, contains('خماسي'));
     });
   });
 

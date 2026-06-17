@@ -159,6 +159,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         if (!notification.read) {
           await NotificationService.markAsRead(notification.id);
         }
+        // Fix: trigger rebuild to update the list from NotificationService
+        if (mounted) {
+          setState(() {});
+        }
       },
       child: ListTile(
         leading: Container(

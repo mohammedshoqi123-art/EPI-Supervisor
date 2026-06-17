@@ -42,7 +42,8 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     _typingAnimCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat();
+    );
+    // Fix: only start typing animation when loading — don't repeat infinitely
     _restore();
     _botEngine = BotEngine();
     _botEngine.initialize();
@@ -97,6 +98,8 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       _msgs.add(ChatMsg(role: 'user', content: text));
       _loading = true;
     });
+    // Start typing animation only during loading
+    _typingAnimCtrl.repeat();
     _scrollDown();
     unawaited(ChatStore.save(_msgs));
 
@@ -112,6 +115,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
               source: 'offline',
             ));
             _loading = false;
+      _typingAnimCtrl.stop();
           });
           unawaited(ChatStore.save(_msgs));
         } else if (_mounted) {
@@ -146,6 +150,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 _msgs.add(
                     ChatMsg(role: 'assistant', content: resp, source: 'zai'));
                 _loading = false;
+      _typingAnimCtrl.stop();
               });
               unawaited(ChatStore.save(_msgs));
             }
@@ -171,6 +176,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 _msgs.add(ChatMsg(
                     role: 'assistant', content: resp, source: 'openrouter'));
                 _loading = false;
+      _typingAnimCtrl.stop();
               });
               unawaited(ChatStore.save(_msgs));
             }
@@ -244,6 +250,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             );
           }
           _loading = false;
+      _typingAnimCtrl.stop();
         });
       } else {
         HapticFeedback.lightImpact();
@@ -256,6 +263,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             );
           }
           _loading = false;
+      _typingAnimCtrl.stop();
         });
       }
       unawaited(ChatStore.save(_msgs));
@@ -268,6 +276,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           source: 'error',
         ));
         _loading = false;
+      _typingAnimCtrl.stop();
       });
       unawaited(ChatStore.save(_msgs));
     } catch (e) {
@@ -291,6 +300,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
               source: 'offline',
             ));
             _loading = false;
+      _typingAnimCtrl.stop();
           });
         } else {
           setState(() {
@@ -300,6 +310,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
               source: 'offline',
             ));
             _loading = false;
+      _typingAnimCtrl.stop();
           });
         }
         unawaited(ChatStore.save(_msgs));
@@ -319,6 +330,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         _msgs.add(
             ChatMsg(role: 'assistant', content: userMessage, source: 'error'));
         _loading = false;
+      _typingAnimCtrl.stop();
       });
       unawaited(ChatStore.save(_msgs));
     }

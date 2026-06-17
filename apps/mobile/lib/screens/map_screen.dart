@@ -109,7 +109,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final subs = _getFilteredSubmissions();
     final points = subs
         .where((s) => s['gps_lat'] != null && s['gps_lng'] != null)
-        .map((s) => LatLng(s['gps_lat'] as double, s['gps_lng'] as double))
+        .map((s) => LatLng((s['gps_lat'] as num?)?.toDouble() ?? 0, (s['gps_lng'] as num?)?.toDouble() ?? 0))
         .toList();
 
     if (points.isEmpty) {
@@ -914,8 +914,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   Widget _buildSelectedPanel() {
     final sub = _selectedSubmission!;
-    final lat = sub['gps_lat'] as double?;
-    final lng = sub['gps_lng'] as double?;
+    final lat = (sub['gps_lat'] as num?)?.toDouble();
+    final lng = (sub['gps_lng'] as num?)?.toDouble();
     final status = sub['status'] as String? ?? 'draft';
     final role =
         (sub['profiles']?['role'] ?? sub['submitter_role'] ?? '').toString();
@@ -1090,8 +1090,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final govName =
         sub['governorates']?['name_ar'] ?? sub['governorate_name'] ?? '';
     final distName = sub['districts']?['name_ar'] ?? sub['district_name'] ?? '';
-    final lat = sub['gps_lat'] as double?;
-    final lng = sub['gps_lng'] as double?;
+    final lat = (sub['gps_lat'] as num?)?.toDouble();
+    final lng = (sub['gps_lng'] as num?)?.toDouble();
     final createdAt = sub['created_at'] as String? ?? '';
     final data = sub['data'] as Map<String, dynamic>? ?? {};
     final notes = sub['notes'] as String? ?? '';

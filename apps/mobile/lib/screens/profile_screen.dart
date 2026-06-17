@@ -359,8 +359,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         onPressed: () => context.pop(),
       ),
       actions: [
-        // Edit / Save toggle
-        if (_isEditing)
+        // Edit / Save / Cancel toggle
+        if (_isEditing) ...[
+          // Cancel button — exit edit mode without saving
+          IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
+            tooltip: 'إلغاء',
+            onPressed: _isSaving
+                ? null
+                : () {
+                    final authState = ref.read(authStateProvider).valueOrNull;
+                    if (authState != null) {
+                      _initControllers(authState);
+                    }
+                    setState(() => _isEditing = false);
+                  },
+          ),
+          // Save button
           IconButton(
             icon: _isSaving
                 ? const SizedBox(
@@ -372,11 +387,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     ),
                   )
                 : const Icon(Icons.check_rounded, color: Colors.white),
+            tooltip: 'حفظ',
             onPressed: _isSaving ? null : _saveProfile,
-          )
-        else
+          ),
+        ] else
           IconButton(
             icon: const Icon(Icons.edit_rounded, color: Colors.white),
+            tooltip: 'تعديل',
             onPressed: () => setState(() => _isEditing = true),
           ),
       ],
@@ -787,11 +804,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   String _getInitials(String name) {
-    if (name.isEmpty) return '?';
-    final parts = name.trim().split(' ');
+    if (name.trim().isEmpty) return '?';
+    // Filter out empty parts from multiple spaces
+    final parts = name.trim().split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
     if (parts.length >= 2) {
       return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
     }
-    return name[0].toUpperCase();
+    return parts.first[0].toUpperCase();
   }
 }

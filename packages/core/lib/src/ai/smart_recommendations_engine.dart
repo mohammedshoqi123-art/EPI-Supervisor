@@ -165,8 +165,9 @@ class SmartRecommendationsEngine {
       ));
     }
 
-    // Sudden drop detection
-    if (submissionsByDay.length >= 3) {
+    // Sudden drop detection — needs at least 4 data points to compare
+    // last day against average of previous 3 days.
+    if (submissionsByDay.length >= 4) {
       final previousAvg = submissionsByDay
           .sublist(submissionsByDay.length - 4, submissionsByDay.length - 1)
           .reduce((a, b) => a + b) / 3;

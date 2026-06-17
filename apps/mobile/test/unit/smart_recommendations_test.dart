@@ -42,10 +42,10 @@ void main() {
     });
 
     test('declining trend detected', () {
-      // Strongly declining trend: 100 -> 40 in 7 steps
-      // slope is negative, trend = slope / mean = negative
+      // Strongly declining trend: 100 -> 10 in 5 steps
+      // slope = -22.5, mean = 55, trend = -0.41 (which is < -0.2)
       final recs = SmartRecommendationsEngine.analyzeSubmissionTrends(
-        submissionsByDay: [100, 90, 80, 70, 60, 50, 40],
+        submissionsByDay: [100, 70, 40, 20, 10],
         expectedDailyTarget: 30,
       );
       // Should detect either declining trend or low performance (or both)

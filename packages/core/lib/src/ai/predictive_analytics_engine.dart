@@ -115,8 +115,12 @@ class PredictiveAnalyticsEngine {
     final slope = ssXX == 0 ? 0.0 : ssXY / ssXX;
     final intercept = yMean - slope * xMean;
 
-    // R² for confidence
-    final r2 = ssYY == 0 ? 1.0 : (1 - (ssXY * ssXY) / (ssXX * ssYY)).clamp(0.0, 1.0).toDouble();
+    // R² (coefficient of determination) = correlation coefficient squared
+    // For perfect linear data, R² should be 1.0.
+    // r = SSXY / sqrt(SSXX * SSYY), R² = r² = SSXY² / (SSXX * SSYY)
+    final r2 = (ssXX == 0 || ssYY == 0)
+        ? 1.0  // constant data — perfect fit (no variance to explain)
+        : ((ssXY * ssXY) / (ssXX * ssYY)).clamp(0.0, 1.0).toDouble();
 
     final predictions = List<double>.generate(periods, (i) {
       return slope * (n + i) + intercept;

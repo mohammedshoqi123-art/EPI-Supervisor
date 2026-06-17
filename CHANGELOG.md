@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — AI Development (Phase 3)
+- **`SmartRecommendationsEngine`** — new AI engine that analyzes system data and generates intelligent recommendations for administrative decisions:
+  - `analyzeSubmissionTrends()` — detects low performance, declining trends, sudden drops, and high performers
+  - `predictShortage()` — predicts vaccine shortages based on consumption patterns and safety stock levels
+  - `analyzeCoverageGaps()` — identifies critical gaps (<50%), below-target areas (50-90%), and top performers
+  - `prioritizeRecommendations()` — sorts by priority (critical > high > medium > low > informational), then impact, then confidence
+  - `generateExecutiveSummary()` — produces Arabic executive summary with counts by priority
+  - `Recommendation` model with confidence scoring, action items, metadata, and JSON serialization
+- **`PredictiveAnalyticsEngine`** — new AI engine using statistical models for forecasting:
+  - `predictLinear()` — linear regression for trending data
+  - `predictMovingAverage()` — moving average for stable data
+  - `predictExponentialSmoothing()` — exponential smoothing for noisy trending data
+  - `predictBestFit()` — auto-selects the best model based on confidence
+  - `detectSeasonality()` — detects seasonal patterns (e.g., weekly cycles)
+  - `evaluateAccuracy()` — hold-out validation with MAE, RMSE, MAPE, R²
+  - `generateForecastReport()` — Arabic forecast report with confidence warnings
+  - `PredictionResult` and `PredictionAccuracy` models with JSON serialization
+
+### Added — Tests (Phase 3)
+- **`smart_recommendations_test.dart`** — 50+ tests covering all SmartRecommendationsEngine methods: analyzeSubmissionTrends (empty, low perf, declining, sudden drop, high perf), predictShortage (empty, zero stock, predicted, critical, ample, vaccine name), analyzeCoverageGaps (empty, critical, below target, top performers, mixed), prioritizeRecommendations ordering, generateExecutiveSummary, Recommendation confidence calculation
+- **`predictive_analytics_test.dart`** — 50+ tests covering all PredictiveAnalyticsEngine methods: predictLinear (empty, single, perfect linear, constant, negative clamping, metadata), predictMovingAverage (empty, stable, window, confidence), predictExponentialSmoothing (empty, constant, alpha sensitivity, metadata), predictBestFit (trending, stable, <2 points, model selection), detectSeasonality (insufficient data, weekly pattern, cycle 0, all-equal), evaluateAccuracy (insufficient, linear, MAPE, quality score, quality label), generateForecastReport (empty, metric name, confidence, warnings, model label), PredictionResult/PredictionAccuracy serialization
+
+### Changed — CI (Phase 3)
+- Raised coverage threshold from 5% to 10% (hard fail) after adding 190+ new tests in Phase 2.
+
 ### Added
 - `maxAgeMonths` field on `Vaccine` model with `canBeAdministeredAtAge()` and `isOverdueAtAge()` helpers — enforces medical age limits programmatically (BCG ≤ 12mo, Rota ≤ 24mo, most others ≤ 60mo, Td ≤ 84mo).
 - Migration `034_submission_photos_visibility.sql` — allows supervisors (admin/central/governorate/district) to view submission photos in their region for oversight.

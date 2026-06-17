@@ -33,7 +33,7 @@ Future<Map<String, String>> loadEnvFile() async {
       }
 
       if (kDebugMode) {
-        print('📄 .env loaded from $path: ${env.length} variable(s)');
+        debugPrint('📄 .env loaded from $path: ${env.length} variable(s)');
       }
       return env;
     } catch (e) {
@@ -42,6 +42,6 @@ Future<Map<String, String>> loadEnvFile() async {
   }
 
   if (kDebugMode)
-    print('ℹ️ No .env file found — using compile-time or empty values');
+    debugPrint('ℹ️ No .env file found — using compile-time or empty values');
   return {};
 }

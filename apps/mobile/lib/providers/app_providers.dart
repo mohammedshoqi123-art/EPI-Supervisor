@@ -18,10 +18,6 @@ final analyticsServiceProvider = Provider<AnalyticsService>(
   (ref) => AnalyticsService(ref.read(apiClientProvider)),
 );
 
-final geminiServiceProvider = Provider<GeminiService>(
-  (ref) => GeminiService(ref.read(apiClientProvider)),
-);
-
 // ─── Offline / Sync ───────────────────────────────────────────────────────────
 
 /// ═══ FIX: Robust offline manager initialization with connectivity bridge ═══
@@ -317,7 +313,7 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
       _ref.invalidate(shortagesProvider);
 
       if (kDebugMode) {
-        print(
+        debugPrint(
             '[CampaignNotifier] Campaign changed to ${campaign.value} - Providers invalidated');
       }
     } catch (e) {

@@ -1,0 +1,103 @@
+version: 2
+updates:
+  # Dart/Flutter dependencies (mobile + packages)
+  - package-ecosystem: "pub"
+    directory: "/apps/mobile"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Aden"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "flutter"
+    commit-message:
+      prefix: "deps(mobile)"
+    groups:
+      flutter-framework:
+        patterns:
+          - "flutter*"
+          - "dart:*"
+      state-management:
+        patterns:
+          - "flutter_riverpod"
+          - "riverpod*"
+      supabase:
+        patterns:
+          - "supabase*"
+
+  - package-ecosystem: "pub"
+    directory: "/packages/core"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "core"
+    commit-message:
+      prefix: "deps(core)"
+
+  - package-ecosystem: "pub"
+    directory: "/packages/shared"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "shared"
+    commit-message:
+      prefix: "deps(shared)"
+
+  - package-ecosystem: "pub"
+    directory: "/packages/features"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "features"
+    commit-message:
+      prefix: "deps(features)"
+
+  # npm dependencies (admin web)
+  - package-ecosystem: "npm"
+    directory: "/apps/admin-web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Aden"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "admin-web"
+    commit-message:
+      prefix: "deps(admin-web)"
+    groups:
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+      react-ecosystem:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "react-router-dom"
+          - "react-hook-form"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "deps(ci)"

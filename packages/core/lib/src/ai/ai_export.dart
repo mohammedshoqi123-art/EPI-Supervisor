@@ -10,18 +10,11 @@ export 'function_calling/function_calling_engine.dart';
 // Enhanced Local AI
 export 'enhanced_local_ai.dart';
 
-// Smart Analytics
-export 'smart_analytics.dart';
-
-// Unified Router
-export 'ai_router.dart';
-
 // ═══ NLP Engine (الكامل من EPI-Bot) ═══
 export 'epi_nlp_engine.dart';
 
 // ═══ قاعدة المعرفة ═══
 export 'epi_knowledge_base.dart';
-export 'epi_knowledge_base_v2.dart';
 
 // ═══ مدير سياق الطفل ═══
 export 'child_context_manager.dart';
@@ -36,7 +29,6 @@ export 'ai_router_v2.dart';
 export 'zai_service.dart';
 export 'openrouter_service.dart';
 export 'smart_alerts_engine.dart';
-export 'smart_analytics.dart';
 
 // ═══ Bot Engine (EPI-Bot Integration) ═══
 export 'bot/bot_export.dart';

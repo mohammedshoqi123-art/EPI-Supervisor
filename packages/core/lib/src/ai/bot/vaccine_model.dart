@@ -12,6 +12,7 @@ class Vaccine {
   final String description;
   final int dueWeeks; // weeks after birth
   final int dueMonths; // months after birth
+  final int maxAgeMonths; // maximum age in months (0 = no limit)
   final String doseNumber; // الجرعة الأولى، الثانية، etc.
   final String route; // intramuscular, oral, subcutaneous
   final String site; // injection site
@@ -28,6 +29,7 @@ class Vaccine {
     required this.description,
     this.dueWeeks = 0,
     this.dueMonths = 0,
+    this.maxAgeMonths = 0,
     required this.doseNumber,
     required this.route,
     required this.site,
@@ -37,6 +39,26 @@ class Vaccine {
     this.contraindications = const [],
     this.notes = '',
   });
+
+  /// Returns true if the vaccine can be administered at the given age.
+  /// Age is provided in months (converted from weeks if needed).
+  /// If [maxAgeMonths] is 0, there is no upper age limit.
+  bool canBeAdministeredAtAge({int? ageWeeks, int? ageMonths}) {
+    final months = ageMonths ?? ((ageWeeks ?? 0) ~/ 4);
+    if (maxAgeMonths > 0 && months > maxAgeMonths) {
+      return false;
+    }
+    return true;
+  }
+
+  /// Returns true if the vaccine is overdue at the given age
+  /// (age is past due date but within max age).
+  bool isOverdueAtAge({int? ageWeeks, int? ageMonths}) {
+    final weeks = ageWeeks ?? 0;
+    final months = ageMonths ?? 0;
+    final isPastDue = dueMonths > 0 ? months >= dueMonths : weeks >= dueWeeks;
+    return isPastDue && canBeAdministeredAtAge(ageWeeks: weeks, ageMonths: months);
+  }
 }
 
 class ChildRecord {

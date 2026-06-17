@@ -54,7 +54,7 @@ class SyncService {
       if (cache != null) {
         await cache.invalidateAll();
         if (kDebugMode)
-          print(
+          debugPrint(
             '[SyncService] All caches cleared — next fetch will get fresh data',
           );
       }
@@ -97,7 +97,7 @@ class SyncService {
       // ═══ FIX: إذا في sync شغال، ننتظره بدل ما نتجاوزه ═══
       if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
         if (kDebugMode)
-          print('[SyncService] Waiting for active sync ($trigger)');
+          debugPrint('[SyncService] Waiting for active sync ($trigger)');
         await _activeCompleter!.future;
       }
       return;
@@ -108,7 +108,7 @@ class SyncService {
     if (pending == 0) return;
 
     if (kDebugMode)
-      print('[SyncService] Triggered by $trigger ($pending items)');
+      debugPrint('[SyncService] Triggered by $trigger ($pending items)');
     await sync();
   }
 
@@ -122,7 +122,7 @@ class SyncService {
 
       if (lockAge > _staleLockSeconds) {
         if (kDebugMode)
-          print('[SyncService] Stale lock (${lockAge}s), resetting');
+          debugPrint('[SyncService] Stale lock (${lockAge}s), resetting');
         _isSyncing = false;
         _activeCompleter?.complete(SyncCycleResult.empty());
         _activeCompleter = null;
@@ -167,7 +167,7 @@ class SyncService {
         final batch = uniqueItems.sublist(offset, batchEnd);
 
         if (kDebugMode)
-          print(
+          debugPrint(
             '[SyncService] Batch: ${batch.length} items ($offset/${uniqueItems.length})',
           );
 
@@ -189,7 +189,7 @@ class SyncService {
           final offlineId = item['offline_id'] as String? ?? '';
           await _offline.removeFromQueue(offlineId);
           if (kDebugMode)
-            print('[SyncService] Archived failed item: $offlineId');
+            debugPrint('[SyncService] Archived failed item: $offlineId');
           result.archived++;
           result.errors.add(
             SyncError(
@@ -325,7 +325,7 @@ class SyncService {
           }
 
           if (kDebugMode)
-            print(
+            debugPrint(
               '[SyncService] Invalidated $invalidated cache prefixes (submissions + analytics)',
             );
         }
@@ -364,7 +364,7 @@ class SyncService {
     }
 
     if (kDebugMode) {
-      print(
+      debugPrint(
         '[SyncService] Done: +${result.synced} dup=${result.duplicates} '
         'conf=${result.conflicts} fail=${result.failed} archive=${result.archived} '
         'remain=${_offline.pendingCount}',
@@ -402,7 +402,7 @@ class SyncService {
         );
       }
       if (kDebugMode)
-        print('[SyncService] Forms cache warmed up for all campaign types');
+        debugPrint('[SyncService] Forms cache warmed up for all campaign types');
     } catch (e) {
       if (kDebugMode) print('[SyncService] Warm-up failed: $e');
     }

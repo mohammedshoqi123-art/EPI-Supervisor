@@ -443,7 +443,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           try {
             final result = await syncService.sync();
             if (kDebugMode) {
-              print(
+              debugPrint(
                 '[FormSubmit] Immediate sync: ${result.synced} synced, ${result.failed} failed',
               );
             }
@@ -454,7 +454,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
             }
           } catch (e) {
             if (kDebugMode)
-              print('[FormSubmit] Immediate sync failed (will retry): $e');
+              debugPrint('[FormSubmit] Immediate sync failed (will retry): $e');
           }
         }).catchError((e) {
           if (kDebugMode) print('[FormSubmit] SyncService not available: $e');

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import '../huggingface/hf_service.dart';
 
 /// Document chunk for the knowledge base
@@ -200,7 +201,7 @@ class RagPipeline {
         }
       } catch (e) {
         // If embedding fails, skip this batch
-        print('Embedding batch $i-$end failed: $e');
+        debugPrint('Embedding batch $i-$end failed: $e');
       }
 
       // Small delay between batches

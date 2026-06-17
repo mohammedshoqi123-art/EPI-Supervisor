@@ -44,7 +44,7 @@ class OfflineManager {
         _connectivityController.add(_isOnline);
       }
       if (kDebugMode)
-        print(
+        debugPrint(
           '[OfflineManager] Connectivity changed: ${online ? "online" : "offline"}',
         );
     }
@@ -94,7 +94,7 @@ class OfflineManager {
 
     _initialized = true;
     if (kDebugMode)
-      print(
+      debugPrint(
         '[OfflineManager] Initialized. Pending items: ${_getQueue().length}',
       );
   }
@@ -148,7 +148,7 @@ class OfflineManager {
         final encrypted = _encryption.encrypt(jsonEncode(queue));
         await _safeBox?.put(_syncQueueKey, encrypted);
         if (kDebugMode)
-          print('[OfflineManager] Recovered $recovered stuck syncing items');
+          debugPrint('[OfflineManager] Recovered $recovered stuck syncing items');
       }
     } catch (e) {
       if (kDebugMode) print('[OfflineManager] Recovery check failed: $e');
@@ -426,7 +426,7 @@ class OfflineManager {
       final duplicates = results.where((r) => r.isDuplicate).length;
       final conflicts = results.where((r) => r.isConflict).length;
       final errors = results.where((r) => r.isError).length;
-      print(
+      debugPrint(
         'Sync summary: $success ok, $duplicates dup, $conflicts conflict, $errors error',
       );
     }
@@ -524,11 +524,11 @@ class OfflineManager {
         // 3. Both failed — data is corrupted or key changed.
         //    Clear it so we start fresh, but LOG the issue.
         if (kDebugMode) {
-          print(
+          debugPrint(
             '[OfflineManager] ⚠️ Cache corrupted or encryption key changed!',
           );
-          print('[OfflineManager]    Decrypt error: $decryptError');
-          print(
+          debugPrint('[OfflineManager]    Decrypt error: $decryptError');
+          debugPrint(
             '[OfflineManager]    Clearing cache — will re-fetch on next request.',
           );
         }
@@ -560,7 +560,7 @@ class OfflineManager {
       // Only discard data older than the hard retention limit (30 days)
       if (age > AppConfig.maxOfflineRetention) {
         if (kDebugMode) {
-          print(
+          debugPrint(
             '[OfflineManager] Cache expired (>${AppConfig.maxOfflineRetention.inDays}d) for $key — discarded',
           );
         }

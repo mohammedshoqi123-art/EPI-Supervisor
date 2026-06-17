@@ -8,6 +8,7 @@ import { CampaignProvider } from '@/lib/campaign-context'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import App from './App'
 import './index.css'
+import './i18n'
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -6,12 +6,11 @@ import 'package:epi_core/src/errors/app_exceptions.dart';
 /// ═══════════════════════════════════════════════════════════════
 ///  اختبارات DatabaseService —契约 + parameter validation
 ///
-///  ملاحظة: هذه الاختبارات تتحقق من:
-///  1. أن كل الدوال موجودة وتقبل المعاملات الصحيحة
-///  2. أن قواعد التحقق (validation rules) تعمل
-///  3. أن الاتفاقيات (contracts) محفوظة (e.g. soft-delete)
-///
-///  اختبارات الـ live DB تتم في integration tests.
+///  These are CONTRACT tests — they verify that methods exist with the
+///  correct signatures and accept the documented parameters. They do
+///  NOT call Supabase (which would throw NetworkException without
+///  configuration). We use returnsNormally to verify the method can
+///  be called without throwing synchronously.
 /// ═══════════════════════════════════════════════════════════════
 
 void main() {
@@ -28,9 +27,7 @@ void main() {
       expect(db, isNotNull);
     });
 
-    test('stores ApiClient reference', () {
-      // No public getter, but instantiating with different ApiClients
-      // produces independent instances.
+    test('stores ApiClient reference (independent instances)', () {
       final db2 = DatabaseService(ApiClient());
       expect(identical(db, db2), isFalse);
     });
@@ -41,10 +38,7 @@ void main() {
     /// or removed, the test will fail to compile.
 
     test('getUsers method exists with correct signature', () {
-      expect(
-        db.getUsers,
-        isA<Function>(),
-      );
+      expect(db.getUsers, isA<Function>());
     });
 
     test('getUserProfile method exists', () {
@@ -156,69 +150,127 @@ void main() {
     });
   });
 
-  group('DatabaseService — getUsers parameter validation', () {
-    test('getUsers with no filters returns Future', () {
-      // Without Supabase configured, this will throw NetworkException
-      // or similar. The test verifies the function returns a Future.
-      final result = db.getUsers();
-      expect(result, isA<Future>());
+  group('DatabaseService — parameter validation (returnsNormally)', () {
+    /// Verify methods can be CALLED with the documented parameters
+    /// without throwing synchronously. They will throw asynchronously
+    /// (NetworkException) when Supabase is not configured, but that's
+    /// expected — we're testing the signature, not the network call.
+
+    test('getUsers with no filters', () {
+      expect(() => db.getUsers(), returnsNormally);
     });
 
-    test('getUsers with role filter returns Future', () {
-      final result = db.getUsers(role: 'admin');
-      expect(result, isA<Future>());
+    test('getUsers with role filter', () {
+      expect(() => db.getUsers(role: 'admin'), returnsNormally);
     });
 
-    test('getUsers with governorateId filter returns Future', () {
-      final result = db.getUsers(governorateId: 'gov-1');
-      expect(result, isA<Future>());
+    test('getUsers with governorateId filter', () {
+      expect(() => db.getUsers(governorateId: 'gov-1'), returnsNormally);
     });
 
-    test('getUsers with limit and offset returns Future', () {
-      final result = db.getUsers(limit: 10, offset: 20);
-      expect(result, isA<Future>());
-    });
-  });
-
-  group('DatabaseService — getDistricts parameter validation', () {
-    test('getDistricts requires governorateId', () {
-      final result = db.getDistricts(governorateId: 'gov-1');
-      expect(result, isA<Future>());
-    });
-  });
-
-  group('DatabaseService — getHealthFacilities parameter validation', () {
-    test('getHealthFacilities accepts districtId', () {
-      final result = db.getHealthFacilities(
-        districtId: 'dist-1',
-      );
-      expect(result, isA<Future>());
-    });
-  });
-
-  group('DatabaseService — getForms parameter validation', () {
-    test('getForms accepts activeOnly filter', () {
-      final result = db.getForms(activeOnly: true);
-      expect(result, isA<Future>());
+    test('getUsers with limit and offset', () {
+      expect(() => db.getUsers(limit: 10, offset: 20), returnsNormally);
     });
 
-    test('getForms accepts campaignType filter', () {
-      final result = db.getForms(campaignType: 'polio');
-      expect(result, isA<Future>());
+    test('getDistricts with governorateId', () {
+      expect(() => db.getDistricts(governorateId: 'gov-1'), returnsNormally);
     });
-  });
 
-  group('DatabaseService — getSubmissions parameter validation', () {
+    test('getHealthFacilities with districtId', () {
+      expect(() => db.getHealthFacilities(districtId: 'dist-1'), returnsNormally);
+    });
+
+    test('getForms with activeOnly filter', () {
+      expect(() => db.getForms(activeOnly: true), returnsNormally);
+    });
+
+    test('getForms with campaignType filter', () {
+      expect(() => db.getForms(campaignType: 'polio'), returnsNormally);
+    });
+
     test('getSubmissions accepts all filter types', () {
-      final result = db.getSubmissions(
-        formId: 'form-1',
-        governorateId: 'gov-1',
-        districtId: 'dist-1',
-        status: 'submitted',
-        limit: 50,
-        offset: 0,
+      expect(
+        () => db.getSubmissions(
+          formId: 'form-1',
+          governorateId: 'gov-1',
+          districtId: 'dist-1',
+          status: 'submitted',
+          limit: 50,
+          offset: 0,
+        ),
+        returnsNormally,
       );
-      expect(result, isA<Future>());
+    });
+
+    test('updateSubmissionStatus accepts reviewedBy and reviewNotes', () {
+      expect(
+        () => db.updateSubmissionStatus(
+          'sub-1',
+          'approved',
+          reviewedBy: 'user-1',
+          reviewNotes: 'Looks good',
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('getShortages accepts severity and isResolved filters', () {
+      expect(
+        () => db.getShortages(
+          governorateId: 'gov-1',
+          districtId: 'dist-1',
+          severity: 'critical',
+          isResolved: false,
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('getAuditLogs accepts userId, action, table filters', () {
+      expect(
+        () => db.getAuditLogs(
+          userId: 'user-1',
+          action: 'create',
+          tableName: 'form_submissions',
+          limit: 100,
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('getNotifications accepts unreadOnly filter', () {
+      expect(
+        () => db.getNotifications(unreadOnly: true, limit: 20),
+        returnsNormally,
+      );
+    });
+
+    test('getUnreadNotificationCount can be called', () {
+      expect(() => db.getUnreadNotificationCount(), returnsNormally);
+    });
+
+    test('getAppSettings accepts optional key filter', () {
+      expect(() => db.getAppSettings(), returnsNormally);
+      expect(() => db.getAppSettings(key: 'ai_enabled'), returnsNormally);
+    });
+
+    test('updateAppSetting accepts key and value', () {
+      expect(() => db.updateAppSetting('ai_enabled', true), returnsNormally);
+    });
+
+    test('getDashboardStats requires userId, accepts campaignType', () {
+      expect(() => db.getDashboardStats('user-1'), returnsNormally);
+      expect(() => db.getDashboardStats('user-1', campaignType: 'polio'), returnsNormally);
+    });
+
+    test('getGovernorateReport accepts date range', () {
+      expect(
+        () => db.getGovernorateReport(
+          startDate: DateTime(2026, 1, 1),
+          endDate: DateTime(2026, 6, 1),
+        ),
+        returnsNormally,
+      );
     });
   });
 
@@ -231,87 +283,6 @@ void main() {
       for (final status in validStatuses) {
         expect(status, isA<String>());
       }
-    });
-
-    test('updateSubmissionStatus accepts reviewedBy and reviewNotes', () {
-      final result = db.updateSubmissionStatus(
-        'sub-1',
-        'approved',
-        reviewedBy: 'user-1',
-        reviewNotes: 'Looks good',
-      );
-      expect(result, isA<Future>());
-    });
-  });
-
-  group('DatabaseService — shortages parameter validation', () {
-    test('getShortages accepts severity and isResolved filters', () {
-      final result = db.getShortages(
-        governorateId: 'gov-1',
-        districtId: 'dist-1',
-        severity: 'critical',
-        isResolved: false,
-      );
-      expect(result, isA<Future>());
-    });
-  });
-
-  group('DatabaseService — audit logs parameter validation', () {
-    test('getAuditLogs accepts userId, action, table filters', () {
-      final result = db.getAuditLogs(
-        userId: 'user-1',
-        action: 'create',
-        tableName: 'form_submissions',
-        limit: 100,
-      );
-      expect(result, isA<Future>());
-    });
-  });
-
-  group('DatabaseService — notifications parameter validation', () {
-    test('getNotifications accepts unreadOnly filter', () {
-      final result = db.getNotifications(unreadOnly: true, limit: 20);
-      expect(result, isA<Future>());
-    });
-
-    test('getUnreadNotificationCount returns Future<int>', () {
-      final result = db.getUnreadNotificationCount();
-      expect(result, isA<Future<int>>());
-    });
-  });
-
-  group('DatabaseService — app settings', () {
-    test('getAppSettings accepts optional key filter', () {
-      final result = db.getAppSettings();
-      expect(result, isA<Future>());
-
-      final result2 = db.getAppSettings(key: 'ai_enabled');
-      expect(result2, isA<Future>());
-    });
-
-    test('updateAppSetting accepts key and value', () {
-      final result = db.updateAppSetting('ai_enabled', true);
-      expect(result, isA<Future>());
-    });
-  });
-
-  group('DatabaseService — dashboard stats', () {
-    test('getDashboardStats requires userId, accepts campaignType', () {
-      final result = db.getDashboardStats('user-1');
-      expect(result, isA<Future>());
-
-      final result2 = db.getDashboardStats('user-1', campaignType: 'polio');
-      expect(result2, isA<Future>());
-    });
-  });
-
-  group('DatabaseService — governorate report', () {
-    test('getGovernorateReport accepts date range', () {
-      final result = db.getGovernorateReport(
-        startDate: DateTime(2026, 1, 1),
-        endDate: DateTime(2026, 6, 1),
-      );
-      expect(result, isA<Future>());
     });
   });
 
@@ -357,13 +328,9 @@ void main() {
   group('DatabaseService — soft delete contract', () {
     /// Document that DatabaseService does NOT expose a hard delete method
     /// for user-modifiable entities. Soft-delete via `deleted_at IS NULL`
-    /// is the standard pattern. We verify this by reflection: the type
-    /// should not have deleteUser or deleteForm methods.
+    /// is the standard pattern.
 
     test('DatabaseService does not expose deleteUser', () {
-      // Use dart:mirrors would be ideal, but Flutter disables mirrors.
-      // Instead, verify that calling an undefined method throws at runtime.
-      // ignore: avoid_dynamic_calls
       bool hasMethod;
       try {
         // ignore: avoid_dynamic_calls

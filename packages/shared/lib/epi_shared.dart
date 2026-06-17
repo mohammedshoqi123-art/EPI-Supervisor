@@ -7,6 +7,9 @@ export 'src/theme/app_theme.dart';
 // ─── Constants ────────────────────────────────────────────────────────────
 export 'src/constants/app_strings.dart';
 
+// ─── i18n ─────────────────────────────────────────────────────────────────
+export 'src/i18n/app_localizations.dart';
+
 // ─── Extensions ───────────────────────────────────────────────────────────
 export 'src/extensions/string_extensions.dart';
 export 'src/extensions/context_extensions.dart';

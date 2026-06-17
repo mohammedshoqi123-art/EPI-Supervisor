@@ -366,7 +366,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                       ),
                                     ],
                                   ),
-                                  child: ElevatedButton(
+                                  child: Semantics(
+                                    button: true,
+                                    enabled: !_isLoading,
+                                    label: _isLoading ? 'دخول — جاري التحميل' : 'دخول',
+                                    hint: 'اضغط لتسجيل الدخول',
+                                    child: ElevatedButton(
                                     onPressed: _isLoading ? null : _login,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.transparent,
@@ -405,6 +410,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                               ),
                                             ],
                                           ),
+                                  ),
                                   ),
                                 ),
                               ),

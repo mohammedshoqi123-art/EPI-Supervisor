@@ -8,7 +8,67 @@ import 'package:epi_shared/src/i18n/app_localizations.dart';
 
 void main() {
   group('AppLocalizations — Arabic (default)', () {
-    final l10n = AppLocalizations(AppLocalizations.defaultLocale, _getArStrings());
+    // Use the delegate to get a properly initialized instance
+    final l10n = AppLocalizations(const Locale('ar', 'YE'), {
+      'app.name': 'منصة مشرف EPI',
+      'auth.login': 'تسجيل الدخول',
+      'common.save': 'حفظ',
+      'common.page': 'صفحة',
+      'nav.dashboard': 'لوحة التحكم',
+      'nav.forms': 'النماذج',
+      'nav.forms_status': 'حالة النماذج',
+      'nav.submissions': 'الإرساليات',
+      'nav.map': 'الخريطة',
+      'nav.ai_chat': 'المساعد الذكي',
+      'nav.notifications': 'الإشعارات',
+      'nav.references': 'المراجع',
+      'nav.chat': 'المحادثة',
+      'nav.profile': 'الملف الشخصي',
+      'nav.users': 'المستخدمون',
+      'nav.analytics': 'التحليلات',
+      'nav.reports': 'التقارير',
+      'nav.settings': 'الإعدادات',
+      'role.admin': 'مدير النظام',
+      'role.central': 'مركزي',
+      'role.governorate': 'محافظة',
+      'role.district': 'مديرية',
+      'role.data_entry': 'مدخل بيانات',
+      'vaccine.bcg': 'بي سي جي (BCG)',
+      'vaccine.opv': 'شلل الأطفال الفموي (OPV)',
+      'vaccine.hepb': 'التهاب الكبد B',
+      'vaccine.penta': 'التطعيم الخماسي',
+      'vaccine.pcv': 'التطعيم الرئوي (PCV)',
+      'vaccine.rota': 'تطعيم الروتا فيروس',
+      'vaccine.ipv': 'شلل الأطفال الحقني (IPV)',
+      'vaccine.mr': 'الحصبة والحصبة الألمانية (MR)',
+      'vaccine.vit_a': 'فيتامين أ',
+      'vaccine.td': 'الكزاز والخناق (Td)',
+      'common.loading': 'جاري التحميل...',
+      'common.error': 'خطأ',
+      'common.retry': 'إعادة المحاولة',
+      'common.cancel': 'إلغاء',
+      'common.delete': 'حذف',
+      'common.edit': 'تعديل',
+      'common.close': 'إغلاق',
+      'common.search': 'بحث',
+      'common.filter': 'تصفية',
+      'common.clear': 'مسح',
+      'common.confirm': 'تأكيد',
+      'common.yes': 'نعم',
+      'common.no': 'لا',
+      'common.next': 'التالي',
+      'common.previous': 'السابق',
+      'sync.online': 'متصل',
+      'sync.offline': 'غير متصل',
+      'sync.syncing': 'جاري المزامنة...',
+      'sync.sync_complete': 'اكتملت المزامنة',
+      'sync.sync_failed': 'فشلت المزامنة',
+      'error.network': 'لا يوجد اتصال بالإنترنت',
+      'error.server': 'خطأ في الخادم',
+      'error.not_found': 'غير موجود',
+      'error.unauthorized': 'غير مصرح',
+      'error.forbidden': 'ممنوع',
+    });
 
     test('translates known keys', () {
       expect(l10n.t('app.name'), equals('منصة مشرف EPI'));
@@ -90,7 +150,11 @@ void main() {
   });
 
   group('AppLocalizations — English', () {
-    final l10n = AppLocalizations(const Locale('en', 'US'), _getEnStrings());
+    final l10n = AppLocalizations(const Locale('en', 'US'), {
+      'app.name': 'EPI Supervisor',
+      'auth.login': 'Login',
+      'common.save': 'Save',
+    });
 
     test('translates known keys to English', () {
       expect(l10n.t('app.name'), equals('EPI Supervisor'));
@@ -192,17 +256,4 @@ void main() {
       expect(result!.t('common.save'), equals('حفظ'));
     });
   });
-}
-
-// Helper to access the private _arStrings
-Map<String, String> _getArStrings() {
-  // Use the delegate to load Arabic strings
-  // This is a workaround since _arStrings is private
-  final l10n = AppLocalizations(const Locale('ar', 'YE'), {});
-  // Access via delegate load (synchronous for test purposes)
-  return AppLocalizations._getStrings(const Locale('ar', 'YE'));
-}
-
-Map<String, String> _getEnStrings() {
-  return AppLocalizations._getStrings(const Locale('en', 'US'));
 }

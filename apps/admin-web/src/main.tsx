@@ -8,6 +8,7 @@ import { CampaignProvider } from '@/lib/campaign-context'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import App from './App'
 import './index.css'
+import './i18n' // Initialize i18n
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,9 +22,7 @@ const queryClient = new QueryClient({
 
 // Use Vite base URL for GitHub Pages deployment
 const getBasename = () => {
-  // import.meta.env.BASE_URL is '/' in dev, '/EPI-Supervisor/' in prod
   const base = import.meta.env.BASE_URL
-  // Remove trailing slash for react-router
   return base === '/' ? '' : base.replace(/\/$/, '')
 }
 

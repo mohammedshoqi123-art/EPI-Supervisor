@@ -17,23 +17,30 @@ class EpiSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      textDirection: TextDirection.rtl,
-      decoration: InputDecoration(
-        hintText: hint ?? 'بحث...',
-        prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
-        suffixIcon: controller?.text.isNotEmpty == true
-            ? IconButton(
-                icon: const Icon(Icons.clear, color: AppTheme.textSecondary),
-                onPressed: () {
-                  controller?.clear();
-                  onChanged?.call('');
-                  onClear?.call();
-                },
-              )
-            : null,
+    final effectiveHint = hint ?? 'بحث...';
+    return Semantics(
+      textField: true,
+      label: 'حقل البحث',
+      hint: effectiveHint,
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        textDirection: TextDirection.rtl,
+        decoration: InputDecoration(
+          hintText: effectiveHint,
+          prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
+          suffixIcon: controller?.text.isNotEmpty == true
+              ? IconButton(
+                  icon: const Icon(Icons.clear, color: AppTheme.textSecondary),
+                  tooltip: 'مسح البحث',
+                  onPressed: () {
+                    controller?.clear();
+                    onChanged?.call('');
+                    onClear?.call();
+                  },
+                )
+              : null,
+        ),
       ),
     );
   }

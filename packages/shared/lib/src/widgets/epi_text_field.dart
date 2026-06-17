@@ -38,23 +38,34 @@ class EpiTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      onChanged: onChanged,
-      validator: validator,
-      keyboardType: keyboardType,
-      obscureText: obscureText,
+    // Accessibility: expose label, hint, and disabled state to screen readers.
+    // For password fields, announce that input is obscured.
+    final semanticLabel = label ?? hint ?? 'حقل نص';
+    final obscuredHint = obscureText ? ' (نص مخفي)' : '';
+
+    return Semantics(
+      textField: true,
       enabled: enabled,
-      readOnly: readOnly,
-      onTap: onTap,
-      maxLines: maxLines,
-      maxLength: maxLength,
-      textDirection: textDirection ?? TextDirection.rtl,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: prefixIcon != null ? Icon(prefixIcon) : null,
-        suffixIcon: suffix,
+      label: '$semanticLabel$obscuredHint',
+      hint: hint,
+      child: TextFormField(
+        controller: controller,
+        onChanged: onChanged,
+        validator: validator,
+        keyboardType: keyboardType,
+        obscureText: obscureText,
+        enabled: enabled,
+        readOnly: readOnly,
+        onTap: onTap,
+        maxLines: maxLines,
+        maxLength: maxLength,
+        textDirection: textDirection ?? TextDirection.rtl,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: prefixIcon != null ? Icon(prefixIcon) : null,
+          suffixIcon: suffix,
+        ),
       ),
     );
   }

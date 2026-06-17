@@ -25,81 +25,93 @@ class EpiStatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cardColor = color ?? AppTheme.primaryColor;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: cardColor.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: cardColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+    // Accessibility: announce stat value and title together as a single
+    // semantic unit. If trend is shown, announce direction too.
+    final trendText = trend != null
+        ? ' — ${trendUp ? 'ارتفاع' : 'انخفاض'} $trend'
+        : '';
+    final semanticLabel = '$title: $value$trendText';
+
+    return Semantics(
+      button: onTap != null,
+      label: semanticLabel,
+      hint: onTap != null ? 'انقر للتفاصيل' : null,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: cardColor.withValues(alpha: 0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: cardColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: cardColor, size: 24),
                   ),
-                  child: Icon(icon, color: cardColor, size: 24),
-                ),
-                if (trend != null)
-                  Row(
-                    children: [
-                      Icon(
-                        trendUp ? Icons.trending_up : Icons.trending_down,
-                        color: trendUp
-                            ? AppTheme.successColor
-                            : AppTheme.errorColor,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        trend!,
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 12,
+                  if (trend != null)
+                    Row(
+                      children: [
+                        Icon(
+                          trendUp ? Icons.trending_up : Icons.trending_down,
                           color: trendUp
                               ? AppTheme.successColor
                               : AppTheme.errorColor,
-                          fontWeight: FontWeight.w600,
+                          size: 16,
                         ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              value,
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textPrimary,
+                        const SizedBox(width: 4),
+                        Text(
+                          trend!,
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 12,
+                            color: trendUp
+                                ? AppTheme.successColor
+                                : AppTheme.errorColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: const TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 14,
-                color: AppTheme.textSecondary,
+              const Spacer(),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 14,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

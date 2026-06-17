@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -665,12 +666,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
 /// Top-level function for compute() — encodes photos to base64 in a background isolate.
 /// Must be top-level (not a class method) to be callable from compute().
+/// Uses dart:io File (not XFile) because XFile doesn't have readAsBytesSync().
 List<String> _encodePhotosToBase64(List<String> paths) {
+  // ignore: avoid_web_libraries_in_flutter
   final result = <String>[];
   for (final path in paths) {
     try {
-      final file = XFile(path);
-      final bytes = file.readAsBytesSync();
+      // Use dart:io File for synchronous reading in isolate
+      final bytes = File(path).readAsBytesSync();
       result.add(base64Encode(bytes));
     } catch (_) {
       // Skip failed photos — don't crash the isolate

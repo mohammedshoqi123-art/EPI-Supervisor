@@ -6,83 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
+import 'ai_chat_models.dart';
 
-// ═══════════════════════════════════════════════════════════
-// CHAT MESSAGE MODEL
-// ═══════════════════════════════════════════════════════════
-
-class ChatMsg {
-  final String role;
-  final String content;
-  final String? source;
-  final DateTime time;
-  final String id;
-
-  ChatMsg({
-    required this.role,
-    required this.content,
-    this.source,
-    DateTime? time,
-    String? id,
-  })  : time = time ?? DateTime.now(),
-        id = id ?? DateTime.now().millisecondsSinceEpoch.toString();
-
-  Map<String, dynamic> toJson() => {
-        'role': role,
-        'content': content,
-        'source': source,
-        'time': time.toIso8601String(),
-        'id': id,
-      };
-
-  factory ChatMsg.fromJson(Map<String, dynamic> j) => ChatMsg(
-        role: j['role'] ?? 'assistant',
-        content: j['content'] ?? '',
-        source: j['source'],
-        time: DateTime.tryParse(j['time'] ?? ''),
-        id: j['id'],
-      );
-}
-
-// ═══════════════════════════════════════════════════════════
-// CHAT PERSISTENCE
-// ═══════════════════════════════════════════════════════════
-
-class _ChatStore {
-  static const _box = 'ai_chat_v3';
-  static const _key = 'msgs';
-
-  static Future<List<ChatMsg>> load() async {
-    try {
-      final box = await Hive.openBox<String>(_box);
-      final raw = box.get(_key);
-      if (raw == null || raw.isEmpty) return [];
-      return (jsonDecode(raw) as List)
-          .map((j) => ChatMsg.fromJson(Map<String, dynamic>.from(j)))
-          .toList();
-    } catch (_) {
-      return [];
-    }
-  }
-
-  static Future<void> save(List<ChatMsg> msgs) async {
-    try {
-      final trimmed = msgs.length > 60 ? msgs.sublist(msgs.length - 60) : msgs;
-      final box = await Hive.openBox<String>(_box);
-      await box.put(_key, jsonEncode(trimmed.map((m) => m.toJson()).toList()));
-    } catch (_) {}
-  }
-
-  static Future<void> clear() async {
-    try {
-      final box = await Hive.openBox<String>(_box);
-      await box.delete(_key);
-      unawaited(box.close());
-    } catch (_) {}
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
 // AI CHAT SCREEN V3 — Premium 3-Tab Edition
 // ═══════════════════════════════════════════════════════════
 
@@ -135,7 +60,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   }
 
   Future<void> _restore() async {
-    final saved = await _ChatStore.load();
+    final saved = await ChatStore.load();
     if (saved.isNotEmpty && _mounted) {
       setState(() {
         _msgs.addAll(saved);
@@ -173,7 +98,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       _loading = true;
     });
     _scrollDown();
-    unawaited(_ChatStore.save(_msgs));
+    unawaited(ChatStore.save(_msgs));
 
     try {
       // ═══ OFFLINE FALLBACK: Use local BotEngine when no internet ═══
@@ -188,7 +113,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             ));
             _loading = false;
           });
-          unawaited(_ChatStore.save(_msgs));
+          unawaited(ChatStore.save(_msgs));
         } else if (_mounted) {
           setState(() => _loading = false);
         }
@@ -222,7 +147,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                     ChatMsg(role: 'assistant', content: resp, source: 'zai'));
                 _loading = false;
               });
-              unawaited(_ChatStore.save(_msgs));
+              unawaited(ChatStore.save(_msgs));
             }
             return;
           } catch (_) {
@@ -247,7 +172,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                     role: 'assistant', content: resp, source: 'openrouter'));
                 _loading = false;
               });
-              unawaited(_ChatStore.save(_msgs));
+              unawaited(ChatStore.save(_msgs));
             }
             return;
           } catch (_) {
@@ -333,7 +258,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           _loading = false;
         });
       }
-      unawaited(_ChatStore.save(_msgs));
+      unawaited(ChatStore.save(_msgs));
     } on TimeoutException {
       if (!_mounted) return;
       setState(() {
@@ -344,7 +269,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         ));
         _loading = false;
       });
-      unawaited(_ChatStore.save(_msgs));
+      unawaited(ChatStore.save(_msgs));
     } catch (e) {
       if (!_mounted) return;
       final errorMsg = e.toString();
@@ -377,7 +302,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             _loading = false;
           });
         }
-        unawaited(_ChatStore.save(_msgs));
+        unawaited(ChatStore.save(_msgs));
         _scrollDown();
         return;
       }
@@ -395,7 +320,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             ChatMsg(role: 'assistant', content: userMessage, source: 'error'));
         _loading = false;
       });
-      unawaited(_ChatStore.save(_msgs));
+      unawaited(ChatStore.save(_msgs));
     }
     _scrollDown();
   }
@@ -420,7 +345,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       _msgs.clear();
       _showWelcome = true;
     });
-    Future.microtask(() async => await _ChatStore.clear());
+    Future.microtask(() async => await ChatStore.clear());
   }
 
   void _copyMessage(ChatMsg msg) {

@@ -98,7 +98,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     setState(() => _isLoading = true);
 
     // ═══ FIX: إعادة محاولة تلقائية (3 محاولات مع backoff) ═══
-    const maxRetries = 3;
+    // Skip retries if offline — no point retrying without internet
+    final isOffline = !ConnectivityUtils.isOnline;
+    final maxRetries = isOffline ? 1 : 3;
     Exception? lastError;
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
@@ -123,6 +125,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             errStr.contains('email')) {
           break; // خطأ بيانات — لا فائدة من إعادة المحاولة
         }
+
+        // Don't retry on network errors if offline
+        if (isOffline) break;
 
         if (attempt < maxRetries) {
           final delay = Duration(seconds: 2 * attempt);

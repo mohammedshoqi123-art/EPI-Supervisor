@@ -143,6 +143,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   @override
   void dispose() {
     _syncSub?.cancel();
+    _searchDebounce?.cancel();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -432,13 +433,19 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     return DateTime.tryParse(dateStr) ?? DateTime(2000);
   }
 
+  // Debounce timer for search — prevents reload on every keystroke
+  Timer? _searchDebounce;
+
   void _onSearchChanged(String query) {
+    // Update search query immediately for visual feedback
     setState(() {
       _searchQuery = query.toLowerCase();
-      _refreshKey++;
     });
-    // Reload current tab with new search
-    _reloadCurrentTab();
+    // Debounce the reload — wait 300ms after last keystroke
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      _reloadCurrentTab();
+    });
   }
 
   void _reloadCurrentTab() {

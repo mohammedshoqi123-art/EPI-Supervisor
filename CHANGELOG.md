@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Mobile App Comprehensive Improvements (Phase 6)
+
+Critical fixes:
+- RBAC guards added to admin routes (/users, /forms-management, /references-management, /analytics) — prevents data_entry users from accessing admin screens
+- Cache key mismatch in form_fill_screen.dart fixed — now tries campaign-specific key first, then 'forms_all' fallback
+- Onboarding timeout defaults to false (show onboarding) instead of true (skip) on slow devices
+- Dashboard now reactive to campaign changes (ref.watch instead of ref.read)
+- Forms screen pull-to-refresh uses correct campaign-specific cache key
+
+High severity fixes:
+- GPS type cast crash fixed — uses (as num?)?.toDouble() instead of as double
+- _getInitials crash on whitespace-only names fixed — filters empty parts
+- Search debouncing (300ms) added to forms_status_screen — prevents jank on every keystroke
+- Dismissible.onDismissed in notifications_screen now removes item from local list
+- Login retry skipped when offline — saves 6 seconds of pointless retries
+- Typing animation in ai_chat_screen_v3 only runs during loading (not infinitely)
+- Full sync tracks success count — reports error state if all steps return 0 items
+- Silent catch blocks in main.dart now log errors via debugPrint
+- Dashboard background sync error now logged
+
+UX improvements:
+- Profile screen cancel button added — exit edit mode without saving
+- Profile edit/save buttons now have tooltips for accessibility
+
+Security/Config:
+- AndroidManifest: removed deprecated READ/WRITE_EXTERNAL_STORAGE and requestLegacyExternalStorage
+- AndroidManifest: added POST_NOTIFICATIONS permission for Android 13+
+- AndroidManifest: added android:allowBackup="false" (sensitive health data)
+- .env.example: documented all AI API keys (HF_API_TOKEN, ZAI_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, MIMO_API_KEY)
+- .env.example: ENCRYPTION_KEY placeholder changed to obvious <REPLACE_WITH_32_CHAR_MINIMUM_KEY>
+- debugLogDiagnostics set to kDebugMode only (was always true)
+
 ### Added — AI Development (Phase 3)
 - **`SmartRecommendationsEngine`** — new AI engine that analyzes system data and generates intelligent recommendations for administrative decisions:
   - `analyzeSubmissionTrends()` — detects low performance, declining trends, sudden drops, and high performers

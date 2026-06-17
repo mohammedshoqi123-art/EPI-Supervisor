@@ -42,12 +42,16 @@ Future<void> main() async {
         anonKey: dotenv['SUPABASE_ANON_KEY'] ?? '',
       );
     }
-  } catch (_) {}
+  } catch (e) {
+    debugPrint('[Init] ⚠️ Env load failed: $e');
+  }
 
   // ═══ الخطوة 2: تهيئة Connectivity ═══
   try {
     await ConnectivityUtils.initialize().timeout(const Duration(seconds: 5));
-  } catch (_) {}
+  } catch (e) {
+    debugPrint('[Init] ⚠️ Connectivity init failed: $e');
+  }
 
   // ═══ الخطوة 3: تهيئة Supabase مُزامنة (await) قبل runApp ═══
   // هذا يحل مشكلة Race Condition: AuthRepository لن يجد _client = null
@@ -57,12 +61,14 @@ Future<void> main() async {
   runApp(const ProviderScope(child: EpiSupervisorApp()));
 
   // ═══ الخطوة 5: تهيئة الخدمات غير الحرجة في الخلفية ═══
-  Future.microtask(() async {
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
     try {
       if (SupabaseConfig.isConfigured) {
         NotificationService.init(ApiClient());
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Init] ⚠️ NotificationService init failed: $e');
+    }
   });
 }
 
@@ -145,8 +151,10 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
 
   Future<void> _checkOnboarding() async {
     try {
+      // Fix: default to false (show onboarding) on timeout — safer to show
+      // onboarding twice than to skip it entirely on slow devices.
       final completed = await OnboardingScreen.isCompleted()
-          .timeout(const Duration(seconds: 5), onTimeout: () => true);
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
       if (mounted) {
         setState(() {
           _showOnboarding = !completed;

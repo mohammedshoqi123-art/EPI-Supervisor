@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -30,16 +31,24 @@ import '../screens/analytics_screen.dart';
 final routerProvider = Provider<GoRouter>((ref) {
   final authAsync = ref.watch(authStateProvider);
 
-  // Minimum role level required per route
+  // Minimum role level required per route — RBAC guards
   const routeMinRole = {
     '/ai': 1, // everyone
-
     '/references': 1, // everyone can view references
+    '/users': 4, // admin + central only
+    '/forms-management': 4, // admin + central only
+    '/references-management': 4, // admin + central only
+    '/analytics': 3, // governorate+ can view analytics
+    '/map': 1, // everyone
+    '/submissions': 1, // everyone (RLS filters by role)
+    '/forms-status': 1, // everyone
+    '/notifications': 1, // everyone
+    '/profile': 1, // everyone
   };
 
   return GoRouter(
     initialLocation: '/splash',
-    debugLogDiagnostics: true,
+    debugLogDiagnostics: kDebugMode,
     refreshListenable: GoRouterRefreshStream(
       ref.watch(authRepositoryProvider).authStateChanges,
     ),

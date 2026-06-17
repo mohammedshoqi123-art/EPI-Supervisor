@@ -67,7 +67,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
             const Duration(seconds: 5),
             onTimeout: () => throw Exception('timeout'),
           );
-      final cachedForms = cache.getCachedDataList('forms_all');
+      // Fix: try multiple cache keys since formsProvider uses campaign-specific key
+      // First try the specific form cache, then try campaign-specific list
+      final campaignValue = ref.read(campaignProvider).value;
+      List<Map<String, dynamic>>? cachedForms;
+      // Try campaign-specific cache key first (matches formsProvider)
+      cachedForms = cache.getCachedDataList('forms_$campaignValue');
+      // Also try 'forms_all' as fallback (may be populated by full sync)
+      cachedForms ??= cache.getCachedDataList('forms_all');
       if (cachedForms != null) {
         for (final f in cachedForms) {
           if (f['id'] == widget.formId) {

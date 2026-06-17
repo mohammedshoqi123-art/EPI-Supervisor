@@ -27,7 +27,9 @@ class FormsScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () async {
           if (!ConnectivityUtils.isOnline) return;
-          await ref.read(forceRefreshProvider)('forms');
+          // Fix: use campaign-specific cache key to match formsProvider
+          final campaignValue = ref.read(campaignProvider).value;
+          await ref.read(forceRefreshProvider)('forms_$campaignValue');
           ref.invalidate(formsProvider);
         },
         child: forms.when(

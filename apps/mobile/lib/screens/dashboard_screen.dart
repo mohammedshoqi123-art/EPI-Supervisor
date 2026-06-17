@@ -62,7 +62,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           if (service.currentState.pendingCount > 0) {
             await service.sync();
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Dashboard] Background sync failed: $e');
+        }
       });
     });
   }
@@ -80,7 +82,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     // ═══ PERFORMANCE: Use .select() to minimize rebuild scope ═══
     final analytics = ref.watch(
       dashboardAnalyticsProvider(
-        AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
+        AnalyticsFilter(campaignType: ref.watch(campaignProvider).value),
       ),
     );
     final authState = ref.watch(authStateProvider);
@@ -103,7 +105,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           await ref.read(forceRefreshProvider)('dashboard_analytics');
           ref.invalidate(
             dashboardAnalyticsProvider(
-              AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
+              AnalyticsFilter(campaignType: ref.watch(campaignProvider).value),
             ),
           );
         },
@@ -113,7 +115,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             SliverToBoxAdapter(
               child: DashboardHeroHeader(
                 userName: authState.valueOrNull?.fullName ?? 'مستخدم',
-                campaignLabel: ref.read(campaignProvider).displayLabel,
+                campaignLabel: ref.watch(campaignProvider).displayLabel,
                 unreadNotifications: unreadNotifs,
                 headerAnim: _headerAnim,
                 pulseAnim: _pulseAnim,
@@ -147,7 +149,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       onRetry: () => ref.invalidate(
                         dashboardAnalyticsProvider(
                           AnalyticsFilter(
-                            campaignType: ref.read(campaignProvider).value,
+                            campaignType: ref.watch(campaignProvider).value,
                           ),
                         ),
                       ),
@@ -361,7 +363,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         analyticsData: ref
             .read(
               dashboardAnalyticsProvider(
-                AnalyticsFilter(campaignType: ref.read(campaignProvider).value),
+                AnalyticsFilter(campaignType: ref.watch(campaignProvider).value),
               ),
             )
             .valueOrNull,

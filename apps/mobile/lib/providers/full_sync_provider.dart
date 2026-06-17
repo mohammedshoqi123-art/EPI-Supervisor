@@ -155,9 +155,16 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
       _ref.invalidate(submissionTrendProvider);
       _ref.invalidate(governorateRankingProvider);
 
-      state = FullSyncState.done;
-      debugPrint(
-          '[FullSync] ✅ Complete: $forms forms, $submissions subs, $govs govs, $dists dists');
+      // Fix: check if at least some data was fetched — don't report success if all failed
+      final totalSynced = forms + submissions + govs + dists + refs + facs;
+      if (totalSynced == 0) {
+        state = FullSyncState.error;
+        debugPrint('[FullSync] ⚠️ All sync steps returned 0 items — possible network issue');
+      } else {
+        state = FullSyncState.done;
+        debugPrint(
+            '[FullSync] ✅ Complete: $forms forms, $submissions subs, $govs govs, $dists dists');
+      }
 
       return FullSyncResult(
         forms: forms,

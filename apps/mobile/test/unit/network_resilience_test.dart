@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('HTTP Status Code Handling', () {
     bool isRetryable(int statusCode) {
-      return statusCode >= 500 || statusCode === 429;
+      return statusCode >= 500 || statusCode == 429;
     }
 
     bool isSuccess(int statusCode) {

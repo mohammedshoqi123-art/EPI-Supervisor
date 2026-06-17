@@ -42,10 +42,6 @@ jobs:
         working-directory: packages/shared
         run: flutter pub get
 
-      - name: Install dependencies (features)
-        working-directory: packages/features
-        run: flutter pub get
-
       - name: Install dependencies (mobile)
         working-directory: apps/mobile
         run: |
@@ -77,10 +73,10 @@ jobs:
             if [ $TOTAL -gt 0 ]; then
               PCT=$((HIT * 100 / TOTAL))
               echo "📊 Test coverage: ${PCT}% (${HIT}/${TOTAL} lines)"
-              # Hard threshold raised from 10% to 15% after adding 290+ new tests.
-              # TODO: raise to 20% → 30% as more tests are added.
-              if [ $PCT -lt 15 ]; then
-                echo "::error::Coverage ${PCT}% is below 15% hard threshold — tests are critically missing"
+              # Hard threshold raised from 15% to 20% after adding 400+ new tests.
+              # TODO: raise to 25% → 30% as more tests are added.
+              if [ $PCT -lt 20 ]; then
+                echo "::error::Coverage ${PCT}% is below 20% hard threshold — tests are critically missing"
                 exit 1
               elif [ $PCT -lt 30 ]; then
                 echo "::warning::Coverage ${PCT}% is below 30% target — add more tests"
@@ -172,7 +168,6 @@ jobs:
         run: |
           cd packages/core && flutter pub get
           cd $GITHUB_WORKSPACE/packages/shared && flutter pub get && dart run build_runner build --delete-conflicting-outputs
-          cd $GITHUB_WORKSPACE/packages/features && flutter pub get
           cd $GITHUB_WORKSPACE/apps/mobile && flutter pub get
 
       - name: Mask secrets in logs
@@ -237,7 +232,6 @@ jobs:
         run: |
           cd packages/core && flutter pub get
           cd $GITHUB_WORKSPACE/packages/shared && flutter pub get && dart run build_runner build --delete-conflicting-outputs
-          cd $GITHUB_WORKSPACE/packages/features && flutter pub get
           cd $GITHUB_WORKSPACE/apps/mobile && flutter pub get
 
       - name: Build Flutter Web

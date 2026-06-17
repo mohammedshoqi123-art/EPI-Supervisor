@@ -116,7 +116,7 @@ class PredictiveAnalyticsEngine {
     final intercept = yMean - slope * xMean;
 
     // R² for confidence
-    final r2 = ssYY == 0 ? 1.0 : (1 - (ssXY * ssXY) / (ssXX * ssYY)).clamp(0.0, 1.0);
+    final r2 = ssYY == 0 ? 1.0 : (1 - (ssXY * ssXY) / (ssXX * ssYY)).clamp(0.0, 1.0).toDouble();
 
     final predictions = List<double>.generate(periods, (i) {
       return slope * (n + i) + intercept;
@@ -124,7 +124,7 @@ class PredictiveAnalyticsEngine {
 
     return PredictionResult(
       metric: metric,
-      predictions: predictions.map((p) => p < 0 ? 0 : p).toList(),
+      predictions: predictions.map((p) => p < 0 ? 0.0 : p).toList(),
       confidence: r2,
       model: 'linear_regression',
       metadata: {
@@ -364,11 +364,11 @@ class PredictiveAnalyticsEngine {
     final n = testData.length;
     final mae = sumAbsError / n;
     final rmse = sqrt(sumSquaredError / n);
-    final mape = pctCount > 0 ? sumAbsPctError / pctCount : 0;
+    final mape = pctCount > 0 ? sumAbsPctError / pctCount : 0.0;
     // R² = 1 - SS_res / SS_tot
     final ssTot = sumActualMeanDiffSquared;
     final ssRes = sumSquaredError;
-    final r2 = ssTot == 0 ? 1.0 : (1 - ssRes / ssTot).clamp(0.0, 1.0);
+    final r2 = ssTot == 0 ? 1.0 : (1 - ssRes / ssTot).clamp(0.0, 1.0).toDouble();
 
     return PredictionAccuracy(mae: mae, rmse: rmse, mape: mape, r2: r2);
   }

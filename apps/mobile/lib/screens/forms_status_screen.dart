@@ -7,6 +7,7 @@ import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import '../router/app_router.dart';
+import 'forms_status_widgets.dart';
 
 /// ═══ Forms Status Dashboard ═══
 /// Shows 3 tabs: المسودات (Drafts) | قيد المزامنة (Pending Sync) | المرسلة (Submitted)
@@ -773,7 +774,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
               itemCount: _draftItems.length,
               itemBuilder: (context, index) {
                 final draft = _draftItems[index];
-                return _DraftTile(
+                return DraftTile(
                   title: draft['form_title'] ?? 'مسودة',
                   formId: draft['formId'] ?? draft['form_id'] ?? '',
                   date: draft['saved_at'] ?? draft['created_at'],
@@ -834,7 +835,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
               itemCount: _pendingItems.length,
               itemBuilder: (context, index) {
                 final item = _pendingItems[index];
-                return _PendingTile(
+                return PendingTile(
                   title: item['form_title'] ??
                       item['forms']?['title_ar'] ??
                       'استمارة',
@@ -893,7 +894,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
               itemCount: _submittedItems.length,
               itemBuilder: (context, index) {
                 final sub = _submittedItems[index];
-                return _SubmittedTile(
+                return SubmittedTile(
                   title: sub['forms']?['title_ar'] ?? 'نموذج',
                   status: sub['status'] ?? 'submitted',
                   date: sub['submitted_at'] ?? sub['created_at'],
@@ -953,7 +954,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         child: Row(
           children: [
             // Previous button
-            _NavButton(
+            FormsNavButton(
               icon: Icons.arrow_forward_ios,
               label: 'السابق',
               enabled: hasPrev && !isLoading,
@@ -1000,7 +1001,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
             ),
 
             // Next button
-            _NavButton(
+            FormsNavButton(
               icon: Icons.arrow_back_ios,
               label: 'التالي',
               enabled: hasNext && !isLoading,
@@ -1204,7 +1205,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       child: Row(
         children: [
           Expanded(
-            child: _StatCard(
+            child: FormsStatCard(
               title: 'المسودات',
               count: stats.drafts,
               icon: Icons.edit_note,
@@ -1220,7 +1221,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: _StatCard(
+            child: FormsStatCard(
               title: 'قيد المزامنة',
               count: stats.pending,
               icon: Icons.sync,
@@ -1236,7 +1237,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: _StatCard(
+            child: FormsStatCard(
               title: 'المرسلة',
               count: stats.submitted,
               icon: Icons.check_circle,
@@ -1517,12 +1518,12 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _PickerSheet(
+      builder: (_) => PickerSheet(
         title: 'اختر النموذج',
         items: [
-          const _PickerItem(id: null, label: 'الكل'),
+          const PickerItem(id: null, label: 'الكل'),
           ...forms.map(
-              (f) => _PickerItem(id: f['id'], label: f['title_ar'] ?? 'نموذج')),
+              (f) => PickerItem(id: f['id'], label: f['title_ar'] ?? 'نموذج')),
         ],
         selectedId: _filterFormId,
         onSelected: (id) {
@@ -1543,12 +1544,12 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _PickerSheet(
+      builder: (_) => PickerSheet(
         title: 'اختر المحافظة',
         items: [
-          const _PickerItem(id: null, label: 'الكل'),
+          const PickerItem(id: null, label: 'الكل'),
           ...govs.map(
-              (g) => _PickerItem(id: g['id'], label: g['name_ar'] ?? 'محافظة')),
+              (g) => PickerItem(id: g['id'], label: g['name_ar'] ?? 'محافظة')),
         ],
         selectedId: _filterGovernorate,
         onSelected: (id) {
@@ -1570,12 +1571,12 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _PickerSheet(
+      builder: (_) => PickerSheet(
         title: 'اختر المديرية',
         items: [
-          const _PickerItem(id: null, label: 'الكل'),
+          const PickerItem(id: null, label: 'الكل'),
           ...districts.map(
-              (d) => _PickerItem(id: d['id'], label: d['name_ar'] ?? 'مديرية')),
+              (d) => PickerItem(id: d['id'], label: d['name_ar'] ?? 'مديرية')),
         ],
         selectedId: _filterDistrict,
         onSelected: (id) {
@@ -1603,11 +1604,11 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _PickerSheet(
+      builder: (_) => PickerSheet(
         title: 'اختر الصفة',
         items: [
-          const _PickerItem(id: null, label: 'الكل'),
-          ...roles.map((r) => _PickerItem(id: r, label: roleNames[r] ?? r)),
+          const PickerItem(id: null, label: 'الكل'),
+          ...roles.map((r) => PickerItem(id: r, label: roleNames[r] ?? r)),
         ],
         selectedId: _filterSupervisorRole,
         onSelected: (id) {
@@ -1625,649 +1626,3 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STAT CARD — مع دعم الضغط للانتقال للتبويب
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _StatCard extends StatelessWidget {
-  final String title;
-  final int count;
-  final IconData icon;
-  final Color color;
-  final LinearGradient gradient;
-  final VoidCallback? onTap;
-
-  const _StatCard({
-    required this.title,
-    required this.count,
-    required this.icon,
-    required this.color,
-    required this.gradient,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: Colors.white, size: 22),
-            const SizedBox(height: 8),
-            Text(
-              '$count',
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              title,
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 10,
-                color: Colors.white.withValues(alpha: 0.9),
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// NAV BUTTON — أزرار التالي/السابق
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _NavButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _NavButton({
-    required this.icon,
-    required this.label,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: enabled
-              ? AppTheme.primaryColor.withValues(alpha: 0.1)
-              : AppTheme.backgroundLight,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: enabled
-                ? AppTheme.primaryColor.withValues(alpha: 0.3)
-                : Colors.grey.shade200,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: enabled ? AppTheme.primaryColor : AppTheme.textHint,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: enabled ? AppTheme.primaryColor : AppTheme.textHint,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// DRAFT TILE
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _DraftTile extends StatelessWidget {
-  final String title;
-  final String formId;
-  final String? date;
-  final VoidCallback onTap;
-
-  const _DraftTile({
-    required this.title,
-    required this.formId,
-    this.date,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-        border: Border.all(
-          color: AppTheme.warningColor.withValues(alpha: 0.2),
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppTheme.warningColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.edit_note,
-                  color: AppTheme.warningColor,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const EpiStatusChip(status: 'draft', small: true),
-                        if (date != null) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatDate(date!),
-                            style: const TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontSize: 10,
-                              color: AppTheme.textHint,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primarySurface,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.edit,
-                  size: 16,
-                  color: AppTheme.primaryColor,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(String dateStr) {
-    final d = DateTime.tryParse(dateStr);
-    if (d == null) return dateStr;
-    return '${d.day}/${d.month}/${d.year} - ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PENDING TILE
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _PendingTile extends StatelessWidget {
-  final String title;
-  final String status;
-  final String? date;
-  final int retryCount;
-  final VoidCallback onTap;
-
-  const _PendingTile({
-    required this.title,
-    required this.status,
-    this.date,
-    required this.retryCount,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-        border: Border.all(
-          color: AppTheme.infoColor.withValues(alpha: 0.2),
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppTheme.infoColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: AppTheme.infoColor,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppTheme.infoColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.sync,
-                                  size: 12, color: AppTheme.infoColor),
-                              SizedBox(width: 4),
-                              Text(
-                                'بانتظار المزامنة',
-                                style: TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontSize: 11,
-                                  color: AppTheme.infoColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (retryCount > 0) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            'محاولة $retryCount',
-                            style: const TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontSize: 10,
-                              color: AppTheme.errorColor,
-                            ),
-                          ),
-                        ],
-                        if (date != null) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatDate(date!),
-                            style: const TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontSize: 10,
-                              color: AppTheme.textHint,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.arrow_forward_ios,
-                size: 14,
-                color: AppTheme.textHint,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(String dateStr) {
-    final d = DateTime.tryParse(dateStr);
-    if (d == null) return dateStr;
-    return '${d.day}/${d.month}/${d.year}';
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SUBMITTED TILE
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _SubmittedTile extends StatelessWidget {
-  final String title;
-  final String status;
-  final String? date;
-  final String? userName;
-  final bool isOffline;
-  final VoidCallback onTap;
-
-  const _SubmittedTile({
-    required this.title,
-    required this.status,
-    this.date,
-    this.userName,
-    this.isOffline = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-        border: Border.all(
-          color: AppTheme.statusColor(status).withValues(alpha: 0.2),
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppTheme.statusColor(status).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  _statusIcon(status),
-                  color: AppTheme.statusColor(status),
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: const TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (isOffline)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.wifi_off,
-                                  size: 10,
-                                  color: Colors.orange,
-                                ),
-                                SizedBox(width: 3),
-                                Text(
-                                  'أوفلاين',
-                                  style: TextStyle(
-                                    fontFamily: 'Tajawal',
-                                    fontSize: 9,
-                                    color: Colors.orange,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        EpiStatusChip(status: status, small: true),
-                        if (userName != null) ...[
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              userName!,
-                              style: const TextStyle(
-                                fontFamily: 'Tajawal',
-                                fontSize: 11,
-                                color: AppTheme.textSecondary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (date != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDate(date!),
-                        style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 10,
-                          color: AppTheme.textHint,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.arrow_forward_ios,
-                size: 14,
-                color: AppTheme.textHint,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  IconData _statusIcon(String status) {
-    switch (status) {
-      case 'approved':
-        return Icons.check_circle;
-      case 'rejected':
-        return Icons.cancel;
-      case 'submitted':
-        return Icons.send;
-      case 'reviewed':
-        return Icons.rate_review;
-      case 'draft':
-        return Icons.edit_note;
-      default:
-        return Icons.description;
-    }
-  }
-
-  String _formatDate(String dateStr) {
-    final d = DateTime.tryParse(dateStr);
-    if (d == null) return dateStr;
-    return '${d.day}/${d.month}/${d.year} - ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PICKER SHEET
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _PickerItem {
-  final String? id;
-  final String label;
-
-  const _PickerItem({required this.id, required this.label});
-}
-
-class _PickerSheet extends StatelessWidget {
-  final String title;
-  final List<_PickerItem> items;
-  final String? selectedId;
-  final ValueChanged<String?> onSelected;
-
-  const _PickerSheet({
-    required this.title,
-    required this.items,
-    required this.selectedId,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index];
-                final isSelected = item.id == selectedId;
-                return ListTile(
-                  title: Text(
-                    item.label,
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 14,
-                      fontWeight:
-                          isSelected ? FontWeight.w700 : FontWeight.normal,
-                      color: isSelected
-                          ? AppTheme.primaryColor
-                          : AppTheme.textPrimary,
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_circle,
-                          color: AppTheme.primaryColor)
-                      : null,
-                  onTap: () => onSelected(item.id),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

@@ -51,18 +51,6 @@ updates:
     commit-message:
       prefix: "deps(shared)"
 
-  - package-ecosystem: "pub"
-    directory: "/packages/features"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "features"
-    commit-message:
-      prefix: "deps(features)"
-
   # npm dependencies (admin web)
   - package-ecosystem: "npm"
     directory: "/apps/admin-web"

@@ -292,7 +292,7 @@ void main() {
           id: '1',
           title: 'Low',
           description: '',
-          type: RecommendationType.informational,
+          type: RecommendationType.campaignOptimization,
           priority: RecommendationPriority.low,
           impact: RecommendationImpact.low,
           actionItems: [],

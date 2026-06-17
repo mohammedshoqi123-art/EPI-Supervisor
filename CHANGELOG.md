@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.github/ISSUE_TEMPLATE/bug_report.md` and `feature_request.md`.
 - `CHANGELOG.md` (this file).
 
+### Added (Tests & Accessibility — Phase 2)
+- **`api_client_test.dart`** — 30+ tests covering ApiClient sentinels, instantiation, PostgrestException code mapping (PGRST116, 23505, 23503, 42501, 22P02, 5xx), FunctionException HTTP status mapping (401/403/429/5xx), AppException hierarchy coverage.
+- **`auth_repository_test.dart`** — 40+ tests covering instantiation, signIn/signOut/updateProfile/uploadAvatar without configuration, AuthState JSON round-trip serialization, UserRole hierarchy & permissions (canManage, canAccessAdminDashboard, etc.), legacy `teamLead` role backward compat.
+- **`database_service_test.dart`** — 40+ contract tests verifying every method signature (getUsers, getForms, getSubmissions, submitForm, updateSubmissionStatus, getShortages, getAuditLogs, etc.), parameter validation, soft-delete contract (no public hard-delete methods).
+- **`analytics_service_test.dart`** — 30+ tests covering AnalyticsService contract + LocalAnalyticsEngine pure functions: mean, standardDeviation, median, detectAnomalies, linearRegression, predictNext, topCategories, healthScore, generateInsights, detectSuddenChanges.
+- **`submit_form_validation_test.ts`** — 25+ Deno tests for Edge Function validation: ROLE_HIERARCHY, validateSubmissionPermissions (admin/central/governorate/district/data_entry), GPS coordinates (Yemen boundaries), status, payload size, form_id, photos, edge cases.
+- **`sync_offline_test.ts`** — 25+ Deno tests for batch sync: MAX_BATCH_SIZE boundary, validateBatchSize, validateItem, buildExistingMap, processItem (duplicate/new/error), buildSummary, full batch flow, edge cases.
+- **Semantics widgets** for accessibility — added to 6 shared widgets:
+  - `EpiButton` — exposes label, disabled state, loading state
+  - `EpiTextField` — exposes label, hint, obscured text indicator
+  - `EpiDropdown` — exposes label and current value
+  - `EpiStatCard` — announces stat value + title + trend as single unit
+  - `EpiStatusChip` — announces "الحالة: <status>"
+  - `EpiSearchBar` — exposes "حقل البحث" label + clear button tooltip
+- **Staging environment**: migration `034_submission_photos_visibility.sql` applied to staging (gbgwokizfrjxdfgpdhsr.supabase.co) — verified policies are live.
+
 ### Changed
 - `env_validator.dart`: ENCRYPTION_KEY warning now correctly reports it as `🚨 CRITICAL` (was misleadingly marked "Optional: using default" — there is no default, the app crashes on first encryption).
 - `vaccination_service.dart`: `getVaccinesDueAtAge`, `getOverdueVaccines`, and `getOverdueVaccinesDetailed` now respect `maxAgeMonths` — vaccines past their max age are excluded (no longer suggested as overdue).

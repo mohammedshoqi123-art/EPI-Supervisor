@@ -22,15 +22,22 @@ class EpiDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      value: value,
-      items: items,
-      onChanged: enabled ? onChanged : null,
-      validator: validator,
-      decoration: InputDecoration(labelText: label, hintText: hint),
-      style: const TextStyle(fontFamily: 'Tajawal', color: Colors.black87),
-      dropdownColor: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+    final effectiveLabel = label ?? hint ?? 'قائمة منسدلة';
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: effectiveLabel,
+      hint: value != null ? 'القيمة الحالية: $value' : (hint ?? 'اختر قيمة'),
+      child: DropdownButtonFormField<T>(
+        value: value,
+        items: items,
+        onChanged: enabled ? onChanged : null,
+        validator: validator,
+        decoration: InputDecoration(labelText: label, hintText: hint),
+        style: const TextStyle(fontFamily: 'Tajawal', color: Colors.black87),
+        dropdownColor: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
     );
   }
 }

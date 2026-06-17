@@ -56,29 +56,50 @@ class EpiButton extends StatelessWidget {
             ],
           );
 
+    // Accessibility: expose button label, disabled state, and loading state
+    // to screen readers (TalkBack on Android, VoiceOver on iOS).
+    final isDisabled = isLoading || onPressed == null;
+    final semanticLabel = isLoading
+        ? '$text — جاري التحميل'
+        : isDisabled
+            ? '$text — غير متاح'
+            : text;
+
     if (isOutlined) {
       return SizedBox(
         width: width,
-        child: OutlinedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: textColor ?? AppTheme.primaryColor,
-            side: BorderSide(color: backgroundColor ?? AppTheme.primaryColor),
+        child: Semantics(
+          button: true,
+          enabled: !isDisabled,
+          label: semanticLabel,
+          hint: 'زر: $text',
+          child: OutlinedButton(
+            onPressed: isLoading ? null : onPressed,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: textColor ?? AppTheme.primaryColor,
+              side: BorderSide(color: backgroundColor ?? AppTheme.primaryColor),
+            ),
+            child: child,
           ),
-          child: child,
         ),
       );
     }
 
     return SizedBox(
       width: width,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor,
-          foregroundColor: textColor,
+      child: Semantics(
+        button: true,
+        enabled: !isDisabled,
+        label: semanticLabel,
+        hint: 'زر: $text',
+        child: ElevatedButton(
+          onPressed: isLoading ? null : onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: backgroundColor,
+            foregroundColor: textColor,
+          ),
+          child: child,
         ),
-        child: child,
       ),
     );
   }

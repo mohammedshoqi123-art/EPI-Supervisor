@@ -18,23 +18,28 @@ class EpiStatusChip extends StatelessWidget {
     final color = AppTheme.statusColor(status);
     final text = label ?? _getStatusLabel(status);
 
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: small ? 8 : 12,
-        vertical: small ? 4 : 6,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(small ? 6 : 8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Tajawal',
-          fontSize: small ? 11 : 13,
-          fontWeight: FontWeight.w600,
-          color: color,
+    // Accessibility: announce as a status label so screen readers
+    // can convey the state (e.g., "الحالة: معتمد").
+    return Semantics(
+      label: 'الحالة: $text',
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: small ? 8 : 12,
+          vertical: small ? 4 : 6,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(small ? 6 : 8),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontFamily: 'Tajawal',
+            fontSize: small ? 11 : 13,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
         ),
       ),
     );

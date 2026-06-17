@@ -77,10 +77,10 @@ jobs:
             if [ $TOTAL -gt 0 ]; then
               PCT=$((HIT * 100 / TOTAL))
               echo "📊 Test coverage: ${PCT}% (${HIT}/${TOTAL} lines)"
-              # Hard threshold at 5% — catches catastrophic coverage drops without blocking current work.
-              # TODO: raise to 10% → 20% → 30% → 40% as tests are added in upcoming releases.
-              if [ $PCT -lt 5 ]; then
-                echo "::error::Coverage ${PCT}% is below 5% hard threshold — tests are critically missing"
+              # Hard threshold raised from 5% to 10% after adding 190+ new tests.
+              # TODO: raise to 15% → 20% → 30% as more tests are added.
+              if [ $PCT -lt 10 ]; then
+                echo "::error::Coverage ${PCT}% is below 10% hard threshold — tests are critically missing"
                 exit 1
               elif [ $PCT -lt 30 ]; then
                 echo "::warning::Coverage ${PCT}% is below 30% target — add more tests"

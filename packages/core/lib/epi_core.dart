@@ -32,6 +32,9 @@ export 'src/ai/huggingface/hf_service.dart';
 export 'src/ai/rag/rag_pipeline.dart';
 export 'src/ai/function_calling/function_calling_engine.dart';
 export 'src/ai/enhanced_local_ai.dart';
+// ═══ AI v3: Smart Recommendations + Predictive Analytics ═══
+export 'src/ai/smart_recommendations_engine.dart';
+export 'src/ai/predictive_analytics_engine.dart';
 // ═══ New AI Providers: Z AI + OpenRouter + NLP + KB + Alerts ═══
 export 'src/ai/zai_service.dart';
 export 'src/ai/openrouter_service.dart';

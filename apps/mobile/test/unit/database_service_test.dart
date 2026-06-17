@@ -188,9 +188,8 @@ void main() {
   });
 
   group('DatabaseService — getHealthFacilities parameter validation', () {
-    test('getHealthFacilities accepts governorateId and districtId', () {
+    test('getHealthFacilities accepts districtId', () {
       final result = db.getHealthFacilities(
-        governorateId: 'gov-1',
         districtId: 'dist-1',
       );
       expect(result, isA<Future>());
@@ -358,17 +357,39 @@ void main() {
   group('DatabaseService — soft delete contract', () {
     /// Document that DatabaseService does NOT expose a hard delete method
     /// for user-modifiable entities. Soft-delete via `deleted_at IS NULL`
-    /// is the standard pattern.
+    /// is the standard pattern. We verify this by reflection: the type
+    /// should not have deleteUser or deleteForm methods.
 
-    test('no public hard delete method for users', () {
-      // Verify that DatabaseService does not expose deleteUser()
-      // (soft-delete via updateProfile is_active=false is the pattern).
-      expect(() => db.deleteUser, throwsNoSuchMethodError,
+    test('DatabaseService does not expose deleteUser', () {
+      // Use dart:mirrors would be ideal, but Flutter disables mirrors.
+      // Instead, verify that calling an undefined method throws at runtime.
+      // ignore: avoid_dynamic_calls
+      bool hasMethod;
+      try {
+        // ignore: avoid_dynamic_calls
+        (db as dynamic).deleteUser;
+        hasMethod = true;
+      } on NoSuchMethodError {
+        hasMethod = false;
+      } catch (_) {
+        hasMethod = false;
+      }
+      expect(hasMethod, isFalse,
           reason: 'DatabaseService should not expose hard delete for users');
     });
 
-    test('no public hard delete method for forms', () {
-      expect(() => db.deleteForm, throwsNoSuchMethodError,
+    test('DatabaseService does not expose deleteForm', () {
+      bool hasMethod;
+      try {
+        // ignore: avoid_dynamic_calls
+        (db as dynamic).deleteForm;
+        hasMethod = true;
+      } on NoSuchMethodError {
+        hasMethod = false;
+      } catch (_) {
+        hasMethod = false;
+      }
+      expect(hasMethod, isFalse,
           reason: 'DatabaseService should not expose hard delete for forms');
     });
   });

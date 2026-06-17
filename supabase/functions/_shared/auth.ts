@@ -11,6 +11,17 @@ export interface AuthResult {
   userId: string
   email?: string
   role?: string
+  ip?: string
+}
+
+/**
+ * Extract client IP from request headers.
+ * Uses x-forwarded-for (from Supabase Edge Runtime) or x-real-ip.
+ */
+export function getClientIp(req: Request): string {
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || req.headers.get('x-real-ip')
+    || 'unknown'
 }
 
 /**

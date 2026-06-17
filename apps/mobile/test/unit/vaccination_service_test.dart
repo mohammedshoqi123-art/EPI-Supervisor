@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:epi_supervisor/core/lib/src/ai/bot/vaccination_service.dart';
+import 'package:epi_core/src/ai/bot/vaccination_service.dart';
 
 /// ═══════════════════════════════════════════════════════════
 /// اختبارات خدمة التطعيم — يتحقق من صحة البيانات الطبية

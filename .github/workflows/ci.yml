@@ -116,7 +116,7 @@ jobs:
         with:
           name: admin-web-dist
           path: apps/admin-web/dist/
-          retention-days: 7
+          retention-days: 3
 
   # ─── Build APK ───────────────────────────────────────────
   # NOTE: Admin dashboard deployment handled by deploy-admin.yml
@@ -187,7 +187,7 @@ jobs:
         with:
           name: epi-supervisor-apk
           path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
+          retention-days: 3
 
   # ─── Build Flutter Web ───────────────────────────────────
   # Flutter Web build DISABLED — admin-web only
@@ -237,7 +237,7 @@ jobs:
         with:
           name: epi-supervisor-web
           path: apps/mobile/build/web/
-          retention-days: 30
+          retention-days: 3
 
   # ─── Deploy Flutter Web to GitHub Pages ──────────────────
   deploy-flutter-web:
@@ -299,12 +299,12 @@ jobs:
             ZAI_API_KEY=${{ secrets.ZAI_API_KEY }} \
             OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }} \
           || echo "⚠️ Failed to set some secrets"
-          supabase functions deploy ai-chat-v3 --no-verify-jwt || echo "⚠️ Failed to deploy ai-chat-v3"
+          supabase functions deploy ai-chat-v3 || echo "⚠️ Failed to deploy ai-chat-v3"
           for func_dir in supabase/functions/*/; do
             func_name=$(basename "$func_dir")
             if [ "$func_name" != "_shared" ] && [ "$func_name" != "ai-chat-v3" ] && [ "$func_name" != "deno.json" ]; then
               echo "Deploying $func_name..."
-              supabase functions deploy "$func_name" --no-verify-jwt || echo "⚠️ Failed to deploy $func_name"
+              supabase functions deploy "$func_name" || echo "⚠️ Failed to deploy $func_name"
             fi
           done
 

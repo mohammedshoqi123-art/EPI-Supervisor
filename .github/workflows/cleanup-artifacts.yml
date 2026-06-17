@@ -1,0 +1,81 @@
+# ═══════════════════════════════════════════════════════════
+# Cleanup Old Artifacts — يحفظ آخر 10 عمليات بناء فقط
+# يعمل تلقائياً كل أسبوع + يمكن تشغيله يدوياً
+# ═══════════════════════════════════════════════════════════
+
+name: Cleanup Old Artifacts
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # Every Sunday at 3 AM UTC
+  workflow_dispatch:       # Manual trigger
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    name: Keep Last 10 Builds
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old artifacts — keep last 10 per name
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const KEEP_LAST = 10;
+
+            console.log(`🧹 Starting artifact cleanup — keeping last ${KEEP_LAST} per artifact name\n`);
+
+            // Collect all artifacts
+            let allArtifacts = [];
+            for await (const resp of github.paginate.iterator(
+              github.rest.actions.listArtifactsForRepo,
+              { owner: context.repo.owner, repo: context.repo.repo, per_page: 100 }
+            )) {
+              allArtifacts.push(...resp.data);
+            }
+
+            console.log(`📦 Total artifacts found: ${allArtifacts.length}\n`);
+
+            // Group by artifact name
+            const groups = {};
+            for (const a of allArtifacts) {
+              if (!groups[a.name]) groups[a.name] = [];
+              groups[a.name].push(a);
+            }
+
+            // Sort each group by created_at DESC (newest first)
+            // Delete everything after the first KEEP_LAST items
+            let deleted = 0;
+            let freedBytes = 0;
+
+            for (const [name, items] of Object.entries(groups)) {
+              items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+              const toDelete = items.slice(KEEP_LAST);
+
+              if (toDelete.length > 0) {
+                console.log(`📁 ${name}: ${items.length} total, deleting ${toDelete.length}, keeping ${Math.min(KEEP_LAST, items.length)}`);
+              }
+
+              for (const a of toDelete) {
+                const sizeMB = (a.size_in_bytes / 1048576).toFixed(1);
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: a.id,
+                });
+                deleted++;
+                freedBytes += a.size_in_bytes;
+                console.log(`  🗑️  Deleted: ${a.name} (${sizeMB} MB) — ${a.created_at.split('T')[0]}`);
+              }
+            }
+
+            const freedMB = (freedBytes / 1048576).toFixed(1);
+            const freedGB = (freedBytes / 1073741824).toFixed(2);
+
+            console.log(`\n═══════════════════════════════════════`);
+            console.log(`✅ Cleanup complete!`);
+            console.log(`   Deleted: ${deleted} artifacts`);
+            console.log(`   Freed: ${freedMB} MB (${freedGB} GB)`);
+            console.log(`═══════════════════════════════════════`);

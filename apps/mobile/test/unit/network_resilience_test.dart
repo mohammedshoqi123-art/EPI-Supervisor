@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-/// ═══════════════════════════════════════════════════════════
 /// اختبارات مرونة الشبكة — Network Resilience Tests
-/// ═══════════════════════════════════════════════════════════
 
 void main() {
   group('HTTP Status Code Handling', () {
@@ -24,7 +22,7 @@ void main() {
       expect(isSuccess(204), isTrue);
     });
 
-    test('4xx is client error (not retryable)', () => {
+    test('4xx is client error (not retryable)', () {
       expect(isClientError(400), isTrue);
       expect(isClientError(401), isTrue);
       expect(isClientError(403), isTrue);
@@ -32,7 +30,7 @@ void main() {
       expect(isRetryable(400), isFalse);
     });
 
-    test('5xx is server error (retryable)', () => {
+    test('5xx is server error (retryable)', () {
       expect(isRetryable(500), isTrue);
       expect(isRetryable(502), isTrue);
       expect(isRetryable(503), isTrue);
@@ -46,11 +44,16 @@ void main() {
   group('Timeout Handling', () {
     Duration getTimeout(String operation) {
       switch (operation) {
-        case 'auth': return Duration(seconds: 10);
-        case 'submit': return Duration(seconds: 30);
-        case 'sync': return Duration(seconds: 60);
-        case 'upload': return Duration(seconds: 120);
-        default: return Duration(seconds: 15);
+        case 'auth':
+          return Duration(seconds: 10);
+        case 'submit':
+          return Duration(seconds: 30);
+        case 'sync':
+          return Duration(seconds: 60);
+        case 'upload':
+          return Duration(seconds: 120);
+        default:
+          return Duration(seconds: 15);
       }
     }
 
@@ -103,7 +106,7 @@ void main() {
 
     bool shouldRetry(int attempt, int maxAttempts, int statusCode) {
       if (attempt >= maxAttempts) return false;
-      if (statusCode < 500 && statusCode !== 429) return false;
+      if (statusCode < 500 && statusCode != 429) return false;
       return true;
     }
 

@@ -40,7 +40,11 @@ serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}))
-    const { governorate_id, district_id, start_date, end_date, form_id, campaign_type } = body
+    const { governorate_id, district_id, start_date, end_date, form_id, campaign_type, campaign_round } = body
+
+    // ═══ NEW: Validate optional campaign_round (only filter when a valid number > 0) ═══
+    const parsedRound = Number(campaign_round)
+    const campaignRound = !isNaN(parsedRound) && parsedRound > 0 ? parsedRound : null
 
     const today = new Date().toISOString().split('T')[0]
 
@@ -64,8 +68,17 @@ serve(async (req) => {
       return q
     }
 
+    // ═══ NEW: Apply campaign_round filter — ONLY for form_submissions queries ═══
+    const applyCampaignRound = (q: any) => {
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
+      return q
+    }
+
+    // Wrapper for form_submissions queries: shared filters + campaign_round filter
+    const applyFormSubFilters = (q: any) => applyCampaignRound(applyFilters(q))
+
     const applyDateFilters = (q: any) => {
-      q = applyFilters(q)
+      q = applyFormSubFilters(q)
       if (start_date) q = q.gte('created_at', start_date)
       if (end_date) q = q.lte('created_at', end_date)
       return q
@@ -85,7 +98,7 @@ serve(async (req) => {
       // ═══ NEW: Fetch full submissions for governorate + form breakdowns ═══
       { data: fullSubmissions },
     ] = await Promise.all([
-      applyFilters(
+      applyFormSubFilters(
         supabase.from('form_submissions').select('*', { count: 'exact', head: true })
           .is('deleted_at', null)
           .gte('created_at', `${today}T00:00:00Z`)
@@ -99,7 +112,7 @@ serve(async (req) => {
         supabase.from('form_submissions').select('status')
           .is('deleted_at', null).limit(5000)
       ),
-      applyFilters(
+      applyFormSubFilters(
         supabase.from('form_submissions').select('created_at')
           .is('deleted_at', null)
           .gte('created_at', (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().split('T')[0] + 'T00:00:00Z' })())
@@ -199,7 +212,7 @@ serve(async (req) => {
       forms: formAnalytics,
       governorateBreakdown: govBreakdown.sort((a: any, b: any) => b.count - a.count),
       generatedAt: new Date().toISOString(),
-      filters: { governorate_id, district_id, start_date, end_date, form_id },
+      filters: { governorate_id, district_id, start_date, end_date, form_id, campaign_round: campaignRound },
     }, 200, origin)
 
   } catch (error) {

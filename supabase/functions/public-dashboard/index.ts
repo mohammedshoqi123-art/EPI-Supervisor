@@ -26,6 +26,17 @@ serve(async (req: Request) => {
 
     const url = new URL(req.url)
     const days = parseInt(url.searchParams.get('days') || '30')
+    // ═══ NEW: Optional campaign_round query param (default = no filter / all rounds) ═══
+    const campaignRoundRaw = url.searchParams.get('campaign_round')
+    const parsedRound = campaignRoundRaw ? parseInt(campaignRoundRaw, 10) : NaN
+    const campaignRound = !isNaN(parsedRound) && parsedRound > 0 ? parsedRound : null
+
+    // Helper to apply campaign_round filter only to form_submissions queries
+    const applyCampaignRound = (q: any) => {
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
+      return q
+    }
+
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const todayISO = today.toISOString()
@@ -47,36 +58,36 @@ serve(async (req: Request) => {
       activeUsersRes,
     ] = await Promise.allSettled([
       // Total submissions
-      supabase.from('form_submissions')
+      applyCampaignRound(supabase.from('form_submissions')
         .select('id', { count: 'exact', head: true })
         .is('deleted_at', null)
-        .gte('created_at', periodStart),
+        .gte('created_at', periodStart)),
 
       // Today
-      supabase.from('form_submissions')
+      applyCampaignRound(supabase.from('form_submissions')
         .select('id', { count: 'exact', head: true })
         .is('deleted_at', null)
-        .gte('created_at', todayISO),
+        .gte('created_at', todayISO)),
 
       // This week
-      supabase.from('form_submissions')
+      applyCampaignRound(supabase.from('form_submissions')
         .select('id', { count: 'exact', head: true })
         .is('deleted_at', null)
-        .gte('created_at', weekAgo),
+        .gte('created_at', weekAgo)),
 
       // Submitted
-      supabase.from('form_submissions')
+      applyCampaignRound(supabase.from('form_submissions')
         .select('id', { count: 'exact', head: true })
         .is('deleted_at', null)
         .eq('status', 'submitted')
-        .gte('created_at', periodStart),
+        .gte('created_at', periodStart)),
 
       // Draft
-      supabase.from('form_submissions')
+      applyCampaignRound(supabase.from('form_submissions')
         .select('id', { count: 'exact', head: true })
         .is('deleted_at', null)
         .eq('status', 'draft')
-        .gte('created_at', periodStart),
+        .gte('created_at', periodStart)),
 
       // Active governorates (with submissions)
       supabase.from('governorates')
@@ -100,10 +111,10 @@ serve(async (req: Request) => {
       supabase.rpc('public_subs_by_form', { p_days: days }),
 
       // Active users today (no PII — just count)
-      supabase.from('form_submissions')
+      applyCampaignRound(supabase.from('form_submissions')
         .select('submitted_by', { count: 'exact', head: true })
         .is('deleted_at', null)
-        .gte('created_at', todayISO),
+        .gte('created_at', todayISO)),
     ])
 
     const total = totalSubsRes.status === 'fulfilled' ? totalSubsRes.value.count || 0 : 0

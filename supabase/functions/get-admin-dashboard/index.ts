@@ -51,6 +51,17 @@ serve(async (req) => {
     const adminClient = createAdminClient()
     const db = adminClient ?? supabase
 
+    // ═══ NEW: Parse optional campaign_round from request body ═══
+    const body = await req.json().catch(() => ({}))
+    const parsedRound = Number(body.campaign_round)
+    const campaignRound = !isNaN(parsedRound) && parsedRound > 0 ? parsedRound : null
+
+    // Helper to apply campaign_round filter only to form_submissions queries
+    const applyCampaignRound = (q: any) => {
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
+      return q
+    }
+
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -75,11 +86,11 @@ serve(async (req) => {
     ] = await Promise.all([
       db.from('profiles').select('*', { count: 'exact', head: true }).is('deleted_at', null),
       db.from('profiles').select('*', { count: 'exact', head: true }).eq('is_active', true).is('deleted_at', null),
-      db.from('form_submissions').select('*', { count: 'exact', head: true }).is('deleted_at', null),
-      db.from('form_submissions').select('*', { count: 'exact', head: true }).gte('created_at', todayStart).is('deleted_at', null),
-      db.from('form_submissions').select('*', { count: 'exact', head: true }).eq('status', 'submitted').is('deleted_at', null),
+      applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true }).is('deleted_at', null)),
+      applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true }).gte('created_at', todayStart).is('deleted_at', null)),
+      applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true }).eq('status', 'submitted').is('deleted_at', null)),
 
-      db.from('form_submissions').select('*', { count: 'exact', head: true }).eq('status', 'draft').is('deleted_at', null),
+      applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true }).eq('status', 'draft').is('deleted_at', null)),
       db.from('supply_shortages').select('*', { count: 'exact', head: true }).is('deleted_at', null),
       db.from('supply_shortages').select('*', { count: 'exact', head: true }).eq('severity', 'critical').eq('is_resolved', false).is('deleted_at', null),
       db.from('governorates').select('*', { count: 'exact', head: true }).eq('is_active', true).is('deleted_at', null),
@@ -90,12 +101,12 @@ serve(async (req) => {
     ])
 
     // ═══ Submissions Timeline (last 30 days) ═══
-    const { data: timelineData } = await db
+    const { data: timelineData } = await applyCampaignRound(db
       .from('form_submissions')
       .select('created_at, status')
       .gte('created_at', monthAgo)
       .is('deleted_at', null)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: true }))
 
     // Group by day
     const timelineMap = new Map<string, { total: number; submitted: number; draft: number }>()
@@ -116,11 +127,11 @@ serve(async (req) => {
     const submissionsTimeline = Array.from(timelineMap.entries()).map(([date, data]) => ({ date, ...data }))
 
     // ═══ Submissions by Governorate ═══
-    const { data: govSubmissions } = await db
+    const { data: govSubmissions } = await applyCampaignRound(db
       .from('form_submissions')
       .select('governorate_id, governorates(name_ar)')
       .gte('created_at', monthAgo)
-      .is('deleted_at', null)
+      .is('deleted_at', null))
 
     const govMap = new Map<string, { name: string; count: number }>()
     for (const sub of govSubmissions ?? []) {
@@ -166,8 +177,8 @@ serve(async (req) => {
     // ═══ Weekly comparison ═══
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString()
     const [{ count: thisWeekSubmissions }, { count: lastWeekSubmissions }] = await Promise.all([
-      db.from('form_submissions').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo).is('deleted_at', null),
-      db.from('form_submissions').select('*', { count: 'exact', head: true }).gte('created_at', twoWeeksAgo).lt('created_at', weekAgo).is('deleted_at', null),
+      applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo).is('deleted_at', null)),
+      applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true }).gte('created_at', twoWeeksAgo).lt('created_at', weekAgo).is('deleted_at', null)),
     ])
 
     const weeklyChange = (lastWeekSubmissions ?? 0) > 0
@@ -175,11 +186,11 @@ serve(async (req) => {
       : (thisWeekSubmissions ?? 0) > 0 ? 100 : 0
 
     // ═══ Pending sync count ═══
-    const { count: offlinePending } = await db
+    const { count: offlinePending } = await applyCampaignRound(db
       .from('form_submissions')
       .select('*', { count: 'exact', head: true })
       .eq('is_offline', true)
-      .is('synced_at', null)
+      .is('synced_at', null))
 
     return jsonResponse({
       kpis: {

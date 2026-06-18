@@ -42,11 +42,19 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const targetUserId = body.user_id || auth.userId
     const campaignType = body.campaign_type
+    // ═══ NEW: Optional campaign_round filter (default = no filter / all rounds) ═══
+    const parsedRound = Number(body.campaign_round)
+    const campaignRound = !isNaN(parsedRound) && parsedRound > 0 ? parsedRound : null
 
-    const { data, error } = await supabase.rpc('get_dashboard_stats', {
+    // Build RPC params — only include p_campaign_round when a valid round is provided
+    // so the default request behavior (all rounds) is unchanged.
+    const rpcParams: Record<string, any> = {
       p_user_id: targetUserId,
-      p_campaign_type: campaignType || null
-    })
+      p_campaign_type: campaignType || null,
+    }
+    if (campaignRound) rpcParams.p_campaign_round = campaignRound
+
+    const { data, error } = await supabase.rpc('get_dashboard_stats', rpcParams)
 
     if (error) {
       console.error('Dashboard stats RPC error:', error)

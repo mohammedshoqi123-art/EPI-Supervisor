@@ -5,9 +5,9 @@ import { getCampaignFormIds } from './campaign'
 
 // ==================== DASHBOARD ====================
 
-export function useDashboardStats(campaignType?: string) {
+export function useDashboardStats(campaignType?: string, campaignRound?: number) {
   return useQuery({
-    queryKey: ['dashboard-stats', campaignType],
+    queryKey: ['dashboard-stats', campaignType, campaignRound],
     queryFn: async () => {
       if (!isConfigured) return null
 
@@ -16,7 +16,8 @@ export function useDashboardStats(campaignType?: string) {
 
       // Helper to apply campaign filter to form_submissions queries
       const applyFormFilter = (q: any) => {
-        if (formIds && formIds.length > 0) return q.in('form_id', formIds)
+        if (formIds && formIds.length > 0) q = q.in('form_id', formIds)
+        if (campaignRound && campaignRound > 0) q = q.eq('campaign_round', campaignRound)
         return q
       }
 

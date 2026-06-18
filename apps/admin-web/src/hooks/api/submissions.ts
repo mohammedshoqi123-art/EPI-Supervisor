@@ -7,7 +7,7 @@ import { getCampaignFormIds } from './campaign'
 
 export function useSubmissions(filters?: {
   status?: SubmissionStatus; formId?: string; governorateId?: string; role?: string; search?: string
-  page?: number; pageSize?: number; campaignType?: string
+  page?: number; pageSize?: number; campaignType?: string; campaignRound?: number
 }) {
   return useQuery({
     queryKey: ['submissions', filters],
@@ -46,6 +46,11 @@ export function useSubmissions(filters?: {
           // No forms for this campaign → return empty
           return { data: [], count: 0 }
         }
+      }
+
+      // Campaign round filter
+      if (filters?.campaignRound && filters.campaignRound > 0) {
+        query = query.eq('campaign_round', filters.campaignRound)
       }
 
       const { data, error, count } = await query

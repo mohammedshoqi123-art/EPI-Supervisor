@@ -26,14 +26,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    // ═══ وقت أقصر للـ splash — فقط للوجو ═══
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Fix: reduced artificial delays — 500ms was too long for logo display
+    // 200ms is enough for a smooth visual transition
+    await Future.delayed(const Duration(milliseconds: 200));
     if (!mounted || _hasNavigated) return;
 
     // ═══ إذا Supabase مو مُعدّ — روح للّوجن ═══
     if (!SupabaseConfig.isConfigured) {
       setState(() => _status = 'Supabase غير مُعدّ — الانتقال لتسجيل الدخول');
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Fix: removed extra 500ms delay — go immediately
       if (!mounted || _hasNavigated) return;
       _hasNavigated = true;
       context.go('/login');
@@ -58,11 +59,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               throw TimeoutException('Profile load timed out');
             },
           );
-        } catch (_) {
+        } catch (e) {
           // ═══ القاعدة الذهبية: فشل Profile ≠ فشل دخول ═══
           // المستخدم مصادق → روح للداشبورد
-          debugPrint(
-              '[Splash] Profile failed but user is authenticated — proceeding');
+          debugPrint('[Splash] Profile failed ($e) but user is authenticated — proceeding');
         }
 
         if (!mounted || _hasNavigated) return;
@@ -70,7 +70,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         context.go('/dashboard');
       } else {
         setState(() => _status = 'الانتقال لتسجيل الدخول...');
-        await Future.delayed(const Duration(milliseconds: 300));
+        // Fix: removed 300ms delay — navigate immediately
         if (!mounted || _hasNavigated) return;
         _hasNavigated = true;
         context.go('/login');

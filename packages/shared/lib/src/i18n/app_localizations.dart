@@ -197,6 +197,28 @@ class AppLocalizations {
     'onboarding.welcome': 'مرحباً بك في منصة مشرف EPI',
     'onboarding.start': 'ابدأ الاستخدام',
     'onboarding.skip': 'تخطي',
+
+    // ═══ Splash ═══
+    'splash.loading': 'جاري التحميل...',
+    'splash.session_found': 'تم العثور على جلسة — جاري التحميل...',
+    'splash.going_to_login': 'الانتقال لتسجيل الدخول...',
+    'splash.supabase_not_configured': 'Supabase غير مُعدّ — الانتقال لتسجيل الدخول',
+
+    // ═══ Login ═══
+    'login.forget_password': 'نسيت كلمة المرور؟',
+    'login.reset_password_title': 'استعادة كلمة المرور',
+    'login.reset_password_body': 'أدخل بريدك الإلكتروني وسيتم إرسال رابط استعادة كلمة المرور',
+    'login.reset_sent': 'تم إرسال رابط الاستعادة إلى {email}',
+    'login.reset_failed': 'فشل الإرسال',
+    'login.invalid_email': 'الرجاء إدخال بريد صحيح',
+
+    // ═══ Notifications ═══
+    'notif.sync_complete': '✅ اكتملت المزامنة',
+    'notif.sync_complete_with_errors': '⚠️ اكتملت المزامنة (مع أخطاء)',
+    'notif.sync_body': 'تمت مزامنة {count} عنصر بنجاح',
+    'notif.sync_body_with_errors': 'تمت مزامنة {synced} عنصر، فشل {failed} عنصر',
+    'notif.submission_confirmed': '✅ تم تأكيد الإرسالية',
+    'notif.shortage_alert': '🔴 تنبيه: نقص في {vaccine}',
   };
 
   /// English strings (for future use)

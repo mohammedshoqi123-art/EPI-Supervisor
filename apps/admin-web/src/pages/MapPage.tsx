@@ -105,14 +105,14 @@ function FitBounds({ points }: { points: [number, number][] }) {
 export default function MapPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { campaign, labelAr, isFiltered } = useCampaign()
+  const { campaign, labelAr, isFiltered, campaignRound, showRoundFilter } = useCampaign()
   const { previewProps, openPreview, closePreview } = useReportPreview()
 
-  const { data: submissions, isLoading, refetch } = useSubmissions({ pageSize: 10000 })
+  const { data: submissions, isLoading, refetch } = useSubmissions({ pageSize: 10000, campaignType: campaign, campaignRound: showRoundFilter ? campaignRound : undefined })
   const { data: forms } = useForms({ pageSize: 100 })
   const { data: governorates } = useGovernorates()
   const { data: users } = useUsers()
-  const { data: stats } = useDashboardStats(campaign)
+  const { data: stats } = useDashboardStats(campaign, showRoundFilter ? campaignRound : undefined)
 
   // State
   const [leafletLoaded, setLeafletLoaded] = useState(false)

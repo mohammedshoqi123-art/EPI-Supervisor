@@ -68,7 +68,7 @@ export default function SubmissionsPage() {
   const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FormSubmission | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const { campaign, labelAr, isFiltered } = useCampaign()
+  const { campaign, labelAr, isFiltered, campaignRound, showRoundFilter } = useCampaign()
   const { toast } = useToast()
   const { data: authData } = useAuth()
   const userRole = authData?.profile?.role
@@ -86,6 +86,7 @@ export default function SubmissionsPage() {
     page,
     pageSize: 20,
     campaignType: campaign,
+    campaignRound: showRoundFilter ? campaignRound : undefined,
   })
 
   const { data: formsResult } = useForms({ campaignType: campaign })

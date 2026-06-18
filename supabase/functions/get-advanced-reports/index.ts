@@ -34,7 +34,17 @@ serve(async (req) => {
     const db = adminClient ?? supabase
 
     const body = await req.json().catch(() => ({}))
-    const { report_type, from_date, to_date, governorate_id, district_id, form_id, status } = body
+    const { report_type, from_date, to_date, governorate_id, district_id, form_id, status, campaign_round } = body
+
+    // ═══ NEW: Validate optional campaign_round (only filter when a valid number > 0) ═══
+    const parsedRound = Number(campaign_round)
+    const campaignRound = !isNaN(parsedRound) && parsedRound > 0 ? parsedRound : null
+
+    // Helper to apply campaign_round filter only to form_submissions queries
+    const applyCampaignRound = (q: any) => {
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
+      return q
+    }
 
     const fromDate = from_date ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     const toDate = to_date ?? new Date().toISOString()
@@ -59,6 +69,7 @@ serve(async (req) => {
         if (district_id) query = query.eq('district_id', district_id)
         if (form_id) query = query.eq('form_id', form_id)
         if (status) query = query.eq('status', status)
+        if (campaignRound) query = query.eq('campaign_round', campaignRound)
 
         const { data, error, count } = await query.limit(500)
         if (error) return jsonResponse({ error: error.message }, 400, origin)
@@ -101,12 +112,12 @@ serve(async (req) => {
           const districtIds = (govDistricts ?? []).map(d => d.id)
 
           const [total, submitted, draft, facilitiesCount, usersCount] = await Promise.all([
-            db.from('form_submissions').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
-            db.from('form_submissions').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).eq('status', 'submitted').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
-            db.from('form_submissions').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).eq('status', 'draft').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null),
+            applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true })
+              .eq('governorate_id', gov.id).gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null)),
+            applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true })
+              .eq('governorate_id', gov.id).eq('status', 'submitted').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null)),
+            applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true })
+              .eq('governorate_id', gov.id).eq('status', 'draft').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null)),
             districtIds.length > 0
               ? db.from('health_facilities').select('*', { count: 'exact', head: true })
                   .in('district_id', districtIds).eq('is_active', true).is('deleted_at', null)

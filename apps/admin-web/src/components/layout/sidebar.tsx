@@ -8,7 +8,7 @@ import {
   AlertTriangle, Bell, Moon, Sun, Menu, X, Sparkles, Layout, Clock,
   Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
   FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare,
-  FileSpreadsheet, Calendar
+  FileSpreadsheet, Calendar, RotateCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -19,7 +19,7 @@ import { useTheme } from './theme-provider'
 import { useSignOut, useDashboardStats } from '@/hooks/useApi'
 import { ROLE_LABELS, type UserRole } from '@/types/database'
 import { getInitials } from '@/lib/utils'
-import { useCampaign, type CampaignType } from '@/lib/campaign-context'
+import { useCampaign, CAMPAIGN_ROUNDS, getRoundLabel } from '@/lib/campaign-context'
 
 // Helper to get logo URL with base path support
 function getLogoUrl(size: '64' | '128' | '256' = '128') {
@@ -140,7 +140,7 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
   const { theme, setTheme } = useTheme()
   const signOut = useSignOut()
   const { data: stats } = useDashboardStats()
-  const { campaign, setCampaign, visibleOptions } = useCampaign()
+  const { campaign, setCampaign, visibleOptions, campaignRound, setCampaignRound, showRoundFilter } = useCampaign()
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
 
   const toggleSection = (sectionId: string) => {
@@ -274,6 +274,39 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
           <span className="text-lg">
             {visibleOptions.find(o => o.id === campaign)?.icon}
           </span>
+        </div>
+      )}
+
+      {/* ═══ Campaign Round Filter — only for integrated_activity ═══ */}
+      {!collapsed && showRoundFilter && (
+        <div className="px-3 py-2">
+          <div className="flex items-center gap-1.5 px-2 mb-2">
+            <RotateCw className="w-3.5 h-3.5 text-blue-200" />
+            <span className="text-[11px] font-medium text-blue-200 uppercase tracking-wider">فلتر الجولة</span>
+          </div>
+          <div className="space-y-1">
+            {CAMPAIGN_ROUNDS.map((round) => {
+              const isActive = campaignRound === round
+              return (
+                <button
+                  key={round}
+                  onClick={() => setCampaignRound(round)}
+                  className={cn(
+                    'w-full flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 text-right',
+                    isActive
+                      ? 'bg-white/20 text-white shadow-md shadow-black/10'
+                      : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                  )}
+                >
+                  <span className="text-sm">🔄</span>
+                  <span className="flex-1 truncate">{getRoundLabel(round)}</span>
+                  {isActive && (
+                    <span className="w-2 h-2 rounded-full bg-white shrink-0" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -436,7 +469,7 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
   const [open, setOpen] = useState(false)
   const [collapsedSectionsMobile, setCollapsedSectionsMobile] = useState<Set<string>>(new Set())
   const location = useLocation()
-  const { campaign, setCampaign, visibleOptions } = useCampaign()
+  const { campaign, setCampaign, visibleOptions, campaignRound, setCampaignRound, showRoundFilter } = useCampaign()
   const signOut = useSignOut()
 
   const toggleMobileSection = (sectionId: string) => {

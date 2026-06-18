@@ -52,6 +52,35 @@ const ALL_OPTION: CampaignOption = {
 const STORAGE_KEY = 'epi-admin-active-campaign'
 const CAMPAIGNS_CACHE_KEY = 'epi-admin-campaigns-cache'
 const HIDDEN_BUILTIN_KEY = 'epi-admin-hidden-builtins'
+const ROUND_STORAGE_KEY = 'epi-admin-active-round'
+
+// ═══ Campaign Round Helpers ═══
+const ROUND_LABELS: Record<number, string> = {
+  1: 'الجولة الأولى',
+  2: 'الجولة الثانية',
+  3: 'الجولة الثالثة',
+  4: 'الجولة الرابعة',
+  5: 'الجولة الخامسة',
+}
+
+export function getRoundLabel(round: number): string {
+  return ROUND_LABELS[round] || `الجولة ${round}`
+}
+
+export const CAMPAIGN_ROUNDS = [1, 2, 3, 4, 5]
+
+function loadActiveRound(): number {
+  if (typeof window === 'undefined') return 1
+  const stored = localStorage.getItem(ROUND_STORAGE_KEY)
+  const parsed = parseInt(stored || '1')
+  return isNaN(parsed) || parsed < 1 ? 1 : parsed
+}
+
+function saveActiveRound(round: number) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(ROUND_STORAGE_KEY, String(round))
+  }
+}
 
 // ═══ Context ═══
 interface CampaignContextValue {
@@ -83,6 +112,15 @@ interface CampaignContextValue {
   getCampaign: (id: CampaignType) => CampaignOption | undefined
   /** Whether data is loading from Supabase */
   loading: boolean
+  /** ═══ Campaign Round System ═══ */
+  /** Current active campaign round (1-5). Only relevant for integrated_activity. */
+  campaignRound: number
+  /** Set the active campaign round */
+  setCampaignRound: (round: number) => void
+  /** Arabic label for current round */
+  roundLabelAr: string
+  /** Whether round filter should be visible (campaign === integrated_activity) */
+  showRoundFilter: boolean
 }
 
 const CampaignContext = createContext<CampaignContextValue | null>(null)
@@ -263,6 +301,7 @@ export const CAMPAIGN_COLORS = [
 
 export function CampaignProvider({ children }: { children: ReactNode }) {
   const [campaign, setCampaignState] = useState<CampaignType>(loadActiveCampaign)
+  const [campaignRound, setCampaignRoundState] = useState<number>(loadActiveRound)
   const [campaigns, setCampaigns] = useState<CampaignOption[]>(loadCachedCampaigns)
   const [hiddenBuiltins, setHiddenBuiltins] = useState<Set<string>>(loadHiddenBuiltins)
   const [loading, setLoading] = useState(true)
@@ -302,6 +341,16 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   // ── Persist active campaign ──
   useEffect(() => { saveActiveCampaign(campaign) }, [campaign])
 
+  // ── Persist active round ──
+  useEffect(() => { saveActiveRound(campaignRound) }, [campaignRound])
+
+  // ── Reset round to 1 when switching away from integrated_activity ──
+  useEffect(() => {
+    if (campaign !== 'integrated_activity' && campaignRound !== 1) {
+      setCampaignRoundState(1)
+    }
+  }, [campaign, campaignRound])
+
   // ── Persist hidden builtins ──
   useEffect(() => { saveHiddenBuiltins(hiddenBuiltins) }, [hiddenBuiltins])
 
@@ -317,6 +366,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
   const setCampaign = useCallback((newCampaign: CampaignType) => {
     setCampaignState(newCampaign)
+  }, [])
+
+  const setCampaignRound = useCallback((round: number) => {
+    if (round >= 1 && round <= 10) {
+      setCampaignRoundState(round)
+    }
   }, [])
 
   const isCampaignVisible = useCallback((id: CampaignType) => {
@@ -423,7 +478,11 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     deleteCampaign,
     getCampaign,
     loading,
-  }), [campaign, currentOption, allCampaigns, visibleOptions, loading])
+    campaignRound,
+    setCampaignRound,
+    roundLabelAr: getRoundLabel(campaignRound),
+    showRoundFilter: campaign === 'integrated_activity',
+  }), [campaign, currentOption, allCampaigns, visibleOptions, loading, campaignRound])
 
   return (
     <CampaignContext.Provider value={value}>

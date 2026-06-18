@@ -188,12 +188,12 @@ const AlertBanner = memo(function AlertBanner({ icon: Icon, color, bg, title, va
 // ═══ Main Dashboard ═══
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const { campaign, labelAr, isFiltered } = useCampaign()
-  const { data: stats, isLoading: statsLoading, refetch, isFetching, error: statsError } = useDashboardStats(campaign)
+  const { campaign, labelAr, isFiltered, campaignRound, showRoundFilter } = useCampaign()
+  const { data: stats, isLoading: statsLoading, refetch, isFetching, error: statsError } = useDashboardStats(campaign, showRoundFilter ? campaignRound : undefined)
   const { data: chartData, isLoading: chartLoading } = useSubmissionsChart(campaign)
   const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign)
   const { data: notifications } = useNotifications()
-  const { data: recentData } = useSubmissions({ pageSize: 10 })
+  const { data: recentData } = useSubmissions({ pageSize: 10, campaignType: campaign, campaignRound: showRoundFilter ? campaignRound : undefined })
   const { data: formsResult } = useForms({ pageSize: 100 })
   const { data: users } = useUsers()
   const { data: shortages } = useShortages(campaign)

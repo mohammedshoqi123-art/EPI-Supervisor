@@ -1,5 +1,5 @@
 buildscript {
-    ext.kotlin_version = '2.1.0'
+    ext.kotlin_version = '2.2.0'
     repositories {
         google()
         mavenCentral()
@@ -31,15 +31,24 @@ tasks.register("clean", Delete) {
 }
 
 // Force AndroidX core version to fix lStar attribute error in printing package
-// Force Kotlin stdlib to 2.1.0 to prevent 2.2.0 from breaking compilation
 subprojects {
     configurations.all {
         resolutionStrategy {
             force 'androidx.core:core:1.13.1'
             force 'androidx.core:core-ktx:1.13.1'
-            force 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0'
-            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.0'
-            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0'
+        }
+    }
+    // Fix: set Kotlin language version 1.8 for all subprojects
+    // This prevents "Language version 1.6 is no longer supported" error
+    // when compiling plugins that use old Kotlin language version with Kotlin 2.2.0
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                kotlinOptions {
+                    languageVersion = '1.8'
+                    apiVersion = '1.8'
+                }
+            }
         }
     }
 }

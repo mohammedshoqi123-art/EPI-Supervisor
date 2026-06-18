@@ -155,9 +155,13 @@ dependencies {
 }
 
 // Force AndroidX core to compatible version (fix lStar attribute error)
+// Force Kotlin stdlib to match project Kotlin version (fix incompatible metadata)
 configurations.all {
     resolutionStrategy {
         force 'androidx.core:core:1.13.1'
         force 'androidx.core:core-ktx:1.13.1'
+        force "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     }
 }

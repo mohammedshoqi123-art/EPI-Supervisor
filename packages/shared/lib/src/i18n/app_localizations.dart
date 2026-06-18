@@ -198,6 +198,18 @@ class AppLocalizations {
     'onboarding.start': 'ابدأ الاستخدام',
     'onboarding.skip': 'تخطي',
 
+    // ═══ Settings ═══
+    'settings.title': 'الإعدادات',
+    'settings.dark_mode': 'الوضع الليلي',
+    'settings.dark_mode_enabled': 'مفعّل',
+    'settings.dark_mode_disabled': 'معطّل',
+    'settings.dark_mode_system': 'تلقائي (حسب النظام)',
+    'settings.dark_mode_auto': 'تلقائي',
+    'settings.dark_mode_light': 'نهاري',
+    'settings.dark_mode_dark': 'ليلي',
+    'settings.account_info': 'معلومات الحساب',
+    'settings.app_info': 'معلومات التطبيق',
+
     // ═══ Splash ═══
     'splash.loading': 'جاري التحميل...',
     'splash.session_found': 'تم العثور على جلسة — جاري التحميل...',

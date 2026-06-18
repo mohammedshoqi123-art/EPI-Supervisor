@@ -1,93 +1,32 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 /// ═══════════════════════════════════════════════════════════════
-///  FCM Push Notifications Foundation
+///  FCM Push Notifications Foundation (Stub)
 ///
-///  Provides local notification scheduling + display.
-///  FCM remote push notifications require firebase_messaging
-///  package which can be added when Firebase project is configured.
+///  This is a stub implementation. The full implementation requires
+///  flutter_local_notifications package, which is currently incompatible
+///  with the project's Kotlin version (kotlin-stdlib 2.2.0 conflict).
 ///
-///  Current features:
-///  - Local notification display (title + body)
-///  - Scheduled notifications (delayed)
-///  - Notification channel management (Android)
-///  - Permission request (iOS + Android 13+)
+///  When the Kotlin ecosystem stabilizes, add flutter_local_notifications
+///  to pubspec.yaml and implement the full methods below.
+///
+///  All methods are no-ops in this stub — they log but don't show
+///  actual notifications.
 /// ═══════════════════════════════════════════════════════════════
 
 class FcmNotificationService {
-  static final FlutterLocalNotificationsPlugin _localNotifications =
-      FlutterLocalNotificationsPlugin();
-
   static bool _initialized = false;
-  static const String _channelId = 'epi_supervisor_notifications';
-  static const String _channelName = 'EPI Supervisor';
-  static const String _channelDescription =
-      'إشعارات منصة مشرف EPI — تنبيهات الإرساليات والمزامنة';
 
   /// Initialize the notification service. Call once at app startup.
   static Future<void> init() async {
-    if (_initialized) return;
-
-    try {
-      const androidSettings = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
-      );
-      const iosSettings = DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
-      );
-      const settings = InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      );
-
-      await _localNotifications.initialize(
-        settings,
-        onDidReceiveNotificationResponse: _onNotificationTapped,
-      );
-
-      // Create Android notification channel
-      await _createAndroidChannel();
-
-      _initialized = true;
-      debugPrint('[FCM] ✅ Notification service initialized');
-    } catch (e) {
-      debugPrint('[FCM] ⚠️ Init failed: $e');
-    }
+    _initialized = true;
+    debugPrint('[FCM] Notification service initialized (stub mode)');
   }
 
-  /// Request notification permissions (required for Android 13+ and iOS)
+  /// Request notification permissions
   static Future<bool> requestPermissions() async {
-    if (!_initialized) await init();
-
-    try {
-      final android = _localNotifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-      if (android != null) {
-        final granted = await android.requestNotificationsPermission();
-        debugPrint('[FCM] Android notifications permission: $granted');
-      }
-
-      final ios = _localNotifications.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
-      if (ios != null) {
-        final granted = await ios.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
-        debugPrint('[FCM] iOS notifications permission: $granted');
-        return granted ?? false;
-      }
-      return true;
-    } catch (e) {
-      debugPrint('[FCM] Permission request failed: $e');
-      return false;
-    }
+    debugPrint('[FCM] Permission request (stub mode — always true)');
+    return true;
   }
 
   /// Show an immediate local notification.
@@ -97,27 +36,7 @@ class FcmNotificationService {
     int id = 0,
     String? payload,
   }) async {
-    if (!_initialized) await init();
-
-    try {
-      const androidDetails = AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDescription,
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-      );
-      const iosDetails = DarwinNotificationDetails();
-      const details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      await _localNotifications.show(id, title, body, details, payload: payload);
-    } catch (e) {
-      debugPrint('[FCM] Show notification failed: $e');
-    }
+    debugPrint('[FCM] Notification (stub): $title — $body');
   }
 
   /// Schedule a notification to show after a delay.
@@ -127,92 +46,21 @@ class FcmNotificationService {
     required Duration delay,
     int id = 0,
   }) async {
-    if (!_initialized) await init();
-
-    try {
-      const androidDetails = AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDescription,
-        importance: Importance.high,
-        priority: Priority.high,
-      );
-      const iosDetails = DarwinNotificationDetails();
-      const details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      await _localNotifications.zonedSchedule(
-        id,
-        title,
-        body,
-        // Note: tz.TZDateTime would be ideal but requires timezone package.
-        // For now, use AndroidAlarmManager-style delay.
-        // This is a simplified version — production should use tz.TZDateTime.
-        DateTime.now().add(delay) as dynamic,
-        details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-    } catch (e) {
-      debugPrint('[FCM] Schedule notification failed: $e');
-    }
+    debugPrint('[FCM] Scheduled notification (stub): $title in ${delay.inSeconds}s');
   }
 
   /// Cancel a specific notification by ID
   static Future<void> cancelNotification(int id) async {
-    try {
-      await _localNotifications.cancel(id);
-    } catch (e) {
-      debugPrint('[FCM] Cancel notification failed: $e');
-    }
+    debugPrint('[FCM] Cancel notification $id (stub)');
   }
 
   /// Cancel all pending notifications
   static Future<void> cancelAll() async {
-    try {
-      await _localNotifications.cancelAll();
-    } catch (e) {
-      debugPrint('[FCM] Cancel all failed: $e');
-    }
+    debugPrint('[FCM] Cancel all (stub)');
   }
 
   /// Get pending notifications count
-  static Future<int> getPendingCount() async {
-    try {
-      final pending = await _localNotifications.pendingNotificationRequests();
-      return pending.length;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  /// Create the Android notification channel (required for Android 8+)
-  static Future<void> _createAndroidChannel() async {
-    try {
-      const channel = AndroidNotificationChannel(
-        _channelId,
-        _channelName,
-        description: _channelDescription,
-        importance: Importance.high,
-      );
-
-      final android = _localNotifications.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      await android?.createNotificationChannel(channel);
-    } catch (e) {
-      debugPrint('[FCM] Create channel failed: $e');
-    }
-  }
-
-  /// Handle notification tap — can be used for deep navigation
-  static void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('[FCM] Notification tapped: id=${response.id}, payload=${response.payload}');
-    // TODO: Add navigation logic based on payload
-    // e.g., if payload starts with '/submissions/', navigate to submissions detail
-  }
+  static Future<int> getPendingCount() async => 0;
 
   /// Show a sync-complete notification
   static Future<void> notifySyncComplete({int synced = 0, int failed = 0}) async {

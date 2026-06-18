@@ -61,9 +61,6 @@ dependencies:
   # Auth (biometric)
   local_auth: ^2.3.0
 
-  # Local notifications (push notification foundation)
-  flutter_local_notifications: ^17.2.3
-
   # Onboarding
   shared_preferences: ^2.3.2
 

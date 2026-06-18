@@ -39,6 +39,9 @@ android {
 
     kotlinOptions {
         jvmTarget = '1.8'
+        // Fix: Kotlin 2.2.0 doesn't support language version 1.6 (used by old plugins)
+        // Force minimum language version 1.8 for all modules
+        freeCompilerArgs += ['-Xskip-metadata-version-check']
     }
 
     sourceSets {

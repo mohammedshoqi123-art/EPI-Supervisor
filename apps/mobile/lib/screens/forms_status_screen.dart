@@ -252,10 +252,12 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     setState(() => _submittedLoading = true);
     try {
       final campaign = ref.read(campaignProvider);
+      final round = ref.read(campaignRoundProvider);
       // ═══ PERFORMANCE: Use reasonable limit — cached data is reused ═══
       final filter = SubmissionsFilter(
         campaignType: campaign.value,
-        limit: 500, // ═══ PERFORMANCE: Reduced, cache handles rest ═══
+        campaignRound: round,
+        limit: 500,
         offset: 0,
       );
       final data = await ref.read(submissionsProvider(filter).future);

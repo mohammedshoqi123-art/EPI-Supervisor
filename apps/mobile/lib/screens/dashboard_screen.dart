@@ -82,7 +82,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     // ═══ PERFORMANCE: Use .select() to minimize rebuild scope ═══
     final analytics = ref.watch(
       dashboardAnalyticsProvider(
-        AnalyticsFilter(campaignType: ref.watch(campaignProvider).value),
+        AnalyticsFilter(campaignType: ref.watch(campaignProvider).value, campaignRound: ref.watch(campaignRoundProvider)),
       ),
     );
     final authState = ref.watch(authStateProvider);
@@ -105,7 +105,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           await ref.read(forceRefreshProvider)('dashboard_analytics');
           ref.invalidate(
             dashboardAnalyticsProvider(
-              AnalyticsFilter(campaignType: ref.watch(campaignProvider).value),
+              AnalyticsFilter(campaignType: ref.watch(campaignProvider).value, campaignRound: ref.watch(campaignRoundProvider)),
             ),
           );
         },
@@ -363,7 +363,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         analyticsData: ref
             .read(
               dashboardAnalyticsProvider(
-                AnalyticsFilter(campaignType: ref.watch(campaignProvider).value),
+                AnalyticsFilter(campaignType: ref.watch(campaignProvider).value, campaignRound: ref.watch(campaignRoundProvider)),
               ),
             )
             .valueOrNull,

@@ -158,6 +158,7 @@ class DatabaseService {
     String? districtId,
     String? submittedBy,
     String? campaignType,
+    int? campaignRound,
     int? limit,
     int? offset,
     String? orderBy,
@@ -175,6 +176,7 @@ class DatabaseService {
       if (governorateId != null) extraFilters['governorate_id'] = governorateId;
       if (districtId != null) extraFilters['district_id'] = districtId;
       if (submittedBy != null) extraFilters['submitted_by'] = submittedBy;
+      if (campaignRound != null) extraFilters['campaign_round'] = campaignRound;
 
       // Single query with IN filter — replaces N separate queries
       return _api.selectIn(
@@ -197,6 +199,7 @@ class DatabaseService {
     if (governorateId != null) filters['governorate_id'] = governorateId;
     if (districtId != null) filters['district_id'] = districtId;
     if (submittedBy != null) filters['submitted_by'] = submittedBy;
+    if (campaignRound != null) filters['campaign_round'] = campaignRound;
 
     return _api.select(
       'form_submissions',
@@ -224,6 +227,7 @@ class DatabaseService {
     String? formId,
     String? status,
     String? campaignType,
+    int? campaignRound,
   }) async {
     if (campaignType != null && formId == null) {
       final campaignForms = await getForms(campaignType: campaignType);
@@ -233,11 +237,13 @@ class DatabaseService {
         'form_id': ApiClient.inList(formIds),
       };
       if (status != null) filters['status'] = status;
+      if (campaignRound != null) filters['campaign_round'] = campaignRound;
       return _api.count('form_submissions', filters: filters);
     }
     final filters = <String, dynamic>{};
     if (formId != null) filters['form_id'] = formId;
     if (status != null) filters['status'] = status;
+    if (campaignRound != null) filters['campaign_round'] = campaignRound;
     return _api.count('form_submissions', filters: filters);
   }
 

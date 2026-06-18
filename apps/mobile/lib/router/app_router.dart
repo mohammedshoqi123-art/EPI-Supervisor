@@ -486,6 +486,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final authAsync = ref.watch(authStateProvider);
     final authState = authAsync.valueOrNull;
     final campaign = ref.watch(campaignProvider);
+    final campaignRound = ref.watch(campaignRoundProvider);
     return EpiDrawer(
       currentRoute: GoRouterState.of(context).matchedLocation,
       userName: authState?.fullName ?? 'مستخدم',
@@ -502,6 +503,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         ref
             .read(campaignProvider.notifier)
             .selectCampaign(CampaignType.fromString(v));
+      },
+      activeCampaignRound: campaignRound,
+      onCampaignRoundChanged: (round) {
+        ref.read(campaignRoundProvider.notifier).selectRound(round);
       },
     );
   }

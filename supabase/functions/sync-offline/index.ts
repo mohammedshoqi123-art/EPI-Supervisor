@@ -58,6 +58,7 @@ type SyncItem = {
   base_updated_at?: string
   entity_type?: string
   entity_id?: string
+  campaign_round?: number
 }
 
 type SyncResult = {
@@ -171,6 +172,7 @@ serve(async (req) => {
           device_id: item.device_id || null,
           app_version: item.app_version || null,
           is_offline: true,
+          campaign_round: item.campaign_round || 1,
           submitted_at: item.created_at || new Date().toISOString(),
           synced_at: new Date().toISOString(),
         }

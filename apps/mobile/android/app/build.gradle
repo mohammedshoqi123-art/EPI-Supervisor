@@ -39,9 +39,6 @@ android {
 
     kotlinOptions {
         jvmTarget = '1.8'
-        // Fix: Kotlin 2.2.0 doesn't support language version 1.6 (used by old plugins)
-        // Force minimum language version 1.8 for all modules
-        freeCompilerArgs += ['-Xskip-metadata-version-check']
     }
 
     sourceSets {
@@ -158,13 +155,14 @@ dependencies {
 }
 
 // Force AndroidX core to compatible version (fix lStar attribute error)
-// Force Kotlin stdlib to match project Kotlin version (fix incompatible metadata)
+// Force Kotlin stdlib to match project Kotlin version (2.1.0)
+// This prevents kotlin-stdlib 2.2.0 from being pulled by transitive deps
 configurations.all {
     resolutionStrategy {
         force 'androidx.core:core:1.13.1'
         force 'androidx.core:core-ktx:1.13.1'
-        force "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+        force "org.jetbrains.kotlin:kotlin-stdlib:2.1.0"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.0"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0"
     }
 }

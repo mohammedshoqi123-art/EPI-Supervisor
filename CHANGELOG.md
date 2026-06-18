@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Dark Mode + Settings + Coverage 25% + Theme Tests (Phase 9)
+
+Dark Mode:
+- Dark mode toggle in profile screen with PopupMenuButton (System/Light/Dark)
+- Uses existing themeModeProvider (was declared but had no UI)
+- Dark theme already defined in AppTheme — now accessible to users
+- Visual feedback: shows current mode label and icon
+
+Settings Section:
+- New "الإعدادات" section in profile screen with settings_outlined icon
+- Dark mode toggle with Semantics (toggle, label, hint)
+- Shows current state: مفعّل / معطّل / تلقائي (حسب النظام)
+
+i18n:
+- Added 10 new settings keys: dark_mode, dark_mode_enabled/disabled/system/auto/light/dark, account_info, app_info
+- Total i18n keys: 125+
+
+CI:
+- Coverage threshold raised from 20% to 25% (hard fail)
+
+Tests:
+- New theme_and_settings_test.dart: 20+ tests covering AppTheme (colors, gradients, shadows, severity), ThemeMode enum, i18n settings keys, EpiButton with Semantics (label, disabled, loading), EpiStatCard with Semantics (label, trend, no-tap), EpiTextField with Semantics (label, obscured)
+
 ### Added — FCM + Forget Password + Splash + i18n Expansion (Phase 8)
 
 FCM Push Notifications:

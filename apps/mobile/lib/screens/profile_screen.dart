@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
+import '../main.dart';
 import '../providers/app_providers.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -304,6 +305,158 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         );
                       },
                     ),
+
+                    const SizedBox(height: 32),
+
+                    // ═══ Settings ═══
+                    _sectionLabel('الإعدادات', Icons.settings_outlined),
+                    const SizedBox(height: 12),
+
+                    // Dark mode toggle
+                    Consumer(builder: (context, ref, _) {
+                      final themeMode = ref.watch(themeModeProvider);
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            // Dark Mode
+                            Semantics(
+                              label: 'الوضع الليلي',
+                              hint: 'تبديل بين الوضع النهاري والليلي',
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    themeMode == ThemeMode.dark
+                                        ? Icons.dark_mode
+                                        : Icons.light_mode,
+                                    color: AppTheme.primaryColor,
+                                    size: 20,
+                                  ),
+                                ),
+                                title: const Text(
+                                  'الوضع الليلي',
+                                  style: TextStyle(
+                                    fontFamily: 'Tajawal',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  themeMode == ThemeMode.dark
+                                      ? 'مفعّل'
+                                      : themeMode == ThemeMode.system
+                                          ? 'تلقائي (حسب النظام)'
+                                          : 'معطّل',
+                                  style: TextStyle(
+                                    fontFamily: 'Tajawal',
+                                    fontSize: 11,
+                                    color: AppTheme.textHint,
+                                  ),
+                                ),
+                                trailing: PopupMenuButton<ThemeMode>(
+                                  onSelected: (mode) {
+                                    ref.read(themeModeProvider.notifier).state = mode;
+                                  },
+                                  itemBuilder: (_) => [
+                                    PopupMenuItem(
+                                      value: ThemeMode.system,
+                                      child: Row(children: [
+                                        Icon(Icons.settings_brightness,
+                                            size: 18,
+                                            color: themeMode == ThemeMode.system
+                                                ? AppTheme.primaryColor
+                                                : AppTheme.textHint),
+                                        const SizedBox(width: 8),
+                                        const Text('تلقائي', style: TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+                                      ]),
+                                    ),
+                                    PopupMenuItem(
+                                      value: ThemeMode.light,
+                                      child: Row(children: [
+                                        Icon(Icons.light_mode,
+                                            size: 18,
+                                            color: themeMode == ThemeMode.light
+                                                ? AppTheme.primaryColor
+                                                : AppTheme.textHint),
+                                        const SizedBox(width: 8),
+                                        const Text('نهاري', style: TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+                                      ]),
+                                    ),
+                                    PopupMenuItem(
+                                      value: ThemeMode.dark,
+                                      child: Row(children: [
+                                        Icon(Icons.dark_mode,
+                                            size: 18,
+                                            color: themeMode == ThemeMode.dark
+                                                ? AppTheme.primaryColor
+                                                : AppTheme.textHint),
+                                        const SizedBox(width: 8),
+                                        const Text('ليلي', style: TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+                                      ]),
+                                    ),
+                                  ],
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          themeMode == ThemeMode.dark
+                                              ? Icons.dark_mode
+                                              : themeMode == ThemeMode.system
+                                                  ? Icons.settings_brightness
+                                                  : Icons.light_mode,
+                                          size: 14,
+                                          color: AppTheme.primaryColor,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          themeMode == ThemeMode.dark
+                                              ? 'ليلي'
+                                              : themeMode == ThemeMode.system
+                                                  ? 'تلقائي'
+                                                  : 'نهاري',
+                                          style: TextStyle(
+                                            fontFamily: 'Tajawal',
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppTheme.primaryColor,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Icon(Icons.arrow_drop_down, size: 16, color: AppTheme.primaryColor),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
 
                     const SizedBox(height: 32),
 

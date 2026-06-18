@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 
@@ -86,6 +87,87 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     _passwordController.dispose();
     _animController.dispose();
     super.dispose();
+  }
+
+  /// Show forget password dialog — sends a password reset email via Supabase Auth
+  Future<void> _showForgetPasswordDialog() async {
+    final emailController = TextEditingController(
+      text: _emailController.text.trim(),
+    );
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text(
+          'استعادة كلمة المرور',
+          style: TextStyle(fontFamily: 'Cairo', fontSize: 18),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'أدخل بريدك الإلكتروني وسيتم إرسال رابط استعادة كلمة المرور',
+              style: TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(
+                labelText: 'البريد الإلكتروني',
+                hintText: 'example@email.com',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.emailAddress,
+              textDirection: TextDirection.ltr,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final email = emailController.text.trim();
+              if (email.isEmpty || !email.contains('@')) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('الرجاء إدخال بريد صحيح')),
+                  );
+                }
+                return;
+              }
+
+              try {
+                final client = Supabase.instance.client;
+                await client.auth.resetPasswordForEmail(email);
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('تم إرسال رابط الاستعادة إلى $email'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(
+                      content: Text('فشل الإرسال: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('إرسال'),
+          ),
+        ],
+      ),
+    );
+    emailController.dispose();
   }
 
   Future<void> _login() async {
@@ -420,8 +502,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                 ),
                               ),
 
+                              // Forget password link
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton(
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () => _showForgetPasswordDialog(),
+                                  child: Text(
+                                    'نسيت كلمة المرور؟',
+                                    style: TextStyle(
+                                      fontFamily: 'Tajawal',
+                                      fontSize: 12,
+                                      color: AppTheme.primaryColor,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
                               // Biometric login button
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 8),
                               FutureBuilder<bool>(
                                 future: _canUseBiometric(),
                                 builder: (context, snapshot) {

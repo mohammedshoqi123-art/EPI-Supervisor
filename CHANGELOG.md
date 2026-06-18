@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — FCM + Forget Password + Splash + i18n Expansion (Phase 8)
+
+FCM Push Notifications:
+- New `FcmNotificationService` class in core package — local notification scheduling + display
+- `flutter_local_notifications` dependency added to pubspec.yaml
+- Initialized in `main.dart` with permission request on app launch
+- Pre-built notification helpers: `notifySyncComplete()`, `notifySubmissionConfirmed()`, `notifyShortageAlert()`
+- Android notification channel management
+- iOS + Android 13+ permission handling
+
+Login:
+- "نسيت كلمة المرور؟" link added below login button
+- Forget password dialog sends `resetPasswordForEmail()` via Supabase Auth
+- Email validation before send
+- Success/failure SnackBar feedback
+
+Splash Screen:
+- Reduced artificial delays: 500ms → 200ms for logo display
+- Removed 500ms delay on Supabase-not-configured path
+- Removed 300ms delay on no-session path
+- Total perceived latency reduced from 800ms+ to 200ms
+
+i18n:
+- Added 14 new Arabic keys: splash (4), login (6), notifications (6)
+- Total i18n keys: 110+
+
 ### Added — Realtime + Sentry + Isolate + iOS + i18n (Phase 7)
 
 Realtime:

@@ -17,6 +17,7 @@ export 'src/security/rbac_service.dart';
 export 'src/analytics/analytics_service.dart';
 export 'src/analytics/local_analytics_engine.dart';
 export 'src/notifications/notification_service.dart';
+export 'src/notifications/fcm_notification_service.dart';
 export 'src/reports/form_report_generator.dart';
 export 'src/reports/word_report_generator.dart';
 export 'src/reports/report_generator.dart';

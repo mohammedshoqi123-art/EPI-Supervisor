@@ -68,6 +68,9 @@ Future<void> main() async {
         if (SupabaseConfig.isConfigured) {
           NotificationService.init(ApiClient());
         }
+        // Initialize FCM local notifications
+        await FcmNotificationService.init();
+        await FcmNotificationService.requestPermissions();
       } catch (e) {
         debugPrint('[Init] ⚠️ NotificationService init failed: $e');
       }

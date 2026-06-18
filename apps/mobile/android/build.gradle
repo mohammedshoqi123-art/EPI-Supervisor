@@ -38,18 +38,4 @@ subprojects {
             force 'androidx.core:core-ktx:1.13.1'
         }
     }
-    // Fix: set Kotlin language version 1.8 for all subprojects
-    // This prevents "Language version 1.6 is no longer supported" error
-    afterEvaluate { project ->
-        if (project.hasProperty('android')) {
-            try {
-                project.android.kotlinOptions {
-                    languageVersion = '1.8'
-                    apiVersion = '1.8'
-                }
-            } catch (e) {
-                // Some subprojects may not have kotlinOptions — skip them
-            }
-        }
-    }
 }

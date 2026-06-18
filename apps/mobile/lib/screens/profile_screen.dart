@@ -332,7 +332,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           children: [
                             // Dark Mode
                             Semantics(
-                              toggle: true,
                               label: 'الوضع الليلي',
                               hint: 'تبديل بين الوضع النهاري والليلي',
                               child: ListTile(

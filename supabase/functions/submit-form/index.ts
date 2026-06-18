@@ -128,7 +128,8 @@ serve(async (req) => {
     const {
       form_id, data: formData, status = 'submitted', governorate_id, district_id,
       gps_lat, gps_lng, gps_accuracy, photos = [], notes,
-      offline_id, device_id, app_version, is_offline = false
+      offline_id, device_id, app_version, is_offline = false,
+      campaign_round
     } = body
 
     // ─── Validate Required Fields ───────────────────────────
@@ -225,6 +226,7 @@ serve(async (req) => {
       device_id: device_id || null,
       app_version: app_version || null,
       is_offline,
+      campaign_round: campaign_round || 1,
       submitted_at: new Date().toISOString(),
       synced_at: is_offline ? new Date().toISOString() : null,
     }

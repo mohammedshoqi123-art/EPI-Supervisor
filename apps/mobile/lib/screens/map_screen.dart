@@ -80,7 +80,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
   void _refresh() {
     HapticFeedback.mediumImpact();
     ref.invalidate(submissionsProvider(SubmissionsFilter(
-      campaignType: ref.read(campaignProvider).value,
+      campaignType: ref.read(campaignProvider).value, campaignRound: ref.read(campaignRoundProvider),
       limit: 500, // ═══ PERFORMANCE: Reduced for map rendering ═══
     )));
     ref.invalidate(governoratesProvider);
@@ -139,7 +139,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     // ═══ FIX #2: Load all submissions for map (no 20-item limit) ═══
     final allSubs = ref
             .read(submissionsProvider(SubmissionsFilter(
-              campaignType: ref.read(campaignProvider).value,
+              campaignType: ref.read(campaignProvider).value, campaignRound: ref.read(campaignRoundProvider),
               limit: 500, // ═══ PERFORMANCE: Reduced for map rendering ═══
             )))
             .valueOrNull ??
@@ -418,7 +418,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     // ═══ FIX #2: Load all submissions for map filters ═══
     final allSubs = ref
             .read(submissionsProvider(SubmissionsFilter(
-              campaignType: ref.read(campaignProvider).value,
+              campaignType: ref.read(campaignProvider).value, campaignRound: ref.read(campaignRoundProvider),
               limit: 500, // ═══ PERFORMANCE: Reduced for map rendering ═══
             )))
             .valueOrNull ??

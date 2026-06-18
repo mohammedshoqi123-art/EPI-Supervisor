@@ -30,6 +30,8 @@ class EpiDrawer extends StatelessWidget {
   final bool isSyncingConfig;
   final String activeCampaign;
   final ValueChanged<String>? onCampaignChanged;
+  final int activeCampaignRound;
+  final ValueChanged<int>? onCampaignRoundChanged;
 
   const EpiDrawer({
     super.key,
@@ -44,6 +46,8 @@ class EpiDrawer extends StatelessWidget {
     this.isSyncingConfig = false,
     this.activeCampaign = 'polio_campaign',
     this.onCampaignChanged,
+    this.activeCampaignRound = 1,
+    this.onCampaignRoundChanged,
   });
 
   @override
@@ -193,6 +197,50 @@ class EpiDrawer extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // ═══ Campaign round selector — only for integrated activity ═══
+                  if (activeCampaign == 'integrated_activity') ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: activeCampaignRound,
+                          isExpanded: true,
+                          dropdownColor: AppTheme.primaryDark,
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.white70,
+                          ),
+                          style: const TextStyle(
+                            fontFamily: 'Tajawal',
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                          items: List.generate(5, (i) => i + 1).map((r) {
+                            return DropdownMenuItem(
+                              value: r,
+                              child: Text('🔄 ${_roundLabel(r)}'),
+                            );
+                          }).toList(),
+                          onChanged: (v) {
+                            if (v != null && v != activeCampaignRound) {
+                              onCampaignRoundChanged?.call(v);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -446,6 +494,18 @@ class EpiDrawer extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+/// Returns Arabic label for a campaign round number.
+String _roundLabel(int round) {
+  switch (round) {
+    case 1: return 'الجولة الأولى';
+    case 2: return 'الجولة الثانية';
+    case 3: return 'الجولة الثالثة';
+    case 4: return 'الجولة الرابعة';
+    case 5: return 'الجولة الخامسة';
+    default: return 'الجولة $round';
   }
 }
 

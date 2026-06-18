@@ -158,6 +158,7 @@ class SubmissionsFilter {
   final String? governorateId;
   final String? districtId;
   final String? campaignType;
+  final int? campaignRound;
   final int limit;
   final int offset;
 
@@ -167,7 +168,8 @@ class SubmissionsFilter {
     this.governorateId,
     this.districtId,
     this.campaignType,
-    this.limit = 200, // ═══ PERFORMANCE: Reduced from 2000 — use pagination ═══
+    this.campaignRound,
+    this.limit = 200,
     this.offset = 0,
   });
 
@@ -181,6 +183,7 @@ class SubmissionsFilter {
           governorateId == other.governorateId &&
           districtId == other.districtId &&
           campaignType == other.campaignType &&
+          campaignRound == other.campaignRound &&
           limit == other.limit &&
           offset == other.offset;
 
@@ -191,6 +194,7 @@ class SubmissionsFilter {
         governorateId,
         districtId,
         campaignType,
+        campaignRound,
         limit,
         offset,
       );
@@ -198,6 +202,7 @@ class SubmissionsFilter {
   String get cacheKey {
     final parts = <String>['submissions'];
     if (campaignType != null) parts.add('camp_$campaignType');
+    if (campaignRound != null) parts.add('round_$campaignRound');
     if (formId != null) parts.add('form_$formId');
     if (status != null) parts.add('status_$status');
     if (governorateId != null) parts.add('gov_$governorateId');
@@ -326,6 +331,78 @@ final campaignProvider = StateNotifierProvider<CampaignNotifier, CampaignType>(
   (ref) => CampaignNotifier(ref),
 );
 
+// ─── Campaign Round Selection ───────────────────────────────────────────────
+
+/// Persisted campaign round — tracks which round is active for integrated activity.
+/// Round 1 = الجولة الأولى, Round 2 = الجولة الثانية, etc.
+/// Only relevant when campaignType == integrated_activity.
+class CampaignRoundNotifier extends StateNotifier<int> {
+  final Ref _ref;
+
+  CampaignRoundNotifier(this._ref) : super(1) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final cache = await _ref.read(offlineDataCacheProvider.future);
+      final cached = await cache.getMap('active_campaign_round', () async {
+        final db = _ref.read(databaseServiceProvider);
+        final result = await db.getAppSettings(key: 'active_campaign_round');
+        return {'round': result['value'] ?? 1};
+      }, maxAge: const Duration(days: 30));
+      state = (cached['round'] as num?)?.toInt() ?? 1;
+    } catch (_) {
+      // Default to round 1
+    }
+  }
+
+  Future<void> selectRound(int round) async {
+    if (round == state || round < 1 || round > 10) return;
+    state = round;
+    try {
+      final db = _ref.read(databaseServiceProvider);
+      await db.updateAppSetting('active_campaign_round', round);
+
+      // Invalidate all providers that depend on campaign round
+      _ref.invalidate(formsProvider);
+      _ref.invalidate(dashboardAnalyticsProvider);
+      _ref.invalidate(submissionTrendProvider);
+      _ref.invalidate(governorateRankingProvider);
+      _ref.invalidate(shortagesProvider);
+      _ref.invalidate(formStatsProvider);
+
+      if (kDebugMode) {
+        debugPrint('[CampaignRoundNotifier] Round changed to $round - Providers invalidated');
+      }
+    } catch (e) {
+      debugPrint('[CampaignRoundNotifier] Save failed: $e');
+    }
+  }
+}
+
+final campaignRoundProvider =
+    StateNotifierProvider<CampaignRoundNotifier, int>(
+  (ref) => CampaignRoundNotifier(ref),
+);
+
+/// Returns the Arabic label for a campaign round number.
+String campaignRoundLabel(int round) {
+  switch (round) {
+    case 1: return 'الجولة الأولى';
+    case 2: return 'الجولة الثانية';
+    case 3: return 'الجولة الثالثة';
+    case 4: return 'الجولة الرابعة';
+    case 5: return 'الجولة الخامسة';
+    case 6: return 'الجولة السادسة';
+    case 7: return 'الجولة السابعة';
+    case 8: return 'الجولة الثامنة';
+    case 9: return 'الجولة التاسعة';
+    case 10: return 'الجولة العاشرة';
+    default: return 'الجولة $round';
+  }
+}
+
 // ─── Forms (filtered by active campaign) ────────────────────────────────────
 
 final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
@@ -361,6 +438,7 @@ final submissionsProvider = FutureProvider.family
           governorateId: filter.governorateId,
           districtId: filter.districtId,
           campaignType: filter.campaignType,
+          campaignRound: filter.campaignRound,
           limit: filter.limit,
           offset: filter.offset,
         ),
@@ -396,6 +474,7 @@ final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
     // ═══ PERFORMANCE FIX: Single count query instead of loading 2000 submissions ═══
     final db = ref.read(databaseServiceProvider);
     final campaign = ref.read(campaignProvider);
+    final round = ref.read(campaignRoundProvider);
 
     // Count submitted items using server-side count (no data transfer)
     final submittedStatuses = ['submitted', 'reviewed', 'approved', 'rejected'];
@@ -403,6 +482,7 @@ final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
       try {
         final count = await db.getSubmissionsCount(
           campaignType: campaign.value,
+          campaignRound: round,
           status: status,
         );
         submitted += count;
@@ -419,6 +499,7 @@ class AnalyticsFilter {
   final String? districtId;
   final String? formId;
   final String? campaignType;
+  final int? campaignRound;
   final DateTime? startDate;
   final DateTime? endDate;
 
@@ -427,6 +508,7 @@ class AnalyticsFilter {
     this.districtId,
     this.formId,
     this.campaignType,
+    this.campaignRound,
     this.startDate,
     this.endDate,
   });
@@ -440,6 +522,7 @@ class AnalyticsFilter {
           districtId == other.districtId &&
           formId == other.formId &&
           campaignType == other.campaignType &&
+          campaignRound == other.campaignRound &&
           startDate == other.startDate &&
           endDate == other.endDate;
 
@@ -449,6 +532,7 @@ class AnalyticsFilter {
         districtId,
         formId,
         campaignType,
+        campaignRound,
         startDate,
         endDate,
       );
@@ -456,6 +540,7 @@ class AnalyticsFilter {
   String get cacheKey {
     final parts = ['dashboard_analytics'];
     if (campaignType != null) parts.add('camp_$campaignType');
+    if (campaignRound != null) parts.add('round_$campaignRound');
     if (governorateId != null) parts.add('gov_$governorateId');
     if (districtId != null) parts.add('dist_$districtId');
     if (formId != null) parts.add('form_$formId');

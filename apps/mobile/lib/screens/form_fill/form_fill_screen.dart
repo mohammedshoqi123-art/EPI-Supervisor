@@ -444,12 +444,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         }
       }
 
+      final campaignRound = ref.read(campaignRoundProvider);
       final submissionData = {
         'form_id': widget.formId,
         'data': dataWithPhotos,
         if (_gpsLat != null) 'gps_lat': _gpsLat,
         if (_gpsLng != null) 'gps_lng': _gpsLng,
         'photos_count': _pickedPhotos.length,
+        'campaign_round': campaignRound,
         'created_at': DateTime.now().toIso8601String(),
       };
 

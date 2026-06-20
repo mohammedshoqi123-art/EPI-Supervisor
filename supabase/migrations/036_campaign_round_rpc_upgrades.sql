@@ -147,16 +147,17 @@ DECLARE
   v_role text;
   v_form_ids uuid[];
 BEGIN
-  SELECT COALESCE(role, 'data_entry') INTO v_role
-  FROM profiles
-  WHERE id = p_user_id;
+  -- Use alias p to avoid ambiguity with output column "role"
+  SELECT COALESCE(p.role, 'data_entry') INTO v_role
+  FROM profiles p
+  WHERE p.id = p_user_id;
 
   -- Resolve form IDs when a campaign_type is specified
   IF p_campaign_type IS NOT NULL THEN
-    SELECT array_agg(id) INTO v_form_ids
-    FROM forms
-    WHERE campaign_type = p_campaign_type
-      AND deleted_at IS NULL;
+    SELECT array_agg(f.id) INTO v_form_ids
+    FROM forms f
+    WHERE f.campaign_type = p_campaign_type
+      AND f.deleted_at IS NULL;
   END IF;
 
   RETURN QUERY
@@ -175,18 +176,10 @@ BEGIN
         AND (p_campaign_type IS NULL OR fs.form_id = ANY(COALESCE(v_form_ids, ARRAY[]::uuid[])))
         AND (p_campaign_round IS NULL OR fs.campaign_round = p_campaign_round)
     )::bigint AS pending,
-    -- approved
-    COUNT(fs.id) FILTER (
-      WHERE fs.status IN ('approved', 'reviewed')
-        AND (p_campaign_type IS NULL OR fs.form_id = ANY(COALESCE(v_form_ids, ARRAY[]::uuid[])))
-        AND (p_campaign_round IS NULL OR fs.campaign_round = p_campaign_round)
-    )::bigint AS approved,
-    -- rejected
-    COUNT(fs.id) FILTER (
-      WHERE fs.status = 'rejected'
-        AND (p_campaign_type IS NULL OR fs.form_id = ANY(COALESCE(v_form_ids, ARRAY[]::uuid[])))
-        AND (p_campaign_round IS NULL OR fs.campaign_round = p_campaign_round)
-    )::bigint AS rejected,
+    -- approved (always 0 — submission_status enum only has draft/submitted)
+    0::bigint AS approved,
+    -- rejected (always 0 — submission_status enum only has draft/submitted)
+    0::bigint AS rejected,
     -- drafts
     COUNT(fs.id) FILTER (
       WHERE fs.status = 'draft'
@@ -194,8 +187,8 @@ BEGIN
         AND (p_campaign_type IS NULL OR fs.form_id = ANY(COALESCE(v_form_ids, ARRAY[]::uuid[])))
         AND (p_campaign_round IS NULL OR fs.campaign_round = p_campaign_round)
     )::bigint AS drafts,
-    -- unread_notifications (independent of campaign)
-    (SELECT COUNT(*) FROM notifications WHERE user_id = p_user_id AND read_at IS NULL)::bigint AS unread_notifications,
+    -- unread_notifications (uses recipient_id column, not user_id)
+    (SELECT COUNT(*) FROM notifications n WHERE n.recipient_id = p_user_id AND n.read_at IS NULL)::bigint AS unread_notifications,
     COALESCE(p_campaign_round, 1) AS campaign_round
   FROM form_submissions fs
   WHERE fs.deleted_at IS NULL;

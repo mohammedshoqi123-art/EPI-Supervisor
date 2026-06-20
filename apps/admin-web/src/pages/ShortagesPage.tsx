@@ -28,8 +28,8 @@ export default function ShortagesPage() {
   const [formFilter, setFormFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [selectedShortage, setSelectedShortage] = useState<SupplyShortage | null>(null)
-  const { campaign, labelAr, isFiltered } = useCampaign()
-  const { data: shortages, isLoading, isError, error, refetch } = useShortages(campaign)
+  const { campaign, labelAr, isFiltered, campaignRound, showRoundFilter } = useCampaign()
+  const { data: shortages, isLoading, isError, error, refetch } = useShortages(campaign, showRoundFilter ? campaignRound : undefined)
   const { data: governorates } = useGovernorates()
   const { data: formsResult } = useForms({ campaignType: campaign })
   const forms = formsResult?.data

@@ -206,11 +206,16 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       final buffer = StringBuffer();
       bool gotAnyText = false;
 
+      // ═══ Pass active campaign round to AI so it filters data correctly ═══
+      final activeRound = ref.read(campaignRoundProvider);
+      final activeCampaign = ref.read(campaignProvider).value;
+
       await for (final chunk in api.callFunctionStream('ai-chat-v3', {
         'message': text,
         'history': historyJson,
         'stream': true,
         if (template != null) 'template': template,
+        if (activeCampaign == 'integrated_activity') 'campaign_round': activeRound,
       }).timeout(const Duration(seconds: 60), onTimeout: (sink) {
         sink.close();
         throw TimeoutException('انتهت مهلة الطلب');
@@ -237,6 +242,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           'message': text,
           'history': historyJson,
           if (template != null) 'template': template,
+          if (activeCampaign == 'integrated_activity') 'campaign_round': activeRound,
         }).timeout(const Duration(seconds: 45));
         final reply =
             resp['reply'] as String? ?? resp['message'] as String? ?? '';
@@ -1492,10 +1498,15 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                       : m.text
                 })
             .toList();
+        // ═══ Pass active campaign round to AI for vaccination context ═══
+        final activeRound = ref.read(campaignRoundProvider);
+        final activeCampaign = ref.read(campaignProvider).value;
+
         final resp = await api.callFunction('ai-chat-v3', {
           'message': text,
           'history': histJson,
-          'template': 'vaccination'
+          'template': 'vaccination',
+          if (activeCampaign == 'integrated_activity') 'campaign_round': activeRound,
         }).timeout(const Duration(seconds: 30));
         final reply = resp['reply'] as String? ?? '';
         if (reply.isNotEmpty && _mounted) {

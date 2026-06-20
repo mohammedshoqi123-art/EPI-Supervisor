@@ -180,7 +180,7 @@ serve(async (req) => {
         const { data: submission, error: insertError } = await admin
           .from('form_submissions')
           .insert(submissionData)
-          .select('id, updated_at')
+          .select('id, updated_at, campaign_round')
           .single()
 
         if (insertError) {
@@ -192,7 +192,12 @@ serve(async (req) => {
           continue
         }
 
-        results.push({ offline_id: offlineId, status: 'synced', submission_id: submission.id })
+        results.push({
+          offline_id: offlineId,
+          status: 'synced',
+          submission_id: submission.id,
+          server_data: { campaign_round: submission.campaign_round ?? 1 },
+        })
 
         // Audit log (fire-and-forget)
         try {

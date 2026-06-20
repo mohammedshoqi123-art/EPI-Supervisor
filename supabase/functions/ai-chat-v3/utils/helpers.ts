@@ -116,9 +116,48 @@ export async function getCampaignFormIds(supa: any, campaignType: string): Promi
   return data?.map((f: any) => f.id) ?? null
 }
 
-export function applyCampaignFilter(query: any, formIds: string[] | null) {
-  if (formIds && formIds.length > 0) return query.in('form_id', formIds)
-  return query
+export function applyCampaignFilter(query: any, formIds: string[] | null, campaignRound?: number | null) {
+  let q = query
+  if (formIds && formIds.length > 0) q = q.in('form_id', formIds)
+  if (campaignRound && campaignRound > 0) q = q.eq('campaign_round', campaignRound)
+  return q
+}
+
+// ═══ Round label helper — Arabic label for campaign round ═══
+const ROUND_LABELS_AR_AI: Record<number, string> = {
+  1: 'الجولة الأولى',
+  2: 'الجولة الثانية',
+  3: 'الجولة الثالثة',
+  4: 'الجولة الرابعة',
+  5: 'الجولة الخامسة',
+  6: 'الجولة السادسة',
+  7: 'الجولة السابعة',
+  8: 'الجولة الثامنة',
+  9: 'الجولة التاسعة',
+  10: 'الجولة العاشرة',
+}
+
+export function getRoundLabelAr(round?: number | null): string | null {
+  if (!round || round <= 0) return null
+  return ROUND_LABELS_AR_AI[round] || `الجولة ${round}`
+}
+
+// ═══ Read active campaign round from app_settings ═══
+export async function getActiveCampaignRound(supa: any): Promise<number | null> {
+  try {
+    const { data } = await supa
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'active_campaign_round')
+      .maybeSingle()
+    if (data?.value) {
+      const v = parseInt(data.value, 10)
+      return isNaN(v) || v < 1 ? null : v
+    }
+  } catch (e) {
+    console.error('[getActiveCampaignRound] error:', e)
+  }
+  return null
 }
 
 // ═══ Count helper — avoids full data fetch ═══

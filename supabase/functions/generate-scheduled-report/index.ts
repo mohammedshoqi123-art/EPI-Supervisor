@@ -32,6 +32,7 @@ interface ScheduledReport {
   report_type: string
   format: string
   campaign_type: string
+  campaign_round?: number | null
   governorate_ids: string[]
   delivery_method: string
   delivery_config: Record<string, unknown>
@@ -57,18 +58,22 @@ async function fetchReportData(supa: any, report: ScheduledReport): Promise<Repo
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
+  // ─── Campaign filter helpers ───
+  const campaignRound = report.campaign_round && report.campaign_round > 0 ? report.campaign_round : null
+  const applyRound = (q: any) => campaignRound ? q.eq('campaign_round', campaignRound) : q
+
   const [
     subsRes, usersRes, govsRes, shortagesRes, weekSubsRes, todaySubsRes, submittedRes, draftRes, formsRes
   ] = await Promise.allSettled([
-    supa.from('form_submissions').select('id, form_id, submitted_by, governorate_id, district_id, status, created_at, data')
-      .is('deleted_at', null).gte('created_at', monthAgo).limit(50000),
+    applyRound(supa.from('form_submissions').select('id, form_id, submitted_by, governorate_id, district_id, status, created_at, campaign_round, data')
+      .is('deleted_at', null).gte('created_at', monthAgo).limit(50000)),
     supa.from('profiles').select('id, full_name, email, role, governorate_id, is_active').is('deleted_at', null),
     supa.from('governorates').select('id, name_ar, is_active').eq('is_active', true).is('deleted_at', null),
     supa.from('supply_shortages').select('id, item_name, severity, is_resolved, governorate_id').is('deleted_at', null),
-    supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', weekAgo),
-    supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', today),
-    supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted'),
-    supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'draft'),
+    applyRound(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', weekAgo)),
+    applyRound(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).gte('created_at', today)),
+    applyRound(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted')),
+    applyRound(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'draft')),
     supa.from('forms').select('id, title_ar, is_active').is('deleted_at', null).limit(1000),
   ])
 

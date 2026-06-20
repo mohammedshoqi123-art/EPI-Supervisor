@@ -17,13 +17,17 @@ import {
   buildProgress,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 export async function generateCentralReport(options?: {
   dateFrom?: string
   dateTo?: string
   campaignType?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const dateFrom = options?.dateFrom
   const dateTo = options?.dateTo
   const period = dateFrom && dateTo
@@ -44,6 +48,7 @@ export async function generateCentralReport(options?: {
         .range(offset, offset + pageSize - 1)
       if (dateFrom) q = q.gte('created_at', dateFrom)
       if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
       const { data, error } = await q
       if (error || !data || data.length === 0) break
       allData.push(...data)
@@ -103,9 +108,7 @@ export async function generateCentralReport(options?: {
       ${getStyles()}
     </head>
     <body>
-      ${buildHeader(
-        'التقرير المركزي الشامل',
-        'نظرة عامة على أداء جميع المحافظات والإرساليات والمستخدمين',
+      ${buildHeader('التقرير المركزي الشامل', 'نظرة عامة على أداء جميع المحافظات والإرساليات والمستخدمين' + roundSuffix(campaignRound),
         period
       )}
 

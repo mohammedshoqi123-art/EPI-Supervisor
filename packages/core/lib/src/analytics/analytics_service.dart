@@ -19,6 +19,7 @@ class AnalyticsService {
     DateTime? endDate,
     String? formId,
     String? campaignType,
+    int? campaignRound,
   }) async {
     try {
       // Try Edge Function first for complex aggregation
@@ -29,6 +30,7 @@ class AnalyticsService {
         'end_date': endDate?.toIso8601String(),
         'form_id': formId,
         'campaign_type': campaignType,
+        'campaign_round': campaignRound,
       });
       return result;
     } catch (_) {
@@ -39,6 +41,7 @@ class AnalyticsService {
         startDate: startDate,
         endDate: endDate,
         campaignType: campaignType,
+        campaignRound: campaignRound,
       );
     }
   }
@@ -49,6 +52,7 @@ class AnalyticsService {
     DateTime? startDate,
     DateTime? endDate,
     String? campaignType,
+    int? campaignRound,
   }) async {
     // ═══ FIX: form_submissions doesn't have campaign_type — resolve form IDs first ═══
     List<String>? campaignFormIds;
@@ -76,6 +80,7 @@ class AnalyticsService {
     final filters = <String, dynamic>{};
     if (governorateId != null) filters['governorate_id'] = governorateId;
     if (districtId != null) filters['district_id'] = districtId;
+    if (campaignRound != null) filters['campaign_round'] = campaignRound;
     // Don't add campaign_type to form_submissions filters — it doesn't exist there
 
     // Submissions
@@ -161,10 +166,12 @@ class AnalyticsService {
   Future<List<Map<String, dynamic>>> getSubmissionTrend({
     int days = 30,
     String? governorateId,
+    int? campaignRound,
   }) async {
     final startDate = DateTime.now().subtract(Duration(days: days));
     final filters = <String, dynamic>{};
     if (governorateId != null) filters['governorate_id'] = governorateId;
+    if (campaignRound != null) filters['campaign_round'] = campaignRound;
 
     final submissions = await _api.select(
       'form_submissions',
@@ -197,10 +204,15 @@ class AnalyticsService {
   }
 
   /// Get top governorates by submission count
-  Future<List<Map<String, dynamic>>> getGovernorateRanking() async {
+  Future<List<Map<String, dynamic>>> getGovernorateRanking({
+    int? campaignRound,
+  }) async {
+    final filters = <String, dynamic>{};
+    if (campaignRound != null) filters['campaign_round'] = campaignRound;
     final submissions = await _api.select(
       'form_submissions',
       select: 'governorate_id, governorates(name_ar, name_en)',
+      filters: filters,
       limit: 5000,
     );
 

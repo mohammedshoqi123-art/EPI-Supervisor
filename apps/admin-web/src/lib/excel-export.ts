@@ -619,12 +619,18 @@ export function exportFormSubmissionsToExcel(
     governorate: string
     district: string
     created_at: string
+    campaign_round?: number
     data: Record<string, unknown>
-  }>
+  }>,
+  options?: { campaignRound?: number }
 ): void {
+  const roundSuffix = options?.campaignRound && options.campaignRound > 0
+    ? ` — الجولة ${options.campaignRound}`
+    : ''
   const columns: EnhancedExportColumn[] = [
     { header: '#', key: 'index', width: 6, align: 'center' },
     { header: 'الحالة', key: 'status', width: 12 },
+    { header: 'الجولة', key: 'campaign_round', width: 10, align: 'center' },
     { header: 'المُرسل', key: 'submitted_by', width: 20 },
     { header: 'المحافظة', key: 'governorate', width: 15 },
     { header: 'المديرية', key: 'district', width: 15 },
@@ -640,6 +646,7 @@ export function exportFormSubmissionsToExcel(
     const row: Record<string, unknown> = {
       index: i + 1,
       status: s.status === 'submitted' ? 'مرسلة' : 'مسودة',
+      campaign_round: s.campaign_round ?? 1,
       submitted_by: s.submitted_by,
       governorate: s.governorate,
       district: s.district,
@@ -653,11 +660,11 @@ export function exportFormSubmissionsToExcel(
 
   exportEnhancedExcel({
     sheetName: formTitle.slice(0, 31), // Excel sheet name max 31 chars
-    title: `${formTitle} — EPI Supervisor`,
-    subtitle: `${rows.length} إرسالية — ${new Date().toLocaleDateString('ar-SA')}`,
+    title: `${formTitle}${roundSuffix} — EPI Supervisor`,
+    subtitle: `${rows.length} إرسالية — ${new Date().toLocaleDateString('ar-SA')}${roundSuffix}`,
     columns,
     data: rows,
-    fileName: formTitle.replace(/\s+/g, '_'),
+    fileName: formTitle.replace(/\s+/g, '_') + (roundSuffix ? `_round${options!.campaignRound}` : ''),
     conditionalRules: [
       {
         column: 'status',

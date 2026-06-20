@@ -16,12 +16,15 @@ import {
   buildProgress,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 export async function generateFormAnalysisReport(
   formId: string,
-  options?: { dateFrom?: string; dateTo?: string }
+  options?: { dateFrom?: string; dateTo?: string; campaignRound?: number }
 ): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const dateFrom = options?.dateFrom
   const dateTo = options?.dateTo
 
@@ -32,7 +35,7 @@ export async function generateFormAnalysisReport(
   }
 
   const subsQuery = applyDateFilter(
-    supabase.from('form_submissions').select('*, profiles:submitted_by(full_name, role), governorates(name_ar), districts(name_ar)').eq('form_id', formId).is('deleted_at', null)
+    applyRoundFilter(supabase.from('form_submissions').select('*, profiles:submitted_by(full_name, role), governorates(name_ar), districts(name_ar)').eq('form_id', formId).is('deleted_at', null), campaignRound)
   ).order('created_at', { ascending: false })
 
   const [formRes, subsRes, govsRes] = await Promise.allSettled([
@@ -115,7 +118,7 @@ export async function generateFormAnalysisReport(
     <body>
       ${buildHeader(
         `تقرير تحليل النموذج`,
-        form.title_ar,
+        form.title_ar + roundSuffix(campaignRound),
         campaignLabel
       )}
 

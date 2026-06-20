@@ -23,6 +23,8 @@ import {
   buildTable,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 import {
   fetchComprehensiveEvaluationData,
@@ -162,7 +164,9 @@ function extractText(data: any, keywords: string[]): string | null {
 
 export async function generateMasterSupervisorReport(options?: {
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const today = new Date().toISOString().split('T')[0]
   const todayArabic = formatDateArabic(new Date())
 
@@ -182,7 +186,11 @@ export async function generateMasterSupervisorReport(options?: {
       pageSize: 1000,
       orderBy: 'created_at',
       orderDirection: 'desc',
-      applyFilters: (q) => q.eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24').eq('status', 'submitted').is('deleted_at', null),
+      applyFilters: (q) => {
+        let qq: any = q.eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24').eq('status', 'submitted').is('deleted_at', null)
+        if (campaignRound) qq = qq.eq('campaign_round', campaignRound)
+        return qq
+      },
     }),
 
     bulkFetch({
@@ -192,7 +200,11 @@ export async function generateMasterSupervisorReport(options?: {
       pageSize: 1000,
       orderBy: 'created_at',
       orderDirection: 'desc',
-      applyFilters: (q) => q.is('deleted_at', null),
+      applyFilters: (q) => {
+        let qq: any = q.is('deleted_at', null)
+        if (campaignRound) qq = qq.eq('campaign_round', campaignRound)
+        return qq
+      },
     }),
   ])
 
@@ -476,9 +488,7 @@ export async function generateMasterSupervisorReport(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'التقرير الشامل للمشرفين',
-        'تقييم + تحليل + تحديات — تقرير مدمج',
+      ${buildHeader('التقرير الشامل للمشرفين', 'تقييم + تحليل + تحديات — تقرير مدمج' + roundSuffix(campaignRound),
         todayArabic,
       )}
 

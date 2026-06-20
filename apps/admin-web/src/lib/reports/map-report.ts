@@ -8,6 +8,7 @@
 import { supabase } from '../supabase'
 import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
+import { roundSuffix, applyRoundFilter } from './shared'
 
 // ─── Yemen center & governorate approximate centers ──────────
 
@@ -40,7 +41,9 @@ export async function generateMapReport(options?: {
   dateFrom?: string
   dateTo?: string
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const today = new Date().toISOString().split('T')[0]
   const dateFrom = options?.dateFrom || today
   const dateTo = options?.dateTo || today
@@ -71,6 +74,8 @@ export async function generateMapReport(options?: {
       if (options?.governorateId && options.governorateId !== 'all') {
         q = q.eq('governorate_id', options.governorateId)
       }
+
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
 
       const { data, error } = await q
       if (error || !data || data.length === 0) break

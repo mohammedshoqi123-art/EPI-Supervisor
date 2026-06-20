@@ -15,15 +15,18 @@ import {
   buildTable,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 export async function generateDistrictReport(
   districtId: string,
-  options?: { dateFrom?: string; dateTo?: string }
+  options?: { dateFrom?: string; dateTo?: string; campaignRound?: number }
 ): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const [distRes, subsRes, usersRes] = await Promise.allSettled([
     supabase.from('districts').select('*, governorates(name_ar)').eq('id', districtId).single(),
-    supabase.from('form_submissions').select('*, forms(title_ar), profiles:submitted_by(full_name, role)').eq('district_id', districtId).is('deleted_at', null).order('created_at', { ascending: false }),
+    applyRoundFilter(supabase.from('form_submissions').select('*, forms(title_ar), profiles:submitted_by(full_name, role)').eq('district_id', districtId).is('deleted_at', null).order('created_at', { ascending: false }), campaignRound),
     supabase.from('profiles').select('*').eq('district_id', districtId).is('deleted_at', null),
   ])
 
@@ -55,10 +58,7 @@ export async function generateDistrictReport(
       ${getStyles()}
     </head>
     <body>
-      ${buildHeader(
-        `تقرير مديرية ${dist.name_ar}`,
-        `محافظة ${dist.governorates?.name_ar || '—'} — تحليل شامل`
-      )}
+      ${buildHeader(`تقرير مديرية ${dist.name_ar}`, `محافظة ${dist.governorates?.name_ar || '—'} — تحليل شامل${roundSuffix(campaignRound)}`)}
 
       ${buildSectionTitle('📊', 'مؤشرات المديرية')}
       <div class="kpi-grid">

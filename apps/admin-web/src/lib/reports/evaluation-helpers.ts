@@ -84,12 +84,14 @@ export function formatDateArabic(d: Date): string {
 export async function fetchEvaluationData(options?: {
   date?: string
   governorateId?: string
+  campaignRound?: number
 }): Promise<EvaluationData> {
   const targetDate = options?.date || getTodayStr()
   const dayStart = `${targetDate}T00:00:00`
   const dayEnd = `${targetDate}T23:59:59`
   const dayName = getDayName(targetDate)
   const dateArabic = formatDateArabic(new Date(targetDate))
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
 
   // ── Fetch all data ──
   // NOTE: submissions uses bulkFetch for pagination (Supabase PostgREST caps at ~1000 rows per request)
@@ -115,12 +117,16 @@ export async function fetchEvaluationData(options?: {
   // Paginated fetch for submissions on target date
   const subsResult = await bulkFetch({
     table: 'form_submissions',
-    select: 'id, submitted_by, governorate_id, district_id, status, created_at',
+    select: 'id, submitted_by, governorate_id, district_id, status, created_at, campaign_round',
     maxRows: 100000,
     pageSize: 1000,
     orderBy: 'created_at',
     orderDirection: 'asc',
-    applyFilters: (q) => q.is('deleted_at', null).gte('created_at', dayStart).lte('created_at', dayEnd),
+    applyFilters: (q) => {
+      let qq: any = q.is('deleted_at', null).gte('created_at', dayStart).lte('created_at', dayEnd)
+      if (campaignRound) qq = qq.eq('campaign_round', campaignRound)
+      return qq
+    },
   })
 
   const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
@@ -201,7 +207,9 @@ export interface ComprehensiveEvaluationData {
 
 export async function fetchComprehensiveEvaluationData(options?: {
   governorateId?: string
+  campaignRound?: number
 }): Promise<ComprehensiveEvaluationData> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   // ── Fetch all data (no date filter) ──
   // NOTE: submissions uses bulkFetch for pagination (Supabase PostgREST caps at ~1000 rows per request)
   const [usersRes, govsRes, distsRes] = await Promise.allSettled([
@@ -226,12 +234,16 @@ export async function fetchComprehensiveEvaluationData(options?: {
   // Paginated fetch for ALL submissions (no 1000-row cap)
   const subsResult = await bulkFetch({
     table: 'form_submissions',
-    select: 'id, submitted_by, governorate_id, district_id, status, created_at',
+    select: 'id, submitted_by, governorate_id, district_id, status, created_at, campaign_round',
     maxRows: 100000,
     pageSize: 1000,
     orderBy: 'created_at',
     orderDirection: 'asc',
-    applyFilters: (q) => q.is('deleted_at', null),
+    applyFilters: (q) => {
+      let qq: any = q.is('deleted_at', null)
+      if (campaignRound) qq = qq.eq('campaign_round', campaignRound)
+      return qq
+    },
   })
 
   const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []

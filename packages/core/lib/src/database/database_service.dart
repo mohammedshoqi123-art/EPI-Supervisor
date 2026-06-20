@@ -274,23 +274,42 @@ class DatabaseService {
     String? severity,
     bool? isResolved,
     String? campaignType,
+    int? campaignRound,
     int? limit,
     int? offset,
   }) async {
     // ═══ PERFORMANCE FIX: Single query with IN filter instead of fetching 5000 submissions ═══
-    if (campaignType != null) {
-      final campaignForms = await getForms(campaignType: campaignType);
-      if (campaignForms.isEmpty) return [];
-      final formIds = campaignForms.map((f) => f['id'] as String).toList();
+    // When campaignType or campaignRound is set, resolve submission IDs first.
+    if (campaignType != null || campaignRound != null) {
+      List<String> formIds = [];
+      if (campaignType != null) {
+        final campaignForms = await getForms(campaignType: campaignType);
+        if (campaignForms.isEmpty) return [];
+        formIds = campaignForms.map((f) => f['id'] as String).toList();
+      }
 
-      // Get submission IDs for these forms using IN filter (single query)
-      final submissions = await _api.selectIn(
-        'form_submissions',
-        'form_id',
-        formIds,
-        select: 'id',
-        limit: 5000,
-      );
+      // Get submission IDs for these forms (and optionally round) using IN filter
+      final List<Map<String, dynamic>> submissions;
+      if (formIds.isNotEmpty) {
+        submissions = await _api.selectIn(
+          'form_submissions',
+          'form_id',
+          formIds,
+          select: 'id',
+          extraFilters: campaignRound != null
+              ? {'campaign_round': campaignRound}
+              : null,
+          limit: 5000,
+        );
+      } else {
+        // Round-only filter (no campaign_type)
+        submissions = await _api.select(
+          'form_submissions',
+          select: 'id',
+          filters: {'campaign_round': campaignRound},
+          limit: 5000,
+        );
+      }
       final submissionIds =
           submissions.map((s) => s['id'] as String).toList();
 

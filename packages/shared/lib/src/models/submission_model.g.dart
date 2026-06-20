@@ -37,6 +37,7 @@ _$SubmissionModelImpl _$$SubmissionModelImplFromJson(
       appVersion: json['app_version'] as String?,
       isOffline: json['is_offline'] as bool? ?? false,
       offlineId: json['offline_id'] as String?,
+      campaignRound: (json['campaign_round'] as num?)?.toInt() ?? 1,
       syncedAt: json['synced_at'] == null
           ? null
           : DateTime.parse(json['synced_at'] as String),
@@ -74,6 +75,7 @@ Map<String, dynamic> _$$SubmissionModelImplToJson(
       'app_version': instance.appVersion,
       'is_offline': instance.isOffline,
       'offline_id': instance.offlineId,
+      'campaign_round': instance.campaignRound,
       'synced_at': instance.syncedAt?.toIso8601String(),
       'created_at': instance.createdAt?.toIso8601String(),
       'updated_at': instance.updatedAt?.toIso8601String(),

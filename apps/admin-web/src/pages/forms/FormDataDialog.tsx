@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useSubmissions, useAuth, useGovernorates } from '@/hooks/useApi'
+import { useCampaign } from '@/lib/campaign-context'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { supabase } from '@/lib/supabase'
@@ -35,11 +36,13 @@ export function FormDataDialog({ open, onOpenChange, form }: {
   const canEdit = authData?.profile?.role === 'admin' || authData?.profile?.role === 'central'
   const canDelete = authData?.profile?.role === 'admin'
   const { data: governorates } = useGovernorates()
+  const { campaignRound, showRoundFilter } = useCampaign()
 
   const { data, isLoading, refetch } = useSubmissions({
     formId: form.id,
     status: statusFilter !== 'all' ? statusFilter as any : undefined,
     governorateId: govFilter !== 'all' ? govFilter : undefined,
+    campaignRound: showRoundFilter ? campaignRound : undefined,
     page, pageSize: 20,
   })
 
@@ -50,9 +53,11 @@ export function FormDataDialog({ open, onOpenChange, form }: {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const { data: allData } = await supabase.from('form_submissions').select('*').eq('form_id', form.id).order('created_at', { ascending: false })
+      let query = supabase.from('form_submissions').select('*').eq('form_id', form.id).order('created_at', { ascending: false })
+      if (showRoundFilter && campaignRound) query = query.eq('campaign_round', campaignRound)
+      const { data: allData } = await query
       if (!allData || allData.length === 0) { toast({ title: 'تنبيه', description: 'لا توجد بيانات للتصدير' }); return }
-      const headers = ['id', 'status', 'governorate_id', 'district_id', 'created_at', 'submitted_at', 'gps_lat', 'gps_lng', 'notes', 'data']
+      const headers = ['id', 'status', 'campaign_round', 'governorate_id', 'district_id', 'created_at', 'submitted_at', 'gps_lat', 'gps_lng', 'notes', 'data']
       const rows = allData.map(row => headers.map(h => {
         let val = row[h]
         if (h === 'data') val = JSON.stringify(val || {})
@@ -63,7 +68,7 @@ export function FormDataDialog({ open, onOpenChange, form }: {
       const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a'); a.href = url
-      a.download = `${form.title_ar}_export_${new Date().toISOString().slice(0, 10)}.csv`
+      a.download = `${form.title_ar}_export_${new Date().toISOString().slice(0, 10)}${showRoundFilter && campaignRound ? `_round${campaignRound}` : ''}.csv`
       a.click(); URL.revokeObjectURL(url)
       toast({ title: 'تم التصدير', description: `تم تصدير ${allData.length} سجل` })
     } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }) }

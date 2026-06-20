@@ -166,9 +166,9 @@ export function useDashboardRealtime() {
   }, [queryClient])
 }
 
-export function useSubmissionsChart(campaignType?: string) {
+export function useSubmissionsChart(campaignType?: string, campaignRound?: number) {
   return useQuery({
-    queryKey: ['submissions-chart', campaignType],
+    queryKey: ['submissions-chart', campaignType, campaignRound],
     queryFn: async () => {
       // Only fetch last 30 days — use date filter instead of fetching everything
       const now = new Date()
@@ -185,6 +185,11 @@ export function useSubmissionsChart(campaignType?: string) {
       const formIds = await getCampaignFormIds(campaignType)
       if (formIds && formIds.length > 0) {
         query = query.in('form_id', formIds)
+      }
+
+      // Apply round filter
+      if (campaignRound && campaignRound > 0) {
+        query = query.eq('campaign_round', campaignRound)
       }
 
       const { data } = await query
@@ -214,9 +219,9 @@ export function useSubmissionsChart(campaignType?: string) {
   })
 }
 
-export function useGovernorateStats(campaignType?: string) {
+export function useGovernorateStats(campaignType?: string, campaignRound?: number) {
   return useQuery({
-    queryKey: ['governorate-stats', campaignType],
+    queryKey: ['governorate-stats', campaignType, campaignRound],
     queryFn: async () => {
       // Get all active governorates
       const { data: governorates } = await supabase
@@ -242,6 +247,7 @@ export function useGovernorateStats(campaignType?: string) {
         .limit(50000) // Safety cap
 
       if (formIds && formIds.length > 0) query = query.in('form_id', formIds)
+      if (campaignRound && campaignRound > 0) query = query.eq('campaign_round', campaignRound)
 
       const { data: submissions } = await query
 

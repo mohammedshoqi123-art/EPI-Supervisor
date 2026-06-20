@@ -61,13 +61,18 @@ const ROUND_LABELS: Record<number, string> = {
   3: 'الجولة الثالثة',
   4: 'الجولة الرابعة',
   5: 'الجولة الخامسة',
+  6: 'الجولة السادسة',
+  7: 'الجولة السابعة',
+  8: 'الجولة الثامنة',
+  9: 'الجولة التاسعة',
+  10: 'الجولة العاشرة',
 }
 
 export function getRoundLabel(round: number): string {
   return ROUND_LABELS[round] || `الجولة ${round}`
 }
 
-export const CAMPAIGN_ROUNDS = [1, 2, 3, 4, 5]
+export const CAMPAIGN_ROUNDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 function loadActiveRound(): number {
   if (typeof window === 'undefined') return 1

@@ -16,15 +16,18 @@ import {
   buildTable,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
-export async function generateDailyActivityReport(): Promise<void> {
+export async function generateDailyActivityReport(options?: { campaignRound?: number }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
   const yesterdayStr = new Date(today.getTime() - 86400000).toISOString().split('T')[0]
 
   const [subsRes, usersRes, notifsRes] = await Promise.allSettled([
-    supabase.from('form_submissions').select('*, forms(title_ar), profiles:submitted_by(full_name, role), governorates(name_ar)').gte('created_at', `${todayStr}T00:00:00`).is('deleted_at', null).order('created_at', { ascending: false }),
+    applyRoundFilter(supabase.from('form_submissions').select('*, forms(title_ar), profiles:submitted_by(full_name, role), governorates(name_ar)').gte('created_at', `${todayStr}T00:00:00`).is('deleted_at', null).order('created_at', { ascending: false }), campaignRound),
     supabase.from('profiles').select('*').is('deleted_at', null),
     supabase.from('notifications').select('*').gte('created_at', `${todayStr}T00:00:00`).order('created_at', { ascending: false }),
   ])
@@ -35,7 +38,7 @@ export async function generateDailyActivityReport(): Promise<void> {
 
   // Yesterday subs for comparison
   const [yesterdayRes] = await Promise.allSettled([
-    supabase.from('form_submissions').select('id', { count: 'exact', head: true }).gte('created_at', `${yesterdayStr}T00:00:00`).lt('created_at', `${todayStr}T00:00:00`).is('deleted_at', null),
+    applyRoundFilter(supabase.from('form_submissions').select('id', { count: 'exact', head: true }).gte('created_at', `${yesterdayStr}T00:00:00`).lt('created_at', `${todayStr}T00:00:00`).is('deleted_at', null), campaignRound),
   ])
 
   const yesterdayCount = yesterdayRes.status === 'fulfilled' ? yesterdayRes.value.count || 0 : 0
@@ -63,9 +66,7 @@ export async function generateDailyActivityReport(): Promise<void> {
       ${getStyles()}
     </head>
     <body>
-      ${buildHeader(
-        'تقرير النشاط اليومي',
-        `نشاط اليوم — ${formatDateArabic(today)}`,
+      ${buildHeader('تقرير النشاط اليومي', `نشاط اليوم — ${formatDateArabic(today)}${roundSuffix(campaignRound)}`,
       )}
 
       ${buildSectionTitle('📊', 'مؤشرات اليوم')}

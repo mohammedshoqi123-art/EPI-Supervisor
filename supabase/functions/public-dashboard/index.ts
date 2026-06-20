@@ -102,13 +102,19 @@ serve(async (req: Request) => {
         .is('deleted_at', null),
 
       // Submissions by governorate (aggregated)
-      supabase.rpc('public_subs_by_gov', { p_days: days }),
+      supabase.rpc('public_subs_by_gov', campaignRound !== null
+        ? { p_days: days, p_campaign_round: campaignRound }
+        : { p_days: days }),
 
       // Submissions by day (last 30 days)
-      supabase.rpc('public_subs_by_day', { p_days: days }),
+      supabase.rpc('public_subs_by_day', campaignRound !== null
+        ? { p_days: days, p_campaign_round: campaignRound }
+        : { p_days: days }),
 
       // Submissions by form
-      supabase.rpc('public_subs_by_form', { p_days: days }),
+      supabase.rpc('public_subs_by_form', campaignRound !== null
+        ? { p_days: days, p_campaign_round: campaignRound }
+        : { p_days: days }),
 
       // Active users today (no PII — just count)
       applyCampaignRound(supabase.from('form_submissions')
@@ -134,6 +140,7 @@ serve(async (req: Request) => {
         ok: true,
         generated_at: now.toISOString(),
         period_days: days,
+        campaign_round: campaignRound,
         kpis: {
           total_submissions: total,
           today: todayCount,

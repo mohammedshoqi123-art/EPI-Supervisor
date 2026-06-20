@@ -13,9 +13,19 @@ import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import { EPI_LOGO_BASE64 } from '../epi-logo'
 import {
-  escapeHtml, formatDateArabic, formatTimeArabic,
-  buildHeader, buildFooter, buildKPI, buildSectionTitle,
-  buildTable, buildProgress, getStyles, printReport,
+  escapeHtml,
+  formatDateArabic,
+  formatTimeArabic,
+  buildHeader,
+  buildFooter,
+  buildKPI,
+  buildSectionTitle,
+  buildTable,
+  buildProgress,
+  getStyles,
+  printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 // ─── Supervision Form Sections (EPI Standard) ───────────────
@@ -157,7 +167,9 @@ export async function generateSupervisionFormReport(options?: {
   dateTo?: string
   governorateId?: string
   formId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const now = new Date()
 
   // ── Fetch supervision form submissions (paginated) ──
@@ -173,6 +185,7 @@ export async function generateSupervisionFormReport(options?: {
       if (options?.formId) q = q.eq('form_id', options.formId)
       if (options?.dateFrom) q = q.gte('created_at', options.dateFrom)
       if (options?.dateTo) q = q.lte('created_at', options.dateTo + 'T23:59:59')
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
       return q
     },
   })
@@ -413,9 +426,7 @@ export async function generateSupervisionFormReport(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقرير استمارة الإشراف — النشاط الإيصالي التكاملي',
-        'تحليل تحديات 8 أقسام إشرافية × 33 مؤشر',
+      ${buildHeader('تقرير استمارة الإشراف — النشاط الإيصالي التكاملي', 'تحليل تحديات 8 أقسام إشرافية × 33 مؤشر' + roundSuffix(campaignRound),
         options?.dateFrom && options?.dateTo
           ? `${formatDateArabic(new Date(options.dateFrom))} — ${formatDateArabic(new Date(options.dateTo))}`
           : 'آخر 30 يوم',

@@ -52,11 +52,13 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
 
     try {
       final campaign = ref.read(campaignProvider);
+      final round = ref.read(campaignRoundProvider);
       // ═══ PERFORMANCE: Cache-first — sync populates cache, this reads from it ═══
       // Client-side pagination on cached data (fast after first sync)
       final filter = SubmissionsFilter(
         status: _statusFilter,
         campaignType: campaign.value,
+        campaignRound: campaign.value == 'integrated_activity' ? round : null,
         limit: 500, // Reasonable limit for cache population
         offset: 0,
       );

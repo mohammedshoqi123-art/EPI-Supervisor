@@ -16,6 +16,8 @@ import {
   AppearanceSection,
   DataSection,
   SystemSection,
+  ActiveRoundCard,
+  CampaignManagerCard,
   useSettings,
 } from './settings'
 
@@ -114,7 +116,13 @@ export default function SettingsPage() {
 
           {/* ═══ Main Content ═══ */}
           <div className="flex-1 space-y-6 min-w-0">
-            {activeSection === 'general' && <GeneralSection state={state} update={update} />}
+            {activeSection === 'general' && (
+              <>
+                <GeneralSection state={state} update={update} />
+                <CampaignManagerCard />
+                <ActiveRoundCard />
+              </>
+            )}
             {activeSection === 'security' && <SecuritySection state={state} update={update} />}
             {activeSection === 'notifications' && <NotificationSection state={state} update={update} />}
             {activeSection === 'appearance' && <AppearanceSection state={state} update={update} />}

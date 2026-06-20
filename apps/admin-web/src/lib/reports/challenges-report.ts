@@ -10,9 +10,19 @@ import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import { EPI_LOGO_BASE64 } from '../epi-logo'
 import {
-  escapeHtml, formatDateArabic, formatTimeArabic,
-  buildHeader, buildFooter, buildKPI, buildSectionTitle,
-  buildTable, buildProgress, getStyles, printReport,
+  escapeHtml,
+  formatDateArabic,
+  formatTimeArabic,
+  buildHeader,
+  buildFooter,
+  buildKPI,
+  buildSectionTitle,
+  buildTable,
+  buildProgress,
+  getStyles,
+  printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 // ─── Severity Styling ────────────────────────────────────────
@@ -39,7 +49,9 @@ export async function generateChallengesReport(options?: {
   dateFrom?: string
   dateTo?: string
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const now = new Date()
 
   // ── Fetch all relevant data (paginated for large tables) ──
@@ -68,7 +80,7 @@ export async function generateChallengesReport(options?: {
       profiles!submitted_by(full_name, phone),
       governorates(id, name_ar),
       districts(id, name_ar)
-    `),
+    `, (q: any) => campaignRound ? q.eq('campaign_round', campaignRound) : q),
     supabase.from('supply_shortages')
       .select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name)')
       .is('deleted_at', null)
@@ -260,9 +272,7 @@ export async function generateChallengesReport(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقرير التحديات والصعوبات',
-        'تحليل شامل — التحديات، الإجراءات المتخذة، التوصيات',
+      ${buildHeader('تقرير التحديات والصعوبات', 'تحليل شامل — التحديات، الإجراءات المتخذة، التوصيات' + roundSuffix(campaignRound),
         options?.dateFrom && options?.dateTo
           ? `${formatDateArabic(new Date(options.dateFrom))} — ${formatDateArabic(new Date(options.dateTo))}`
           : 'آخر 30 يوم',

@@ -5,13 +5,23 @@
 import { supabase } from '../supabase'
 import { BRAND } from '../pdf-brand'
 import {
-  escapeHtml, buildHeader, buildFooter, buildKPI,
-  buildSectionTitle, buildTable, getStyles, printReport,
+  escapeHtml,
+  buildHeader,
+  buildFooter,
+  buildKPI,
+  buildSectionTitle,
+  buildTable,
+  getStyles,
+  printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 export async function generateUserActivityReport(options?: {
   dateFrom?: string; dateTo?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const dateFrom = options?.dateFrom
   const dateTo = options?.dateTo
 
@@ -23,7 +33,7 @@ export async function generateUserActivityReport(options?: {
 
   const [usersRes, subsRes] = await Promise.allSettled([
     supabase.from('profiles').select('*, governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('last_login', { ascending: false }),
-    applyDateFilter(supabase.from('form_submissions').select('submitted_by, created_at').is('deleted_at', null)),
+    applyDateFilter(applyRoundFilter(supabase.from('form_submissions').select('submitted_by, created_at').is('deleted_at', null), campaignRound)),
   ])
 
   const users = usersRes.status === 'fulfilled' ? usersRes.value.data || [] : []
@@ -51,7 +61,7 @@ export async function generateUserActivityReport(options?: {
       ${getStyles()}
     </head>
     <body>
-      ${buildHeader('تقرير نشاط المستخدمين', 'تحليل شامل لنشاط ودخول المستخدمين')}
+      ${buildHeader('تقرير نشاط المستخدمين', 'تحليل شامل لنشاط ودخول المستخدمين' + roundSuffix(campaignRound))}
 
       ${buildSectionTitle('📊', 'ملخص المستخدمين')}
       <div class="kpi-grid">

@@ -16,11 +16,15 @@ import {
   buildProgress,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 export async function generateCoverageGapReport(options?: {
   dateFrom?: string; dateTo?: string; governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const dateFrom = options?.dateFrom
   const dateTo = options?.dateTo
   const governorateId = options?.governorateId
@@ -39,7 +43,7 @@ export async function generateCoverageGapReport(options?: {
   const [govsRes, distsRes, subsRes, usersRes] = await Promise.allSettled([
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null).order('name_ar'),
     supabase.from('districts').select('*, governorates(name_ar)').eq('is_active', true).is('deleted_at', null),
-    applyDateFilter(applyGovFilter(supabase.from('form_submissions').select('governorate_id, district_id, created_at').is('deleted_at', null))),
+    applyDateFilter(applyGovFilter(applyRoundFilter(supabase.from('form_submissions').select('governorate_id, district_id, created_at').is('deleted_at', null), campaignRound))),
     supabase.from('profiles').select('governorate_id, district_id, role, is_active').is('deleted_at', null),
   ])
 
@@ -115,9 +119,7 @@ export async function generateCoverageGapReport(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقرير الفجوة في التغطية',
-        'تحليل شامل للمناطق المغطاة وغير المغطاة — أين نحن وأين يجب أن نكون',
+      ${buildHeader('تقرير الفجوة في التغطية', 'تحليل شامل للمناطق المغطاة وغير المغطاة — أين نحن وأين يجب أن نكون' + roundSuffix(campaignRound),
       )}
 
       ${buildSectionTitle('📊', 'نظرة عامة على التغطية')}

@@ -30,8 +30,8 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: true,
-      // Better chunk splitting
+      sourcemap: false,
+      // Better chunk splitting — isolate heavy libraries to reduce initial load
       rollupOptions: {
         output: {
           manualChunks: {
@@ -52,10 +52,13 @@ export default defineConfig(({ mode }) => {
             ],
             'chart-vendor': ['recharts'],
             'data-vendor': ['@supabase/supabase-js', '@tanstack/react-query', '@tanstack/react-table'],
+            // ═══ NEW: Isolate heavy export/report libraries ═══
+            // These are only needed when generating reports, not for normal browsing
+            'export-vendor': ['xlsx', 'jspdf', 'html-to-image', 'pptxgenjs'],
+            'map-vendor': ['leaflet', 'react-leaflet'],
           },
         },
       },
-      // Increase chunk size warning limit
       chunkSizeWarningLimit: 800,
     },
   }

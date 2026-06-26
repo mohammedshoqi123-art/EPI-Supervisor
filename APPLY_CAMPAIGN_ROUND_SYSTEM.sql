@@ -105,7 +105,9 @@ CREATE TRIGGER trg_set_campaign_round
 -- ═══════════════════════════════════════════════════════════════
 
 -- 2.1 public_subs_by_gov(int, int) — accepts optional p_campaign_round
+-- Drop both old signatures (int) and new (int, int) to avoid "already exists" errors
 DROP FUNCTION IF EXISTS public_subs_by_gov(int);
+DROP FUNCTION IF EXISTS public_subs_by_gov(int, int);
 CREATE FUNCTION public_subs_by_gov(p_days int DEFAULT 30, p_campaign_round int DEFAULT NULL)
 RETURNS TABLE (
   governorate_id uuid,
@@ -138,6 +140,7 @@ $$;
 
 -- 2.2 public_subs_by_day(int, int)
 DROP FUNCTION IF EXISTS public_subs_by_day(int);
+DROP FUNCTION IF EXISTS public_subs_by_day(int, int);
 CREATE FUNCTION public_subs_by_day(p_days int DEFAULT 30, p_campaign_round int DEFAULT NULL)
 RETURNS TABLE (
   day date,
@@ -173,6 +176,7 @@ $$;
 
 -- 2.3 public_subs_by_form(int, int)
 DROP FUNCTION IF EXISTS public_subs_by_form(int);
+DROP FUNCTION IF EXISTS public_subs_by_form(int, int);
 CREATE FUNCTION public_subs_by_form(p_days int DEFAULT 30, p_campaign_round int DEFAULT NULL)
 RETURNS TABLE (
   form_id uuid,

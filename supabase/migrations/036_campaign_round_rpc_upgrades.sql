@@ -16,7 +16,9 @@
 BEGIN;
 
 -- ═══ 1. Drop & recreate public_subs_by_gov with optional round ═══
+-- Drop both old signatures (int) and new (int, int) to avoid "already exists" errors
 DROP FUNCTION IF EXISTS public_subs_by_gov(int);
+DROP FUNCTION IF EXISTS public_subs_by_gov(int, int);
 CREATE FUNCTION public_subs_by_gov(p_days int DEFAULT 30, p_campaign_round int DEFAULT NULL)
 RETURNS TABLE (
   governorate_id uuid,
@@ -49,6 +51,7 @@ $$;
 
 -- ═══ 2. Drop & recreate public_subs_by_day with optional round ═══
 DROP FUNCTION IF EXISTS public_subs_by_day(int);
+DROP FUNCTION IF EXISTS public_subs_by_day(int, int);
 CREATE FUNCTION public_subs_by_day(p_days int DEFAULT 30, p_campaign_round int DEFAULT NULL)
 RETURNS TABLE (
   day date,
@@ -84,6 +87,7 @@ $$;
 
 -- ═══ 3. Drop & recreate public_subs_by_form with optional round ═══
 DROP FUNCTION IF EXISTS public_subs_by_form(int);
+DROP FUNCTION IF EXISTS public_subs_by_form(int, int);
 CREATE FUNCTION public_subs_by_form(p_days int DEFAULT 30, p_campaign_round int DEFAULT NULL)
 RETURNS TABLE (
   form_id uuid,

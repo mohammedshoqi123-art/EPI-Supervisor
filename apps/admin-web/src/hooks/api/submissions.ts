@@ -17,7 +17,16 @@ export function useSubmissions(filters?: {
 
       let query = supabase
         .from('form_submissions')
-        .select('*, forms(title_ar, campaign_type), profiles:submitted_by(full_name, email, role), governorates(name_ar), districts(name_ar)', { count: 'exact' })
+        .select(`
+          id, status, form_id, governorate_id, district_id, submitted_by,
+          created_at, submitted_at, gps_lat, gps_lng, gps_accuracy,
+          campaign_round, notes, data, photos, reviewed_by, reviewed_at, review_notes,
+          device_id, app_version, is_offline, offline_id, synced_at, updated_at,
+          forms(title_ar, campaign_type),
+          profiles:submitted_by(full_name, email, role),
+          governorates(name_ar),
+          districts(name_ar)
+        `, { count: 'exact' })
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range((page - 1) * pageSize, page * pageSize - 1)
@@ -55,12 +64,12 @@ export function useSubmissions(filters?: {
 
       const { data, error, count } = await query
       if (error) throw error
-      return { data: data || [], count: count || 0 }
+      return { data: (data as any[]) || [], count: count || 0 }
     },
     enabled: isConfigured,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    staleTime: 10000,
+    staleTime: 30000,
   })
 }
 

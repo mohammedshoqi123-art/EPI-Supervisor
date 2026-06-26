@@ -19,7 +19,7 @@ export function useGovernorates() {
     enabled: isConfigured,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    staleTime: 0, // Always fetch fresh — governorates don't change often but deletions must reflect immediately
+    staleTime: 5 * 60 * 1000, // 5min — governorates rarely change; use invalidateQueries after mutations
   })
 }
 

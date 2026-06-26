@@ -10,9 +10,10 @@ export function useUsers(filters?: { role?: UserRole; search?: string }) {
     queryFn: async () => {
       let query = supabase
         .from('profiles')
-        .select('*, governorates(name_ar), districts(name_ar)')
+        .select('id, full_name, email, phone, role, is_active, last_login, created_at, updated_at, governorate_id, district_id, governorates(name_ar), districts(name_ar)')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
+        .limit(500)
 
       if (filters?.role) {
         query = query.eq('role', filters.role)
@@ -23,12 +24,12 @@ export function useUsers(filters?: { role?: UserRole; search?: string }) {
 
       const { data, error } = await query
       if (error) throw error
-      return data
+      return (data as any[]) || []
     },
     enabled: isConfigured,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    staleTime: 10000,
+    staleTime: 60000,
   })
 }
 

@@ -80,7 +80,7 @@ export async function generateDataQualityReport(options?: {
 
     // Field completeness from schema
     let schema: any = {}
-    try { schema = typeof f.schema === 'string' ? JSON.parse(f.schema) : f.schema } catch {}
+    try { schema = typeof f.schema === 'string' ? JSON.parse(f.schema) : f.schema } catch (e) { console.warn('[data-quality] Failed to parse form schema:', e) }
     const fields = (schema?.sections || []).flatMap((s: any) => s.fields || [])
 
     const fieldCompleteness = fields.map((field: any) => {

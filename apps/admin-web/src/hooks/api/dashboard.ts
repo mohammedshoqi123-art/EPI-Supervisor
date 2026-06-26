@@ -119,6 +119,25 @@ export function useDashboardStats(campaignType?: string, campaignRound?: number)
 let _dashChannel: ReturnType<typeof supabase.channel> | null = null
 let _dashSubscribed = false
 
+// ═══ Debounced invalidation — prevents UI freeze when many realtime events arrive ═══
+// When 50+ submissions arrive simultaneously, each triggers a separate event.
+// Without debounce: 50 events × 4 invalidations = 200 re-fetches → UI freeze.
+// With debounce: all events within 2000ms are batched into 1 invalidation set.
+let _invalidateTimer: ReturnType<typeof setTimeout> | null = null
+const _pendingKeys = new Set<string>()
+
+function debouncedInvalidate(queryClient: ReturnType<typeof useQueryClient>, keys: string[]) {
+  for (const k of keys) _pendingKeys.add(k)
+  if (_invalidateTimer) clearTimeout(_invalidateTimer)
+  _invalidateTimer = setTimeout(() => {
+    for (const key of _pendingKeys) {
+      queryClient.invalidateQueries({ queryKey: [key] })
+    }
+    _pendingKeys.clear()
+    _invalidateTimer = null
+  }, 2000) // 2s debounce
+}
+
 export function useDashboardRealtime() {
   const queryClient = useQueryClient()
 
@@ -133,18 +152,13 @@ export function useDashboardRealtime() {
 
     channel
       .on('postgres_changes', { event: '*', schema: 'public', table: 'form_submissions' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
-        queryClient.invalidateQueries({ queryKey: ['submissions-chart'] })
-        queryClient.invalidateQueries({ queryKey: ['governorate-stats'] })
-        queryClient.invalidateQueries({ queryKey: ['submissions'] })
+        debouncedInvalidate(queryClient, ['dashboard-stats', 'submissions-chart', 'governorate-stats', 'submissions'])
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'supply_shortages' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['shortages'] })
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+        debouncedInvalidate(queryClient, ['shortages', 'dashboard-stats'])
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['users'] })
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+        debouncedInvalidate(queryClient, ['users', 'dashboard-stats'])
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -161,6 +175,11 @@ export function useDashboardRealtime() {
         try { supabase.removeChannel(channel) } catch { /* ignore */ }
         _dashChannel = null
         _dashSubscribed = false
+        if (_invalidateTimer) {
+          clearTimeout(_invalidateTimer)
+          _invalidateTimer = null
+        }
+        _pendingKeys.clear()
       }
     }
   }, [queryClient])
@@ -179,7 +198,7 @@ export function useSubmissionsChart(campaignType?: string, campaignRound?: numbe
         .select('status, created_at')
         .gte('created_at', thirtyDaysAgo)
         .order('created_at', { ascending: true })
-        .limit(10000) // Safety cap
+        .limit(5000) // Reduced from 10000 — 5000 is sufficient for 30 days of chart data
 
       // Apply campaign filter
       const formIds = await getCampaignFormIds(campaignType)
@@ -244,7 +263,7 @@ export function useGovernorateStats(campaignType?: string, campaignRound?: numbe
         .not('governorate_id', 'is', null)
         .is('deleted_at', null)
         .gte('created_at', thirtyDaysAgo)
-        .limit(50000) // Safety cap
+        .limit(20000) // Reduced from 50000 — 20K is sufficient for 30-day governorate stats
 
       if (formIds && formIds.length > 0) query = query.in('form_id', formIds)
       if (campaignRound && campaignRound > 0) query = query.eq('campaign_round', campaignRound)

@@ -26,6 +26,6 @@ export function useAuditLogs(filters?: { userId?: string; action?: string; page?
     enabled: isConfigured,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    staleTime: 10000,
+    staleTime: 30000,
   })
 }

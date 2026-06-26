@@ -9,6 +9,7 @@ import { supabase } from '../supabase'
 import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import { roundSuffix, applyRoundFilter } from './shared'
+import { getCampaignFormIds } from '@/hooks/api/campaign'
 
 // ─── Yemen center & governorate approximate centers ──────────
 
@@ -42,6 +43,7 @@ export async function generateMapReport(options?: {
   dateTo?: string
   governorateId?: string
   campaignRound?: number
+  campaignType?: string
 }): Promise<void> {
   const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const today = new Date().toISOString().split('T')[0]
@@ -49,7 +51,11 @@ export async function generateMapReport(options?: {
   const dateTo = options?.dateTo || today
 
   // ── Fetch submissions with GPS (paginated) ──
+  // ═══ FIX: removed hardcoded form_id — now fetches ALL forms with GPS data ═══
   async function fetchAllSubmissions() {
+    // Optionally filter by campaign_type via form IDs
+    const formIds = await getCampaignFormIds(options?.campaignType)
+
     const allData: any[] = []
     let offset = 0
     const pageSize = 1000
@@ -58,11 +64,11 @@ export async function generateMapReport(options?: {
         .from('form_submissions')
         .select(`
           id, gps_lat, gps_lng, created_at, status, data,
+          forms(title_ar, campaign_type),
           profiles:submitted_by(full_name, role),
           governorates(name_ar),
           districts(name_ar)
         `)
-        .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
         .is('deleted_at', null)
         .not('gps_lat', 'is', null)
         .not('gps_lng', 'is', null)
@@ -70,6 +76,11 @@ export async function generateMapReport(options?: {
         .lte('created_at', `${dateTo}T23:59:59`)
         .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1)
+
+      // Apply campaign filter if form IDs are available
+      if (formIds && formIds.length > 0) {
+        q = q.in('form_id', formIds)
+      }
 
       if (options?.governorateId && options.governorateId !== 'all') {
         q = q.eq('governorate_id', options.governorateId)

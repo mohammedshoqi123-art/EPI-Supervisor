@@ -349,12 +349,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   // ── Persist active round ──
   useEffect(() => { saveActiveRound(campaignRound) }, [campaignRound])
 
-  // ── Reset round to 1 when switching away from integrated_activity ──
-  useEffect(() => {
-    if (campaign !== 'integrated_activity' && campaignRound !== 1) {
-      setCampaignRoundState(1)
-    }
-  }, [campaign, campaignRound])
+  // ═══ FIX: Removed auto-reset effect that was overriding ActiveRoundCard changes ═══
+  // Previously: switching to polio_campaign would reset campaignRound to 1,
+  // which prevented the ActiveRoundCard in Settings from updating the round.
+  // Now: the round persists across campaign switches. The round filter is only
+  // applied when showRoundFilter is true (campaign === 'integrated_activity'),
+  // so other campaigns simply ignore the round value.
 
   // ── Persist hidden builtins ──
   useEffect(() => { saveHiddenBuiltins(hiddenBuiltins) }, [hiddenBuiltins])
@@ -486,7 +486,10 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     campaignRound,
     setCampaignRound,
     roundLabelAr: getRoundLabel(campaignRound),
-    showRoundFilter: campaign === 'integrated_activity',
+    // ═══ FIX: showRoundFilter is now true for ALL campaigns, not just integrated_activity ═══
+    // The campaign_round column exists on all submissions (DEFAULT 1), so filtering by round
+    // is valid for any campaign. Users can now filter polio_campaign by round too.
+    showRoundFilter: campaign !== 'all',
   }), [campaign, currentOption, allCampaigns, visibleOptions, loading, campaignRound])
 
   return (

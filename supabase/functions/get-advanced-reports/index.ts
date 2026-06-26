@@ -93,53 +93,95 @@ serve(async (req) => {
       }
 
       case 'governorate_performance': {
-        // Get all governorates with submission stats
-        const { data: governorates } = await db
-          .from('governorates')
-          .select('id, name_ar, name_en, code, population')
-          .eq('is_active', true)
-          .is('deleted_at', null)
-          .order('name_ar')
+        // ═══ FIX: Replaced N+1 queries (22 gov × 5 queries = 110) with single RPC call ═══
+        // Use get_governorate_performance RPC for submission stats (1 query instead of 66)
+        const { data: govPerfData, error: rpcError } = await db
+          .rpc('get_governorate_performance', {
+            p_days: 30,
+            p_campaign_round: campaignRound ?? null,
+          })
 
-        const performance = await Promise.all((governorates ?? []).map(async (gov) => {
-          // Get district IDs for this governorate first
-          const { data: govDistricts } = await db
-            .from('districts')
-            .select('id')
-            .eq('governorate_id', gov.id)
+        if (rpcError) {
+          console.error('get_governorate_performance RPC error:', rpcError)
+          return jsonResponse({ error: rpcError.message }, 400, origin)
+        }
+
+        // Fetch governorate metadata + district/facility/user counts in parallel (3 queries, not 66)
+        const [govMetaRes, districtsRes, facilitiesRes, usersRes] = await Promise.all([
+          db.from('governorates')
+            .select('id, name_ar, name_en, code, population')
             .eq('is_active', true)
             .is('deleted_at', null)
-          const districtIds = (govDistricts ?? []).map(d => d.id)
+            .order('name_ar'),
+          db.from('districts')
+            .select('id, governorate_id')
+            .eq('is_active', true)
+            .is('deleted_at', null),
+          db.from('health_facilities')
+            .select('district_id')
+            .eq('is_active', true)
+            .is('deleted_at', null),
+          db.from('profiles')
+            .select('governorate_id')
+            .eq('is_active', true)
+            .is('deleted_at', null),
+        ])
 
-          const [total, submitted, draft, facilitiesCount, usersCount] = await Promise.all([
-            applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null)),
-            applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).eq('status', 'submitted').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null)),
-            applyCampaignRound(db.from('form_submissions').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).eq('status', 'draft').gte('created_at', fromDate).lte('created_at', toDate).is('deleted_at', null)),
-            districtIds.length > 0
-              ? db.from('health_facilities').select('*', { count: 'exact', head: true })
-                  .in('district_id', districtIds).eq('is_active', true).is('deleted_at', null)
-              : Promise.resolve({ count: 0 }),
-            db.from('profiles').select('*', { count: 'exact', head: true })
-              .eq('governorate_id', gov.id).eq('is_active', true).is('deleted_at', null),
-          ])
+        const governorates = govMetaRes.data ?? []
+        const allDistricts = districtsRes.data ?? []
+        const allFacilities = facilitiesRes.data ?? []
+        const allUsers = usersRes.data ?? []
 
-          const totalCount = total.count ?? 0
-          const submittedCount = submitted.count ?? 0
+        // Build lookup maps for O(1) access
+        const districtsByGov = new Map<string, number>()
+        for (const d of allDistricts) {
+          const gid = d.governorate_id as string
+          districtsByGov.set(gid, (districtsByGov.get(gid) ?? 0) + 1)
+        }
+
+        const facilitiesByDistrict = new Map<string, number>()
+        for (const f of allFacilities) {
+          const did = f.district_id as string
+          facilitiesByDistrict.set(did, (facilitiesByDistrict.get(did) ?? 0) + 1)
+        }
+
+        const usersByGov = new Map<string, number>()
+        for (const u of allUsers) {
+          const gid = u.governorate_id as string
+          if (gid) usersByGov.set(gid, (usersByGov.get(gid) ?? 0) + 1)
+        }
+
+        // Get district IDs per governorate for facility count
+        const districtIdsByGov = new Map<string, string[]>()
+        for (const d of allDistricts) {
+          const gid = d.governorate_id as string
+          if (!districtIdsByGov.has(gid)) districtIdsByGov.set(gid, [])
+          districtIdsByGov.get(gid)!.push(d.id as string)
+        }
+
+        // Merge RPC data with metadata
+        const perfMap = new Map<string, any>()
+        for (const p of (govPerfData ?? [])) {
+          perfMap.set(p.governorate_id, p)
+        }
+
+        const performance = governorates.map((gov: any) => {
+          const perf = perfMap.get(gov.id)
+          const districtIds = districtIdsByGov.get(gov.id) ?? []
+          const facilityCount = districtIds.reduce((sum, did) => sum + (facilitiesByDistrict.get(did) ?? 0), 0)
+
           return {
             ...gov,
             submissions: {
-              total: totalCount,
-              submitted: submittedCount,
-              draft: draft.count ?? 0,
+              total: perf?.total ?? 0,
+              submitted: perf?.submitted ?? 0,
+              draft: perf?.draft ?? 0,
             },
             districts: districtIds.length,
-            facilities: facilitiesCount.count ?? 0,
-            users: usersCount.count ?? 0,
+            facilities: facilityCount,
+            users: usersByGov.get(gov.id) ?? 0,
           }
-        }))
+        })
 
         return jsonResponse({
           report_type: 'governorate_performance',

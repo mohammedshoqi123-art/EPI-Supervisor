@@ -33,7 +33,7 @@ export function useForms(filters?: { search?: string; page?: number; pageSize?: 
     enabled: isConfigured,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    staleTime: 10000,
+    staleTime: 30000,
   })
 }
 
@@ -56,7 +56,7 @@ export function useFormSubmissionCounts(campaignType?: string, campaignRound?: n
         .select('form_id, status')
         .in('form_id', forms.map(f => f.id))
         .is('deleted_at', null)
-        .limit(100000) // Safety cap
+        .limit(10000) // Safety cap
       if (campaignRound && campaignRound > 0) {
         subsQuery = subsQuery.eq('campaign_round', campaignRound)
       }

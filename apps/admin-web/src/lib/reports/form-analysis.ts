@@ -56,7 +56,7 @@ export async function generateFormAnalysisReport(
 
   // Parse form schema for field analysis
   let schema: any = {}
-  try { schema = typeof form.schema === 'string' ? JSON.parse(form.schema) : form.schema } catch {}
+  try { schema = typeof form.schema === 'string' ? JSON.parse(form.schema) : form.schema } catch (e) { console.warn('[form-analysis] Failed to parse form schema:', e) }
   const sections = schema?.sections || []
   const allFields = sections.flatMap((s: any) => s.fields || [])
 

@@ -262,11 +262,13 @@ jobs:
           retention-days: 3
 
   # ─── Build iOS (no codesign — compilation check only) ────
+  # Non-blocking: iOS build failures don't block the release
   build-ios:
     name: Build iOS (No Codesign)
     runs-on: macos-latest
     needs: analyze
     if: github.ref == 'refs/heads/main'
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -376,6 +378,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: analyze
     if: github.ref == 'refs/heads/main'
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

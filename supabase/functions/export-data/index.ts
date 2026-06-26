@@ -70,7 +70,9 @@ serve(async (req) => {
     const db = adminClient ?? supabase
 
     const body = await req.json().catch(() => ({}))
-    const { table, from_date, to_date, governorate_id, status, format = 'csv' } = body
+    const { table, from_date, to_date, governorate_id, status, campaign_round, format = 'csv' } = body
+    const roundNum = Number(campaign_round)
+    const campaignRound = !isNaN(roundNum) && roundNum > 0 ? roundNum : null
 
     if (!table) return jsonResponse({ error: 'table is required' }, 400, origin)
 
@@ -82,7 +84,7 @@ serve(async (req) => {
         let query = db
           .from('form_submissions')
           .select(`
-            id, status, gps_lat, gps_lng, notes, created_at, submitted_at,
+            id, status, campaign_round, gps_lat, gps_lng, notes, created_at, submitted_at,
             forms(title_ar),
             profiles!submitted_by(full_name, email),
             governorates(name_ar),
@@ -96,14 +98,16 @@ serve(async (req) => {
         if (to_date) query = query.lte('created_at', to_date)
         if (governorate_id) query = query.eq('governorate_id', governorate_id)
         if (status) query = query.eq('status', status)
+        if (campaignRound) query = query.eq('campaign_round', campaignRound)
 
         const result = await query
         if (result.error) return jsonResponse({ error: result.error.message }, 400, origin)
 
-        headers = ['رقم_التسلسل', 'الحالة', 'الاستمارة', 'المقدم', 'البريد', 'المحافظة', 'المديرية', 'خط_العرض', 'خط_الطول', 'تاريخ_الإنشاء', 'تاريخ_الإرسال', 'ملاحظات']
+        headers = ['رقم_التسلسل', 'الحالة', 'الجولة', 'الاستمارة', 'المقدم', 'البريد', 'المحافظة', 'المديرية', 'خط_العرض', 'خط_الطول', 'تاريخ_الإنشاء', 'تاريخ_الإرسال', 'ملاحظات']
         data = (result.data ?? []).map((s: any, i: number) => ({
           'رقم_التسلسل': i + 1,
           'الحالة': s.status,
+          'الجولة': s.campaign_round ?? 1,
           'الاستمارة': s.forms?.title_ar ?? '',
           'المقدم': s.profiles?.full_name ?? '',
           'البريد': s.profiles?.email ?? '',
@@ -152,10 +156,11 @@ serve(async (req) => {
           .from('supply_shortages')
           .select(`
             id, item_name, item_category, quantity_needed, quantity_available, unit,
-            severity, notes, is_resolved, created_at,
+            severity, notes, is_resolved, created_at, submission_id,
             profiles!reported_by(full_name),
             governorates(name_ar),
-            districts(name_ar)
+            districts(name_ar),
+            form_submissions!submission_id(campaign_round)
           `)
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
@@ -168,8 +173,13 @@ serve(async (req) => {
         const result = await query
         if (result.error) return jsonResponse({ error: result.error.message }, 400, origin)
 
-        headers = ['رقم_التسلسل', 'الصنف', 'الفئة', 'الكمية_المطلوبة', 'المتاح', 'الوحدة', 'الخطورة', 'محلول', 'المبلغ', 'المحافظة', 'المديرية', 'التاريخ', 'ملاحظات']
-        data = (result.data ?? []).map((s: any, i: number) => ({
+        // Filter shortages by campaign_round via the related submission
+        const filtered = campaignRound
+          ? (result.data ?? []).filter((s: any) => (s.form_submissions as any)?.campaign_round === campaignRound)
+          : (result.data ?? [])
+
+        headers = ['رقم_التسلسل', 'الصنف', 'الفئة', 'الكمية_المطلوبة', 'المتاح', 'الوحدة', 'الخطورة', 'محلول', 'المبلغ', 'المحافظة', 'المديرية', 'الجولة', 'التاريخ', 'ملاحظات']
+        data = filtered.map((s: any, i: number) => ({
           'رقم_التسلسل': i + 1,
           'الصنف': s.item_name,
           'الفئة': s.item_category ?? '',
@@ -181,6 +191,7 @@ serve(async (req) => {
           'المبلغ': s.profiles?.full_name ?? '',
           'المحافظة': s.governorates?.name_ar ?? '',
           'المديرية': s.districts?.name_ar ?? '',
+          'الجولة': (s.form_submissions as any)?.campaign_round ?? '',
           'التاريخ': s.created_at,
           'ملاحظات': s.notes ?? '',
         }))

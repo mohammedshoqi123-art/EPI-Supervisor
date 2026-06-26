@@ -19,6 +19,8 @@ import {
   buildTable,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 import { fetchComprehensiveEvaluationData, isGeneralSupervisor, type EnrichedUser, type GovGroup } from './evaluation-helpers'
 
@@ -46,7 +48,9 @@ const ROLE_ICONS: Record<string, string> = {
 
 export async function generateComprehensiveSupervisorEvaluation(options?: {
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const data = await fetchComprehensiveEvaluationData(options)
   const { enriched, govs, dists, subs, govGroups, dateRange, totalDays } = data
 
@@ -304,9 +308,7 @@ export async function generateComprehensiveSupervisorEvaluation(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقييم أداء المشرفين الشامل',
-        'جميع الاستمارات — النشاط الإيصالي التكاملي',
+      ${buildHeader('تقييم أداء المشرفين الشامل', 'جميع الاستمارات — النشاط الإيصالي التكاملي' + roundSuffix(campaignRound),
         `${dateFromArabic} — ${dateToArabic} (${totalDays} يوم)`,
       )}
 

@@ -9,7 +9,7 @@
  */
 
 import { BRAND } from '../pdf-brand'
-import { escapeHtml, buildHeader, buildFooter, buildKPI, buildSectionTitle, buildTable, getStyles, printReport } from './shared'
+import {escapeHtml, buildHeader, buildFooter, buildKPI, buildSectionTitle, buildTable, getStyles, printReport, applyRoundFilter, roundSuffix} from './shared'
 import { fetchEvaluationData, isGeneralSupervisor, type EnrichedUser, type GovGroup } from './evaluation-helpers'
 
 const ROLE_ICONS: Record<string, string> = { governorate: '🟢' }
@@ -17,7 +17,9 @@ const ROLE_ICONS: Record<string, string> = { governorate: '🟢' }
 export async function generateGovernorateSupervisorsEvaluation(options?: {
   date?: string
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const data = await fetchEvaluationData(options)
   const { enriched, govs, targetDate, dayName, dateArabic } = data
 
@@ -90,9 +92,7 @@ export async function generateGovernorateSupervisorsEvaluation(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقييم إشراف مشرفي المحافظات',
-        'تقييم أداء مشرفي التحصين بالمحافظات — النشاط الإيصالي التكاملي',
+      ${buildHeader('تقييم إشراف مشرفي المحافظات', 'تقييم أداء مشرفي التحصين بالمحافظات — النشاط الإيصالي التكاملي' + roundSuffix(campaignRound),
         `${dayName} — ${dateArabic}`,
       )}
 

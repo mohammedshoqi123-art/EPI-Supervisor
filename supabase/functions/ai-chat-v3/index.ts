@@ -20,7 +20,7 @@ import { authenticateRequest, createUserClient, createAdminClient } from '../_sh
 
 // Module imports
 import type { UserProfile, ModelConfig, UserRole } from './utils/types.ts'
-import { withTimeout, daysAgo, todayStart, CAMPAIGN_LABELS, STATUS_LABELS, CHART_COLORS, getCampaignFormIds, applyCampaignFilter } from './utils/helpers.ts'
+import { withTimeout, daysAgo, todayStart, CAMPAIGN_LABELS, STATUS_LABELS, CHART_COLORS, getCampaignFormIds, applyCampaignFilter, getRoundLabelAr, getActiveCampaignRound } from './utils/helpers.ts'
 import { sanitizeUserMessage } from './utils/guard.ts'
 import { detectGreeting } from './utils/greeting.ts'
 import { classifyIntent, classifyCompoundIntents } from './prompts/intents.ts'
@@ -333,7 +333,7 @@ const TOOLS = [
 // TOOL EXECUTION
 // ═══════════════════════════════════════════════════════════
 
-async function executeFunction(supa: any, name: string, args: Record<string, any>): Promise<any> {
+async function executeFunction(supa: any, name: string, args: Record<string, any>, context?: { campaignRound?: number | null }): Promise<any> {
   // Confirmation gate
   const confirmationRequired = requireConfirmation(name, args)
   if (confirmationRequired) return confirmationRequired
@@ -342,10 +342,10 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
     switch (name) {
       case 'get_submissions': {
         const formIds = await getCampaignFormIds(supa, args.campaign_type || 'all')
-        let q = supa.from('form_submissions').select('status, governorate_id, created_at, form_id').is('deleted_at', null)
+        let q = supa.from('form_submissions').select('status, governorate_id, created_at, form_id, campaign_round').is('deleted_at', null)
         if (args.status) q = q.eq('status', args.status)
         if (args.days) q = q.gte('created_at', daysAgo(args.days))
-        q = applyCampaignFilter(q, formIds)
+        q = applyCampaignFilter(q, formIds, context?.campaignRound)
         const { data } = await withTimeout(q.limit(2000), 8_000) ?? {}
         if (!data) return { error: 'لا توجد بيانات' }
         const byStatus: Record<string, number> = {}
@@ -439,7 +439,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
 
         if (data_source === 'governorates') {
           let q = supa.from('form_submissions').select('governorate_id').is('deleted_at', null).gte('created_at', since).limit(10000)
-          q = applyCampaignFilter(q, formIds)
+          q = applyCampaignFilter(q, formIds, context?.campaignRound)
           const { data: subs } = await withTimeout(q, 10_000) ?? {}
           const { data: govs } = await withTimeout(supa.from('governorates').select('id, name_ar').eq('is_active', true), 5_000) ?? {}
           const govMap: Record<string, string> = {}
@@ -449,7 +449,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           chartData = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, limit || 10).map(([id, val]) => ({ label: govMap[id] || id.slice(0, 8), value: val }))
         } else if (data_source === 'submissions_by_day') {
           let q = supa.from('form_submissions').select('created_at').is('deleted_at', null).gte('created_at', since).limit(10000)
-          q = applyCampaignFilter(q, formIds)
+          q = applyCampaignFilter(q, formIds, context?.campaignRound)
           const { data: subs } = await withTimeout(q, 10_000) ?? {}
           const dayCounts: Record<string, number> = {}
           subs?.forEach((s: any) => { const d = s.created_at?.split('T')[0]; if (d) dayCounts[d] = (dayCounts[d] || 0) + 1 })
@@ -501,13 +501,13 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
 // TOOL CALLS EXECUTOR
 // ═══════════════════════════════════════════════════════════
 
-async function executeToolCalls(supa: any, toolCalls: any[], userId?: string): Promise<any[]> {
+async function executeToolCalls(supa: any, toolCalls: any[], userId?: string, context?: { campaignRound?: number | null }): Promise<any[]> {
   const results = []
   for (const tc of toolCalls) {
     const fnName = tc.function?.name
     const fnArgs = JSON.parse(tc.function?.arguments || '{}')
     console.log(`[Tool Call] ${fnName}(${JSON.stringify(fnArgs)})`)
-    const result = await executeFunction(supa, fnName, fnArgs)
+    const result = await executeFunction(supa, fnName, fnArgs, context)
     if (WRITE_TOOLS.has(fnName) && userId) {
       logWriteOperation(supa, userId, fnName, fnArgs, result, fnArgs._confirmed === true).catch(() => {})
     }
@@ -522,7 +522,7 @@ async function executeToolCalls(supa: any, toolCalls: any[], userId?: string): P
 
 async function multiStepToolCalling(
   msgs: any[], groqKey: string, supa: any,
-  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string }
+  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null }
 ): Promise<{ content: string; toolCallsUsed: string[]; totalTokens: number } | null> {
   const maxSteps = opts.maxSteps ?? 3
   const toolCallsUsed: string[] = []
@@ -533,7 +533,7 @@ async function multiStepToolCalling(
     if (!result) return null
 
     if (result.type === 'tool_calls') {
-      const toolResults = await executeToolCalls(supa, result.tool_calls, opts.userId)
+      const toolResults = await executeToolCalls(supa, result.tool_calls, opts.userId, { campaignRound: opts.campaignRound })
       msgs.push({ role: 'assistant', content: null, tool_calls: result.tool_calls })
       msgs.push(...toolResults)
       toolCallsUsed.push(...result.tool_calls.map((tc: any) => tc.function?.name))
@@ -556,7 +556,7 @@ async function multiStepToolCalling(
 
 async function multiStepToolCallingStream(
   msgs: any[], groqKey: string, supa: any,
-  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string },
+  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null },
   origin: string | null,
 ): Promise<Response> {
   const maxSteps = opts.maxSteps ?? 3
@@ -579,7 +579,7 @@ async function multiStepToolCallingStream(
             const fnName = tc.function?.name
             const fnArgs = JSON.parse(tc.function?.arguments || '{}')
             await send({ type: 'tool_call', step: step + 1, tool: fnName, message: `جاري: ${fnName}` })
-            const toolResult = await executeFunction(supa, fnName, fnArgs)
+            const toolResult = await executeFunction(supa, fnName, fnArgs, { campaignRound: opts.campaignRound })
             if (WRITE_TOOLS.has(fnName) && opts.userId) logWriteOperation(supa, opts.userId, fnName, fnArgs, toolResult, fnArgs._confirmed === true).catch(() => {})
             if (toolResult.needs_confirmation) {
               await send({ type: 'confirmation_needed', tool: fnName, message: toolResult.message })
@@ -698,14 +698,24 @@ serve(async (req) => {
     const conversationSummary = groqKey ? await getConversationSummary(supabase, auth.userId).catch(() => '') : ''
     const feedbackContext = await getFeedbackContext(supabase, auth.userId, intent).catch(() => '')
 
+    // ═══ Campaign Round — read from request body or fall back to app_settings.active_campaign_round ═══
+    const bodyRound = Number(body.campaign_round)
+    const campaignRound = !isNaN(bodyRound) && bodyRound > 0
+      ? bodyRound
+      : (context?.campaign_round ? Number(context.campaign_round) : NaN) || await getActiveCampaignRound(supabase)
+    const roundLabel = getRoundLabelAr(campaignRound)
+
     // System prompt
     const systemPrompt = buildSystemPrompt(
       profile || { id: auth.userId, role: 'data_entry', full_name: 'مستخدم', governorate_id: null, district_id: null, governorate_name: null },
       liveData, conversationSummary + feedbackContext, primaryIntent,
     )
 
-    // Build messages
-    const messages: any[] = [{ role: 'system', content: systemPrompt }]
+    // Append round-aware context to system prompt so LLM is aware
+    const roundContext = roundLabel
+      ? `\n\n## سياق الجولة الحالية\nالنظام يعمل حالياً ضمن **${roundLabel}** من النشاط الإيصالي التكاملي. جميع الإحصائيات والاستعلامات المُصدّرة عبر الأدوات يتم فلترتها تلقائياً حسب هذه الجولة ما لم يطلب المستخدم صراحةً جولة أخرى. عند ذكر "الجولة الحالية" أو "الجولة" بدون تحديد رقم، اذكر ${roundLabel}.`
+      : ''
+    const messages: any[] = [{ role: 'system', content: systemPrompt + roundContext }]
     const maxHistory = modelConfig.maxHistory || 6
     for (const m of (history || []).slice(-maxHistory)) {
       messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content).slice(0, 1500) })
@@ -728,11 +738,11 @@ serve(async (req) => {
     if (groqKey) {
       // Streaming mode
       if (stream && modelConfig.streamEnabled) {
-        return await multiStepToolCallingStream(messages, groqKey, supabase, { model: dbModelId || 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens, temperature: dbTemperature, maxSteps: 5, userId: auth.userId }, origin)
+        return await multiStepToolCallingStream(messages, groqKey, supabase, { model: dbModelId || 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens, temperature: dbTemperature, maxSteps: 5, userId: auth.userId, campaignRound }, origin)
       }
 
       // Non-streaming
-      const result = await multiStepToolCalling(messages, groqKey, supabase, { model: dbModelId || 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens, temperature: dbTemperature, maxSteps: 5, userId: auth.userId })
+      const result = await multiStepToolCalling(messages, groqKey, supabase, { model: dbModelId || 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens, temperature: dbTemperature, maxSteps: 5, userId: auth.userId, campaignRound })
 
       if (result) {
         await logUsage(supabase, dbModel?.id || 'groq-70b', result.totalTokens, Date.now() - startMs, true, undefined, result.toolCallsUsed.length > 0 ? 'groq_multi_step' : 'groq')

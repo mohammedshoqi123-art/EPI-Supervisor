@@ -16,11 +16,15 @@ import {
   buildTable,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 export async function generateSupervisorReport(options?: {
   dateFrom?: string; dateTo?: string; governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const dateFrom = options?.dateFrom
   const dateTo = options?.dateTo
   const governorateId = options?.governorateId
@@ -49,6 +53,7 @@ export async function generateSupervisorReport(options?: {
       if (dateFrom) q = q.gte('created_at', dateFrom)
       if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
       if (governorateId && governorateId !== 'all') q = q.eq('governorate_id', governorateId)
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
       return q
     },
   })
@@ -176,9 +181,7 @@ export async function generateSupervisorReport(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقرير أداء المشرفين الميدانيين',
-        'تقييم شامل لكل مشرف — الإرساليات، النشاط، جودة البيانات، التغطية',
+      ${buildHeader('تقرير أداء المشرفين الميدانيين', 'تقييم شامل لكل مشرف — الإرساليات، النشاط، جودة البيانات، التغطية' + roundSuffix(campaignRound),
       )}
 
       ${buildSectionTitle('📊', 'ملخص الأداء')}

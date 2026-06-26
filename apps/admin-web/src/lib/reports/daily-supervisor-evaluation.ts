@@ -21,6 +21,8 @@ import {
   buildTable,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 import { fetchEvaluationData, isGeneralSupervisor, type EnrichedUser, type GovGroup } from './evaluation-helpers'
 
@@ -49,7 +51,9 @@ const ROLE_ICONS: Record<string, string> = {
 export async function generateDailySupervisorEvaluation(options?: {
   date?: string
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const data = await fetchEvaluationData(options)
   const { enriched, govs, dists, subs, targetDate, dayName, dateArabic, govGroups } = data
 
@@ -327,9 +331,7 @@ export async function generateDailySupervisorEvaluation(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقييم أداء المشرفين اليومي',
-        'استمارة الإشراف للنشاط الإيصالي التكاملي',
+      ${buildHeader('تقييم أداء المشرفين اليومي', 'استمارة الإشراف للنشاط الإيصالي التكاملي' + roundSuffix(campaignRound),
         `${dayName} — ${dateArabic}`,
       )}
 

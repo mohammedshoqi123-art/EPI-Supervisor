@@ -2,138 +2,92 @@
  * ═══════════════════════════════════════════════════════════════
  *  Public Dashboard API — إحصائيات عامة بدون تسجيل دخول
  *  No auth required — returns aggregated, non-PII data only
+ *
+ *  Production version: uses fetch + Deno.serve (no external imports).
+ *  Filters all form_submissions queries by campaign_round when provided.
  * ═══════════════════════════════════════════════════════════════
  */
-
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Cache-Control': 'public, max-age=120', // cache 2 min
+  'Cache-Control': 'public, max-age=120',
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
     const url = new URL(req.url)
     const days = parseInt(url.searchParams.get('days') || '30')
-    // ═══ NEW: Optional campaign_round query param (default = no filter / all rounds) ═══
-    const campaignRoundRaw = url.searchParams.get('campaign_round')
-    const parsedRound = campaignRoundRaw ? parseInt(campaignRoundRaw, 10) : NaN
+    const roundRaw = url.searchParams.get('campaign_round')
+    const parsedRound = roundRaw ? parseInt(roundRaw, 10) : NaN
     const campaignRound = !isNaN(parsedRound) && parsedRound > 0 ? parsedRound : null
-
-    // Helper to apply campaign_round filter only to form_submissions queries
-    const applyCampaignRound = (q: any) => {
-      if (campaignRound) q = q.eq('campaign_round', campaignRound)
-      return q
-    }
 
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const todayISO = today.toISOString()
-    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const periodStart = new Date(today.getTime() - days * 24 * 60 * 60 * 1000).toISOString()
+    const weekAgo = new Date(today.getTime() - 7 * 86400000).toISOString()
+    const periodStart = new Date(today.getTime() - days * 86400000).toISOString()
 
-    // ─── Parallel queries ───
-    const [
-      totalSubsRes,
-      todaySubsRes,
-      weekSubsRes,
-      submittedRes,
-      draftRes,
-      activeGovsRes,
-      totalDistsRes,
-      subsByGovRes,
-      subsByDayRes,
-      subsByFormRes,
-      activeUsersRes,
-    ] = await Promise.allSettled([
-      // Total submissions
-      applyCampaignRound(supabase.from('form_submissions')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .gte('created_at', periodStart)),
+    const headers = {
+      'apikey': serviceKey,
+      'Authorization': `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+    }
 
-      // Today
-      applyCampaignRound(supabase.from('form_submissions')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .gte('created_at', todayISO)),
+    // ─── Count helper using REST API with Prefer: count=exact ───
+    const countFn = async (table: string, filters: Record<string, string>): Promise<number> => {
+      let q = `${table}?select=id&limit=1`
+      for (const [k, v] of Object.entries(filters)) {
+        if (v === 'is.null') q += `&${k}=is.null`
+        else if (v === 'not.null') q += `&${k}=not.is.null`
+        else q += `&${k}=${v}`
+      }
+      const r = await fetch(`${supabaseUrl}/rest/v1/${q}`, {
+        headers: { ...headers, 'Prefer': 'count=exact', 'Range': '0-0' },
+      })
+      const cr = r.headers.get('content-range')
+      const m = cr ? cr.match(/\/([0-9]+)$/) : null
+      return m ? parseInt(m[1]) : 0
+    }
 
-      // This week
-      applyCampaignRound(supabase.from('form_submissions')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .gte('created_at', weekAgo)),
+    // ─── RPC helper ───
+    const rpcFn = async (name: string, params: Record<string, unknown>) => {
+      const r = await fetch(`${supabaseUrl}/rest/v1/rpc/${name}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(params),
+      })
+      return r.json()
+    }
 
-      // Submitted
-      applyCampaignRound(supabase.from('form_submissions')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .eq('status', 'submitted')
-        .gte('created_at', periodStart)),
+    const roundFilter = campaignRound ? { campaign_round: `eq.${campaignRound}` } : {}
 
-      // Draft
-      applyCampaignRound(supabase.from('form_submissions')
-        .select('id', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .eq('status', 'draft')
-        .gte('created_at', periodStart)),
-
-      // Active governorates (with submissions)
-      supabase.from('governorates')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true)
-        .is('deleted_at', null),
-
-      // Total districts
-      supabase.from('districts')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true)
-        .is('deleted_at', null),
-
-      // Submissions by governorate (aggregated)
-      supabase.rpc('public_subs_by_gov', { p_days: days }),
-
-      // Submissions by day (last 30 days)
-      supabase.rpc('public_subs_by_day', { p_days: days }),
-
-      // Submissions by form
-      supabase.rpc('public_subs_by_form', { p_days: days }),
-
-      // Active users today (no PII — just count)
-      applyCampaignRound(supabase.from('form_submissions')
-        .select('submitted_by', { count: 'exact', head: true })
-        .is('deleted_at', null)
-        .gte('created_at', todayISO)),
+    const [total, todayCount, weekCount, submitted, draft, totalGovs, totalDists, byGov, byDay, byForm] = await Promise.all([
+      countFn('form_submissions', { deleted_at: 'is.null', created_at: `gte.${periodStart}`, ...roundFilter }),
+      countFn('form_submissions', { deleted_at: 'is.null', created_at: `gte.${todayISO}`, ...roundFilter }),
+      countFn('form_submissions', { deleted_at: 'is.null', created_at: `gte.${weekAgo}`, ...roundFilter }),
+      countFn('form_submissions', { deleted_at: 'is.null', status: 'eq.submitted', created_at: `gte.${periodStart}`, ...roundFilter }),
+      countFn('form_submissions', { deleted_at: 'is.null', status: 'eq.draft', created_at: `gte.${periodStart}`, ...roundFilter }),
+      countFn('governorates', { is_active: 'eq.true', deleted_at: 'is.null' }),
+      countFn('districts', { is_active: 'eq.true', deleted_at: 'is.null' }),
+      rpcFn('public_subs_by_gov', campaignRound !== null ? { p_days: days, p_campaign_round: campaignRound } : { p_days: days }),
+      rpcFn('public_subs_by_day', campaignRound !== null ? { p_days: days, p_campaign_round: campaignRound } : { p_days: days }),
+      rpcFn('public_subs_by_form', campaignRound !== null ? { p_days: days, p_campaign_round: campaignRound } : { p_days: days }),
     ])
-
-    const total = totalSubsRes.status === 'fulfilled' ? totalSubsRes.value.count || 0 : 0
-    const todayCount = todaySubsRes.status === 'fulfilled' ? todaySubsRes.value.count || 0 : 0
-    const weekCount = weekSubsRes.status === 'fulfilled' ? weekSubsRes.value.count || 0 : 0
-    const submitted = submittedRes.status === 'fulfilled' ? submittedRes.value.count || 0 : 0
-    const draft = draftRes.status === 'fulfilled' ? draftRes.value.count || 0 : 0
-    const totalGovs = activeGovsRes.status === 'fulfilled' ? activeGovsRes.value.count || 0 : 0
-    const totalDists = totalDistsRes.status === 'fulfilled' ? totalDistsRes.value.count || 0 : 0
-
-    const byGov = subsByGovRes.status === 'fulfilled' ? subsByGovRes.value.data || [] : []
-    const byDay = subsByDayRes.status === 'fulfilled' ? subsByDayRes.value.data || [] : []
-    const byForm = subsByFormRes.status === 'fulfilled' ? subsByFormRes.value.data || [] : []
 
     return new Response(
       JSON.stringify({
         ok: true,
         generated_at: now.toISOString(),
         period_days: days,
+        campaign_round: campaignRound,
         kpis: {
           total_submissions: total,
           today: todayCount,
@@ -144,9 +98,9 @@ serve(async (req: Request) => {
           governorates: totalGovs,
           districts: totalDists,
         },
-        by_governorate: byGov,
-        by_day: byDay,
-        by_form: byForm,
+        by_governorate: byGov || [],
+        by_day: byDay || [],
+        by_form: byForm || [],
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

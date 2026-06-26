@@ -310,12 +310,11 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
       // Instead, we only invalidate the Riverpod providers themselves.
       // This clears the app's memory but preserves the disk cache (Hive).
 
-      // Invalidate all providers that depend on campaign
+      // Invalidate all providers that depend on campaign.
+      // Family.autoDispose providers (submissionTrend, governorateRanking, shortages)
+      // will auto-refresh when their consumers re-read with new args (no manual invalidate needed).
       _ref.invalidate(formsProvider);
       _ref.invalidate(dashboardAnalyticsProvider);
-      _ref.invalidate(submissionTrendProvider);
-      _ref.invalidate(governorateRankingProvider);
-      _ref.invalidate(shortagesProvider);
 
       if (kDebugMode) {
         debugPrint(
@@ -364,12 +363,11 @@ class CampaignRoundNotifier extends StateNotifier<int> {
       final db = _ref.read(databaseServiceProvider);
       await db.updateAppSetting('active_campaign_round', round);
 
-      // Invalidate all providers that depend on campaign round
+      // Invalidate all providers that depend on campaign round.
+      // Family.autoDispose providers (submissionTrend, governorateRanking, shortages)
+      // will auto-refresh when their consumers re-read with the new round arg.
       _ref.invalidate(formsProvider);
       _ref.invalidate(dashboardAnalyticsProvider);
-      _ref.invalidate(submissionTrendProvider);
-      _ref.invalidate(governorateRankingProvider);
-      _ref.invalidate(shortagesProvider);
       _ref.invalidate(formStatsProvider);
 
       if (kDebugMode) {
@@ -563,6 +561,7 @@ final dashboardAnalyticsProvider =
           districtId: filter.districtId,
           formId: filter.formId,
           campaignType: filter.campaignType,
+          campaignRound: filter.campaignRound,
           startDate: filter.startDate,
           endDate: filter.endDate,
         ),
@@ -571,34 +570,43 @@ final dashboardAnalyticsProvider =
   );
 });
 
-final shortagesProvider = FutureProvider<List<Map<String, dynamic>>>((
-  ref,
-) async {
+final shortagesProvider = FutureProvider.family
+    .autoDispose<List<Map<String, dynamic>>, int?>((ref, campaignRound) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
+  final key = campaignRound != null ? 'shortages_round_$campaignRound' : 'shortages';
   return cache.getList(
-    'shortages',
-    () => ref.read(databaseServiceProvider).getShortages(),
+    key,
+    () => ref.read(databaseServiceProvider).getShortages(campaignRound: campaignRound),
     maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
   );
 });
 
-final submissionTrendProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, int>((ref, days) async {
+final submissionTrendProvider = FutureProvider.family
+    .autoDispose<List<Map<String, dynamic>>, ({int days, int? campaignRound})>(
+  (ref, params) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
+  final key = params.campaignRound != null
+      ? 'submission_trend_${params.days}_round_${params.campaignRound}'
+      : 'submission_trend_${params.days}';
   return cache.getList(
-    'submission_trend_$days',
-    () => ref.read(analyticsServiceProvider).getSubmissionTrend(days: days),
+    key,
+    () => ref.read(analyticsServiceProvider).getSubmissionTrend(
+          days: params.days,
+          campaignRound: params.campaignRound,
+        ),
     maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
   );
 });
 
-final governorateRankingProvider = FutureProvider<List<Map<String, dynamic>>>((
-  ref,
-) async {
+final governorateRankingProvider = FutureProvider.family
+    .autoDispose<List<Map<String, dynamic>>, int?>((ref, campaignRound) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
+  final key = campaignRound != null
+      ? 'governorate_ranking_round_$campaignRound'
+      : 'governorate_ranking';
   return cache.getList(
-    'governorate_ranking',
-    () => ref.read(analyticsServiceProvider).getGovernorateRanking(),
+    key,
+    () => ref.read(analyticsServiceProvider).getGovernorateRanking(campaignRound: campaignRound),
     maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
   );
 });

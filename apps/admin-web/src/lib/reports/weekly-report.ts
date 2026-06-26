@@ -5,18 +5,29 @@
 import { supabase } from '../supabase'
 import { BRAND } from '../pdf-brand'
 import {
-  escapeHtml, formatDateArabic, buildHeader, buildFooter, buildKPI,
-  buildSectionTitle, buildTable, buildProgress, getStyles, printReport,
+  escapeHtml,
+  formatDateArabic,
+  buildHeader,
+  buildFooter,
+  buildKPI,
+  buildSectionTitle,
+  buildTable,
+  buildProgress,
+  getStyles,
+  printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
-export async function generateWeeklyReport(): Promise<void> {
+export async function generateWeeklyReport(options?: { campaignRound?: number }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const now = new Date()
   const weekStart = new Date(now.getTime() - 7 * 86400000)
   const prevWeekStart = new Date(now.getTime() - 14 * 86400000)
 
   const [thisWeekRes, lastWeekRes, usersRes, govsRes] = await Promise.allSettled([
-    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar)').gte('created_at', weekStart.toISOString()).is('deleted_at', null),
-    supabase.from('form_submissions').select('id', { count: 'exact', head: true }).gte('created_at', prevWeekStart.toISOString()).lt('created_at', weekStart.toISOString()).is('deleted_at', null),
+    applyRoundFilter(supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar)').gte('created_at', weekStart.toISOString()).is('deleted_at', null), campaignRound),
+    applyRoundFilter(supabase.from('form_submissions').select('id', { count: 'exact', head: true }).gte('created_at', prevWeekStart.toISOString()).lt('created_at', weekStart.toISOString()).is('deleted_at', null), campaignRound),
     supabase.from('profiles').select('*').is('deleted_at', null),
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
   ])
@@ -56,7 +67,7 @@ export async function generateWeeklyReport(): Promise<void> {
       ${getStyles()}
     </head>
     <body>
-      ${buildHeader('التقرير الأسبوعي', `ملخص الأسبوع — ${formatDateArabic(weekStart)} إلى ${formatDateArabic(now)}`)}
+      ${buildHeader('التقرير الأسبوعي', `ملخص الأسبوع — ${formatDateArabic(weekStart)} إلى ${formatDateArabic(now)}${roundSuffix(campaignRound)}`)}
 
       ${buildSectionTitle('📊', 'مؤشرات الأسبوع')}
       <div class="kpi-grid">

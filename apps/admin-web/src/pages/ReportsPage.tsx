@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
 import { formatNumber, cn } from '@/lib/utils'
+import { useCampaign, getRoundLabel } from '@/lib/campaign-context'
 import { REPORT_THEMES, getSavedTheme, saveTheme, initBrandTheme, type ReportTheme } from '@/lib/report-colors'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -39,6 +40,8 @@ import { generateMonthlyPerformancePPTX, generateWeeklyBulletinPPTX, generateCam
 
 export default function ReportsPage() {
   const h = useReportHandlers()
+  const { campaignRound, showRoundFilter, labelAr, isFiltered } = useCampaign()
+  const roundBadge = showRoundFilter ? getRoundLabel(campaignRound) : null
 
   // ═══ Favorites State (localStorage) ═══
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -536,6 +539,11 @@ export default function ReportsPage() {
                     </button>
                   )}
                 </div>
+                {roundBadge && (
+                  <Badge variant="secondary" className="text-xs gap-1">
+                    <RefreshCw className="w-3 h-3" /> {roundBadge}
+                  </Badge>
+                )}
                 <Badge variant="outline" className="text-xs">{filteredReportCards.length} تقرير</Badge>
               </div>
             </div>

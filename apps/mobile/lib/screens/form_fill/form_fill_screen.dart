@@ -609,6 +609,63 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
+                      // ═══ Active campaign round indicator (only for integrated_activity) ═══
+                      Builder(builder: (context) {
+                        final campaign = ref.watch(campaignProvider);
+                        final round = ref.watch(campaignRoundProvider);
+                        if (campaign.value != 'integrated_activity') {
+                          return const SizedBox.shrink();
+                        }
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.refresh_rounded,
+                                size: 18,
+                                color: AppTheme.primaryColor,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'يتم التعبئة في:',
+                                      style: TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontSize: 11,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                    Text(
+                                      campaignRoundLabel(round),
+                                      style: TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.primaryColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                       if (_formSchema?['description_ar'] != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 16),

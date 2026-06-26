@@ -51,7 +51,7 @@ interface EnrichedGov {
 
 export default function GovernoratesPage() {
   // ── Campaign filter ──
-  const { campaign, labelAr, isFiltered } = useCampaign()
+  const { campaign, labelAr, isFiltered, campaignRound, showRoundFilter } = useCampaign()
 
   // ── Filter state ──
   const [search, setSearch] = useState('')
@@ -71,8 +71,8 @@ export default function GovernoratesPage() {
   // ── Data fetching ──
   const { data: governorates, isLoading: govLoading, refetch: refetchGovs } = useGovernorates()
   const { data: districts } = useDistricts(selectedGovForDistricts || undefined)
-  const { data: stats } = useDashboardStats(campaign)
-  const { data: govStats } = useGovernorateStats(campaign)
+  const { data: stats } = useDashboardStats(campaign, showRoundFilter ? campaignRound : undefined)
+  const { data: govStats } = useGovernorateStats(campaign, showRoundFilter ? campaignRound : undefined)
   const { data: formsResult } = useForms({ campaignType: campaign })
   const forms = formsResult?.data
   const { data: submissionsData } = useSubmissions({
@@ -81,6 +81,7 @@ export default function GovernoratesPage() {
     governorateId: selectedGov || undefined,
     pageSize: 500,
     campaignType: campaign,
+    campaignRound: showRoundFilter ? campaignRound : undefined,
   })
 
   // ── Compute active filters count ──

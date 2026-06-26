@@ -23,7 +23,7 @@ export default function FormsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [deleteForm, setDeleteForm] = useState<Form | null>(null)
   const [dataForm, setDataForm] = useState<Form | null>(null)
-  const { campaign, labelAr, isFiltered } = useCampaign()
+  const { campaign, labelAr, isFiltered, campaignRound, showRoundFilter } = useCampaign()
   const { data: authData } = useAuth()
   const userRole = authData?.profile?.role
   const canManageForms = userRole === 'admin'
@@ -34,7 +34,7 @@ export default function FormsPage() {
   }, [search])
 
   const { data: formsResult, isLoading, refetch } = useForms({ search: debouncedSearch || undefined, campaignType: campaign })
-  const { data: submissionCounts } = useFormSubmissionCounts(campaign)
+  const { data: submissionCounts } = useFormSubmissionCounts(campaign, showRoundFilter ? campaignRound : undefined)
 
   const forms = formsResult?.data || []
   const totalCount = formsResult?.count || 0

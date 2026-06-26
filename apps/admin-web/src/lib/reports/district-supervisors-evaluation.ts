@@ -9,13 +9,15 @@
  */
 
 import { BRAND } from '../pdf-brand'
-import { escapeHtml, buildHeader, buildFooter, buildKPI, buildSectionTitle, buildTable, getStyles, printReport } from './shared'
+import {escapeHtml, buildHeader, buildFooter, buildKPI, buildSectionTitle, buildTable, getStyles, printReport, applyRoundFilter, roundSuffix} from './shared'
 import { fetchEvaluationData, type EnrichedUser } from './evaluation-helpers'
 
 export async function generateDistrictSupervisorsEvaluation(options?: {
   date?: string
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const data = await fetchEvaluationData(options)
   const { enriched, govs, dists, targetDate, dayName, dateArabic } = data
 
@@ -127,9 +129,7 @@ export async function generateDistrictSupervisorsEvaluation(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقييم إشراف مشرفي المديريات',
-        'تقييم أداء مشرفي المديريات — النشاط الإيصالي التكاملي',
+      ${buildHeader('تقييم إشراف مشرفي المديريات', 'تقييم أداء مشرفي المديريات — النشاط الإيصالي التكاملي' + roundSuffix(campaignRound),
         `${dayName} — ${dateArabic}`,
       )}
 

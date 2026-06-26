@@ -148,12 +148,11 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
       _ref.invalidate(governoratesProvider);
       _ref.invalidate(districtsProvider);
       _ref.invalidate(formsProvider);
-      _ref.invalidate(submissionsProvider);
       _ref.invalidate(formStatsProvider);
       _ref.invalidate(dashboardAnalyticsProvider);
-      _ref.invalidate(shortagesProvider);
-      _ref.invalidate(submissionTrendProvider);
-      _ref.invalidate(governorateRankingProvider);
+      // Note: submissionsProvider, shortagesProvider, submissionTrendProvider, governorateRankingProvider
+      // are now FutureProvider.family.autoDispose — their consumers re-read with the new context
+      // automatically when invalidated providers downstream change.
 
       // Fix: check if at least some data was fetched — don't report success if all failed
       final totalSynced = forms + submissions + govs + dists + refs + facs;

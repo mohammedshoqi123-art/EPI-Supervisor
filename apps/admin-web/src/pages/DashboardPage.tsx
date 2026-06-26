@@ -190,13 +190,13 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const { campaign, labelAr, isFiltered, campaignRound, showRoundFilter } = useCampaign()
   const { data: stats, isLoading: statsLoading, refetch, isFetching, error: statsError } = useDashboardStats(campaign, showRoundFilter ? campaignRound : undefined)
-  const { data: chartData, isLoading: chartLoading } = useSubmissionsChart(campaign)
-  const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign)
+  const { data: chartData, isLoading: chartLoading } = useSubmissionsChart(campaign, showRoundFilter ? campaignRound : undefined)
+  const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign, showRoundFilter ? campaignRound : undefined)
   const { data: notifications } = useNotifications()
   const { data: recentData } = useSubmissions({ pageSize: 10, campaignType: campaign, campaignRound: showRoundFilter ? campaignRound : undefined })
   const { data: formsResult } = useForms({ pageSize: 100 })
   const { data: users } = useUsers()
-  const { data: shortages } = useShortages(campaign)
+  const { data: shortages } = useShortages(campaign, showRoundFilter ? campaignRound : undefined)
   const { alerts: smartAlerts, criticalCount: smartCritical, warningCount: smartWarning } = useSmartAlerts()
 
   // Real-time updates — dashboard auto-refreshes when data changes

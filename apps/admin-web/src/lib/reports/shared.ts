@@ -18,6 +18,41 @@ export function formatDateArabic(date: Date): string {
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
 }
 
+// ─── Campaign Round Helpers ───
+const ROUND_LABELS_AR: Record<number, string> = {
+  1: 'الجولة الأولى',
+  2: 'الجولة الثانية',
+  3: 'الجولة الثالثة',
+  4: 'الجولة الرابعة',
+  5: 'الجولة الخامسة',
+  6: 'الجولة السادسة',
+  7: 'الجولة السابعة',
+  8: 'الجولة الثامنة',
+  9: 'الجولة التاسعة',
+  10: 'الجولة العاشرة',
+}
+
+/** Returns the Arabic label for a campaign round number (1..10+). */
+export function getRoundLabelAr(round?: number | null): string | null {
+  if (!round || round <= 0) return null
+  return ROUND_LABELS_AR[round] || `الجولة ${round}`
+}
+
+/** Returns a suffix string " — {round label}" if round is provided, otherwise empty. */
+export function roundSuffix(round?: number | null): string {
+  const label = getRoundLabelAr(round)
+  return label ? ` — ${label}` : ''
+}
+
+/** Applies the campaign_round filter to a Supabase form_submissions query. */
+export function applyRoundFilter<T>(q: T, round?: number | null): T {
+  if (round && round > 0) {
+    // @ts-expect-error — runtime eq method on Supabase builder
+    return q.eq('campaign_round', round) as T
+  }
+  return q
+}
+
 export function formatTimeArabic(date: Date): string {
   return date.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: true })
 }

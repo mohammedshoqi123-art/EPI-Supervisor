@@ -234,7 +234,7 @@ serve(async (req) => {
     const { data: submission, error: insertError } = await supabase
       .from('form_submissions')
       .insert(submissionData)
-      .select('id, status, created_at')
+      .select('id, status, created_at, campaign_round')
       .single()
 
     if (insertError) {
@@ -254,6 +254,7 @@ serve(async (req) => {
       submission_id: submission.id,
       status: submission.status,
       created_at: submission.created_at,
+      campaign_round: submission.campaign_round ?? 1,
     }, 201, origin)
 
   } catch (error) {

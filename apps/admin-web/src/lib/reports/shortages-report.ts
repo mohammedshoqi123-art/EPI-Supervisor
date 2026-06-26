@@ -5,13 +5,23 @@
 import { supabase } from '../supabase'
 import { BRAND } from '../pdf-brand'
 import {
-  escapeHtml, buildHeader, buildFooter, buildKPI,
-  buildSectionTitle, buildTable, getStyles, printReport,
+  escapeHtml,
+  buildHeader,
+  buildFooter,
+  buildKPI,
+  buildSectionTitle,
+  buildTable,
+  getStyles,
+  printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 export async function generateShortagesDetailedReport(options?: {
   dateFrom?: string; dateTo?: string; governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const dateFrom = options?.dateFrom
   const dateTo = options?.dateTo
   const governorateId = options?.governorateId
@@ -68,7 +78,7 @@ export async function generateShortagesDetailedReport(options?: {
       ${getStyles()}
     </head>
     <body>
-      ${buildHeader('تقرير النواقص والاحتياجات', 'تحليل تفصيلي لنواقص اللقاحات والمعدات والتجهيزات')}
+      ${buildHeader('تقرير النواقص والاحتياجات', 'تحليل تفصيلي لنواقص اللقاحات والمعدات والتجهيزات' + roundSuffix(campaignRound))}
 
       ${buildSectionTitle('📊', 'ملخص النواقص')}
       <div class="kpi-grid">

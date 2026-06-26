@@ -19,6 +19,8 @@ import {
   buildTable,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 import {
   fetchEvaluationData,
@@ -37,7 +39,9 @@ const GEN_ICON = '🏛️'
 export async function generateGeneralSupervisorsEvaluation(options?: {
   date?: string
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const data = await fetchEvaluationData(options)
   const { enriched, govs, targetDate, dayName, dateArabic } = data
 
@@ -273,9 +277,7 @@ export async function generateGeneralSupervisorsEvaluation(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقييم إشراف عام',
-        'تقييم أداء المشرفين العامين — النشاط الإيصالي التكاملي',
+      ${buildHeader('تقييم إشراف عام', 'تقييم أداء المشرفين العامين — النشاط الإيصالي التكاملي' + roundSuffix(campaignRound),
         `${dayName} — ${dateArabic}`,
       )}
 

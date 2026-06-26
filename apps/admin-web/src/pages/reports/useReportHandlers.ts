@@ -72,18 +72,21 @@ import {
 export function useReportHandlers() {
   const { data: authData } = useAuth()
   const userRole = (authData?.profile?.role as UserRole) || 'data_entry'
-  const { campaign, labelAr, isFiltered } = useCampaign()
+  const { campaign, labelAr, isFiltered, campaignRound, showRoundFilter } = useCampaign()
   const { toast } = useToast()
   const { previewProps, openPreview, closePreview } = useReportPreview()
   const exportProgress = useExportProgress()
 
+  // ═══ Effective campaign round passed to all reports (only when campaign=integrated_activity) ═══
+  const effectiveRound = showRoundFilter ? campaignRound : undefined
+
   // Data
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats(campaign)
-  const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign)
+  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats(campaign, effectiveRound)
+  const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign, effectiveRound)
   const { data: formsResult, isLoading: formsLoading, refetch: refetchForms } = useForms({ campaignType: campaign })
-  const { data: submissionCounts } = useFormSubmissionCounts(campaign)
+  const { data: submissionCounts } = useFormSubmissionCounts(campaign, effectiveRound)
   const { data: governorates } = useGovernorates()
-  const { data: chartData, isLoading: chartLoading } = useSubmissionsChart(campaign)
+  const { data: chartData, isLoading: chartLoading } = useSubmissionsChart(campaign, effectiveRound)
   const { data: roleDistribution } = useRoleDistribution()
   const { data: auditData } = useAuditLogs({ page: 1 })
 
@@ -403,26 +406,26 @@ export function useReportHandlers() {
     catch (e) { disableCaptureMode(gen); throw e }
   }
 
-  const handleCentralReport = () => exportReport('central-report', () => captureAndPreview('التقرير المركزي الشامل', 'جميع المحافظات والبيانات', () => generateCentralReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignType: campaign !== 'all' ? campaign : undefined })))
-  const handleGovDetailReport = (govId: string) => exportReport('gov-detail-' + govId, () => captureAndPreview(`تقرير محافظة`, 'تفاصيل تفصيلية', () => generateGovernorateDetailReport(govId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })))
-  const handleFormAnalysisReport = (formId: string) => exportReport('form-analysis-' + formId, () => captureAndPreview('تحليل النموذج', 'تقرير تفصيلي', () => generateFormAnalysisReport(formId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })))
-  const handleSupervisorReport = () => exportReport('supervisor-report', () => captureAndPreview('تقرير أداء المشرفين', 'تقييم شامل لكل مشرف', () => generateSupervisorReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })))
-  const handleCoverageGapReport = () => exportReport('coverage-gap', () => captureAndPreview('تقرير الفجوة التغطية', 'أين البيانات ناقصة', () => generateCoverageGapReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleCampaignComparisonReport = () => exportReport('campaign-comparison', () => captureAndPreview('تقرير مقارنة الحملات', 'شلل أطفال vs الإيصالي التكاملي', () => generateCampaignComparisonReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })))
-  const handleDailyActivityReport = () => exportReport('daily-activity', () => captureAndPreview('تقرير النشاط اليومي', 'نشاط اليوم — إرساليات، دخول، مقارنة', () => generateDailyActivityReport()))
-  const handleDataQualityReport = () => exportReport('data-quality', () => captureAndPreview('تقرير جودة البيانات', 'تحليل اكتمال البيانات — GPS، صور، حقول فارغة', () => generateDataQualityReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })))
+  const handleCentralReport = () => exportReport('central-report', () => captureAndPreview('التقرير المركزي الشامل', 'جميع المحافظات والبيانات', () => generateCentralReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignType: campaign !== 'all' ? campaign : undefined, campaignRound: effectiveRound })))
+  const handleGovDetailReport = (govId: string) => exportReport('gov-detail-' + govId, () => captureAndPreview(`تقرير محافظة`, 'تفاصيل تفصيلية', () => generateGovernorateDetailReport(govId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignRound: effectiveRound })))
+  const handleFormAnalysisReport = (formId: string) => exportReport('form-analysis-' + formId, () => captureAndPreview('تحليل النموذج', 'تقرير تفصيلي', () => generateFormAnalysisReport(formId, { dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignRound: effectiveRound })))
+  const handleSupervisorReport = () => exportReport('supervisor-report', () => captureAndPreview('تقرير أداء المشرفين', 'تقييم شامل لكل مشرف', () => generateSupervisorReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignRound: effectiveRound })))
+  const handleCoverageGapReport = () => exportReport('coverage-gap', () => captureAndPreview('تقرير الفجوة التغطية', 'أين البيانات ناقصة', () => generateCoverageGapReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleCampaignComparisonReport = () => exportReport('campaign-comparison', () => captureAndPreview('تقرير مقارنة الحملات', 'شلل أطفال vs الإيصالي التكاملي', () => generateCampaignComparisonReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignRound: effectiveRound })))
+  const handleDailyActivityReport = () => exportReport('daily-activity', () => captureAndPreview('تقرير النشاط اليومي', 'نشاط اليوم — إرساليات، دخول، مقارنة', () => generateDailyActivityReport({ campaignRound: effectiveRound })))
+  const handleDataQualityReport = () => exportReport('data-quality', () => captureAndPreview('تقرير جودة البيانات', 'تحليل اكتمال البيانات — GPS، صور، حقول فارغة', () => generateDataQualityReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignRound: effectiveRound })))
   const handleShortagesDetailedReport = () => exportReport('shortages-detailed', () => captureAndPreview('تقرير النواقص التفصيلي', 'تحليل شامل — حرج/عالي/متوسط', () => generateShortagesDetailedReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleWeeklyReport = () => exportReport('weekly-report', () => captureAndPreview('التقرير الأسبوعي', 'ملخص الأسبوع — مقارنة بالسابق', () => generateWeeklyReport()))
-  const handleUserActivityReport = () => exportReport('user-activity', () => captureAndPreview('تقرير نشاط المستخدمين', 'دخول، نشاط، مستخدمين خاملين', () => generateUserActivityReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })))
-  const handleChallengesReport = () => exportReport('challenges', () => captureAndPreview('تقرير التحديات والصعوبات', 'تحديات، إجراءات، توصيات', () => generateChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleSupervisionFormReport = () => exportReport('supervision-form', () => captureAndPreview('تقرير استمارة الإشراف', 'النشاط الإيصالي التكاملي — 8 أقسام × 33 مؤشر', () => generateSupervisionFormReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleSupervisionChallengesReport = () => exportReport('supervision-challenges', () => captureAndPreview('تقرير تحديات الإشراف الميداني', 'التحديات — الإجراءات — التوصيات', () => generateSupervisionChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleDailySupervisorEvaluation = () => exportReport('daily-supervisor-eval', () => captureAndPreview('تقييم أداء المشرفين اليومي', 'استمارة الإشراف — النشاط الإيصالي التكاملي', () => generateDailySupervisorEvaluation({ date: dateTo || new Date().toISOString().split('T')[0], governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleComprehensiveSupervisorEvaluation = () => exportReport('comprehensive-supervisor-eval', () => captureAndPreview('تقييم أداء المشرفين الشامل', 'جميع الاستمارات — النشاط الإيصالي التكاملي', () => generateComprehensiveSupervisorEvaluation({ governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleMasterSupervisorReport = () => exportReport('master-supervisor-report', () => captureAndPreview('التقرير الشامل للمشرفين', 'تقييم + تحليل + تحديات + خريطة — تقرير مدمج', () => generateMasterSupervisorReport({ governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleGeneralSupervisorsEvaluation = () => exportReport('general-supervisors-eval', () => captureAndPreview('تقييم إشراف عام', 'تقييم أداء المشرفين العامين — النشاط الإيصالي التكاملي', () => generateGeneralSupervisorsEvaluation({ date: dateTo || new Date().toISOString().split('T')[0], governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleYesNoAnalysis = () => exportReport('yesno-analysis', () => captureAndPreview('تحليل حقول نعم/لا', 'استمارة الاشراف — تحليل شامل', () => generateYesNoAnalysisReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined })))
-  const handleMapReport = () => { generateMapReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined }) }
+  const handleWeeklyReport = () => exportReport('weekly-report', () => captureAndPreview('التقرير الأسبوعي', 'ملخص الأسبوع — مقارنة بالسابق', () => generateWeeklyReport({ campaignRound: effectiveRound })))
+  const handleUserActivityReport = () => exportReport('user-activity', () => captureAndPreview('تقرير نشاط المستخدمين', 'دخول، نشاط، مستخدمين خاملين', () => generateUserActivityReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, campaignRound: effectiveRound })))
+  const handleChallengesReport = () => exportReport('challenges', () => captureAndPreview('تقرير التحديات والصعوبات', 'تحديات، إجراءات، توصيات', () => generateChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleSupervisionFormReport = () => exportReport('supervision-form', () => captureAndPreview('تقرير استمارة الإشراف', 'النشاط الإيصالي التكاملي — 8 أقسام × 33 مؤشر', () => generateSupervisionFormReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleSupervisionChallengesReport = () => exportReport('supervision-challenges', () => captureAndPreview('تقرير تحديات الإشراف الميداني', 'التحديات — الإجراءات — التوصيات', () => generateSupervisionChallengesReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleDailySupervisorEvaluation = () => exportReport('daily-supervisor-eval', () => captureAndPreview('تقييم أداء المشرفين اليومي', 'استمارة الإشراف — النشاط الإيصالي التكاملي', () => generateDailySupervisorEvaluation({ date: dateTo || new Date().toISOString().split('T')[0], governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleComprehensiveSupervisorEvaluation = () => exportReport('comprehensive-supervisor-eval', () => captureAndPreview('تقييم أداء المشرفين الشامل', 'جميع الاستمارات — النشاط الإيصالي التكاملي', () => generateComprehensiveSupervisorEvaluation({ governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleMasterSupervisorReport = () => exportReport('master-supervisor-report', () => captureAndPreview('التقرير الشامل للمشرفين', 'تقييم + تحليل + تحديات + خريطة — تقرير مدمج', () => generateMasterSupervisorReport({ governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleGeneralSupervisorsEvaluation = () => exportReport('general-supervisors-eval', () => captureAndPreview('تقييم إشراف عام', 'تقييم أداء المشرفين العامين — النشاط الإيصالي التكاملي', () => generateGeneralSupervisorsEvaluation({ date: dateTo || new Date().toISOString().split('T')[0], governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleYesNoAnalysis = () => exportReport('yesno-analysis', () => captureAndPreview('تحليل حقول نعم/لا', 'استمارة الاشراف — تحليل شامل', () => generateYesNoAnalysisReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleMapReport = () => { generateMapReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound }) }
 
   // ═══ Charts data ═══
   const govChartData = useMemo(() => {

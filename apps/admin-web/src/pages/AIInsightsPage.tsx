@@ -13,6 +13,7 @@ import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
 import { useDashboardStats, useGovernorateStats, useSubmissionsChart, useShortages, useUsers, useSubmissions, useForms } from '@/hooks/useApi'
+import { useCampaign } from '@/lib/campaign-context'
 import { cn, formatNumber } from '@/lib/utils'
 import { generateAIInsights } from '@/lib/ai-providers'
 import { PredictiveEngine } from '@/lib/epi-bot-engine'
@@ -348,12 +349,14 @@ function generateEPIRecommendations(
 // ─── Main Component ──────────────────────────────────────────
 
 export default function AIInsightsPage() {
-  const { data: stats, isLoading: statsLoading, refetch } = useDashboardStats()
-  const { data: govStats } = useGovernorateStats()
-  const { data: chartData } = useSubmissionsChart()
-  const { data: shortages } = useShortages()
+  const { campaign, campaignRound, showRoundFilter } = useCampaign()
+  const effectiveRound = showRoundFilter ? campaignRound : undefined
+  const { data: stats, isLoading: statsLoading, refetch } = useDashboardStats(campaign, effectiveRound)
+  const { data: govStats } = useGovernorateStats(campaign, effectiveRound)
+  const { data: chartData } = useSubmissionsChart(campaign, effectiveRound)
+  const { data: shortages } = useShortages(campaign, effectiveRound)
   const { data: users } = useUsers()
-  const { data: submissionsData } = useSubmissions({ pageSize: 1000 })
+  const { data: submissionsData } = useSubmissions({ pageSize: 1000, campaignType: campaign, campaignRound: effectiveRound })
   const { data: formsData } = useForms({ pageSize: 100 })
 
   const submissions = submissionsData?.data || []

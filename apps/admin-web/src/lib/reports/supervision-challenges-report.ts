@@ -12,9 +12,17 @@ import { supabase } from '../supabase'
 import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import {
-  escapeHtml, formatDateArabic,
-  buildHeader, buildFooter, buildKPI, buildSectionTitle,
-  buildTable, getStyles, printReport,
+  escapeHtml,
+  formatDateArabic,
+  buildHeader,
+  buildFooter,
+  buildKPI,
+  buildSectionTitle,
+  buildTable,
+  getStyles,
+  printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 // ─── Search keywords ────────────────────────────────────────
@@ -95,7 +103,9 @@ export async function generateSupervisionChallengesReport(options?: {
   dateFrom?: string
   dateTo?: string
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   // ── Fetch data (paginated) ──
   const subsResult = await bulkFetch({
     table: 'form_submissions',
@@ -108,6 +118,7 @@ export async function generateSupervisionChallengesReport(options?: {
       q = q.is('deleted_at', null)
       if (options?.dateFrom) q = q.gte('created_at', options.dateFrom)
       if (options?.dateTo) q = q.lte('created_at', options.dateTo + 'T23:59:59')
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
       return q
     },
   })
@@ -270,9 +281,7 @@ export async function generateSupervisionChallengesReport(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقرير تحديات الإشراف الميداني',
-        'النشاط الإيصالي التكاملي — مجمّع حسب المحافظة',
+      ${buildHeader('تقرير تحديات الإشراف الميداني', 'النشاط الإيصالي التكاملي — مجمّع حسب المحافظة' + roundSuffix(campaignRound),
         options?.dateFrom && options?.dateTo
           ? `${formatDateArabic(new Date(options.dateFrom))} — ${formatDateArabic(new Date(options.dateTo))}`
           : 'آخر 30 يوم',

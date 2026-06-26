@@ -18,6 +18,8 @@ import {
   buildTable,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 // ─── Form Sections & Yes/No Fields ──────────────────────────
@@ -183,7 +185,9 @@ export async function generateYesNoAnalysisReport(options?: {
   dateFrom?: string
   dateTo?: string
   governorateId?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const today = new Date().toISOString().split('T')[0]
   const dateFrom = options?.dateFrom || today
   const dateTo = options?.dateTo || today
@@ -207,6 +211,7 @@ export async function generateYesNoAnalysisReport(options?: {
       if (options?.governorateId && options.governorateId !== 'all') {
         q = q.eq('governorate_id', options.governorateId)
       }
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
       return q
     },
   })
@@ -421,9 +426,7 @@ export async function generateYesNoAnalysisReport(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تحليل حقول نعم/لا',
-        'استمارة الاشراف للنشاط الايصالي التكاملي',
+      ${buildHeader('تحليل حقول نعم/لا', 'استمارة الاشراف للنشاط الايصالي التكاملي' + roundSuffix(campaignRound),
         dateRange,
       )}
 

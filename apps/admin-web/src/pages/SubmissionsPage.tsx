@@ -412,6 +412,9 @@ export default function SubmissionsPage() {
                       <TableHead className="text-xs">المُرسل</TableHead>
                       <TableHead className="text-xs">الحالة</TableHead>
                       <TableHead className="text-xs hidden lg:table-cell">الصفة</TableHead>
+                      {showRoundFilter && (
+                        <TableHead className="text-xs hidden md:table-cell">الجولة</TableHead>
+                      )}
                       <TableHead className="text-xs hidden md:table-cell">التاريخ</TableHead>
                       <TableHead className="w-10 text-xs">...</TableHead>
                     </TableRow>
@@ -456,6 +459,13 @@ export default function SubmissionsPage() {
                              sub.profiles?.role === 'data_entry' ? 'إدخال' : sub.profiles?.role || '—'}
                           </Badge>
                         </TableCell>
+                        {showRoundFilter && (
+                          <TableCell className="text-xs hidden md:table-cell">
+                            <Badge variant="secondary" className="text-[10px]">
+                              الجولة {sub.campaign_round ?? 1}
+                            </Badge>
+                          </TableCell>
+                        )}
                         <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                           {formatRelativeTime(sub.created_at)}
                         </TableCell>
@@ -665,6 +675,12 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
             <div className="p-3 bg-muted/30 rounded-lg">
               <p className="text-[10px] text-muted-foreground mb-0.5">التاريخ</p>
               <p className="text-xs font-medium">{formatDateTime(submission.created_at)}</p>
+            </div>
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <p className="text-[10px] text-muted-foreground mb-0.5">الجولة</p>
+              <Badge variant="secondary" className="text-[10px]">
+                الجولة {(submission as any).campaign_round ?? 1}
+              </Badge>
             </div>
           </div>
 

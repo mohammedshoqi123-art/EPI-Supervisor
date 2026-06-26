@@ -16,12 +16,15 @@ import {
   buildProgress,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 export async function generateGovernorateDetailReport(
   governorateId: string,
-  options?: { dateFrom?: string; dateTo?: string }
+  options?: { dateFrom?: string; dateTo?: string; campaignRound?: number }
 ): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const dateFrom = options?.dateFrom
   const dateTo = options?.dateTo
 
@@ -32,7 +35,7 @@ export async function generateGovernorateDetailReport(
   }
 
   const subsQuery = applyDateFilter(
-    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), profiles:submitted_by(full_name, role), districts(name_ar)').eq('governorate_id', governorateId).is('deleted_at', null)
+    applyRoundFilter(supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), profiles:submitted_by(full_name, role), districts(name_ar)').eq('governorate_id', governorateId).is('deleted_at', null), campaignRound)
   ).order('created_at', { ascending: false })
 
   const shortagesQuery = applyDateFilter(
@@ -81,9 +84,7 @@ export async function generateGovernorateDetailReport(
       ${getStyles()}
     </head>
     <body>
-      ${buildHeader(
-        `تقرير محافظة ${gov.name_ar}`,
-        `تحليل شامل لأداء المحافظة — ${districts.length} مديرية`,
+      ${buildHeader(`تقرير محافظة ${gov.name_ar}`, `تحليل شامل لأداء المحافظة — ${districts.length} مديرية${roundSuffix(campaignRound)}`,
         options?.dateFrom ? `من ${options.dateFrom} إلى ${options.dateTo}` : undefined
       )}
 

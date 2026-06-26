@@ -154,6 +154,7 @@ function ReportDialog({
         schedule_label: editReport.schedule_label,
         timezone: editReport.timezone,
         campaign_type: editReport.campaign_type,
+        campaign_round: editReport.campaign_round ?? null,
         governorate_ids: editReport.governorate_ids,
         delivery_method: editReport.delivery_method,
         delivery_config: editReport.delivery_config,
@@ -163,7 +164,7 @@ function ReportDialog({
       name: '', description: '',
       report_type: 'daily_summary', format: 'pdf',
       schedule_cron: '0 8 * * *', schedule_label: 'يومياً الساعة 8 صباحاً',
-      timezone: 'Asia/Aden', campaign_type: 'all',
+      timezone: 'Asia/Aden', campaign_type: 'all', campaign_round: null,
       governorate_ids: [], delivery_method: 'download', delivery_config: {},
     }
   })
@@ -281,6 +282,42 @@ function ReportDialog({
                   <SelectItem value="pdf"><span className="flex items-center gap-2"><FileText className="w-4 h-4" /> PDF</span></SelectItem>
                   <SelectItem value="excel"><span className="flex items-center gap-2"><FileSpreadsheet className="w-4 h-4" /> Excel</span></SelectItem>
                   <SelectItem value="both"><span className="flex items-center gap-2"><FileText className="w-4 h-4" /> PDF + Excel</span></SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* ═══ NEW: Campaign + Round selectors ═══ */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-medium">النشاط</Label>
+              <Select
+                value={form.campaign_type || 'all'}
+                onValueChange={v => setForm(f => ({ ...f, campaign_type: v }))}
+              >
+                <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع الأنشطة</SelectItem>
+                  <SelectItem value="polio_campaign">💉 حملة شلل الأطفال</SelectItem>
+                  <SelectItem value="integrated_activity">🏥 النشاط الإيصالي التكاملي</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium">الجولة</Label>
+              <Select
+                value={String(form.campaign_round ?? 0)}
+                onValueChange={v => setForm(f => ({ ...f, campaign_round: v === '0' ? null : Number(v) }))}
+                disabled={form.campaign_type !== 'integrated_activity'}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue placeholder={form.campaign_type !== 'integrated_activity' ? 'متاح للإيصالي فقط' : 'كل الجولات'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">كل الجولات</SelectItem>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
+                    <SelectItem key={r} value={String(r)}>الجولة {r}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -875,6 +912,16 @@ export default function ScheduledReportsPage() {
                           >
                             {report.is_active ? 'نشط' : 'متوقف'}
                           </Badge>
+                          {report.campaign_type && report.campaign_type !== 'all' && (
+                            <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                              {report.campaign_type === 'polio_campaign' ? '💉 شلل' : '🏥 إيصالي'}
+                            </Badge>
+                          )}
+                          {report.campaign_round && report.campaign_round > 0 && (
+                            <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
+                              🔄 جولة {report.campaign_round}
+                            </Badge>
+                          )}
                           <StatusBadge status={report.last_run_status} />
                         </div>
 

@@ -16,11 +16,15 @@ import {
   buildTable,
   getStyles,
   printReport,
+  applyRoundFilter,
+  roundSuffix,
 } from './shared'
 
 export async function generateCampaignComparisonReport(options?: {
   dateFrom?: string; dateTo?: string
+  campaignRound?: number
 }): Promise<void> {
+  const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const dateFrom = options?.dateFrom
   const dateTo = options?.dateTo
 
@@ -38,6 +42,7 @@ export async function generateCampaignComparisonReport(options?: {
         .range(offset, offset + pageSize - 1)
       if (dateFrom) q = q.gte('created_at', dateFrom)
       if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+      if (campaignRound) q = q.eq('campaign_round', campaignRound)
       const { data, error } = await q
       if (error || !data || data.length === 0) break
       allData.push(...data)
@@ -142,9 +147,7 @@ export async function generateCampaignComparisonReport(options?: {
       </style>
     </head>
     <body>
-      ${buildHeader(
-        'تقرير مقارنة الحملات',
-        'مقارنة شاملة بين حملة شلل الأطفال والنشاط الإيصالي التكاملي',
+      ${buildHeader('تقرير مقارنة الحملات', 'مقارنة شاملة بين حملة شلل الأطفال والنشاط الإيصالي التكاملي' + roundSuffix(campaignRound),
       )}
 
       ${campaignStats.map((c, i) => `

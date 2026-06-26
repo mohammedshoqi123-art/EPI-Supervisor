@@ -121,10 +121,12 @@ interface DashboardData {
 }
 
 // ─── Fetch ──────────────────────────────────────────────────
-async function fetchDashboard(days = 30): Promise<DashboardData> {
+async function fetchDashboard(days = 30, campaignRound?: number): Promise<DashboardData> {
   const url = import.meta.env.VITE_SUPABASE_URL || ''
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-  const res = await fetch(`${url}/functions/v1/public-dashboard?days=${days}`, {
+  const params = new URLSearchParams({ days: String(days) })
+  if (campaignRound && campaignRound > 0) params.set('campaign_round', String(campaignRound))
+  const res = await fetch(`${url}/functions/v1/public-dashboard?${params.toString()}`, {
     headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -285,13 +287,15 @@ export default function PublicDashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [days, setDays] = useState(30)
   const [refreshing, setRefreshing] = useState(false)
+  // ═══ NEW: campaign_round filter (default = all rounds) ═══
+  const [campaignRound, setCampaignRound] = useState<number | undefined>(undefined)
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
     setError(null)
     try {
-      const result = await fetchDashboard(days)
+      const result = await fetchDashboard(days, campaignRound)
       if (result.ok) setData(result)
       else setError('فشل تحميل البيانات')
     } catch (e: any) {
@@ -300,7 +304,7 @@ export default function PublicDashboardPage() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [days])
+  }, [days, campaignRound])
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
@@ -456,6 +460,22 @@ export default function PublicDashboardPage() {
             </button>
           ))}
           <div className="flex-1" />
+          {/* ═══ NEW: Campaign Round selector ═══ */}
+          <select
+            value={campaignRound ?? 0}
+            onChange={(e) => setCampaignRound(e.target.value === '0' ? undefined : Number(e.target.value))}
+            className="px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer"
+            style={{
+              background: campaignRound ? `linear-gradient(135deg, ${T.blue}, ${T.blueDark})` : T.white,
+              color: campaignRound ? T.white : T.slate500,
+              border: campaignRound ? 'none' : `1px solid ${T.slate200}`,
+            }}
+          >
+            <option value={0}>كل الجولات</option>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
+              <option key={r} value={r}>الجولة {r}</option>
+            ))}
+          </select>
           <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-medium"
             style={{ background: T.emeraldLight, color: T.emerald }}>
             <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: T.emerald }} />

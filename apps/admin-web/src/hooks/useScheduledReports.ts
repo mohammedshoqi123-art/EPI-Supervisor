@@ -17,6 +17,7 @@ export interface ScheduledReport {
   schedule_label: string
   timezone: string
   campaign_type: string
+  campaign_round: number | null
   governorate_ids: string[]
   delivery_method: 'download' | 'email' | 'whatsapp' | 'telegram' | 'webhook'
   delivery_config: Record<string, unknown>
@@ -53,6 +54,7 @@ export interface CreateScheduledReportInput {
   schedule_label: string
   timezone?: string
   campaign_type?: string
+  campaign_round?: number | null
   governorate_ids?: string[]
   delivery_method?: 'download' | 'email' | 'whatsapp' | 'telegram' | 'webhook'
   delivery_config?: Record<string, unknown>

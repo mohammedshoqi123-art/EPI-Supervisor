@@ -98,6 +98,52 @@ class _SubmissionDetailScreenState
                       ]),
                       const SizedBox(height: 16),
 
+                      // Campaign Round badge (only shown if round > 1 or always for integrated)
+                      if (_submission!['campaign_round'] != null) ...[
+                        _buildSection('الجولة', [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.refresh_rounded,
+                                      size: 14,
+                                      color: AppTheme.primaryColor,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      campaignRoundLabel(
+                                        (_submission!['campaign_round'] as num?)?.toInt() ?? 1,
+                                      ),
+                                      style: TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.primaryColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
+                      ],
+
                       // Submitter info
                       _buildSection('المُرسل', [
                         _infoRow(

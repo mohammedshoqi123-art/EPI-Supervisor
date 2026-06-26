@@ -37,9 +37,9 @@ export function useForms(filters?: { search?: string; page?: number; pageSize?: 
   })
 }
 
-export function useFormSubmissionCounts(campaignType?: string) {
+export function useFormSubmissionCounts(campaignType?: string, campaignRound?: number) {
   return useQuery({
-    queryKey: ['form-submission-counts', campaignType],
+    queryKey: ['form-submission-counts', campaignType, campaignRound],
     queryFn: async () => {
       // Get forms list
       const formIds = await getCampaignFormIds(campaignType)
@@ -51,12 +51,16 @@ export function useFormSubmissionCounts(campaignType?: string) {
       const formIdSet = new Set(forms.map(f => f.id))
 
       // ✅ Optimized: single query instead of N*3 queries
-      const { data: submissions } = await supabase
+      let subsQuery = supabase
         .from('form_submissions')
         .select('form_id, status')
         .in('form_id', forms.map(f => f.id))
         .is('deleted_at', null)
         .limit(100000) // Safety cap
+      if (campaignRound && campaignRound > 0) {
+        subsQuery = subsQuery.eq('campaign_round', campaignRound)
+      }
+      const { data: submissions } = await subsQuery
 
       // Count per form+status in memory (single DB roundtrip)
       const counts: Record<string, { total: number; submitted: number; draft: number }> = {}

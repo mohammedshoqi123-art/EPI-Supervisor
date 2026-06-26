@@ -26,6 +26,7 @@ class SubmissionModel with _$SubmissionModel {
     @JsonKey(name: 'app_version') String? appVersion,
     @JsonKey(name: 'is_offline') @Default(false) bool isOffline,
     @JsonKey(name: 'offline_id') String? offlineId,
+    @JsonKey(name: 'campaign_round') @Default(1) int campaignRound,
     @JsonKey(name: 'synced_at') DateTime? syncedAt,
     @JsonKey(name: 'created_at') DateTime? createdAt,
     @JsonKey(name: 'updated_at') DateTime? updatedAt,

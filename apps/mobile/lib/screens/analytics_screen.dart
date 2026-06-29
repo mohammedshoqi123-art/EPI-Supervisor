@@ -263,7 +263,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     _refreshDebounce?.cancel();
     _refreshDebounce = Timer(const Duration(seconds: 2), () {
       if (mounted) {
-        final params = _currentParams;
+        final params = _getAnalyticsParams(ref);
         ref.invalidate(_readinessSubsProvider(params));
         ref.invalidate(_supervisionSubsProvider(params));
       }
@@ -332,14 +332,14 @@ class _ReadinessTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subsAsync = ref.watch(_readinessSubsProvider(_currentParams));
+    final subsAsync = ref.watch(_readinessSubsProvider(_getAnalyticsParams(ref)));
     final govAsync = ref.watch(governoratesProvider);
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
           msg: 'فشل تحميل بيانات الجاهزية',
-          onRetry: () => ref.invalidate(_readinessSubsProvider(_currentParams))),
+          onRetry: () => ref.invalidate(_readinessSubsProvider(_getAnalyticsParams(ref)))),
       data: (subs) {
         final govNames = <String, String>{};
         for (final g in (govAsync.valueOrNull ?? [])) {
@@ -440,8 +440,8 @@ class _ReadinessTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(_readinessSubsProvider(_currentParams));
-            await ref.read(_readinessSubsProvider(_currentParams).future);
+            ref.invalidate(_readinessSubsProvider(_getAnalyticsParams(ref)));
+            await ref.read(_readinessSubsProvider(_getAnalyticsParams(ref)).future);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -532,7 +532,7 @@ class _ComplianceTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subsAsync = ref.watch(_supervisionSubsProvider(_currentParams));
+    final subsAsync = ref.watch(_supervisionSubsProvider(_getAnalyticsParams(ref)));
     final govAsync = ref.watch(governoratesProvider);
     final distAsync = ref.watch(districtsProvider(null));
 
@@ -540,7 +540,7 @@ class _ComplianceTab extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
           msg: 'فشل تحميل بيانات الإشراف',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider(_currentParams))),
+          onRetry: () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)))),
       data: (subs) {
         final realSubs = subs.where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
@@ -573,8 +573,8 @@ class _ComplianceTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(_supervisionSubsProvider(_currentParams));
-            await ref.read(_supervisionSubsProvider(_currentParams).future);
+            ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)));
+            await ref.read(_supervisionSubsProvider(_getAnalyticsParams(ref)).future);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -615,13 +615,13 @@ class _NumbersTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subsAsync = ref.watch(_supervisionSubsProvider(_currentParams));
+    final subsAsync = ref.watch(_supervisionSubsProvider(_getAnalyticsParams(ref)));
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
           msg: 'فشل تحميل البيانات',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider(_currentParams))),
+          onRetry: () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)))),
       data: (subs) {
         // ═══ FIX: Accept all supervision subs — check both data-level and top-level fields ═══
         final realSubs = subs.where((s) {
@@ -722,8 +722,8 @@ class _NumbersTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(_supervisionSubsProvider(_currentParams));
-            await ref.read(_supervisionSubsProvider(_currentParams).future);
+            ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)));
+            await ref.read(_supervisionSubsProvider(_getAnalyticsParams(ref)).future);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -761,13 +761,13 @@ class _ChallengesTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subsAsync = ref.watch(_supervisionSubsProvider(_currentParams));
+    final subsAsync = ref.watch(_supervisionSubsProvider(_getAnalyticsParams(ref)));
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
           msg: 'فشل تحميل البيانات',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider(_currentParams))),
+          onRetry: () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)))),
       data: (subs) {
         final realSubs = subs.where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
@@ -784,8 +784,8 @@ class _ChallengesTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(_supervisionSubsProvider(_currentParams));
-            await ref.read(_supervisionSubsProvider(_currentParams).future);
+            ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)));
+            await ref.read(_supervisionSubsProvider(_getAnalyticsParams(ref)).future);
           },
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
@@ -1743,4 +1743,14 @@ class _Empty extends StatelessWidget {
                     color: Colors.grey.shade500),
                 textAlign: TextAlign.center),
           ])));
+}
+
+// ═══ FIX: Global helper for campaign params — accessible from all widget classes ═══
+({String? campaignType, int? campaignRound}) _getAnalyticsParams(WidgetRef ref) {
+  final campaign = ref.read(campaignProvider).value;
+  final round = ref.read(campaignRoundProvider);
+  return (
+    campaignType: campaign != 'all' ? campaign : null,
+    campaignRound: round,
+  );
 }

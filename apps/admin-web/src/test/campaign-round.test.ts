@@ -118,25 +118,26 @@ describe('Campaign Round System — shared utilities', () => {
 
 describe('Campaign Round System — campaign-context', () => {
   describe('getRoundLabel', () => {
-    it('returns correct labels for rounds 1-10', () => {
+    it('returns correct labels for rounds 1-5', () => {
       expect(getRoundLabel(1)).toBe('الجولة الأولى')
       expect(getRoundLabel(2)).toBe('الجولة الثانية')
       expect(getRoundLabel(3)).toBe('الجولة الثالثة')
-      expect(getRoundLabel(10)).toBe('الجولة العاشرة')
+      expect(getRoundLabel(5)).toBe('الجولة الخامسة')
     })
 
-    it('falls back to "الجولة N" for round > 10', () => {
+    it('falls back to "الجولة N" for round > 5', () => {
+      expect(getRoundLabel(6)).toBe('الجولة 6')
       expect(getRoundLabel(15)).toBe('الجولة 15')
     })
   })
 
   describe('CAMPAIGN_ROUNDS constant', () => {
-    it('contains rounds 1-10', () => {
-      expect(CAMPAIGN_ROUNDS).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    it('contains rounds 1-5', () => {
+      expect(CAMPAIGN_ROUNDS).toEqual([1, 2, 3, 4, 5])
     })
 
-    it('has 10 elements', () => {
-      expect(CAMPAIGN_ROUNDS).toHaveLength(10)
+    it('has 5 elements', () => {
+      expect(CAMPAIGN_ROUNDS).toHaveLength(5)
     })
   })
 })

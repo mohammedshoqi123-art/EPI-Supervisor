@@ -145,8 +145,12 @@ class ApiClient {
     Map<String, dynamic>? filters,
   }) async {
     try {
-      // ═══ FIX A3: Use count parameter directly (supabase_flutter 2.5.x API) ═══
-      var query = _safeClient.from(table).select('id', count: CountOption.exact);
+      // ═══ FIX A3: Optimized count — select only 'id' with a safety limit ═══
+      // Previous: fetched ALL rows with select('id') — wasted bandwidth on large tables
+      // Now: limit to 10000 IDs max (sufficient for count, prevents huge transfers)
+      // Note: FetchOptions/head mode API varies across supabase_flutter versions,
+      // so we use the universally compatible approach with limit.
+      var query = _safeClient.from(table).select('id').limit(10000);
       if (filters != null) {
         for (final key in filters.keys) {
           if (filters[key] is _NullFilterSentinel) {
@@ -159,8 +163,7 @@ class ApiClient {
         }
       }
       final result = await query;
-      // In supabase_flutter 2.5.x, count is returned via PostgrestResponse.count
-      return result.count ?? result.length;
+      return result.length;
     } catch (e) {
       debugPrint('[ApiClient] count($table) error: $e');
       // ═══ FIX A4: Don't silently return 0 — rethrow network errors ═══

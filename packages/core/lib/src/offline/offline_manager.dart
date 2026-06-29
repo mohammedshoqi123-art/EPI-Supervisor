@@ -22,7 +22,10 @@ class OfflineManager {
   static const String _conflictsKey = 'sync_conflicts';
 
   static const int _maxRetries = 3;
-  static const int _maxPayloadSize = 1024 * 1024; // 1MB
+  // ═══ FIX O3: Increased from 1MB to 5MB — 1MB was rejecting submissions with 2+ photos ═══
+  // A single compressed photo (quality 70%, maxWidth 1280) is ~300-800KB base64.
+  // Two photos + form data easily exceeds 1MB, causing silent submission failure.
+  static const int _maxPayloadSize = 5 * 1024 * 1024; // 5MB
 
   Box<String>? _box;
   final EncryptionService _encryption;

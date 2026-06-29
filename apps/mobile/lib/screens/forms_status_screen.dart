@@ -107,8 +107,15 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   void _listenForSyncCompletion() {
     ref.read(syncServiceProvider.future).then((service) {
       _syncSub = service.syncState.listen((state) {
+        // ═══ FIX P2: Only refresh if this screen is currently visible ═══
+        // Previously: every sync completion (every 3 min) cleared all lists
+        // and reloaded — even if user was on another screen. Caused flicker.
         if (!state.isSyncing && mounted) {
-          _refreshAll();
+          // Check if this route is the current one (user is viewing this screen)
+          final isCurrent = ModalRoute.of(context)?.isCurrent ?? false;
+          if (isCurrent) {
+            _refreshAll();
+          }
         }
       });
     }).catchError((_) {});
@@ -117,14 +124,24 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   void _refreshAll() {
     ref.invalidate(formsProvider);
     ref.invalidate(formStatsProvider);
+    // ═══ FIX P2: Only clear + reload the active tab, not all 3 ═══
     setState(() {
       _refreshKey++;
-      _draftItems.clear();
-      _pendingItems.clear();
-      _submittedItems.clear();
-      _draftPage = 0;
-      _pendingPage = 0;
-      _submittedPage = 0;
+      // Only clear the active tab's items — other tabs will reload when visited
+      switch (_activeTab) {
+        case 0: // drafts
+          _draftItems.clear();
+          _draftPage = 0;
+          break;
+        case 1: // pending
+          _pendingItems.clear();
+          _pendingPage = 0;
+          break;
+        case 2: // submitted
+          _submittedItems.clear();
+          _submittedPage = 0;
+          break;
+      }
     });
     // Reload current tab
     switch (_tabController.index) {

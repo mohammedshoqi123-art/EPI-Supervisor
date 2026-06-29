@@ -54,6 +54,7 @@ class DatabaseService {
       'governorates',
       filters: {'deleted_at': ApiClient.isNull, 'is_active': true},
       orderBy: 'name_ar',
+      limit: 100, // ═══ FIX P1: Add safety limit ═══
     );
   }
 
@@ -72,6 +73,7 @@ class DatabaseService {
       select: '*, governorates(name_ar, name_en)',
       filters: filters,
       orderBy: 'name_ar',
+      limit: 500, // ═══ FIX P1: Add safety limit ═══
     );
   }
 
@@ -89,6 +91,7 @@ class DatabaseService {
       'health_facilities',
       filters: filters,
       orderBy: 'name_ar',
+      limit: 1000, // ═══ FIX P1: Add safety limit ═══
     );
   }
 
@@ -108,6 +111,7 @@ class DatabaseService {
       filters: filters,
       orderBy: 'created_at',
       ascending: false,
+      limit: 200, // ═══ FIX P1: Add safety limit ═══
     );
   }
 

@@ -237,7 +237,7 @@ final governoratesProvider = FutureProvider<List<Map<String, dynamic>>>((
 });
 
 final districtsProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String?>((
+    FutureProvider.family.autoDispose<List<Map<String, dynamic>>, String?>((
   ref,
   governorateId,
 ) async {
@@ -254,7 +254,7 @@ final districtsProvider =
 });
 
 final healthFacilitiesProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String?>((
+    FutureProvider.family.autoDispose<List<Map<String, dynamic>>, String?>((
   ref,
   districtId,
 ) async {

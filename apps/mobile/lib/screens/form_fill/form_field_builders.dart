@@ -19,7 +19,7 @@ List<Widget> buildFormSections({
   required VoidCallback getLocation,
   required void Function(VoidCallback) runSetState,
   required Map<String, dynamic>? formSchema,
-  required List<XFile> pickedPhotos,
+  required Map<String, List<XFile>> photosByField,
 }) {
   final widgets = <Widget>[];
 
@@ -107,7 +107,7 @@ Widget buildFormField({
   required VoidCallback getLocation,
   required void Function(VoidCallback) runSetState,
   required Map<String, dynamic>? formSchema,
-  required List<XFile> pickedPhotos,
+  required Map<String, List<XFile>> photosByField,
 }) {
   final key = field['key'] as String? ?? '';
   final type = field['type'] as String? ?? 'text';
@@ -596,14 +596,14 @@ Widget _buildFieldInput({
       );
 
     case 'photo':
+      // ═══ FIX F1: Use per-field photo list instead of shared list ═══
       return PhotoPickerField(
         key: ValueKey('photo_$key'),
-        photos: pickedPhotos,
+        photos: photosByField[key] ?? [],
         maxPhotos: (formSchema?['max_photos'] as int?) ?? 1,
         onPhotosChanged: (photos) {
           runSetState(() {
-            pickedPhotos.clear();
-            pickedPhotos.addAll(photos);
+            photosByField[key] = List<XFile>.from(photos);
             formData[key] = photos.map((p) => p.path).toList();
             markChanged();
           });

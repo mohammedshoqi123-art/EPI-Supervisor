@@ -38,7 +38,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   double? _gpsLat;
   double? _gpsLng;
-  final List<XFile> _pickedPhotos = [];
+  final Map<String, List<XFile>> _photosByField = {};
 
   // Auto-save timer
   Timer? _autoSaveTimer;
@@ -338,6 +338,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       if (!isRequired) continue;
 
       switch (type) {
+        case 'select':
+        case 'health_facility':
+          if (_formData[key] == null || (_formData[key] as String?)?.isEmpty == true)
+            missingFields.add(label);
+          break;
         case 'multiselect':
           final val = _formData[key] as List?;
           if (val == null || val.isEmpty) missingFields.add(label);
@@ -355,7 +360,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           if (_gpsLat == null) missingFields.add(label);
           break;
         case 'photo':
-          if (_pickedPhotos.isEmpty) missingFields.add(label);
+          if ((_photosByField[key] ?? []).isEmpty) missingFields.add(label);
           break;
         case 'governorate':
           if (_formData[key] == null) missingFields.add(label);
@@ -450,7 +455,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         'data': dataWithPhotos,
         if (_gpsLat != null) 'gps_lat': _gpsLat,
         if (_gpsLng != null) 'gps_lng': _gpsLng,
-        'photos_count': _pickedPhotos.length,
+        'photos_count': _photosByField.values.fold(0, (sum, list) => sum + list.length),
         'campaign_round': campaignRound,
         'created_at': DateTime.now().toIso8601String(),
       };
@@ -462,32 +467,39 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         Map<String, dynamic>.from(_formData),
       );
 
+      // ═══ FIX O2: Await sync result before showing success message ═══
+      // Previously: sync was fire-and-forget, showing "sent ✅" even if sync failed
+      bool syncSucceeded = false;
       if (offline.isOnline) {
-        ref.read(syncServiceProvider.future).then((syncService) async {
-          try {
-            final result = await syncService.sync();
-            if (kDebugMode) {
-              debugPrint(
-                '[FormSubmit] Immediate sync: ${result.synced} synced, ${result.failed} failed',
-              );
-            }
-            if (result.synced > 0) {
-              try {
-                await offline.removeDraft(_draftId);
-              } catch (_) {}
-            }
-          } catch (e) {
-            if (kDebugMode)
-              debugPrint('[FormSubmit] Immediate sync failed (will retry): $e');
+        try {
+          final syncService = await ref.read(syncServiceProvider.future).timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw TimeoutException('Sync service timeout'),
+          );
+          final result = await syncService.sync().timeout(
+            const Duration(seconds: 30),
+            onTimeout: () => throw TimeoutException('Sync timeout'),
+          );
+          if (kDebugMode) {
+            debugPrint('[FormSubmit] Sync: ${result.synced} synced, ${result.failed} failed');
           }
-        }).catchError((e) {
-          if (kDebugMode) print('[FormSubmit] SyncService not available: $e');
-        });
+          if (result.synced > 0) {
+            syncSucceeded = true;
+            try {
+              await offline.removeDraft(_draftId);
+            } catch (_) {}
+          }
+        } catch (e) {
+          if (kDebugMode)
+            debugPrint('[FormSubmit] Sync failed (will retry later): $e');
+        }
       }
 
       if (mounted) {
-        if (offline.isOnline) {
-          context.showSuccess('تم الحفظ والإرسال ✅');
+        if (syncSucceeded) {
+          context.showSuccess('تم الحفظ والإرسال بنجاح ✅');
+        } else if (offline.isOnline) {
+          context.showSuccess('تم الحفظ. سيتم الإرسال تلقائياً قريباً');
         } else {
           context.showSuccess(AppStrings.formSubmittedOffline);
         }
@@ -562,9 +574,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         context.showSuccess('تم الحفظ التلقائي');
       }
     } on TimeoutException {
-      // Silent
-    } catch (_) {
-      // Silent
+      // ═══ FIX F6: Show feedback on repeated auto-save failures ═══
+    } catch (e) {
+      debugPrint('[AutoSave] Failed: $e');
     }
   }
 
@@ -574,7 +586,44 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // ═══ FIX U3: Protect against losing unsaved changes ═══
+    return PopScope(
+      canPop: !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('تغييرات غير محفوظة', style: TextStyle(fontFamily: 'Tajawal')),
+            content: const Text(
+              'لديك تغييرات غير محفوظة. هل تريد الحفظ قبل الخروج؟',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('خروج بدون حفظ', style: TextStyle(fontFamily: 'Tajawal', color: Colors.red)),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  await _autoSave(showFeedback: false);
+                  if (ctx.mounted) Navigator.of(ctx).pop(true);
+                },
+                icon: const Icon(Icons.save, size: 18),
+                label: const Text('حفظ وخروج', style: TextStyle(fontFamily: 'Tajawal')),
+              ),
+            ],
+          ),
+        );
+        if (shouldPop == true && context.mounted) {
+          context.pop();
+        }
+      },
+      child: Scaffold(
       appBar: EpiAppBar(
         title: _formSchema?['title_ar'] ?? 'تعبئة النموذج',
         actions: [
@@ -690,7 +739,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                           getLocation: _getLocation,
                           runSetState: (fn) => setState(fn),
                           formSchema: _formSchema,
-                          pickedPhotos: _pickedPhotos,
+                          photosByField: _photosByField,
                         )
                       else
                         ..._flatFields.map(
@@ -705,7 +754,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                             getLocation: _getLocation,
                             runSetState: (fn) => setState(fn),
                             formSchema: _formSchema,
-                            pickedPhotos: _pickedPhotos,
+                            photosByField: _photosByField,
                           ),
                         ),
                       const SizedBox(height: 24),
@@ -719,6 +768,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                     ],
                   ),
                 ),
+      ),
     );
   }
 }

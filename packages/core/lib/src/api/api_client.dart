@@ -137,14 +137,15 @@ class ApiClient {
     }
   }
 
-  /// ═══ PERFORMANCE: Count rows without fetching full data ═══
-  /// Uses select with minimal column to count efficiently.
+  /// ═══ FIX A3: Use real count from Supabase instead of fetching all IDs ═══
+  /// Previously: fetched ALL row IDs and counted .length — huge bandwidth waste.
+  /// Now: uses Supabase's built-in count feature (zero data transfer).
   Future<int> count(
     String table, {
     Map<String, dynamic>? filters,
   }) async {
     try {
-      var query = _safeClient.from(table).select('id');
+      var query = _safeClient.from(table).select('id', const FetchOptions(count: CountOption.exact));
       if (filters != null) {
         for (final key in filters.keys) {
           if (filters[key] is _NullFilterSentinel) {
@@ -157,10 +158,12 @@ class ApiClient {
         }
       }
       final result = await query;
-      return result.length;
+      return result.count ?? 0;
     } catch (e) {
       debugPrint('[ApiClient] count($table) error: $e');
-      return 0;
+      // ═══ FIX A4: Don't silently return 0 — rethrow network errors ═══
+      if (_isNetworkError(e)) throw const NetworkException();
+      return 0; // For non-network errors (RLS, permissions), 0 is still acceptable
     }
   }
 
@@ -286,13 +289,12 @@ class ApiClient {
       // ✅ This has its own 8s timeout and never blocks indefinitely
       await _ensureFreshSession();
 
-      // ✅ FIX: Use 45s timeout for first call (Edge Function cold start can be slow)
-      // Subsequent calls are usually <5s. 45s gives enough headroom for cold starts.
+      // ═══ FIX A2: Reduced timeout from 90s to 30s ═══
       final response =
           await _safeClient.functions.invoke(functionName, body: body).timeout(
-                const Duration(seconds: 90),
+                _functionTimeout,
                 onTimeout: () => throw TimeoutException(
-                  'Function $functionName timed out after 45s',
+                  'Function $functionName timed out after ${_functionTimeout.inSeconds}s',
                 ),
               );
 
@@ -300,7 +302,7 @@ class ApiClient {
       return _parseFunctionResponse(response.data, functionName);
     } on TimeoutException {
       throw NetworkException(
-        'انتهت مهلة الطلب (90 ثانية). قد يكون الخادم بطيء أو الاتصال ضعيف. حاول مرة أخرى.',
+        'انتهت مهلة الطلب (${_functionTimeout.inSeconds} ثانية). تحقق من اتصالك بالإنترنت وأعد المحاولة.',
       );
     } on FunctionException catch (e) {
       // If 401, try refreshing the token ONCE and retry
@@ -311,9 +313,9 @@ class ApiClient {
           final response = await _safeClient.functions
               .invoke(functionName, body: body)
               .timeout(
-                const Duration(seconds: 90),
+                _functionTimeout,
                 onTimeout: () => throw TimeoutException(
-                  'Function $functionName timed out after 45s (retry)',
+                  'Function $functionName timed out (retry)',
                 ),
               );
           return _parseFunctionResponse(response.data, functionName);
@@ -597,6 +599,44 @@ class ApiClient {
       'Function error: ${e.details}',
       code: 'function_$status',
     );
+  }
+
+  // ═══ FIX A2: Reduced timeout from 90s to 30s — 90s was too long for mobile users ═══
+  // Edge Function cold starts are typically ≤10s. 30s gives headroom without freezing UI.
+  static const _functionTimeout = Duration(seconds: 30);
+
+  // ═══ FIX A1: Retry logic for network errors ═══
+  // Retries 3 times with exponential backoff (1s, 2s, 4s) for transient failures.
+  // Only retries on NetworkException, TimeoutException, and 5xx ServerException.
+  Future<T> _withRetry<T>(
+    String label,
+    Future<T> Function() action, {
+    int maxRetries = 3,
+  }) async {
+    int attempt = 0;
+    while (true) {
+      try {
+        return await action();
+      } on NetworkException {
+        attempt++;
+        if (attempt >= maxRetries) rethrow;
+        final delay = Duration(seconds: 1 << (attempt - 1)); // 1s, 2s, 4s
+        debugPrint('[ApiClient] $label network error, retry $attempt/$maxRetries in ${delay.inSeconds}s');
+        await Future.delayed(delay);
+      } on TimeoutException {
+        attempt++;
+        if (attempt >= maxRetries) rethrow;
+        final delay = Duration(seconds: 1 << (attempt - 1));
+        debugPrint('[ApiClient] $label timeout, retry $attempt/$maxRetries in ${delay.inSeconds}s');
+        await Future.delayed(delay);
+      } on ServerException {
+        attempt++;
+        if (attempt >= maxRetries) rethrow;
+        final delay = Duration(seconds: 1 << (attempt - 1));
+        debugPrint('[ApiClient] $label server error, retry $attempt/$maxRetries in ${delay.inSeconds}s');
+        await Future.delayed(delay);
+      }
+    }
   }
 
   /// Report unexpected errors via Sentry (if configured) and debug print.

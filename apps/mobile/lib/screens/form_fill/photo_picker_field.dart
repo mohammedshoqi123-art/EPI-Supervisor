@@ -22,11 +22,12 @@ class PhotoPickerField extends StatelessWidget {
   Future<void> _pickImage(BuildContext context, ImageSource source) async {
     final picker = ImagePicker();
     try {
+      // ═══ FIX F4: Better image compression — smaller files, prevents payload rejection ═══
       final picked = await picker.pickImage(
         source: source,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 95, // High quality pick — we compress separately below
+        maxWidth: 1280,  // Was 1920 — 1280 is sufficient for field documentation
+        maxHeight: 1280, // Was 1080 — square max for consistent compression
+        imageQuality: 85, // Was 95 — 85% is visually identical but much smaller
       );
       if (picked == null) return;
 
@@ -35,10 +36,28 @@ class PhotoPickerField extends StatelessWidget {
       final finalFile =
           compressed ?? picked; // Fallback to original if compression fails
 
+      // ═══ FIX F4: Check file size — warn if still too large ═══
+      try {
+        final fileSize = await finalFile.length();
+        if (fileSize > 2 * 1024 * 1024) { // > 2MB
+          if (context.mounted) {
+            context.showWarning('حجم الصورة كبير (${(fileSize / 1024 / 1024).toStringAsFixed(1)}MB). قد يتأخر الإرسال.');
+          }
+        }
+      } catch (_) {}
+
       final updated = List<XFile>.from(photos)..add(finalFile);
       onPhotosChanged(updated);
     } catch (e) {
-      if (context.mounted) context.showError('فشل التقاط الصورة');
+      // ═══ FIX F3: Better error message for permission denial ═══
+      final errMsg = e.toString().toLowerCase();
+      if (errMsg.contains('permission') || errMsg.contains('denied') || errMsg.contains('camera_access')) {
+        if (context.mounted) {
+          context.showError('تم رفض إذن الكاميرا. فعّله من إعدادات التطبيق.');
+        }
+      } else {
+        if (context.mounted) context.showError('فشل التقاط الصورة: ${e.toString()}');
+      }
     }
   }
 
@@ -53,12 +72,13 @@ class PhotoPickerField extends StatelessWidget {
           : '.jpg';
       final targetPath = '${filePath}_compressed$ext';
 
+      // ═══ FIX F4: Stronger compression — was 75% / minWidth 1024, now 70% / maxWidth 1280 ═══
       final result = await FlutterImageCompress.compressAndGetFile(
         filePath,
         targetPath,
-        quality: 75, // 75% quality — good balance of size vs clarity
-        minWidth: 1024, // Don't go below 1024px width
-        minHeight: 1024, // Don't go below 1024px height
+        quality: 70, // Was 75 — 70% produces ~30% smaller files with minimal quality loss
+        minWidth: 800,  // Was 1024 — 800px is sufficient for field documentation photos
+        minHeight: 800, // Was 1024 — reduces file size significantly
         format: ext.contains('png') ? CompressFormat.png : CompressFormat.jpeg,
       );
 

@@ -208,6 +208,10 @@ class EncryptionService {
           bytes[2] == _magicNew[2] &&
           bytes[3] == _magicNew[3]) {
         // New format: [magic(4)][iv(12)][ciphertext+tag]
+        // Validate minimum length: magic(4) + iv(12) + tag(16) = 32 bytes minimum
+        if (bytes.length < 4 + _ivLength + 16) {
+          throw FormatException('New format ciphertext too short (${bytes.length} bytes, need ${4 + _ivLength + 16})');
+        }
         final iv = enc.IV(
           Uint8List.fromList(bytes.sublist(4, 4 + _ivLength)),
         );
@@ -222,7 +226,7 @@ class EncryptionService {
       // ═══ OLD FORMAT: [salt(16)][iv(12)][ciphertext+tag] ═══
       // Backward compatibility — derive key from embedded salt
       if (bytes.length < _saltLength + _ivLength + 16) {
-        throw FormatException('Ciphertext too short for old format');
+        throw FormatException('Old format ciphertext too short (${bytes.length} bytes, need ${_saltLength + _ivLength + 16})');
       }
 
       var offset = 0;

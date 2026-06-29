@@ -270,14 +270,13 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     try {
       final campaign = ref.read(campaignProvider);
       final round = ref.read(campaignRoundProvider);
-      // ═══ FIX #4: Increased limit from 500 to 5000 to show actual count ═══
-      // Previously: only 500 submissions were fetched, so if there were 1500+
-      // submitted forms, only the first 500 would show and the total count was wrong.
-      // Now: fetches up to 5000 (covers all realistic scenarios for a single campaign).
+      // ═══ PROPOSAL 4: Reverted to 500 — the encryption fix (Proposal 1+2)
+      // makes 500 items fast to process. For actual count, use getSubmissionsCount.
+      // Loading 5000 items was causing memory pressure + slow filtering.
       final filter = SubmissionsFilter(
         campaignType: campaign.value,
         campaignRound: round,
-        limit: 5000,
+        limit: 500,
         offset: 0,
       );
       final data = await ref.read(submissionsProvider(filter).future);

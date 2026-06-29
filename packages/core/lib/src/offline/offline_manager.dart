@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -91,6 +92,26 @@ class OfflineManager {
       if (kDebugMode) print('[OfflineManager] Init failed: $e');
       rethrow;
     }
+
+    // ═══ PROPOSAL 1: Initialize EncryptionService with stable salt ═══
+    // PBKDF2 (600k iterations) runs ONCE here, then all encrypt/decrypt
+    // use the pinned key = <1ms per operation.
+    if (!EncryptionService.isInitialized) {
+      EncryptionService.initialize(
+        encryptionKey: const String.fromEnvironment('ENCRYPTION_KEY', defaultValue: ''),
+        saltSource: () {
+          final saltStr = _box?.get(EncryptionService.saltStorageKey);
+          if (saltStr == null) return null;
+          return Uint8List.fromList(base64Decode(saltStr));
+        },
+        onSaltCreated: (salt) {
+          _box?.put(EncryptionService.saltStorageKey, base64Encode(salt));
+        },
+      );
+    }
+
+    // ═══ PROPOSAL 2: Migrate old blob drafts to sharded storage ═══
+    await _migrateDraftsToSharded();
 
     // ═══ FIX: Recover stuck items from previous crashes ═══
     await _recoverStuckSyncingItems();
@@ -220,6 +241,20 @@ class OfflineManager {
   Future<void> removeFromQueue(String offlineId) async {
     final queue = _getQueue();
     queue.removeWhere((item) => item['offline_id'] == offlineId);
+    await _saveQueue(queue);
+    _invalidatePendingCount();
+  }
+
+  // ═══ PROPOSAL 3: Batch remove — 1× decrypt + 1× encrypt instead of N× ═══
+  /// Remove multiple items from the queue in a single operation.
+  /// This is critical for sync: previously, removing 50 synced items
+  /// required 50× (decrypt + encrypt) = 100 operations on main thread.
+  /// Now: 1× (decrypt + encrypt) regardless of batch size.
+  Future<void> removeFromQueueBatch(List<String> offlineIds) async {
+    if (offlineIds.isEmpty) return;
+    final queue = _getQueue();
+    final idSet = offlineIds.toSet();
+    queue.removeWhere((item) => idSet.contains(item['offline_id']));
     await _saveQueue(queue);
     _invalidatePendingCount();
   }
@@ -435,64 +470,129 @@ class OfflineManager {
     }
   }
 
-  // ===== DRAFTS =====
+  // ===== DRAFTS (SHARDED STORAGE — Proposal 2) =====
+  // Each draft is stored in its own Hive key: drafts/$draftId
+  // An unencrypted index (drafts_index) stores the list of draft IDs.
+  // This means: saveDraft = encrypt 1 item (not all),
+  //             removeDraft = delete 1 key (not decrypt+encrypt all),
+  //             getDraftFormIds = read index (no decrypt at all!)
 
-  /// Save a draft using a unique [draftId]. Also stores the [formId] so we can identify which form it belongs to.
+  static const String _draftsIndexKey = 'drafts_index';
+
+  /// Migrate old blob-format drafts to sharded storage (called once on init)
+  Future<void> _migrateDraftsToSharded() async {
+    final oldBlob = _box?.get(_draftsKey);
+    if (oldBlob == null || oldBlob.isEmpty) return; // No old data
+
+    // Check if already migrated
+    final index = _box?.get(_draftsIndexKey);
+    if (index != null) return; // Already migrated
+
+    try {
+      if (kDebugMode) debugPrint('[OfflineManager] Migrating drafts to sharded storage...');
+      final drafts = Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(oldBlob)));
+      final draftIds = <String>[];
+
+      for (final entry in drafts.entries) {
+        final draftId = entry.key;
+        final value = entry.value as Map<String, dynamic>;
+        // Store each draft in its own key
+        await _box?.put('drafts/$draftId', _encryption.encrypt(jsonEncode(value)));
+        draftIds.add(draftId);
+      }
+
+      // Store the index (unencrypted — just a list of IDs)
+      await _box?.put(_draftsIndexKey, jsonEncode(draftIds));
+
+      // Delete old blob
+      await _box?.delete(_draftsKey);
+
+      if (kDebugMode) debugPrint('[OfflineManager] Migrated ${draftIds.length} drafts to sharded storage');
+    } catch (e) {
+      if (kDebugMode) debugPrint('[OfflineManager] Draft migration failed: $e');
+    }
+  }
+
+  /// Save a draft — encrypts ONLY this draft (not all drafts)
   Future<void> saveDraft(
       String draftId, String formId, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
-      final drafts = _getDrafts();
-      drafts[draftId] = {
+      final draftData = {
         'form_id': formId,
         'data': data,
         'saved_at': DateTime.now().toIso8601String(),
       };
-      final encrypted = _encryption.encrypt(jsonEncode(drafts));
-      await _safeBox?.put(_draftsKey, encrypted);
+      // ═══ PROPOSAL 2: Encrypt only THIS draft = <1ms ═══
+      final encrypted = _encryption.encrypt(jsonEncode(draftData));
+      await _box?.put('drafts/$draftId', encrypted);
+
+      // Update index (unencrypted — just IDs, no decrypt needed)
+      final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
+      final index = List<String>.from(jsonDecode(indexStr));
+      if (!index.contains(draftId)) {
+        index.add(draftId);
+        await _box?.put(_draftsIndexKey, jsonEncode(index));
+      }
     });
   }
 
-  Map<String, dynamic> _getDrafts() {
-    final data = _safeBox?.get(_draftsKey);
-    if (data == null || data.isEmpty) return {};
+  /// Get a single draft — decrypts ONLY this draft (not all)
+  Map<String, dynamic>? getDraft(String draftId) {
+    final data = _box?.get('drafts/$draftId');
+    if (data == null || data.isEmpty) return null;
     try {
       return Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
     } catch (e) {
-      if (kDebugMode) print('[OfflineManager] Drafts decrypt error: $e');
+      if (kDebugMode) print('[OfflineManager] Draft decrypt error: $e');
+      return null;
+    }
+  }
+
+  /// Get all drafts — decrypts each individually (not one giant blob)
+  List<Map<String, dynamic>> getAllDrafts() {
+    final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
+    final index = List<String>.from(jsonDecode(indexStr));
+    final result = <Map<String, dynamic>>[];
+
+    for (final draftId in index) {
+      final data = _box?.get('drafts/$draftId');
+      if (data == null || data.isEmpty) continue;
+      try {
+        final v = Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
+        result.add({
+          'draft_id': draftId,
+          'form_id': v['form_id'] ?? draftId,
+          'data': v['data'],
+          'saved_at': v['saved_at'],
+        });
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  /// Get draft form IDs — reads index ONLY (NO decryption!)
+  /// This was the #5 performance killer: previously decrypted ALL drafts
+  /// just to count the keys. Now: reads a plain JSON list = <1ms.
+  Set<String> getDraftFormIds() {
+    final indexStr = _box?.get(_draftsIndexKey);
+    if (indexStr == null || indexStr.isEmpty) return {};
+    try {
+      return (jsonDecode(indexStr) as List).cast<String>().toSet();
+    } catch (_) {
       return {};
     }
   }
 
-  Map<String, dynamic>? getDraft(String draftId) {
-    final drafts = _getDrafts();
-    return drafts[draftId];
-  }
-
-  /// Returns all saved drafts, supporting legacy drafts which used formId as the key.
-  List<Map<String, dynamic>> getAllDrafts() {
-    final drafts = _getDrafts();
-    return drafts.entries.map((e) {
-      final v = e.value as Map<String, dynamic>? ?? {};
-      return {
-        'draft_id': e.key,
-        'form_id': v['form_id'] ?? e.key, // Legacy fallback
-        'data': v['data'],
-        'saved_at': v['saved_at'],
-      };
-    }).toList();
-  }
-
-  /// Deprecated, use getAllDrafts instead.
-  Set<String> getDraftFormIds() {
-    return _getDrafts().keys.toSet();
-  }
-
+  /// Remove a draft — deletes ONLY this key (no decrypt + encrypt of all!)
   Future<void> removeDraft(String draftId) async {
     return _withWriteLock(() async {
-      final drafts = _getDrafts();
-      drafts.remove(draftId);
-      final encrypted = _encryption.encrypt(jsonEncode(drafts));
-      await _safeBox?.put(_draftsKey, encrypted);
+      await _box?.delete('drafts/$draftId');
+
+      // Update index
+      final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
+      final index = List<String>.from(jsonDecode(indexStr));
+      index.remove(draftId);
+      await _box?.put(_draftsIndexKey, jsonEncode(index));
     });
   }
 

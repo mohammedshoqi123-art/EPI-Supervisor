@@ -773,8 +773,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
         initialZoom: _currentZoom,
         minZoom: 4.0,
         maxZoom: 18.0,
-        onPositionChanged: (pos, _) =>
-            setState(() => _currentZoom = pos.zoom ?? _currentZoom),
+        // ═══ PROPOSAL 4: No setState on pan/zoom — just update the variable ═══
+        // Previously: every pan/zoom triggered setState → full rebuild → 6× filter + 500 markers
+        // Now: just update _currentZoom without rebuild. Markers don't depend on zoom.
+        onPositionChanged: (pos, _) {
+          _currentZoom = pos.zoom ?? _currentZoom;
+        },
       ),
       children: [
         TileLayer(

@@ -185,9 +185,11 @@ class SyncService {
         }
 
         // أرشف العناصر الفاشلة نهائياً (إزالة من الطابور + تسجيل في السجل)
+        // ═══ PROPOSAL 3: Batch remove — collect IDs, remove once ═══
+        final archivedIds = <String>[];
         for (final item in toArchive) {
           final offlineId = item['offline_id'] as String? ?? '';
-          await _offline.removeFromQueue(offlineId);
+          archivedIds.add(offlineId);
           if (kDebugMode)
             debugPrint('[SyncService] Archived failed item: $offlineId');
           result.archived++;
@@ -197,6 +199,10 @@ class SyncService {
               error: 'Max retries ($_maxRetries) exceeded — removed from queue',
             ),
           );
+        }
+        // Batch remove all archived items at once
+        if (archivedIds.isNotEmpty) {
+          await _offline.removeFromQueueBatch(archivedIds);
         }
 
         if (toRetry.isEmpty) continue;
@@ -222,6 +228,8 @@ class SyncService {
           final serverResults = (response['results'] as List?) ?? [];
           final serverErrors = (response['errors'] as List?) ?? [];
 
+          // ═══ PROPOSAL 3: Collect IDs to remove, batch at end ═══
+          final syncedIds = <String>[];
           for (final item in toRetry) {
             final offlineId = item['offline_id'] as String? ?? '';
 
@@ -234,14 +242,14 @@ class SyncService {
               final status = match['status'] as String? ?? 'error';
               switch (status) {
                 case 'synced':
-                  await _offline.removeFromQueue(offlineId);
+                  syncedIds.add(offlineId);
                   result.synced++;
                 case 'duplicate':
-                  await _offline.removeFromQueue(offlineId);
+                  syncedIds.add(offlineId);
                   result.duplicates++;
                 case 'conflict':
                   await _offline.saveConflict(item, match);
-                  await _offline.removeFromQueue(offlineId);
+                  syncedIds.add(offlineId);
                   result.conflicts++;
                   result.conflictDetails.add(
                     OfflineSyncResult.conflict(offlineId, match),
@@ -286,6 +294,13 @@ class SyncService {
                 ),
               );
             }
+          }
+
+          // ═══ PROPOSAL 3: Batch remove all synced/duplicate/conflict items ═══
+          // Previously: 50× (decrypt + encrypt) for 50 synced items
+          // Now: 1× (decrypt + encrypt) for all items at once
+          if (syncedIds.isNotEmpty) {
+            await _offline.removeFromQueueBatch(syncedIds);
           }
         } on TimeoutException {
           _applyBackoffToBatch(toRetry, result, 'Timeout');

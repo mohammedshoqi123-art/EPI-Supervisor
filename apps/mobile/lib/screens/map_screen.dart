@@ -79,9 +79,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   void _refresh() {
     HapticFeedback.mediumImpact();
+    // ═══ FIX #3: Invalidate with current filter so map re-fetches ═══
     ref.invalidate(submissionsProvider(SubmissionsFilter(
-      campaignType: ref.read(campaignProvider).value, campaignRound: ref.read(campaignRoundProvider),
-      limit: 500, // ═══ PERFORMANCE: Reduced for map rendering ═══
+      campaignType: ref.read(campaignProvider).value,
+      campaignRound: ref.read(campaignRoundProvider),
+      limit: 500,
     )));
     ref.invalidate(governoratesProvider);
   }
@@ -137,10 +139,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   List<Map<String, dynamic>> _getFilteredSubmissions() {
     // ═══ FIX #2: Load all submissions for map (no 20-item limit) ═══
+    // ═══ FIX #3: Use ref.watch instead of ref.read so map updates on campaign/round change ═══
     final allSubs = ref
-            .read(submissionsProvider(SubmissionsFilter(
-              campaignType: ref.read(campaignProvider).value, campaignRound: ref.read(campaignRoundProvider),
-              limit: 500, // ═══ PERFORMANCE: Reduced for map rendering ═══
+            .watch(submissionsProvider(SubmissionsFilter(
+              campaignType: ref.watch(campaignProvider).value,
+              campaignRound: ref.watch(campaignRoundProvider),
+              limit: 500,
             )))
             .valueOrNull ??
         [];
@@ -416,10 +420,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   Widget _buildFilterBar() {
     // ═══ FIX #2: Load all submissions for map filters ═══
+    // ═══ FIX #3: Use ref.watch instead of ref.read so map updates on campaign/round change ═══
     final allSubs = ref
-            .read(submissionsProvider(SubmissionsFilter(
-              campaignType: ref.read(campaignProvider).value, campaignRound: ref.read(campaignRoundProvider),
-              limit: 500, // ═══ PERFORMANCE: Reduced for map rendering ═══
+            .watch(submissionsProvider(SubmissionsFilter(
+              campaignType: ref.watch(campaignProvider).value,
+              campaignRound: ref.watch(campaignRoundProvider),
+              limit: 500,
             )))
             .valueOrNull ??
         [];

@@ -472,7 +472,7 @@ export default function PublicDashboardPage() {
             }}
           >
             <option value={0}>كل الجولات</option>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
+            {[1, 2, 3, 4, 5].map(r => (
               <option key={r} value={r}>الجولة {r}</option>
             ))}
           </select>

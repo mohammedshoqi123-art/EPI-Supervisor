@@ -357,7 +357,7 @@ class CampaignRoundNotifier extends StateNotifier<int> {
   }
 
   Future<void> selectRound(int round) async {
-    if (round == state || round < 1 || round > 10) return;
+    if (round == state || round < 1 || round > 5) return;
     state = round;
     try {
       final db = _ref.read(databaseServiceProvider);

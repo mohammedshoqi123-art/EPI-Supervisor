@@ -122,16 +122,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 onNotificationsTap: () => context.go('/notifications'),
               ),
             ),
-            if (pendingCount > 0)
-              SliverToBoxAdapter(
-                child: DashboardSyncBanner(
-                  pendingCount: pendingCount,
-                  onSyncTap: () => ref.read(syncServiceProvider.future).then(
-                        (s) =>
-                            s.sync().catchError((_) => SyncCycleResult.empty()),
-                      ),
-                ),
-              ),
+            // ═══ FIX #1: Removed floating sync banner — sync happens automatically in background ═══
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: analytics.when(

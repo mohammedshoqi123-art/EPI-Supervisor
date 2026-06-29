@@ -165,26 +165,43 @@ const _serviceNumberFields = {
 //  PROVIDERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-final _readinessSubsProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+// ═══ FIX #2: Changed to family.autoDispose with campaignType + campaignRound params ═══
+// Previously: hardcoded cache key + no campaign/round filtering + limit: 200
+// Now: accepts campaignType + campaignRound + limit: 5000 (all submissions)
+final _readinessSubsProvider = FutureProvider.family
+    .autoDispose<List<Map<String, dynamic>>, ({String? campaignType, int? campaignRound})>((
+  ref,
+  params,
+) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
+  final cacheKey = 'readiness_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
   return cache.getList(
-    'readiness_subs_integrated',
-    () => ref
-        .read(databaseServiceProvider)
-        .getSubmissions(formId: _readinessFormId, limit: 200),
+    cacheKey,
+    () => ref.read(databaseServiceProvider).getSubmissions(
+          formId: _readinessFormId,
+          campaignType: params.campaignType,
+          campaignRound: params.campaignRound,
+          limit: 5000, // ═══ FIX #2: Was 200 — now fetches all submissions ═══
+        ),
     maxAge: const Duration(hours: 2),
   );
 });
 
-final _supervisionSubsProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final _supervisionSubsProvider = FutureProvider.family
+    .autoDispose<List<Map<String, dynamic>>, ({String? campaignType, int? campaignRound})>((
+  ref,
+  params,
+) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
+  final cacheKey = 'supervision_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
   return cache.getList(
-    'supervision_subs_integrated',
-    () => ref
-        .read(databaseServiceProvider)
-        .getSubmissions(formId: _supervisionFormId, limit: 200),
+    cacheKey,
+    () => ref.read(databaseServiceProvider).getSubmissions(
+          formId: _supervisionFormId,
+          campaignType: params.campaignType,
+          campaignRound: params.campaignRound,
+          limit: 5000, // ═══ FIX #2: Was 200 — now fetches all submissions ═══
+        ),
     maxAge: const Duration(hours: 2),
   );
 });
@@ -230,14 +247,25 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     });
   }
 
+  // ═══ FIX #2: Build params from current campaign/round selection ═══
+  ({String? campaignType, int? campaignRound}) get _currentParams {
+    final campaign = ref.read(campaignProvider).value;
+    final round = ref.read(campaignRoundProvider);
+    return (
+      campaignType: campaign != 'all' ? campaign : null,
+      campaignRound: round,
+    );
+  }
+
   // ═══ Debounce refresh — prevents rapid invalidations ═══
   Timer? _refreshDebounce;
   void _debouncedRefresh() {
     _refreshDebounce?.cancel();
     _refreshDebounce = Timer(const Duration(seconds: 2), () {
       if (mounted) {
-        ref.invalidate(_readinessSubsProvider);
-        ref.invalidate(_supervisionSubsProvider);
+        final params = _currentParams;
+        ref.invalidate(_readinessSubsProvider(params));
+        ref.invalidate(_supervisionSubsProvider(params));
       }
     });
   }
@@ -304,14 +332,14 @@ class _ReadinessTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subsAsync = ref.watch(_readinessSubsProvider);
+    final subsAsync = ref.watch(_readinessSubsProvider(_currentParams));
     final govAsync = ref.watch(governoratesProvider);
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
           msg: 'فشل تحميل بيانات الجاهزية',
-          onRetry: () => ref.invalidate(_readinessSubsProvider)),
+          onRetry: () => ref.invalidate(_readinessSubsProvider(_currentParams))),
       data: (subs) {
         final govNames = <String, String>{};
         for (final g in (govAsync.valueOrNull ?? [])) {
@@ -412,8 +440,8 @@ class _ReadinessTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(_readinessSubsProvider);
-            await ref.read(_readinessSubsProvider.future);
+            ref.invalidate(_readinessSubsProvider(_currentParams));
+            await ref.read(_readinessSubsProvider(_currentParams).future);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -504,7 +532,7 @@ class _ComplianceTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subsAsync = ref.watch(_supervisionSubsProvider);
+    final subsAsync = ref.watch(_supervisionSubsProvider(_currentParams));
     final govAsync = ref.watch(governoratesProvider);
     final distAsync = ref.watch(districtsProvider(null));
 
@@ -512,7 +540,7 @@ class _ComplianceTab extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
           msg: 'فشل تحميل بيانات الإشراف',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider)),
+          onRetry: () => ref.invalidate(_supervisionSubsProvider(_currentParams))),
       data: (subs) {
         final realSubs = subs.where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
@@ -545,8 +573,8 @@ class _ComplianceTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(_supervisionSubsProvider);
-            await ref.read(_supervisionSubsProvider.future);
+            ref.invalidate(_supervisionSubsProvider(_currentParams));
+            await ref.read(_supervisionSubsProvider(_currentParams).future);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -587,13 +615,13 @@ class _NumbersTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subsAsync = ref.watch(_supervisionSubsProvider);
+    final subsAsync = ref.watch(_supervisionSubsProvider(_currentParams));
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
           msg: 'فشل تحميل البيانات',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider)),
+          onRetry: () => ref.invalidate(_supervisionSubsProvider(_currentParams))),
       data: (subs) {
         // ═══ FIX: Accept all supervision subs — check both data-level and top-level fields ═══
         final realSubs = subs.where((s) {
@@ -694,8 +722,8 @@ class _NumbersTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(_supervisionSubsProvider);
-            await ref.read(_supervisionSubsProvider.future);
+            ref.invalidate(_supervisionSubsProvider(_currentParams));
+            await ref.read(_supervisionSubsProvider(_currentParams).future);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -733,13 +761,13 @@ class _ChallengesTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final subsAsync = ref.watch(_supervisionSubsProvider);
+    final subsAsync = ref.watch(_supervisionSubsProvider(_currentParams));
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
           msg: 'فشل تحميل البيانات',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider)),
+          onRetry: () => ref.invalidate(_supervisionSubsProvider(_currentParams))),
       data: (subs) {
         final realSubs = subs.where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
@@ -756,8 +784,8 @@ class _ChallengesTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(_supervisionSubsProvider);
-            await ref.read(_supervisionSubsProvider.future);
+            ref.invalidate(_supervisionSubsProvider(_currentParams));
+            await ref.read(_supervisionSubsProvider(_currentParams).future);
           },
           child: ListView.builder(
             padding: const EdgeInsets.all(16),

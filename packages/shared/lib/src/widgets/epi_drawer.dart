@@ -226,7 +226,7 @@ class EpiDrawer extends StatelessWidget {
                             color: Colors.white,
                             fontSize: 14,
                           ),
-                          items: List.generate(10, (i) => i + 1).map((r) {
+                          items: List.generate(5, (i) => i + 1).map((r) {
                             return DropdownMenuItem(
                               value: r,
                               child: Text('🔄 ${_roundLabel(r)}'),

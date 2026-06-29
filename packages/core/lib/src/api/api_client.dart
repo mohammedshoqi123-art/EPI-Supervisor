@@ -145,12 +145,11 @@ class ApiClient {
     Map<String, dynamic>? filters,
   }) async {
     try {
-      // ═══ FIX A3: Optimized count — select only 'id' with a safety limit ═══
+      // ═══ FIX A3: Optimized count — select only 'id' with safety limit ═══
       // Previous: fetched ALL rows with select('id') — wasted bandwidth on large tables
       // Now: limit to 10000 IDs max (sufficient for count, prevents huge transfers)
-      // Note: FetchOptions/head mode API varies across supabase_flutter versions,
-      // so we use the universally compatible approach with limit.
-      var query = _safeClient.from(table).select('id').limit(10000);
+      // Note: .limit() must come AFTER filters (PostgrestTransformBuilder doesn't support .eq())
+      var query = _safeClient.from(table).select('id');
       if (filters != null) {
         for (final key in filters.keys) {
           if (filters[key] is _NullFilterSentinel) {
@@ -162,7 +161,7 @@ class ApiClient {
           }
         }
       }
-      final result = await query;
+      final result = await query.limit(10000);
       return result.length;
     } catch (e) {
       debugPrint('[ApiClient] count($table) error: $e');

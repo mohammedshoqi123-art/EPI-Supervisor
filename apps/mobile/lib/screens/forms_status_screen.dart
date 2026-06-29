@@ -128,7 +128,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     setState(() {
       _refreshKey++;
       // Only clear the active tab's items — other tabs will reload when visited
-      switch (_activeTab) {
+      switch (_tabController.index) {
         case 0: // drafts
           _draftItems.clear();
           _draftPage = 0;

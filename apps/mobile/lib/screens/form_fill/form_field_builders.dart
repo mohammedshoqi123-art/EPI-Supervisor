@@ -84,7 +84,7 @@ List<Widget> buildFormSections({
           getLocation: getLocation,
           runSetState: runSetState,
           formSchema: formSchema,
-          pickedPhotos: pickedPhotos,
+          photosByField: photosByField,
         ),
       );
     }
@@ -151,7 +151,7 @@ Widget buildFormField({
           getLocation: getLocation,
           runSetState: runSetState,
           formSchema: formSchema,
-          pickedPhotos: pickedPhotos,
+          photosByField: photosByField,
         ),
       ],
     ),
@@ -184,7 +184,7 @@ Widget _buildFieldInput({
   required VoidCallback getLocation,
   required void Function(VoidCallback) runSetState,
   required Map<String, dynamic>? formSchema,
-  required List<XFile> pickedPhotos,
+  required Map<String, List<XFile>> photosByField,
 }) {
   switch (type) {
     case 'text':

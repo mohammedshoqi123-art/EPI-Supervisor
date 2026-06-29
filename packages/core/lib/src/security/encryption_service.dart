@@ -53,7 +53,19 @@ class EncryptionService {
   /// Salt storage key in Hive (salt is NOT secret — it's a derivation parameter)
   static const String saltStorageKey = '_encryption_salt_v2';
 
-  late final enc.Key _key;
+  /// ═══ KEY GETTER — always uses pinned key if available ═══
+  /// Critical: EncryptionService is created by Riverpod BEFORE
+  /// OfflineManager.init() calls initialize(). If we used a
+  /// `late final _key` field, it would be set to ephemeral at
+  /// construction time and never update when _pinnedKey is set.
+  /// Using a getter ensures we always use the latest _pinnedKey.
+  enc.Key? _ephemeralKey;
+  enc.Key get _key {
+    if (_pinnedKey != null) return _pinnedKey!;
+    _ephemeralKey ??= _deriveKey(utf8.encode(_activeKey), _generateRandomBytes(_saltLength));
+    return _ephemeralKey!;
+  }
+
   final String _activeKey;
 
   /// ═══ Initialize — call ONCE at app startup ═══
@@ -113,20 +125,9 @@ class EncryptionService {
       );
     }
 
-    // Use pinned key if available (normal case after initialize())
-    if (_pinnedKey != null) {
-      _key = _pinnedKey!;
-    } else {
-      // Fallback: derive key with a new salt (should not happen in production
-      // — initialize() should be called first). This maintains backward compat
-      // for tests or edge cases where initialize() wasn't called.
-      if (kDebugMode) {
-        debugPrint('[EncryptionService] WARNING: initialize() not called — '
-            'deriving key with ephemeral salt (PBKDF2 600k on main thread)');
-      }
-      final ephemeralSalt = _generateRandomBytes(_saltLength);
-      _key = _deriveKey(utf8.encode(_activeKey), ephemeralSalt);
-    }
+    // No key derivation here — _key getter handles it lazily.
+    // This ensures that when _pinnedKey is set later by initialize(),
+    // all subsequent encrypt/decrypt use the correct pinned key.
   }
 
   /// PBKDF2 key derivation using HMAC-SHA256 — 600,000 iterations.

@@ -145,7 +145,8 @@ class ApiClient {
     Map<String, dynamic>? filters,
   }) async {
     try {
-      var query = _safeClient.from(table).select('id', const FetchOptions(count: CountOption.exact));
+      // ═══ FIX A3: Use count parameter directly (supabase_flutter 2.5.x API) ═══
+      var query = _safeClient.from(table).select('id', count: CountOption.exact);
       if (filters != null) {
         for (final key in filters.keys) {
           if (filters[key] is _NullFilterSentinel) {
@@ -158,7 +159,8 @@ class ApiClient {
         }
       }
       final result = await query;
-      return result.count ?? 0;
+      // In supabase_flutter 2.5.x, count is returned via PostgrestResponse.count
+      return result.count ?? result.length;
     } catch (e) {
       debugPrint('[ApiClient] count($table) error: $e');
       // ═══ FIX A4: Don't silently return 0 — rethrow network errors ═══

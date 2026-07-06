@@ -419,8 +419,7 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
           if (_artifact == null && !_loading)
             Expanded(child: _buildEmpty(cs)),
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildLibraryPanel(ColorScheme cs) {

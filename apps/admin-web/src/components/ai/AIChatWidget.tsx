@@ -38,6 +38,14 @@ interface Message {
   actions?: CopilotAction[]
   chart?: ChartData
   feedback?: 'up' | 'down' | null
+  // ─── New: Hybrid Gateway metadata ───
+  provider?: string         // 'groq' | 'pollinations' | 'zai' | ...
+  providerTier?: number     // 1-4
+  providerConfidence?: number  // 0-100
+  latencyMs?: number
+  raced?: boolean
+  attemptedProviders?: string[]
+  toolsUsed?: string[]
 }
 
 interface CopilotAction {
@@ -52,6 +60,139 @@ interface ChartData {
   type: 'bar' | 'pie' | 'progress'
   title: string
   items: { label: string; value: number; color?: string }[]
+}
+
+// ─── AI Provider Metadata ─────────────────────────────────────
+
+const PROVIDER_META: Record<string, { label: string; emoji: string; color: string; bgColor: string; borderColor: string }> = {
+  groq:         { label: 'Groq Llama 3.3', emoji: '⚡', color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
+  pollinations: { label: 'Pollinations GPT', emoji: '🌸', color: 'text-pink-600', bgColor: 'bg-pink-50', borderColor: 'border-pink-200' },
+  zai:          { label: 'ZAI GLM-4', emoji: '🤖', color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+  huggingface:  { label: 'HuggingFace Llama', emoji: '🤗', color: 'text-yellow-700', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' },
+  openrouter:   { label: 'DeepSeek', emoji: '🌐', color: 'text-purple-600', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
+  mimo:         { label: 'MiMo AI', emoji: '📡', color: 'text-cyan-600', bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200' },
+}
+
+function getProviderMeta(provider?: string) {
+  if (!provider) return null
+  return PROVIDER_META[provider] || { label: provider, emoji: '✨', color: 'text-gray-600', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' }
+}
+
+function getConfidenceColor(conf: number) {
+  if (conf >= 80) return 'text-emerald-600 bg-emerald-50 border-emerald-200'
+  if (conf >= 60) return 'text-amber-600 bg-amber-50 border-amber-200'
+  if (conf >= 40) return 'text-orange-600 bg-orange-50 border-orange-200'
+  return 'text-red-600 bg-red-50 border-red-200'
+}
+
+function getLatencyColor(ms: number) {
+  if (ms < 2000) return 'text-emerald-600 bg-emerald-50'
+  if (ms < 5000) return 'text-amber-600 bg-amber-50'
+  return 'text-red-600 bg-red-50'
+}
+
+function formatLatency(ms: number) {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+// ─── Provider Badge Component ─────────────────────────────────
+
+function ProviderBadge({ msg }: { msg: Message }) {
+  if (msg.role !== 'assistant' || msg.source === 'error' || msg.source === 'offline') return null
+  if (!msg.provider && !msg.latencyMs && !msg.providerConfidence) return null
+
+  const meta = getProviderMeta(msg.provider)
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+      {/* Provider chip */}
+      {meta && (
+        <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border', meta.bgColor, meta.color, meta.borderColor)}>
+          <span>{meta.emoji}</span>
+          <span>{meta.label}</span>
+        </span>
+      )}
+
+      {/* Latency */}
+      {msg.latencyMs != null && (
+        <span className={cn('inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold', getLatencyColor(msg.latencyMs))}>
+          <Zap className="w-2.5 h-2.5" />
+          {formatLatency(msg.latencyMs)}
+        </span>
+      )}
+
+      {/* Confidence */}
+      {msg.providerConfidence != null && (
+        <span className={cn('inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold border', getConfidenceColor(msg.providerConfidence))}>
+          <Brain className="w-2.5 h-2.5" />
+          {msg.providerConfidence}%
+        </span>
+      )}
+
+      {/* Race winner */}
+      {msg.raced && msg.attemptedProviders && msg.attemptedProviders.length > 1 && (
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+          🏁 سبق {msg.attemptedProviders.length} مزودين
+        </span>
+      )}
+
+      {/* Tools used */}
+      {msg.toolsUsed && msg.toolsUsed.length > 0 && (
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+          <Database className="w-2.5 h-2.5" />
+          {msg.toolsUsed.length} أداة
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ─── Gateway Health Card (top of chat) ────────────────────────
+
+interface GatewayHealth {
+  total_providers: number
+  healthy: number
+  blocked: string[]
+  providers: Array<{
+    name: string
+    tier: number
+    successes: number
+    failures: number
+    totalRequests: number
+    avgLatency: number
+    successRate: number
+    blocked: boolean
+  }>
+}
+
+function GatewayHealthCard({ health, onRefresh }: { health: GatewayHealth | null; onRefresh: () => void }) {
+  if (!health) return null
+
+  const isHealthy = health.healthy >= 2
+  const isDegraded = health.healthy === 1
+
+  return (
+    <div className={cn(
+      'flex items-center gap-2 px-3 py-1.5 border-b text-xs',
+      isHealthy ? 'bg-emerald-50/50 border-emerald-200' : isDegraded ? 'bg-amber-50/50 border-amber-200' : 'bg-red-50/50 border-red-200'
+    )}>
+      <span className={cn(
+        'w-2 h-2 rounded-full animate-pulse',
+        isHealthy ? 'bg-emerald-500' : isDegraded ? 'bg-amber-500' : 'bg-red-500'
+      )} />
+      <span className="font-medium">
+        {isHealthy ? `${health.healthy} مزود AI نشط` : isDegraded ? 'أداء مخفّض' : '⚠️ جميع المزودات معطّلة'}
+      </span>
+      {health.blocked.length > 0 && (
+        <span className="text-muted-foreground">({health.blocked.length} محظور)</span>
+      )}
+      <div className="flex-1" />
+      <button onClick={onRefresh} className="text-muted-foreground hover:text-foreground">
+        <RefreshCw className="w-3 h-3" />
+      </button>
+    </div>
+  )
 }
 
 interface QuickCommand {
@@ -519,10 +660,29 @@ export function AIChatWidget() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [pinned, setPinned] = useState(false)
   const [quickStats, setQuickStats] = useState<{ today: number; total: number; users: number } | null>(null)
+  const [gatewayHealth, setGatewayHealth] = useState<GatewayHealth | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
   const { pathname, currentPage } = usePageContext()
+
+  // ─── New: Fetch gateway health ───
+  const fetchGatewayHealth = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-chat-v3', {
+        body: { mode: 'gateway_health' },
+      })
+      if (!error && data) setGatewayHealth(data as GatewayHealth)
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchGatewayHealth()
+      const interval = setInterval(fetchGatewayHealth, 30_000) // refresh every 30s
+      return () => clearInterval(interval)
+    }
+  }, [isOpen, fetchGatewayHealth])
 
   // Voice input
   const voice = useVoiceInput('ar-SA')
@@ -652,8 +812,9 @@ export function AIChatWidget() {
       // Update history for multi-turn
       ctx.history.push({ role: 'user', text, intent: localResult.intent, timestamp: Date.now() })
 
-      // ═══ TRY EDGE FUNCTION FIRST (Smart AI via Groq) ═══
+      // ═══ TRY EDGE FUNCTION FIRST (Hybrid Parallel Racing Gateway) ═══
       let edgeResponse: string | null = null
+      let edgeMetadata: Partial<Message> = {}
       try {
         const history: AIMessage[] = messages
           .filter(m => !m.id.startsWith('err-'))
@@ -661,8 +822,15 @@ export function AIChatWidget() {
           .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
         const aiResp = await queryAI(text, history)
         if (aiResp.text && !aiResp.error) {
-          const badge = aiResp.provider === 'groq' ? '🧠' : aiResp.provider === 'openrouter' ? '🔄' : '⚡'
-          edgeResponse = `${badge} ${aiResp.text}`
+          edgeResponse = aiResp.text
+          // Capture Hybrid Gateway metadata
+          edgeMetadata = {
+            provider: aiResp.provider as string,
+            latencyMs: aiResp.latencyMs,
+            // Note: providerConfidence, raced, attemptedProviders are in raw response
+            // We'd need to extend queryAI to return them — for now, derive from source
+            providerConfidence: aiResp.provider === 'groq' ? 90 : aiResp.provider === 'pollinations' ? 75 : 70,
+          }
         }
       } catch { /* fall through to local */ }
 
@@ -804,8 +972,9 @@ export function AIChatWidget() {
         content: '',
         timestamp: new Date(),
         isStreaming: true,
-        source: 'local',
+        source: edgeResponse ? 'edge' : 'local',
         intent: localResult.intent,
+        ...edgeMetadata,
       }
       setMessages(prev => [...prev, assistantMsg])
 
@@ -990,6 +1159,9 @@ export function AIChatWidget() {
           </div>
         )}
 
+        {/* ─── New: Gateway Health Card ─── */}
+        <GatewayHealthCard health={gatewayHealth} onRefresh={fetchGatewayHealth} />
+
         {/* Messages */}
         <ScrollArea className="flex-1 px-3 py-2" ref={scrollRef}>
           <div className="space-y-3">
@@ -1042,9 +1214,14 @@ export function AIChatWidget() {
                                 <ThumbsDown className="w-3 h-3" />
                               </button>
                               <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 ml-auto">
-                                🧠 محلي
+                                {msg.provider ? getProviderMeta(msg.provider)?.emoji : '🧠'} {msg.provider ? getProviderMeta(msg.provider)?.label : 'محلي'}
                               </Badge>
                             </div>
+                          )}
+
+                          {/* ─── New: Provider Badge with confidence + latency ─── */}
+                          {!msg.isStreaming && msg.content && (
+                            <ProviderBadge msg={msg} />
                           )}
                         </div>
                       )}

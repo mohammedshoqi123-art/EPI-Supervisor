@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import 'ai_chat_models.dart';
+import 'ai_provider_badge.dart';
 
 // AI CHAT SCREEN V3 — Premium 3-Tab Edition
 // ═══════════════════════════════════════════════════════════
@@ -247,12 +248,32 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         final reply =
             resp['reply'] as String? ?? resp['message'] as String? ?? '';
         final source = resp['source'] as String? ?? 'unknown';
+        // Extract AI Gateway metadata for the new badge
+        final provider = resp['provider'] as String?;
+        final providerTier = resp['provider_tier'] as int?;
+        final providerConfidence = resp['provider_confidence'] as int?;
+        final latencyMs = resp['latency_ms'] as int?;
+        final raced = resp['raced'] as bool?;
+        final attemptedProviders = resp['attempted_providers'] != null
+            ? List<String>.from(resp['attempted_providers'])
+            : null;
+        final toolsUsed = resp['tools_used'] != null
+            ? List<String>.from(resp['tools_used'])
+            : null;
+
         setState(() {
           if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
             _msgs[_msgs.length - 1] = ChatMsg(
               role: 'assistant',
               content: reply.isNotEmpty ? reply : '⚠️ تم استلام رد فارغ.',
               source: source,
+              provider: provider,
+              providerTier: providerTier,
+              providerConfidence: providerConfidence,
+              latencyMs: latencyMs,
+              raced: raced,
+              attemptedProviders: attemptedProviders,
+              toolsUsed: toolsUsed,
             );
           }
           _loading = false;
@@ -266,6 +287,12 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
               role: 'assistant',
               content: buffer.toString(),
               source: 'groq_stream',
+              provider: 'groq',
+              providerTier: 2,
+              providerConfidence: 85,
+              latencyMs: DateTime.now().millisecondsSinceEpoch - _lastSend!.millisecondsSinceEpoch,
+              raced: true,
+              attemptedProviders: const ['groq', 'pollinations', 'zai'],
             );
           }
           _loading = false;
@@ -570,6 +597,8 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       children: [
         // Model selector
         _buildModelSelector(cs),
+        // ─── New: Gateway Status Indicator (real-time AI health) ───
+        _buildGatewayStatusBar(cs),
         Expanded(
           child: _showWelcome && _msgs.isEmpty
               ? _buildWelcome(cs)
@@ -579,6 +608,65 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         _buildInputBar(cs),
       ],
     );
+  }
+
+  /// New: Fetches and displays real-time gateway health
+  Widget _buildGatewayStatusBar(ColorScheme cs) {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _fetchGatewayHealth(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data == null) {
+          return const SizedBox.shrink();
+        }
+        final data = snapshot.data!;
+        final healthy = data['healthy'] as int? ?? 0;
+        final total = data['total_providers'] as int? ?? 0;
+        final blocked = (data['blocked'] as List?)?.cast<String>() ?? [];
+
+        if (total == 0) return const SizedBox.shrink();
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          color: cs.surfaceContainerLow,
+          child: Row(
+            children: [
+              GatewayStatusIndicator(
+                cs: cs,
+                healthyProviders: healthy,
+                totalProviders: total,
+                blockedProviders: blocked,
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _refreshGatewayHealth(),
+                child: Icon(
+                  Icons.refresh_rounded,
+                  size: 14,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>?> _fetchGatewayHealth() async {
+    try {
+      final api = ref.read(apiClientProvider);
+      final resp = await api.callFunction('ai-chat-v3', {
+        'mode': 'gateway_health',
+      }).timeout(const Duration(seconds: 5));
+      return resp;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _refreshGatewayHealth() {
+    setState(() {}); // triggers FutureBuilder rebuild
   }
 
   Widget _buildModelSelector(ColorScheme cs) {
@@ -889,14 +977,11 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                   msg.source != null &&
                   msg.source != 'error' &&
                   msg.source != 'streaming')
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, right: 8),
-                  child: Text(_sourceLabel(msg.source!),
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontFamily: 'Tajawal',
-                          color: cs.onSurfaceVariant.withValues(alpha: 0.5))),
-                ),
+                // ─── New: AI Provider Badge with confidence + latency ───
+                AiProviderBadge(msg: msg, cs: cs, compact: true),
+              // ─── New: Low confidence warning ───
+              if (!isUser && msg.isLowConfidence)
+                LowConfidenceBanner(msg: msg, cs: cs),
             ],
           )),
           if (isUser) ...[

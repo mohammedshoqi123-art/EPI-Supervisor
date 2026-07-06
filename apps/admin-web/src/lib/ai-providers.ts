@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 
 // ─── Types ───────────────────────────────────────────────────
 
-export type AIProvider = 'groq' | 'huggingface' | 'gemini' | 'zai' | 'openrouter'
+export type AIProvider = 'groq' | 'huggingface' | 'gemini' | 'zai' | 'openrouter' | 'pollinations' | 'mimo'
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant'

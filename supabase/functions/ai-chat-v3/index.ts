@@ -26,6 +26,8 @@ import { detectGreeting } from './utils/greeting.ts'
 import { classifyIntent, classifyCompoundIntents } from './prompts/intents.ts'
 import { buildSystemPrompt } from './prompts/system.ts'
 import { groqChat, huggingfaceChat, openrouterChat, zaiChat, mimoChat, generateSummary } from './llm/providers.ts'
+import { hybridRouteChat, hybridRouteStream, getHybridHealthStats, predictBestProvider } from './llm/hybrid-gateway.ts'
+import { analyzeUserMessage, trackFeedback, trackLatency, getEscalationPrefix } from './llm/smart-escalation.ts'
 import { WRITE_TOOLS, describeWriteAction, requireConfirmation } from './tools/confirmation.ts'
 import { logWriteOperation } from './tools/audit.ts'
 
@@ -1071,6 +1073,8 @@ serve(async (req) => {
     // Feedback
     if (mode === 'feedback' && feedback && message_id) {
       await logFeedback(supabase, auth.userId, message_id, feedback.rating, feedback.comment, { intent: feedback.intent, message: feedback.original_message })
+      // Track feedback for Smart Escalation
+      trackFeedback(auth.userId, feedback.rating)
       return jsonResponse({ success: true }, 200, origin)
     }
 
@@ -1099,6 +1103,22 @@ serve(async (req) => {
     if (mode === 'health') {
       const health = await getSystemHealthScore(supabase)
       return jsonResponse({ health }, 200, origin)
+    }
+    if (mode === 'gateway_health') {
+      // New: expose hybrid gateway health stats for admin UI
+      const stats = getHybridHealthStats()
+      return jsonResponse({
+        providers: stats,
+        total_providers: stats.length,
+        healthy: stats.filter(s => !s.blocked && s.successRate > 50).length,
+        blocked: stats.filter(s => s.blocked).map(s => s.name),
+        timestamp: new Date().toISOString(),
+      }, 200, origin)
+    }
+    if (mode === 'predict_provider' && message) {
+      // New: predict best provider for a message (debugging tool)
+      const pred = predictBestProvider(message, false)
+      return jsonResponse({ ...pred, message_preview: message.slice(0, 100) }, 200, origin)
     }
 
     // Injection guard
@@ -1163,52 +1183,191 @@ serve(async (req) => {
       messages.push({ role: 'user', content: message ?? '' })
     }
 
-    // LLM CALL
+    // LLM CALL — Hybrid Parallel Racing Gateway (Patent-Pending)
     const startMs = Date.now()
 
-    if (groqKey) {
-      // Streaming mode
-      if (stream && modelConfig.streamEnabled) {
-        return await multiStepToolCallingStream(messages, groqKey, supabase, { model: dbModelId || 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens, temperature: dbTemperature, maxSteps: 5, userId: auth.userId, campaignRound }, origin)
+    // ─── Smart Escalation: detect frustrated users ───
+    const escalation = message
+      ? analyzeUserMessage(auth.userId, message)
+      : { shouldEscalate: false, preferredProvider: undefined, reason: undefined }
+    if (escalation.shouldEscalate) {
+      console.log(`[ESCALATION] User ${auth.userId} escalated: ${escalation.reason}`)
+    }
+
+    // Build env map for the gateway
+    const gatewayEnv: Record<string, string | undefined> = {
+      GROQ_API_KEY: groqKey,
+      ZAI_API_KEY: zaiKey,
+      HF_API_TOKEN: hfToken,
+      OPENROUTER_API_KEY: openrouterKey,
+      MIMO_API_KEY: mimoKey,
+    }
+
+    // Determine if this query needs tool calls (data queries)
+    const needsTools = ['get_submissions', 'get_statistics', 'get_alerts', 'predict', 'analyze'].some(k =>
+      message?.toLowerCase().includes(k) || ['daily', 'weekly', 'governorate', 'shortages', 'quality', 'coverage', 'polio', 'supervision', 'targets'].includes(template || '')
+    )
+
+    // Predict best provider (Patent-Pending Predictive Selection)
+    const prediction = message ? predictBestProvider(message, needsTools) : null
+    console.log(`[PREDICT] Best provider: ${prediction?.provider} (${prediction?.reason})`)
+
+    // Streaming mode — use hybrid streaming gateway
+    if (stream && modelConfig.streamEnabled) {
+      const streamResult = await hybridRouteStream(messages, gatewayEnv, {
+        model: dbModelId,
+        maxTokens: dbMaxTokens,
+        temperature: dbTemperature,
+        tools: needsTools ? TOOLS : undefined,
+        needTools: needsTools,
+        raceTimeoutMs: 5_000,
+        fallbackTimeoutMs: 12_000,
+      })
+
+      if (streamResult.response) {
+        return new Response(streamResult.response.body, {
+          status: 200,
+          headers: {
+            ...corsHeaders(origin),
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'X-AI-Provider': streamResult.provider,
+            'X-AI-Tier': String(streamResult.tier),
+            'X-AI-Confidence': String(streamResult.confidence),
+          },
+        })
+      }
+      // Streaming failed → fall through to non-streaming hybrid
+      console.warn('[MAIN] Streaming failed, falling back to non-streaming hybrid')
+    }
+
+    // Non-streaming — use Hybrid Parallel Racing Gateway
+    const hybridResult = await hybridRouteChat(messages, gatewayEnv, {
+      model: dbModelId,
+      maxTokens: dbMaxTokens,
+      temperature: dbTemperature,
+      tools: needsTools ? TOOLS : undefined,
+      needTools: needsTools,
+      raceTimeoutMs: 6_000,
+      fallbackTimeoutMs: 15_000,
+    })
+
+    // ─── If we got tool calls, execute them then ask LLM for final answer ───
+    if (hybridResult.toolCalls?.length) {
+      console.log(`[MAIN] Got ${hybridResult.toolCalls.length} tool calls from ${hybridResult.provider}`)
+      const toolResults = await executeToolCalls(supabase, hybridResult.toolCalls, auth.userId, { campaignRound })
+      const toolCallsUsed = hybridResult.toolCalls.map((tc: any) => tc.function?.name)
+
+      // Check if any tool result needs confirmation
+      const needsConfirm = toolResults.some((r: any) => {
+        try {
+          const parsed = JSON.parse(r.content)
+          return parsed.needs_confirmation
+        } catch { return false }
+      })
+
+      if (needsConfirm) {
+        const confirmResult = toolResults.find((r: any) => {
+          try { return JSON.parse(r.content).needs_confirmation } catch { return false }
+        })
+        return jsonResponse({
+          reply: JSON.parse(confirmResult.content).message,
+          source: 'confirmation_needed',
+          toolsUsed: toolCallsUsed,
+          messageId: crypto.randomUUID(),
+        }, 200, origin)
       }
 
-      // Non-streaming
-      const result = await multiStepToolCalling(messages, groqKey, supabase, { model: dbModelId || 'llama-3.3-70b-versatile', maxTokens: dbMaxTokens, temperature: dbTemperature, maxSteps: 5, userId: auth.userId, campaignRound })
+      // Continue multi-step — feed tool results back to LLM for final answer
+      messages.push({ role: 'assistant', content: null, tool_calls: hybridResult.toolCalls })
+      messages.push(...toolResults)
 
-      if (result) {
-        await logUsage(supabase, dbModel?.id || 'groq-70b', result.totalTokens, Date.now() - startMs, true, undefined, result.toolCallsUsed.length > 0 ? 'groq_multi_step' : 'groq')
-        if (message && intent !== 'general_question') setCachedResponse(supabase, buildCacheKey(profile?.role || 'data_entry', intent, message), result.content).catch(() => {})
-        if (messages.length > 6 && messages.length % 8 === 0) updateConversationSummary(supabase, auth.userId, messages, groqKey).catch(() => {})
-        return jsonResponse({ reply: result.content, source: result.toolCallsUsed.length > 0 ? 'groq_multi_step' : 'groq', model: dbModelId, intent, confidence, intents: compoundIntents.length > 1 ? compoundIntents : undefined, messageId: crypto.randomUUID(), toolsUsed: result.toolCallsUsed }, 200, origin)
+      // Use Groq for the final answer (best tool-calling support)
+      const finalResult = await multiStepToolCalling(messages, groqKey || '', supabase, {
+        model: dbModelId || 'llama-3.3-70b-versatile',
+        maxTokens: dbMaxTokens,
+        temperature: dbTemperature,
+        maxSteps: 3,
+        userId: auth.userId,
+        campaignRound,
+      })
+
+      if (finalResult) {
+        await logUsage(supabase, dbModel?.id || 'hybrid-gateway', finalResult.totalTokens, Date.now() - startMs, true, undefined, `hybrid_${hybridResult.provider}_multi_step`)
+        if (message && intent !== 'general_question') setCachedResponse(supabase, buildCacheKey(profile?.role || 'data_entry', intent, message), finalResult.content).catch(() => {})
+        if (messages.length > 6 && messages.length % 8 === 0 && groqKey) updateConversationSummary(supabase, auth.userId, messages, groqKey).catch(() => {})
+
+        return jsonResponse({
+          reply: finalResult.content,
+          source: `hybrid_${hybridResult.provider}_multi_step`,
+          model: dbModelId,
+          intent, confidence,
+          intents: compoundIntents.length > 1 ? compoundIntents : undefined,
+          messageId: crypto.randomUUID(),
+          toolsUsed: [...toolCallsUsed, ...finalResult.toolCallsUsed],
+          // ─── New metadata for UI ───
+          provider: hybridResult.provider,
+          provider_tier: hybridResult.tier,
+          provider_confidence: hybridResult.confidence,
+          latency_ms: Date.now() - startMs,
+          raced: hybridResult.raced,
+          attempted_providers: hybridResult.attempted,
+        }, 200, origin)
       }
     }
 
-    // Fallbacks
-    if (hfToken) {
-      const reply = await huggingfaceChat(messages, hfToken)
-      if (reply) { await logUsage(supabase, 'hf-llama3-8b', 0, Date.now() - startMs, true, undefined, 'huggingface'); return jsonResponse({ reply, source: 'huggingface', model: 'llama-3-8b', intent, confidence, messageId: crypto.randomUUID() }, 200, origin) }
-    }
-    if (openrouterKey) {
-      const reply = await openrouterChat(messages, openrouterKey, dbMaxTokens)
-      if (reply) { await logUsage(supabase, 'openrouter-deepseek', 0, Date.now() - startMs, true, undefined, 'openrouter'); return jsonResponse({ reply, source: 'openrouter', model: 'deepseek-chat', intent, confidence, messageId: crypto.randomUUID() }, 200, origin) }
-    }
-    if (zaiKey) {
-      const reply = await zaiChat(messages, zaiKey, dbMaxTokens)
-      if (reply) { await logUsage(supabase, 'zai-glm4', 0, Date.now() - startMs, true, undefined, 'zai'); return jsonResponse({ reply, source: 'zai', model: 'glm-4-flash', intent, confidence, messageId: crypto.randomUUID() }, 200, origin) }
-    }
-    if (mimoKey) {
-      const result = await mimoChat(messages, mimoKey)
-      if (result?.choices?.[0]?.message?.content) { await logUsage(supabase, 'mimo-v2', 0, Date.now() - startMs, true, undefined, 'mimo'); return jsonResponse({ reply: result.choices[0].message.content, source: 'mimo', model: 'mimo-v2-pro', intent, confidence, messageId: crypto.randomUUID() }, 200, origin) }
+    // ─── Got a direct text answer from the race ───
+    if (hybridResult.content) {
+      const latencyMs = Date.now() - startMs
+      // Track latency for Smart Escalation
+      trackLatency(auth.userId, latencyMs)
+      await logUsage(supabase, dbModel?.id || `hybrid-${hybridResult.provider}`, 0, latencyMs, true, undefined, `hybrid_${hybridResult.provider}`)
+      if (message && intent !== 'general_question') setCachedResponse(supabase, buildCacheKey(profile?.role || 'data_entry', intent, message), hybridResult.content).catch(() => {})
+      if (messages.length > 6 && messages.length % 8 === 0 && groqKey) updateConversationSummary(supabase, auth.userId, messages, groqKey).catch(() => {})
+
+      // Add escalation prefix if user is frustrated
+      const escalationPrefix = escalation.shouldEscalate && escalation.session
+        ? getEscalationPrefix(escalation.session)
+        : ''
+
+      return jsonResponse({
+        reply: escalationPrefix + hybridResult.content,
+        source: `hybrid_${hybridResult.provider}`,
+        model: dbModelId,
+        intent, confidence,
+        intents: compoundIntents.length > 1 ? compoundIntents : undefined,
+        messageId: crypto.randomUUID(),
+        // ─── New metadata for UI ───
+        provider: hybridResult.provider,
+        provider_tier: hybridResult.tier,
+        provider_confidence: hybridResult.confidence,
+        latency_ms: latencyMs,
+        raced: hybridResult.raced,
+        attempted_providers: hybridResult.attempted,
+        // ─── New: Escalation info ───
+        escalated: escalation.shouldEscalate,
+        escalation_reason: escalation.reason,
+        predicted_provider: prediction?.provider,
+        prediction_reason: prediction?.reason,
+      }, 200, origin)
     }
 
-    // All failed — try data fallback
-    await logUsage(supabase, 'none', 0, Date.now() - startMs, false, 'All providers failed', 'all_failed')
+    // ─── ALL FAILED — Data-only fallback ───
+    await logUsage(supabase, 'none', 0, Date.now() - startMs, false, `All providers failed (attempted: ${hybridResult.attempted.join(',')})`, 'all_failed')
     let fallbackAnswer = ''
     try {
       const health = await getSystemHealthScore(supabase)
-      if (health.score > 0) fallbackAnswer = `📊 **ملخص النظام**:\n• نقاط: ${health.score}/100 ${health.status}\n• اليوم: ${health.today_submissions} إرسالية\n• بانتظار: ${health.pending_review}\n• نواقص حرجة: ${health.critical_shortages}\n\n⚠️ خدمة AI غير متاحة — البيانات من DB مباشرة.`
+      if (health.score > 0) {
+        fallbackAnswer = `📊 **ملخص النظام المباشر**:\n• نقاط الصحة: ${health.score}/100 ${health.status}\n• إرساليات اليوم: ${health.today_submissions}\n• بانتظار المراجعة: ${health.pending_review}\n• نواقص حرجة: ${health.critical_shortages}\n\n⚠️ خدمة AI مؤقتاً غير متاحة (${hybridResult.attempted.length} مزود فشل).\nالبيانات أعلاه من قاعدة البيانات مباشرةً. حاول مرة أخرى بعد قليل.`
+      }
     } catch {}
-    return jsonResponse({ reply: fallbackAnswer || '⚠️ خدمة AI غير متاحة. اسأل سؤالاً محدداً.', source: 'all_failed', fallback_used: !!fallbackAnswer }, 200, origin)
+    return jsonResponse({
+      reply: fallbackAnswer || '⚠️ خدمة AI مؤقتاً غير متاحة. جميع المزودات فشلت. حاول مرة أخرى بعد قليل.',
+      source: 'all_failed',
+      fallback_used: !!fallbackAnswer,
+      attempted_providers: hybridResult.attempted,
+      latency_ms: Date.now() - startMs,
+    }, 200, origin)
 
   } catch (error) {
     console.error('AI error:', error)

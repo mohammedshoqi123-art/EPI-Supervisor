@@ -320,6 +320,12 @@ class EpiDrawer extends StatelessWidget {
                     'مستشار التحصين',
                     '/ai',
                   ),
+                  _buildItem(
+                    context,
+                    Icons.auto_awesome_rounded,
+                    'استوديو المحتوى ✨',
+                    '/studio',
+                  ),
 
                   // Admin-only sections
                   if (userRoleLevel >= 5) ...[

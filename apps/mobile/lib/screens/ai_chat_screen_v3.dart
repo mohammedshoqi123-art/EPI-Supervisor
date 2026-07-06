@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
@@ -555,6 +556,19 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         ],
       ),
       actions: [
+        // ─── Studio access button (NotebookLM-style content generator) ───
+        Container(
+          margin: const EdgeInsets.only(left: 4),
+          decoration: BoxDecoration(
+            color: cs.onPrimary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.auto_awesome_rounded, size: 20),
+            onPressed: () => context.go('/studio'),
+            tooltip: 'استوديو المحتوى',
+          ),
+        ),
         if (_msgs.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(left: 8),
@@ -745,6 +759,80 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     );
   }
 
+  /// NEW: Studio promo banner — NotebookLM-style content generator
+  Widget _buildStudioPromo(ColorScheme cs) {
+    return GestureDetector(
+      onTap: () => context.go('/studio'),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [cs.tertiary, cs.primary],
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: cs.tertiary.withValues(alpha: 0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '✨ استوديو المحتوى الذكي',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'ولّد تقارير، أسئلة شائعة، خرائط ذهنية، وبودكاست صوتي من بياناتك',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      color: Colors.white.withValues(alpha: 0.9),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_back_ios_rounded,
+              color: Colors.white,
+              size: 14,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWelcome(ColorScheme cs) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -791,6 +879,10 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 fontFamily: 'Tajawal',
                 color: cs.onSurfaceVariant)),
         const SizedBox(height: 24),
+
+        // ─── NEW: Studio promo banner ───
+        _buildStudioPromo(cs),
+        const SizedBox(height: 18),
 
         // Quick queries
         _sectionLabel('📊 التحصين والبيانات', cs),

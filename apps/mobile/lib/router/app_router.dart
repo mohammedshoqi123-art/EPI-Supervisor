@@ -15,6 +15,7 @@ import '../screens/dashboard_screen.dart';
 import '../screens/forms_screen.dart';
 import '../screens/map_screen.dart';
 import '../screens/ai_chat_screen_v3.dart';
+import '../screens/epi_studio_screen.dart';
 import '../screens/submission_detail_screen.dart';
 import '../screens/form_fill/form_fill_screen.dart';
 import '../screens/forms_status_screen.dart';
@@ -138,6 +139,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/ai',
             builder: (context, state) => const AiChatScreenV3(),
+          ),
+          GoRoute(
+            path: '/studio',
+            builder: (context, state) {
+              final topic = state.uri.queryParameters['topic'];
+              return EpiStudioScreen(initialTopic: topic);
+            },
           ),
           GoRoute(
             path: '/references',

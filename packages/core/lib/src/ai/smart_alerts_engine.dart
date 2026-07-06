@@ -99,10 +99,157 @@ class SmartAlertsEngine {
     // 7. Positive trends (good news!)
     _checkPositiveTrends(data, alerts);
 
+    // 8. NEW: Always-on operational reminders (so tab is never empty)
+    _checkOperationalReminders(data, alerts);
+
+    // 9. NEW: Supervision reminders
+    _checkSupervisionReminders(data, alerts);
+
+    // 10. NEW: Cold chain reminders
+    _checkColdChainReminders(data, alerts);
+
     // Sort by severity
     alerts.sort((a, b) => b.severity.index.compareTo(a.severity.index));
 
     return alerts;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // NEW: OPERATIONAL REMINDERS — always show some helpful alerts
+  // ═══════════════════════════════════════════════════════════
+
+  static void _checkOperationalReminders(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
+    final now = DateTime.now();
+    final hour = now.hour;
+
+    // Morning reminder (6-11 AM)
+    if (hour >= 6 && hour < 11) {
+      alerts.add(SmartAlert(
+        type: 'positive_trend',
+        title: 'تذكير صباحي',
+        message: 'ابدأ يومك بمراجعة الإرساليات الأمس والتأكد من اكتمال البيانات',
+        severity: AlertSeverity.info,
+        action: 'افتح لوحة التحكم وراجع مؤشرات الأمس',
+      ));
+    }
+
+    // End of day reminder (3-6 PM)
+    if (hour >= 15 && hour < 18) {
+      alerts.add(SmartAlert(
+        type: 'positive_trend',
+        title: 'تذكير نهاية اليوم',
+        message: 'تأكد من رفع جميع الإرساليات الميدانية ومزامنة البيانات قبل نهاية اليوم',
+        severity: AlertSeverity.info,
+        action: 'افتح صفحة الإرساليات وتأكد من اكتمال المزامنة',
+      ));
+    }
+
+    // Weekly reminder (Monday)
+    if (now.weekday == DateTime.monday) {
+      alerts.add(SmartAlert(
+        type: 'positive_trend',
+        title: 'تذكير أسبوعي',
+        message: 'يوم الاثنين — راجع أداء الأسبوع الماضي وخطط لهذا الأسبوع',
+        severity: AlertSeverity.info,
+        action: 'استخدم استوديو المحتوى لتوليد تقرير أسبوعي',
+      ));
+    }
+
+    // Submission count reminders
+    final subs = data['submissions'] as Map<String, dynamic>? ?? {};
+    final total = subs['total'] as int? ?? 0;
+    final today = subs['today'] as int? ?? 0;
+
+    if (total == 0) {
+      alerts.add(SmartAlert(
+        type: 'data_quality',
+        title: 'لا توجد إرساليات',
+        message: 'لم يتم تسجيل أي إرساليات بعد. ابدأ بتسجيل إرساليات اليوم الميدانية',
+        severity: AlertSeverity.medium,
+        action: 'اذهب لصفحة النماذج وابدأ الإدخال',
+      ));
+    } else if (today == 0 && hour >= 12) {
+      alerts.add(SmartAlert(
+        type: 'anomaly_detected',
+        title: 'لا إرساليات اليوم',
+        message: 'تجاوز منتصف اليوم ولا توجد إرساليات جديدة اليوم',
+        severity: AlertSeverity.medium,
+        action: 'تحقق من فرق الإدخال وحفزهم على الرفع',
+      ));
+    } else if (today > 0 && today < 5) {
+      alerts.add(SmartAlert(
+        type: 'positive_trend',
+        title: 'بداية جيدة',
+        message: 'تم تسجيل $today إرساليات اليوم — استمر!',
+        severity: AlertSeverity.info,
+        action: 'شجع الفرق على الاستمرار في الرفع',
+      ));
+    } else if (today >= 10) {
+      alerts.add(SmartAlert(
+        type: 'positive_trend',
+        title: 'يوم نشط 🎉',
+        message: 'تم تسجيل $today إرساليات اليوم — أداء ممتاز!',
+        severity: AlertSeverity.info,
+        action: 'واصل الأداء الجيد. شارك الإنجاز مع الفريق',
+      ));
+    }
+  }
+
+  static void _checkSupervisionReminders(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
+    final now = DateTime.now();
+    final dayOfMonth = now.day;
+
+    // Mid-month supervision reminder
+    if (dayOfMonth >= 14 && dayOfMonth <= 16) {
+      alerts.add(SmartAlert(
+        type: 'supervision_overdue',
+        title: 'تذكير الإشراف الداعم',
+        message: 'منتصف الشهر — تأكد من تنفيذ الزيارات الإشرافية المخططة',
+        severity: AlertSeverity.medium,
+        action: 'راجع خطة الإشراف ونفذ الزيارات المتأخرة',
+      ));
+    }
+
+    // End of month reminder
+    if (dayOfMonth >= 27) {
+      alerts.add(SmartAlert(
+        type: 'supervision_overdue',
+        title: 'نهاية الشهر قريبة',
+        message: 'تأكد من اكتمال جميع الزيارات الإشرافية الشهرية قبل نهاية الشهر',
+        severity: AlertSeverity.high,
+        action: 'حدد الزيارات المتبقية ونفذها هذا الأسبوع',
+      ));
+    }
+  }
+
+  static void _checkColdChainReminders(
+      Map<String, dynamic> data, List<SmartAlert> alerts) {
+    final now = DateTime.now();
+
+    // Monthly cold chain check reminder (1st of month)
+    if (now.day == 1) {
+      alerts.add(SmartAlert(
+        type: 'cold_chain_breach',
+        title: 'تذكير صيانة ثلاجة',
+        message: 'بداية الشهر — وقت الصيانة الشهرية لثلاجة اللقاحات',
+        severity: AlertSeverity.medium,
+        action: 'نفذ الصيانة الشهرية: تنظيف المكثف، فحص الإطار، معايرة الترمومتر',
+      ));
+    }
+
+    // Quarterly defrost reminder (1st of Jan, Apr, Jul, Oct)
+    final quarterMonths = [1, 4, 7, 10];
+    if (now.day <= 3 && quarterMonths.contains(now.month)) {
+      alerts.add(SmartAlert(
+        type: 'cold_chain_breach',
+        title: 'تذكير إذابة الثلج',
+        message: 'بداية الربع — وقت إذابة الثلج من الثلاجة (صيانة ربع سنوية)',
+        severity: AlertSeverity.medium,
+        action: 'انقل اللقاحات لثلاجة احتياطية وأذب الثلج طبيعياً',
+      ));
+    }
   }
 
   // ═══════════════════════════════════════════════════════════

@@ -88,8 +88,9 @@ class StudioArtifact {
 
 class EpiStudioScreen extends ConsumerStatefulWidget {
   final String? initialTopic;
+  final bool embedded; // true = no AppBar (used as tab inside another Scaffold)
 
-  const EpiStudioScreen({super.key, this.initialTopic});
+  const EpiStudioScreen({super.key, this.initialTopic, this.embedded = false});
 
   @override
   ConsumerState<EpiStudioScreen> createState() => _EpiStudioScreenState();
@@ -322,6 +323,10 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // When embedded (as a tab), don't render another Scaffold — just the body
+    if (widget.embedded) {
+      return _buildStudioBody(cs);
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('استوديو المحتوى', style: TextStyle(fontFamily: 'Cairo')),
@@ -352,10 +357,56 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Topic input
-          _buildTopicInput(cs),
+      body: _buildStudioBody(cs),
+    );
+  }
+
+  Widget _buildStudioBody(ColorScheme cs) {
+    return Column(
+      children: [
+        // When embedded, show save + library buttons inline (no AppBar)
+        if (widget.embedded && _artifact != null && !_loading)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            color: cs.surfaceContainerLow,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'استوديو المحتوى',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.bookmark_add_rounded, size: 20),
+                  onPressed: _saving ? null : _saveArtifact,
+                  tooltip: 'حفظ',
+                ),
+                IconButton(
+                  icon: Badge(
+                    isLabelVisible: _savedArtifacts.isNotEmpty,
+                    label: Text('${_savedArtifacts.length}'),
+                    child: const Icon(Icons.folder_rounded, size: 20),
+                  ),
+                  onPressed: () => setState(() => _showLibrary = !_showLibrary),
+                  tooltip: 'مكتبتي',
+                ),
+              ],
+            ),
+          ),
+        // Topic input
+        _buildTopicInput(cs),
           // Library panel (collapsible)
           if (_showLibrary) _buildLibraryPanel(cs),
           // Artifact type selector

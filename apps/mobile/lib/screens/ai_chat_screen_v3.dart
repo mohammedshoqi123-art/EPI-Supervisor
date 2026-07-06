@@ -10,6 +10,7 @@ import '../providers/app_providers.dart';
 import 'ai_chat_models.dart';
 import 'ai_provider_badge.dart';
 import 'citation_widgets.dart';
+import 'epi_studio_screen.dart';
 
 // AI CHAT SCREEN V3 — Premium 3-Tab Edition
 // ═══════════════════════════════════════════════════════════
@@ -447,7 +448,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         backgroundColor: cs.surface,
         appBar: _buildAppBar(cs),
@@ -481,6 +482,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 children: [
                   _buildBotTab(cs),
                   _buildChatTab(cs),
+                  _buildStudioTab(cs),
                   _buildAlertsTab(cs),
                 ],
               ),
@@ -613,6 +615,9 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           Tab(
               text: 'مساعد النظام',
               icon: Icon(Icons.smart_toy_rounded, size: 20)),
+          Tab(
+              text: 'استوديو ✨',
+              icon: Icon(Icons.auto_awesome_rounded, size: 20)),
           Tab(
               text: 'تنبيهات ذكية',
               icon: Icon(Icons.notifications_active_rounded, size: 20)),
@@ -1316,6 +1321,14 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         ]),
       ),
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // TAB: EPI STUDIO (NotebookLM-Inspired Content Generator)
+  // ═══════════════════════════════════════════════════════════
+
+  Widget _buildStudioTab(ColorScheme cs) {
+    return const EpiStudioScreen(embedded: true);
   }
 
   // ═══════════════════════════════════════════════════════════

@@ -365,11 +365,56 @@ export async function generateStudioArtifact(
   // ─── Step 1: Ground on the topic/question ───
   const grounding = await groundMessage(supa, options.message || options.topic || '', options.campaignRound || null)
 
-  if (!grounding.hasData || grounding.sources.length === 0) {
+  // Build grounding sources — even if grounding returns 0, we still proceed
+  // with a default "no specific data" message so the LLM can generate generic content
+  let sources = grounding.sources
+  let groundingContext = grounding.contextText || ''
+
+  // If no data found, add a fallback context so the LLM has something to work with
+  if (sources.length === 0) {
+    console.log('[STUDIO] No grounding data found, using knowledge base fallback')
+    // Try knowledge base directly with the topic
+    try {
+      const { advancedKnowledgeSearch, scoredChunksToSources } = await import('./advanced-search.ts')
+      const knowledgeModule: any = await import('../knowledge_chunks.ts')
+      const docs = knowledgeModule.default || []
+      let extendedDocs: any[] = []
+      let operationalDocs: any[] = []
+      try {
+        const ext: any = await import('./extended-knowledge.ts')
+        extendedDocs = ext.EXTENDED_KNOWLEDGE || []
+      } catch {}
+      try {
+        const ops: any = await import('./operational-knowledge.ts')
+        operationalDocs = ops.OPERATIONAL_KNOWLEDGE || []
+      } catch {}
+      const allDocs = [...docs, ...extendedDocs, ...operationalDocs]
+      const scored = advancedKnowledgeSearch(options.message || options.topic || '', allDocs, { topK: 5, minScore: 1 })
+      if (scored.length > 0) {
+        sources = scoredChunksToSources(scored)
+        groundingContext = '\n\n== مصادر المعرفة (استند إليها) ==\n' +
+          sources.map(s => `[${s.id}] ${s.summary}\n${s.quote}`).join('\n\n')
+        console.log(`[STUDIO] Knowledge fallback found ${sources.length} sources`)
+      }
+    } catch (e) {
+      console.warn('[STUDIO] Knowledge fallback failed:', e)
+    }
+  }
+
+  // If STILL no sources, return early with helpful message
+  if (sources.length === 0) {
     return {
       type,
       title: getArtifactTitle(type, options.topic),
-      content: '⚠️ لا توجد مصادر كافية لتوليد هذا المحتوى. حاول تحديد موضوع أكثر تحديداً.',
+      content: `⚠️ لا توجد مصادر كافية لتوليد هذا المحتوى حول "${options.topic}".
+
+💡 جرّب مواضيع أكثر تحديداً مثل:
+• "تحليل أداء حملة شلل الأطفال في تعز"
+• "كيف أصون ثلاجة اللقاحات"
+• "ما هي إجراءات الترصد الوبائي"
+• "دليل تطعيمات الطفل عمر 6 شهور"
+• "ما هي مؤشرات جودة برنامج التحصين"
+• "كيف نتعامل مع الرفض المجتمعي للتطعيم"`,
       sources: [],
       metadata: {
         generatedAt: new Date().toISOString(),
@@ -382,33 +427,60 @@ export async function generateStudioArtifact(
   // ─── Step 2: Build prompt for artifact type ───
   let messages: any[]
   switch (type) {
-    case 'study_guide':    messages = buildStudyGuidePrompt(grounding.sources, options.topic); break
-    case 'briefing_doc':   messages = buildBriefingDocPrompt(grounding.sources, options.topic); break
-    case 'faq':            messages = buildFaqPrompt(grounding.sources, options.topic); break
-    case 'mind_map':       messages = buildMindMapPrompt(grounding.sources, options.topic); break
-    case 'audio_overview': messages = buildAudioOverviewPrompt(grounding.sources, options.topic); break
+    case 'study_guide':    messages = buildStudyGuidePrompt(sources, options.topic); break
+    case 'briefing_doc':   messages = buildBriefingDocPrompt(sources, options.topic); break
+    case 'faq':            messages = buildFaqPrompt(sources, options.topic); break
+    case 'mind_map':       messages = buildMindMapPrompt(sources, options.topic); break
+    case 'audio_overview': messages = buildAudioOverviewPrompt(sources, options.topic); break
   }
 
   // ─── Step 3: Call LLM via Hybrid Gateway ───
+  // Use higher tokens + longer timeout for Studio (longer generation)
+  const maxTokens = type === 'audio_overview' ? 2500 : 4000
   const result = await hybridRouteChat(messages, env, {
-    maxTokens: 3000,
-    temperature: 0.5,
-    raceTimeoutMs: 12_000,
-    fallbackTimeoutMs: 25_000,
+    maxTokens,
+    temperature: 0.6,
+    raceTimeoutMs: 20_000,   // longer for Studio (was 12s, often timed out)
+    fallbackTimeoutMs: 45_000,
   })
 
   const latencyMs = Date.now() - startTime
-  const content = result.content || '⚠️ فشل توليد المحتوى. حاول مرة أخرى.'
+  console.log(`[STUDIO] LLM result: provider=${result.provider}, contentLength=${result.content?.length || 0}, latency=${latencyMs}ms`)
+
+  // If LLM failed entirely, return a graceful error with sources visible
+  if (!result.content || result.content.trim().length < 50) {
+    return {
+      type,
+      title: getArtifactTitle(type, options.topic),
+      content: `⚠️ تعذّر توليد المحتوى من النموذج الذكي (${result.provider || 'unknown'}).
+
+        found ${sources.length} مصدر بيانات. حاول مرة أخرى بعد قليل.
+
+💡 إذا تكرر الفشل:
+• جرّب موضوعاً مختلفاً
+• تحقق من اتصال الإنترنت
+• قد يكون هناك ضغط على الخدمة`,
+      sources,
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        groundedInSources: sources.length,
+        provider: result.provider,
+        latencyMs,
+      },
+    }
+  }
+
+  const content = result.content
 
   // ─── Step 4: Parse type-specific structure ───
   const artifact: StudioArtifact = {
     type,
     title: getArtifactTitle(type, options.topic),
     content,
-    sources: grounding.sources,
+    sources,
     metadata: {
       generatedAt: new Date().toISOString(),
-      groundedInSources: grounding.sources.length,
+      groundedInSources: sources.length,
       model: 'hybrid',
       provider: result.provider,
       latencyMs,

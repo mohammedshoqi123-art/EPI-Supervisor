@@ -87,6 +87,7 @@ const navSections: NavSection[] = [
     items: [
       { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
       { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },
+      { icon: Sparkles, label: 'استوديو المحتوى', href: '/studio' },
       { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
     ],
   },

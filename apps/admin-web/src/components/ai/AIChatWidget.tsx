@@ -98,7 +98,7 @@ function sourceTypeMeta(type: string) {
   }
 }
 
-function CitationText({ text, sources }: { text: string; sources?: GroundingSource[] }) {
+export function CitationText({ text, sources }: { text: string; sources?: GroundingSource[] }) {
   const parts = parseCitations(text, sources)
   const [openSource, setOpenSource] = useState<GroundingSource | null>(null)
 

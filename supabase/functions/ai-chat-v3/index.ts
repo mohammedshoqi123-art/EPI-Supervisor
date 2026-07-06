@@ -29,6 +29,7 @@ import { groqChat, huggingfaceChat, openrouterChat, zaiChat, mimoChat, generateS
 import { hybridRouteChat, hybridRouteStream, getHybridHealthStats, predictBestProvider } from './llm/hybrid-gateway.ts'
 import { analyzeUserMessage, trackFeedback, trackLatency, getEscalationPrefix } from './llm/smart-escalation.ts'
 import { groundMessage, validateCitations, type GroundingResult } from './llm/grounding.ts'
+import { generateStudioArtifact, ALL_ARTIFACT_TYPES, type StudioArtifactType } from './llm/studio.ts'
 import { WRITE_TOOLS, describeWriteAction, requireConfirmation } from './tools/confirmation.ts'
 import { logWriteOperation } from './tools/audit.ts'
 
@@ -1120,6 +1121,46 @@ serve(async (req) => {
       // New: predict best provider for a message (debugging tool)
       const pred = predictBestProvider(message, false)
       return jsonResponse({ ...pred, message_preview: message.slice(0, 100) }, 200, origin)
+    }
+    if (mode === 'studio_generate') {
+      // ─── NotebookLM Studio: generate Study Guide / Briefing / FAQ / Mind Map / Audio ───
+      const artifactType = body.artifact_type as StudioArtifactType
+      const topic = body.topic as string | undefined
+      const studioMessage = body.message as string | undefined
+
+      if (!artifactType || !ALL_ARTIFACT_TYPES.includes(artifactType)) {
+        return jsonResponse({ error: 'نوع المحتوى غير صالح' }, 400, origin)
+      }
+
+      const gatewayEnv: Record<string, string | undefined> = {
+        GROQ_API_KEY: groqKey,
+        ZAI_API_KEY: zaiKey,
+        HF_API_TOKEN: hfToken,
+        OPENROUTER_API_KEY: openrouterKey,
+        MIMO_API_KEY: mimoKey,
+      }
+
+      const artifact = await generateStudioArtifact(
+        supabase,
+        artifactType,
+        { topic, message: studioMessage, campaignRound: body.campaign_round || null },
+        gatewayEnv,
+      )
+
+      return jsonResponse({ artifact }, 200, origin)
+    }
+    if (mode === 'studio_types') {
+      // List available studio artifact types
+      return jsonResponse({
+        types: ALL_ARTIFACT_TYPES.map(t => ({
+          type: t,
+          icon: ['briefing_doc', 'study_guide', 'faq', 'mind_map', 'audio_overview'].indexOf(t as string) >= 0
+            ? ({ briefing_doc: '📋', study_guide: '📚', faq: '❓', mind_map: '🧠', audio_overview: '🎧' } as any)[t]
+            : '✨',
+          title: ({ briefing_doc: 'وثيقة موجزة', study_guide: 'دليل دراسي', faq: 'أسئلة شائعة', mind_map: 'خريطة ذهنية', audio_overview: 'بودكاست صوتي' } as any)[t],
+          description: ({ briefing_doc: 'ملخص تنفيذي للمديرين', study_guide: 'دليل منظم بالمفاهيم والأرقام والأسئلة', faq: 'أسئلة شائعة مع إجابات موثقة', mind_map: 'خريطة ذهنية بفروع وتفاصيل', audio_overview: 'بودكاست تعليمي بصوتين' } as any)[t],
+        }))
+      }, 200, origin)
     }
 
     // Injection guard

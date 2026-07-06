@@ -460,71 +460,91 @@ async function searchKnowledgeBase(message: string): Promise<GroundingSource[]> 
     const docs = knowledgeModule.default || knowledgeModule.KNOWLEDGE_CHUNKS || []
     if (!Array.isArray(docs)) return []
 
-    // Flatten: docs[] → chunks[]
-    const allChunks: Array<{ content: string; section: string; doc_id: string; doc_title: string; index: number }> = []
-    for (const doc of docs) {
-      if (doc.chunks && Array.isArray(doc.chunks)) {
-        for (const chunk of doc.chunks) {
-          allChunks.push({
-            content: chunk.content || '',
-            section: chunk.section || '',
-            doc_id: doc.doc_id || 'unknown',
-            doc_title: doc.title || doc.doc_id || 'قاعدة معرفة EPI',
-            index: chunk.index ?? 0,
-          })
-        }
-      }
+    // ─── Load extended knowledge (AEFI, outbreak, cold chain, supervision, etc.) ───
+    let extendedDocs: any[] = []
+    try {
+      const ext: any = await import('./extended-knowledge.ts')
+      extendedDocs = ext.EXTENDED_KNOWLEDGE || []
+    } catch (e) {
+      console.warn('[GROUNDING-V2] Extended knowledge load failed:', e)
     }
 
-    if (allChunks.length === 0) return []
+    const allDocs = [...docs, ...extendedDocs]
+    console.log(`[GROUNDING-V2] Searching ${allDocs.length} docs (${docs.length} base + ${extendedDocs.length} extended)`)
 
-    // Score each chunk by keyword overlap
-    const lower = message.toLowerCase()
-    const messageWords = lower.split(/\s+/).filter((w: string) => w.length > 2)
-    const messageKeywords = new Set(messageWords)
+    // Use the advanced search with Arabic normalization + synonyms + fuzzy matching
+    const { advancedKnowledgeSearch, scoredChunksToSources, getSearchDiagnostics } =
+      await import('./advanced-search.ts')
 
-    const scored = allChunks.map((chunk) => {
-      const chunkText = (chunk.content || '').toLowerCase()
-      const section = (chunk.section || '').toLowerCase()
+    const diagnostics = getSearchDiagnostics(message)
+    console.log(`[GROUNDING-V2] Search diagnostics:`, diagnostics)
 
-      let score = 0
-      // Word overlap
-      for (const word of messageWords) {
-        if (chunkText.includes(word)) score += 1
-      }
-      // Section keyword match (boost)
-      const sectionWords = section.split(/[_\s]+/).filter((w: string) => w.length > 2)
-      for (const sw of sectionWords) {
-        if (messageKeywords.has(sw)) score += 3
-      }
-      // Specific medical/vaccination keywords (high boost)
-      const highValueKeywords = ['تطعيم', 'لقاح', 'تحصين', 'جرعة', 'bcg', 'opv', 'penta', 'pcv', 'rota', 'ipv', 'mr', 'hepb', 'Td', 'حصبة', 'شلل', 'سل', 'كزاز', 'كبدي', 'إسهال', 'رئة', 'فيتامين', 'جدول', 'تغطية', 'تسرّب', 'انسحاب', 'سلسلة', 'تبريد', 'vvm', 'حدث', 'ضار', 'aefi']
-      for (const kw of highValueKeywords) {
-        if (lower.includes(kw) && chunkText.includes(kw)) score += 4
-      }
+    const scored = advancedKnowledgeSearch(message, allDocs, { topK: 6, minScore: 2 })
+    console.log(`[GROUNDING-V2] Found ${scored.length} chunks (top score: ${scored[0]?.score || 0})`)
 
-      return { chunk, score }
-    })
+    if (scored.length === 0) {
+      // Fallback to original simple search if advanced returns nothing
+      console.log('[GROUNDING-V2] Advanced search returned 0, falling back to simple search')
+      return simpleKeywordSearch(message, allDocs)
+    }
 
-    // Sort by score, take top 5
-    const top = scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score).slice(0, 5)
-
-    if (top.length === 0) return []
-
-    return top.map((s, i) => ({
-      id: i + 1,
-      type: 'knowledge_chunk' as const,
-      summary: `${s.chunk.doc_title} — ${s.chunk.section.replace(/_/g, ' ')}`,
-      quote: s.chunk.content,
-      metadata: {
-        chunk_id: `${s.chunk.doc_id}-${s.chunk.index}`,
-        source_doc: s.chunk.doc_title,
-      },
-    }))
+    return scoredChunksToSources(scored)
   } catch (e) {
-    console.error('[GROUNDING] Knowledge search failed:', e)
-    return []
+    console.error('[GROUNDING-V2] Advanced search failed, falling back:', e)
+    // Fallback to simple search
+    try {
+      const knowledgeModule: any = await import('../knowledge_chunks.ts')
+      const docs = knowledgeModule.default || knowledgeModule.KNOWLEDGE_CHUNKS || []
+      return simpleKeywordSearch(message, docs)
+    } catch {
+      return []
+    }
   }
+}
+
+// ─── Simple keyword search (fallback) ───
+async function simpleKeywordSearch(message: string, docs: any[]): Promise<GroundingSource[]> {
+  const allChunks: Array<{ content: string; section: string; doc_id: string; doc_title: string; index: number }> = []
+  for (const doc of docs) {
+    if (doc.chunks && Array.isArray(doc.chunks)) {
+      for (const chunk of doc.chunks) {
+        allChunks.push({
+          content: chunk.content || '',
+          section: chunk.section || '',
+          doc_id: doc.doc_id || 'unknown',
+          doc_title: doc.title || doc.doc_id || 'قاعدة معرفة EPI',
+          index: chunk.index ?? 0,
+        })
+      }
+    }
+  }
+  if (allChunks.length === 0) return []
+
+  const lower = message.toLowerCase()
+  const messageWords = lower.split(/\s+/).filter((w: string) => w.length > 2)
+
+  const scored = allChunks.map((chunk) => {
+    const chunkText = (chunk.content || '').toLowerCase()
+    let score = 0
+    for (const word of messageWords) {
+      if (chunkText.includes(word)) score += 1
+    }
+    return { chunk, score }
+  })
+
+  const top = scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score).slice(0, 5)
+  if (top.length === 0) return []
+
+  return top.map((s, i) => ({
+    id: i + 1,
+    type: 'knowledge_chunk' as const,
+    summary: `${s.chunk.doc_title} — ${s.chunk.section.replace(/_/g, ' ')}`,
+    quote: s.chunk.content,
+    metadata: {
+      chunk_id: `${s.chunk.doc_id}-${s.chunk.index}`,
+      source_doc: s.chunk.doc_title,
+    },
+  }))
 }
 
 // ═══ Suggested Follow-ups Generator ═══

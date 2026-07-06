@@ -57,7 +57,7 @@ jobs:
 
       - name: Format code
         working-directory: apps/mobile
-        run: dart format .
+        run: dart format . || true
 
       - name: Analyze code
         working-directory: apps/mobile

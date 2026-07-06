@@ -150,9 +150,9 @@ class EpiAudioService {
 
     // Configure voice for this speaker
     if (segment.isHost1 && _maleVoice != null) {
-      await _tts!.setVoice({'name': _maleVoice, 'locale': 'ar-SA'});
+      await _tts!.setVoice({'name': _maleVoice!, 'locale': 'ar-SA'});
     } else if (!segment.isHost1 && _femaleVoice != null) {
-      await _tts!.setVoice({'name': _femaleVoice, 'locale': 'ar-SA'});
+      await _tts!.setVoice({'name': _femaleVoice!, 'locale': 'ar-SA'});
     }
 
     // Adjust rate/pitch based on emotion

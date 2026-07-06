@@ -27,6 +27,12 @@ class ChatMsg {
   final List<String>? attemptedProviders;  // all providers attempted
   final List<String>? toolsUsed;     // tool calls made
 
+  // ─── New: Grounding metadata (NotebookLM-style) ───
+  final int? groundedInSources;      // how many sources grounded this response
+  final List<GroundingSource>? groundingSources;  // the actual sources
+  final List<String>? suggestedFollowups;  // follow-up question suggestions
+  final bool? ungrounded;            // true if response refused (no data)
+
   ChatMsg({
     required this.role,
     required this.content,
@@ -40,6 +46,10 @@ class ChatMsg {
     this.raced,
     this.attemptedProviders,
     this.toolsUsed,
+    this.groundedInSources,
+    this.groundingSources,
+    this.suggestedFollowups,
+    this.ungrounded,
   })  : time = time ?? DateTime.now(),
         id = id ?? DateTime.now().millisecondsSinceEpoch.toString();
 
@@ -56,6 +66,14 @@ class ChatMsg {
         if (raced != null) 'raced': raced,
         if (attemptedProviders != null) 'attempted_providers': attemptedProviders,
         if (toolsUsed != null) 'tools_used': toolsUsed,
+        if (groundedInSources != null) 'grounded_in_sources': groundedInSources,
+        if (groundingSources != null)
+          'grounding_sources': groundingSources!.map((s) => {
+            'id': s.id, 'type': s.type, 'summary': s.summary,
+            'quote': s.quote, 'metadata': s.metadata,
+          }).toList(),
+        if (suggestedFollowups != null) 'suggested_followups': suggestedFollowups,
+        if (ungrounded != null) 'ungrounded': ungrounded,
       };
 
   factory ChatMsg.fromJson(Map<String, dynamic> j) => ChatMsg(
@@ -75,6 +93,16 @@ class ChatMsg {
         toolsUsed: j['tools_used'] != null
             ? List<String>.from(j['tools_used'])
             : null,
+        groundedInSources: j['grounded_in_sources'],
+        groundingSources: j['grounding_sources'] != null
+            ? (j['grounding_sources'] as List)
+                .map((s) => GroundingSource.fromJson(Map<String, dynamic>.from(s)))
+                .toList()
+            : null,
+        suggestedFollowups: j['suggested_followups'] != null
+            ? List<String>.from(j['suggested_followups'])
+            : null,
+        ungrounded: j['ungrounded'],
       );
 
   /// Whether this message is from the user (vs. assistant/bot)
@@ -91,6 +119,12 @@ class ChatMsg {
 
   /// Whether this response is low-confidence (<50%) — UI should warn user
   bool get isLowConfidence => (providerConfidence ?? 100) < 50 && providerConfidence != null;
+
+  /// Whether this response was grounded in real data
+  bool get isGrounded => (groundedInSources ?? 0) > 0;
+
+  /// Whether this response was a refusal (no data found)
+  bool get isRefusal => ungrounded == true || source == 'grounding_refusal';
 
   /// Human-readable latency label
   String get latencyLabel {
@@ -120,6 +154,9 @@ class ChatMsg {
     }
   }
 }
+
+/// Re-export GroundingSource for convenience
+export 'citation_widgets.dart' show GroundingSource;
 
 /// ═══════════════════════════════════════════════════════════
 ///  CHAT PERSISTENCE

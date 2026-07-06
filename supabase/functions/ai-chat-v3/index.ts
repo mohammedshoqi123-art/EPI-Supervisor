@@ -28,6 +28,7 @@ import { buildSystemPrompt } from './prompts/system.ts'
 import { groqChat, huggingfaceChat, openrouterChat, zaiChat, mimoChat, generateSummary } from './llm/providers.ts'
 import { hybridRouteChat, hybridRouteStream, getHybridHealthStats, predictBestProvider } from './llm/hybrid-gateway.ts'
 import { analyzeUserMessage, trackFeedback, trackLatency, getEscalationPrefix } from './llm/smart-escalation.ts'
+import { groundMessage, validateCitations, type GroundingResult } from './llm/grounding.ts'
 import { WRITE_TOOLS, describeWriteAction, requireConfirmation } from './tools/confirmation.ts'
 import { logWriteOperation } from './tools/audit.ts'
 
@@ -1194,6 +1195,23 @@ serve(async (req) => {
       console.log(`[ESCALATION] User ${auth.userId} escalated: ${escalation.reason}`)
     }
 
+    // ═══ GROUNDING ENGINE (NotebookLM-Inspired) ═══
+    // Pre-fetch REAL data BEFORE calling LLM. Inject actual rows/chunks
+    // as grounding sources. Force LLM to cite [n]. Refuse if no data.
+    // This is THE fix for "wrong answers" — LLM hallucinated because it
+    // had no real data when tool-calling failed.
+    let grounding: GroundingResult | null = null
+    if (message) {
+      console.log(`[GROUNDING] Grounding message: "${message.slice(0, 80)}..."`)
+      grounding = await groundMessage(supabase, message, campaignRound)
+      console.log(`[GROUNDING] Found ${grounding.sources.length} sources, hasData=${grounding.hasData}, intent=${grounding.detectedIntent}`)
+
+      // Add grounding context to messages — this is what the LLM sees
+      if (grounding.contextText) {
+        messages[0].content += grounding.contextText
+      }
+    }
+
     // Build env map for the gateway
     const gatewayEnv: Record<string, string | undefined> = {
       GROQ_API_KEY: groqKey,
@@ -1204,13 +1222,26 @@ serve(async (req) => {
     }
 
     // Determine if this query needs tool calls (data queries)
-    const needsTools = ['get_submissions', 'get_statistics', 'get_alerts', 'predict', 'analyze'].some(k =>
-      message?.toLowerCase().includes(k) || ['daily', 'weekly', 'governorate', 'shortages', 'quality', 'coverage', 'polio', 'supervision', 'targets'].includes(template || '')
-    )
+    // With grounding, we don't need tools — data is already in context
+    const needsTools = false  // grounding replaces tool calling
 
     // Predict best provider (Patent-Pending Predictive Selection)
     const prediction = message ? predictBestProvider(message, needsTools) : null
     console.log(`[PREDICT] Best provider: ${prediction?.provider} (${prediction?.reason})`)
+
+    // ─── GROUNDING REFUSAL: if no data found, refuse immediately ───
+    if (grounding && !grounding.hasData && message) {
+      console.log('[GROUNDING] No data found — refusing with explanation')
+      return jsonResponse({
+        reply: `🔍 لم أجد بيانات مطابقة لاستفسارك في النظام.\n\n${grounding.refusalReason || ''}\n\n💡 جرّب:\n• "كم إرسالية اليوم؟"\n• "أي محافظة الأكثر إرسالاً؟"\n• "ما النواقص الحرجة؟"\n• "وش تطعيمات طفلي؟"`,
+        source: 'grounding_refusal',
+        grounded_in_sources: 0,
+        ungrounded: true,
+        suggested_followups: grounding.suggestedFollowups,
+        messageId: crypto.randomUUID(),
+        latency_ms: Date.now() - startMs,
+      }, 200, origin)
+    }
 
     // Streaming mode — use hybrid streaming gateway
     if (stream && modelConfig.streamEnabled) {
@@ -1330,8 +1361,21 @@ serve(async (req) => {
         ? getEscalationPrefix(escalation.session)
         : ''
 
+      // ═══ Citation Validation (NotebookLM-style) ═══
+      // Validate [n] citations in the answer reference real grounding sources
+      let finalAnswer = escalationPrefix + hybridResult.content
+      let validCitations: number[] = []
+      if (grounding && grounding.sources.length > 0) {
+        const validation = validateCitations(finalAnswer, grounding.sources)
+        finalAnswer = validation.cleanedAnswer
+        validCitations = validation.validCitations
+        if (validation.invalidCitations.length > 0) {
+          console.warn(`[CITATION] Dropped ${validation.invalidCitations.length} invalid citations: ${validation.invalidCitations.join(',')}`)
+        }
+      }
+
       return jsonResponse({
-        reply: escalationPrefix + hybridResult.content,
+        reply: finalAnswer,
         source: `hybrid_${hybridResult.provider}`,
         model: dbModelId,
         intent, confidence,
@@ -1349,6 +1393,18 @@ serve(async (req) => {
         escalation_reason: escalation.reason,
         predicted_provider: prediction?.provider,
         prediction_reason: prediction?.reason,
+        // ─── New: Grounding info (NotebookLM-style) ───
+        grounded_in_sources: grounding?.sources.length || 0,
+        grounding_sources: grounding?.sources.map(s => ({
+          id: s.id,
+          type: s.type,
+          summary: s.summary,
+          quote: s.quote,
+          metadata: s.metadata,
+        })) || [],
+        valid_citations: validCitations,
+        suggested_followups: grounding?.suggestedFollowups || [],
+        detected_intent: grounding?.detectedIntent,
       }, 200, origin)
     }
 

@@ -8,6 +8,7 @@ import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import 'ai_chat_models.dart';
 import 'ai_provider_badge.dart';
+import 'citation_widgets.dart';
 
 // AI CHAT SCREEN V3 — Premium 3-Tab Edition
 // ═══════════════════════════════════════════════════════════
@@ -261,6 +262,18 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             ? List<String>.from(resp['tools_used'])
             : null;
 
+        // ─── New: Grounding sources (NotebookLM-style) ───
+        final groundedInSources = resp['grounded_in_sources'] as int?;
+        final groundingSources = resp['grounding_sources'] != null
+            ? (resp['grounding_sources'] as List)
+                .map((s) => GroundingSource.fromJson(Map<String, dynamic>.from(s)))
+                .toList()
+            : null;
+        final suggestedFollowups = resp['suggested_followups'] != null
+            ? List<String>.from(resp['suggested_followups'])
+            : null;
+        final ungrounded = resp['ungrounded'] as bool?;
+
         setState(() {
           if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
             _msgs[_msgs.length - 1] = ChatMsg(
@@ -274,6 +287,10 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
               raced: raced,
               attemptedProviders: attemptedProviders,
               toolsUsed: toolsUsed,
+              groundedInSources: groundedInSources,
+              groundingSources: groundingSources,
+              suggestedFollowups: suggestedFollowups,
+              ungrounded: ungrounded,
             );
           }
           _loading = false;
@@ -938,39 +955,71 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                   ),
                   child: isStreaming && msg.content.isEmpty
                       ? _buildTypingDots(cs)
-                      : SelectableText.rich(
-                          TextSpan(children: [
-                            ..._parseMarkdown(
-                                msg.content,
-                                TextStyle(
-                                    fontFamily: 'Tajawal',
-                                    color: isUser
-                                        ? cs.onPrimary
-                                        : isError
-                                            ? cs.onErrorContainer
-                                            : cs.onSurface,
-                                    fontSize: 14,
-                                    height: 1.8),
-                                TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontWeight: FontWeight.w800,
-                                    color: isUser
-                                        ? cs.onPrimary
-                                        : isError
-                                            ? cs.onErrorContainer
-                                            : cs.onSurface,
-                                    fontSize: 14,
-                                    height: 1.8),
-                                cs),
-                            if (isStreaming)
-                              WidgetSpan(
-                                  child: _StreamingCursor(
-                                      color: isUser
-                                          ? cs.onPrimary
-                                          : cs.onSurface)),
-                          ]),
-                          textDirection: TextDirection.rtl,
-                        ),
+                      : (msg.groundingSources != null && msg.groundingSources!.isNotEmpty
+                          ? RichTextWithCitations(
+                              text: msg.content,
+                              sources: msg.groundingSources!,
+                              baseStyle: TextStyle(
+                                fontFamily: 'Tajawal',
+                                color: isUser
+                                    ? cs.onPrimary
+                                    : isError
+                                        ? cs.onErrorContainer
+                                        : cs.onSurface,
+                                fontSize: 14,
+                                height: 1.8,
+                              ),
+                              boldStyle: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontWeight: FontWeight.w800,
+                                color: isUser
+                                    ? cs.onPrimary
+                                    : isError
+                                        ? cs.onErrorContainer
+                                        : cs.onSurface,
+                                fontSize: 14,
+                                height: 1.8,
+                              ),
+                              cs: cs,
+                              textColor: isUser
+                                  ? cs.onPrimary
+                                  : isError
+                                      ? cs.onErrorContainer
+                                      : cs.onSurface,
+                            )
+                          : SelectableText.rich(
+                              TextSpan(children: [
+                                ..._parseMarkdown(
+                                    msg.content,
+                                    TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        color: isUser
+                                            ? cs.onPrimary
+                                            : isError
+                                                ? cs.onErrorContainer
+                                                : cs.onSurface,
+                                        fontSize: 14,
+                                        height: 1.8),
+                                    TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.w800,
+                                        color: isUser
+                                            ? cs.onPrimary
+                                            : isError
+                                                ? cs.onErrorContainer
+                                                : cs.onSurface,
+                                        fontSize: 14,
+                                        height: 1.8),
+                                    cs),
+                                if (isStreaming)
+                                  WidgetSpan(
+                                      child: _StreamingCursor(
+                                          color: isUser
+                                              ? cs.onPrimary
+                                              : cs.onSurface)),
+                              ]),
+                              textDirection: TextDirection.rtl,
+                            )),
                 ),
               ),
               if (!isUser &&
@@ -979,6 +1028,20 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                   msg.source != 'streaming')
                 // ─── New: AI Provider Badge with confidence + latency ───
                 AiProviderBadge(msg: msg, cs: cs, compact: true),
+              // ─── New: Grounding Banner (NotebookLM-style) ───
+              if (!isUser && msg.isGrounded && msg.groundingSources != null)
+                GroundingBanner(
+                  sourceCount: msg.groundedInSources ?? 0,
+                  sources: msg.groundingSources!,
+                  cs: cs,
+                ),
+              // ─── New: Suggested Follow-ups ───
+              if (!isUser && msg.suggestedFollowups != null && msg.suggestedFollowups!.isNotEmpty)
+                SuggestedFollowups(
+                  followups: msg.suggestedFollowups!,
+                  cs: cs,
+                  onTap: (q) => _send(q),
+                ),
               // ─── New: Low confidence warning ───
               if (!isUser && msg.isLowConfidence)
                 LowConfidenceBanner(msg: msg, cs: cs),

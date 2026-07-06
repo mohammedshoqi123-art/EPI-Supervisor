@@ -46,6 +46,106 @@ interface Message {
   raced?: boolean
   attemptedProviders?: string[]
   toolsUsed?: string[]
+  // ─── New: Grounding metadata (NotebookLM-style) ───
+  groundedInSources?: number
+  groundingSources?: GroundingSource[]
+  suggestedFollowups?: string[]
+  ungrounded?: boolean
+}
+
+interface GroundingSource {
+  id: number
+  type: 'db_row' | 'aggregate' | 'knowledge_chunk' | string
+  summary: string
+  quote?: string
+  metadata?: Record<string, any>
+}
+
+// ─── Citation Parser (NotebookLM-style inline [1][2]) ───
+function parseCitations(text: string, sources: GroundingSource[] | undefined) {
+  if (!sources || sources.length === 0) return [{ type: 'text', content: text } as const]
+
+  const parts: Array<{ type: 'text'; content: string } | { type: 'citation'; num: number; source: GroundingSource }> = []
+  const regex = /\[(\d+)\]/g
+  let lastEnd = 0
+  let match
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastEnd) {
+      parts.push({ type: 'text', content: text.slice(lastEnd, match.index) })
+    }
+    const num = parseInt(match[1])
+    const source = sources.find(s => s.id === num)
+    if (source) {
+      parts.push({ type: 'citation', num, source })
+    } else {
+      parts.push({ type: 'text', content: match[0] })
+    }
+    lastEnd = match.index + match[0].length
+  }
+  if (lastEnd < text.length) {
+    parts.push({ type: 'text', content: text.slice(lastEnd) })
+  }
+  return parts
+}
+
+function sourceTypeMeta(type: string) {
+  switch (type) {
+    case 'db_row': return { label: 'سجل', icon: '📊', color: 'text-blue-600 bg-blue-50 border-blue-200' }
+    case 'aggregate': return { label: 'إحصاء', icon: '📈', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' }
+    case 'knowledge_chunk': return { label: 'معرفة', icon: '📚', color: 'text-purple-600 bg-purple-50 border-purple-200' }
+    default: return { label: 'مصدر', icon: '📄', color: 'text-gray-600 bg-gray-50 border-gray-200' }
+  }
+}
+
+function CitationText({ text, sources }: { text: string; sources?: GroundingSource[] }) {
+  const parts = parseCitations(text, sources)
+  const [openSource, setOpenSource] = useState<GroundingSource | null>(null)
+
+  return (
+    <>
+      <div className="whitespace-pre-wrap">
+        {parts.map((p, i) => {
+          if (p.type === 'text') return <span key={i}>{p.content}</span>
+          const meta = sourceTypeMeta(p.source.type)
+          return (
+            <button
+              key={i}
+              onClick={() => setOpenSource(p.source)}
+              className={cn('inline-flex items-center justify-center w-4 h-4 mx-0.5 rounded text-[9px] font-bold border align-middle transition-all hover:scale-110', meta.color)}
+              title={`${meta.label}: ${p.source.summary}`}
+            >
+              {p.num}
+            </button>
+          )
+        })}
+      </div>
+      {openSource && (
+        <div className="mt-2 p-3 rounded-lg bg-muted/50 border-r-4 border-primary/40 text-xs">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5">
+              <span>{sourceTypeMeta(openSource.type).icon}</span>
+              <span className="font-bold">{sourceTypeMeta(openSource.type).label}</span>
+              <span className="text-muted-foreground">— {openSource.summary}</span>
+            </div>
+            <button onClick={() => setOpenSource(null)} className="text-muted-foreground hover:text-foreground">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          {openSource.quote && (
+            <pre className="whitespace-pre-wrap text-muted-foreground font-mono text-[10px] leading-relaxed">{openSource.quote}</pre>
+          )}
+          {openSource.metadata && Object.keys(openSource.metadata).length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {Object.entries(openSource.metadata).map(([k, v]) => v && (
+                <span key={k} className="text-[9px] px-1.5 py-0.5 rounded bg-background border">{k}: {String(v).split('T')[0]}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  )
 }
 
 interface CopilotAction {
@@ -830,6 +930,11 @@ export function AIChatWidget() {
             // Note: providerConfidence, raced, attemptedProviders are in raw response
             // We'd need to extend queryAI to return them — for now, derive from source
             providerConfidence: aiResp.provider === 'groq' ? 90 : aiResp.provider === 'pollinations' ? 75 : 70,
+            // ─── New: Grounding metadata ───
+            groundedInSources: aiResp.groundedInSources,
+            groundingSources: aiResp.groundingSources as any,
+            suggestedFollowups: aiResp.suggestedFollowups,
+            ungrounded: aiResp.ungrounded,
           }
         }
       } catch { /* fall through to local */ }
@@ -1189,7 +1294,7 @@ export function AIChatWidget() {
                       {(msg.content || msg.isStreaming) && (
                         <div className="rounded-2xl rounded-bl-md px-3.5 py-2.5 text-sm leading-relaxed bg-muted/80">
                           {msg.content ? (
-                            <div className="whitespace-pre-wrap">{msg.content}</div>
+                            <CitationText text={msg.content} sources={msg.groundingSources} />
                           ) : msg.isStreaming ? (
                             <div className="flex items-center gap-1.5 py-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -1199,6 +1304,35 @@ export function AIChatWidget() {
                           ) : null}
 
                           {msg.chart && <InlineChart data={msg.chart} />}
+
+                          {/* ─── Grounding Banner (NotebookLM-style) ─── */}
+                          {msg.groundedInSources != null && msg.groundedInSources > 0 && msg.groundingSources && (
+                            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-primary bg-primary/5 px-2 py-1 rounded-md border border-primary/20">
+                              <Sparkles className="w-3 h-3" />
+                              <span className="font-bold">مستند إلى {msg.groundedInSources} مصدر</span>
+                              <span className="text-muted-foreground">
+                                ({msg.groundingSources.filter(s => s.type === 'db_row').length} سجلات،
+                                {msg.groundingSources.filter(s => s.type === 'aggregate').length} إحصاءات،
+                                {msg.groundingSources.filter(s => s.type === 'knowledge_chunk').length} معرفة)
+                              </span>
+                            </div>
+                          )}
+
+                          {/* ─── Suggested Follow-ups ─── */}
+                          {msg.suggestedFollowups && msg.suggestedFollowups.length > 0 && !msg.isStreaming && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {msg.suggestedFollowups.map((q, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => sendMessage(q)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                                >
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  {q}
+                                </button>
+                              ))}
+                            </div>
+                          )}
 
                           {msg.content && !msg.isStreaming && msg.id !== 'greeting' && msg.id !== 'greeting-new' && (
                             <div className="mt-2 flex items-center gap-1">

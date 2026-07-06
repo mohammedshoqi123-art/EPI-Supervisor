@@ -22,6 +22,17 @@ export interface AIResponse {
   latencyMs: number
   tokensUsed?: number
   error?: string
+  // ─── New: Grounding metadata (NotebookLM-style) ───
+  groundedInSources?: number
+  groundingSources?: Array<{
+    id: number
+    type: string
+    summary: string
+    quote?: string
+    metadata?: Record<string, any>
+  }>
+  suggestedFollowups?: string[]
+  ungrounded?: boolean
 }
 
 // ─── Edge Function Call ──────────────────────────────────────
@@ -77,6 +88,11 @@ async function callEdgeFunction(
     model: data?.model || 'unknown',
     latencyMs: Date.now() - startTime,
     tokensUsed: data?.tokensUsed,
+    // ─── New: Grounding metadata ───
+    groundedInSources: data?.grounded_in_sources,
+    groundingSources: data?.grounding_sources,
+    suggestedFollowups: data?.suggested_followups,
+    ungrounded: data?.ungrounded,
   }
 }
 

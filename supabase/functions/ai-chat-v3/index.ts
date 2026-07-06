@@ -1162,6 +1162,106 @@ serve(async (req) => {
         }))
       }, 200, origin)
     }
+    if (mode === 'studio_save') {
+      // ─── Save artifact to user's collection (NotebookLM "Save to Note") ───
+      const { artifact_type, title, topic, content, sources, structured_data, metadata } = body
+      if (!artifact_type || !title || !content) {
+        return jsonResponse({ error: 'artifact_type, title, content are required' }, 400, origin)
+      }
+      try {
+        const { data, error } = await supabase.from('saved_artifacts').insert({
+          user_id: auth.userId,
+          artifact_type,
+          title,
+          topic: topic || null,
+          content,
+          sources: sources || [],
+          structured_data: structured_data || {},
+          metadata: metadata || {},
+        }).select().single()
+
+        if (error) {
+          console.error('[STUDIO_SAVE] Error:', error)
+          return jsonResponse({ error: 'فشل حفظ المحتوى' }, 500, origin)
+        }
+        return jsonResponse({ artifact: data, success: true }, 200, origin)
+      } catch (e) {
+        console.error('[STUDIO_SAVE] Exception:', e)
+        return jsonResponse({ error: 'خطأ في الحفظ' }, 500, origin)
+      }
+    }
+    if (mode === 'studio_list') {
+      // ─── List user's saved artifacts ───
+      const { artifact_type, favorite_only, include_archived } = body
+      try {
+        let q = supabase.from('saved_artifacts')
+          .select('*')
+          .eq('user_id', auth.userId)
+          .order('created_at', { ascending: false })
+
+        if (artifact_type) q = q.eq('artifact_type', artifact_type)
+        if (favorite_only) q = q.eq('is_favorite', true)
+        if (!include_archived) q = q.eq('is_archived', false)
+
+        const { data, error } = await q.limit(100)
+        if (error) {
+          console.error('[STUDIO_LIST] Error:', error)
+          return jsonResponse({ error: 'فشل جلب المحتوى المحفوظ' }, 500, origin)
+        }
+        return jsonResponse({ artifacts: data || [], count: data?.length || 0 }, 200, origin)
+      } catch (e) {
+        console.error('[STUDIO_LIST] Exception:', e)
+        return jsonResponse({ error: 'خطأ في الجلب' }, 500, origin)
+      }
+    }
+    if (mode === 'studio_get') {
+      // ─── Get single saved artifact by ID ───
+      const { artifact_id } = body
+      if (!artifact_id) return jsonResponse({ error: 'artifact_id required' }, 400, origin)
+      try {
+        const { data, error } = await supabase.from('saved_artifacts')
+          .select('*')
+          .eq('id', artifact_id)
+          .eq('user_id', auth.userId)
+          .single()
+        if (error) return jsonResponse({ error: 'المحتوى غير موجود' }, 404, origin)
+        return jsonResponse({ artifact: data }, 200, origin)
+      } catch (e) {
+        return jsonResponse({ error: 'خطأ في الجلب' }, 500, origin)
+      }
+    }
+    if (mode === 'studio_update') {
+      // ─── Update artifact (favorite, archive, etc.) ───
+      const { artifact_id, updates } = body
+      if (!artifact_id || !updates) return jsonResponse({ error: 'artifact_id and updates required' }, 400, origin)
+      try {
+        const { data, error } = await supabase.from('saved_artifacts')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', artifact_id)
+          .eq('user_id', auth.userId)
+          .select()
+          .single()
+        if (error) return jsonResponse({ error: 'فشل التحديث' }, 500, origin)
+        return jsonResponse({ artifact: data, success: true }, 200, origin)
+      } catch (e) {
+        return jsonResponse({ error: 'خطأ في التحديث' }, 500, origin)
+      }
+    }
+    if (mode === 'studio_delete') {
+      // ─── Delete saved artifact ───
+      const { artifact_id } = body
+      if (!artifact_id) return jsonResponse({ error: 'artifact_id required' }, 400, origin)
+      try {
+        const { error } = await supabase.from('saved_artifacts')
+          .delete()
+          .eq('id', artifact_id)
+          .eq('user_id', auth.userId)
+        if (error) return jsonResponse({ error: 'فشل الحذف' }, 500, origin)
+        return jsonResponse({ success: true }, 200, origin)
+      } catch (e) {
+        return jsonResponse({ error: 'خطأ في الحذف' }, 500, origin)
+      }
+    }
 
     // Injection guard
     if (message) {

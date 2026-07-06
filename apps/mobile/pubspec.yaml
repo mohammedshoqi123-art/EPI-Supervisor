@@ -64,6 +64,9 @@ dependencies:
   # Onboarding
   shared_preferences: ^2.3.2
 
+  # TTS for Audio Overview (NotebookLM-style podcast)
+  flutter_tts: ^4.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

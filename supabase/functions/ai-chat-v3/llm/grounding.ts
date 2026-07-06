@@ -469,8 +469,17 @@ async function searchKnowledgeBase(message: string): Promise<GroundingSource[]> 
       console.warn('[GROUNDING-V2] Extended knowledge load failed:', e)
     }
 
-    const allDocs = [...docs, ...extendedDocs]
-    console.log(`[GROUNDING-V2] Searching ${allDocs.length} docs (${docs.length} base + ${extendedDocs.length} extended)`)
+    // ─── Load operational knowledge (refrigerator maintenance, surveillance, emergency, training, quality) ───
+    let operationalDocs: any[] = []
+    try {
+      const ops: any = await import('./operational-knowledge.ts')
+      operationalDocs = ops.OPERATIONAL_KNOWLEDGE || []
+    } catch (e) {
+      console.warn('[GROUNDING-V2] Operational knowledge load failed:', e)
+    }
+
+    const allDocs = [...docs, ...extendedDocs, ...operationalDocs]
+    console.log(`[GROUNDING-V2] Searching ${allDocs.length} docs (${docs.length} base + ${extendedDocs.length} extended + ${operationalDocs.length} operational)`)
 
     // Use the advanced search with Arabic normalization + synonyms + fuzzy matching
     const { advancedKnowledgeSearch, scoredChunksToSources, getSearchDiagnostics } =

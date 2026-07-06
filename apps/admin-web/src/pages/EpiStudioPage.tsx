@@ -2,10 +2,11 @@
 // EPI Studio Page — NotebookLM-Inspired Content Generator
 // ═══════════════════════════════════════════════════════════════
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Sparkles, Loader2, FileText, BookOpen, HelpCircle, Brain, Podcast,
-  ChevronRight, Clock, Zap, FileCheck, X,
+  ChevronRight, Clock, Zap, FileCheck, X, Save, Star, Trash2, Archive,
+  Play, Pause, Square, SkipForward, SkipBack, Library,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,17 +16,37 @@ import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
 import {
   generateStudioArtifact,
+  saveArtifact,
+  listSavedArtifacts,
+  updateSavedArtifact,
+  deleteSavedArtifact,
   STUDIO_TYPES,
   type StudioArtifactType,
   type StudioArtifact,
   type StudioSource,
+  type SavedArtifact,
 } from '@/lib/studio-service'
 import { CitationText } from '@/components/ai/AIChatWidget'
+import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
+import { useToast } from '@/hooks/useToast'
 
 export function EpiStudioPage() {
+  const { toast } = useToast()
   const [topic, setTopic] = useState('')
   const [loading, setLoading] = useState<string | null>(null)
   const [artifact, setArtifact] = useState<StudioArtifact | null>(null)
+  const [savedArtifacts, setSavedArtifacts] = useState<SavedArtifact[]>([])
+  const [showLibrary, setShowLibrary] = useState(false)
+  const [savingId, setSavingId] = useState<string | null>(null)
+
+  const fetchSaved = useCallback(async () => {
+    const list = await listSavedArtifacts()
+    setSavedArtifacts(list)
+  }, [])
+
+  useEffect(() => {
+    fetchSaved()
+  }, [fetchSaved])
 
   const handleGenerate = async (type: StudioArtifactType) => {
     if (!topic.trim()) return
@@ -36,16 +57,75 @@ export function EpiStudioPage() {
     setLoading(null)
   }
 
+  const handleSave = async () => {
+    if (!artifact) return
+    setSavingId('current')
+    const saved = await saveArtifact(artifact)
+    if (saved) {
+      toast({ title: 'تم الحفظ ✓', description: 'تم حفظ المحتوى في مكتبتك' })
+      fetchSaved()
+    } else {
+      toast({ title: 'فشل الحفظ', variant: 'destructive' })
+    }
+    setSavingId(null)
+  }
+
+  const handleLoadSaved = (saved: SavedArtifact) => {
+    const md = saved.metadata || {}
+    const reconstructed: StudioArtifact = {
+      type: saved.artifact_type,
+      title: saved.title,
+      content: saved.content,
+      sources: saved.sources || [],
+      mindMapNodes: saved.structured_data?.mind_map_nodes,
+      faqItems: saved.structured_data?.faq_items,
+      studyGuideSections: saved.structured_data?.study_guide_sections,
+      audioScript: saved.structured_data?.audio_script,
+      metadata: {
+        generatedAt: md.generatedAt || saved.created_at,
+        groundedInSources: md.groundedInSources ?? (saved.sources?.length || 0),
+        provider: md.provider || 'saved',
+        latencyMs: md.latencyMs ?? 0,
+      },
+    }
+    setArtifact(reconstructed)
+    setShowLibrary(false)
+  }
+
+  const handleToggleFavorite = async (id: string, current: boolean) => {
+    await updateSavedArtifact(id, { is_favorite: !current })
+    fetchSaved()
+  }
+
+  const handleDelete = async (id: string) => {
+    const ok = await deleteSavedArtifact(id)
+    if (ok) {
+      toast({ title: 'تم الحذف' })
+      fetchSaved()
+    }
+  }
+
   return (
     <>
       <Header title="استوديو المحتوى الذكي" subtitle="NotebookLM-inspired — توليد محتوى موثّق من بيانات النظام" />
       <div className="container mx-auto p-4 space-y-4">
-        {/* Topic Input */}
+        {/* Topic Input + Library Button */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="w-4 h-4 text-primary" />
-              موضوع المحتوى
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                موضوع المحتوى
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLibrary(!showLibrary)}
+                className="text-xs"
+              >
+                <Library className="w-3.5 h-3.5 ml-1" />
+                مكتبتي ({savedArtifacts.length})
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -65,6 +145,65 @@ export function EpiStudioPage() {
             </p>
           </CardContent>
         </Card>
+
+        {/* Saved Artifacts Library */}
+        {showLibrary && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between text-base">
+                <span className="flex items-center gap-2">
+                  <Library className="w-4 h-4 text-primary" />
+                  المحتوى المحفوظ ({savedArtifacts.length})
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => setShowLibrary(false)}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {savedArtifacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  لا يوجد محتوى محفوظ بعد
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {savedArtifacts.map((s) => {
+                    const type = STUDIO_TYPES.find(t => t.type === s.artifact_type)
+                    return (
+                      <div
+                        key={s.id}
+                        className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="text-lg">{type?.icon}</div>
+                        <button
+                          onClick={() => handleLoadSaved(s)}
+                          className="flex-1 text-right"
+                        >
+                          <div className="text-sm font-bold truncate">{s.title}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(s.created_at).toLocaleDateString('ar-SA')}
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => handleToggleFavorite(s.id, s.is_favorite)}
+                          className={cn('p-1 rounded', s.is_favorite ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500')}
+                        >
+                          <Star className={cn('w-3.5 h-3.5', s.is_favorite && 'fill-current')} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(s.id)}
+                          className="p-1 rounded text-muted-foreground hover:text-red-500"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Type Selector */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
@@ -111,7 +250,26 @@ export function EpiStudioPage() {
         )}
 
         {/* Artifact Display */}
-        {artifact && !loading && <ArtifactDisplay artifact={artifact} />}
+        {artifact && !loading && (
+          <>
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSave}
+                disabled={savingId === 'current'}
+                size="sm"
+                className="text-xs"
+              >
+                {savingId === 'current' ? (
+                  <Loader2 className="w-3.5 h-3.5 ml-1 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5 ml-1" />
+                )}
+                حفظ في مكتبتي
+              </Button>
+            </div>
+            <ArtifactDisplay artifact={artifact} />
+          </>
+        )}
 
         {/* Empty State */}
         {!artifact && !loading && (
@@ -326,6 +484,16 @@ function AudioScriptView({
   }>
   sources: StudioSource[]
 }) {
+  const speech = useSpeechSynthesis()
+  const { toast } = useToast()
+
+  // Load script when it changes
+  useEffect(() => {
+    if (script.length > 0) {
+      speech.loadScript(script)
+    }
+  }, [script])
+
   const emotionEmoji: Record<string, string> = {
     enthusiastic: '😊',
     serious: '😌',
@@ -333,36 +501,114 @@ function AudioScriptView({
     neutral: '💬',
   }
 
+  const handlePlay = () => {
+    if (!speech.supported) {
+      toast({
+        title: 'الصوت غير مدعوم',
+        description: 'متصفحك لا يدعم Web Speech API',
+        variant: 'destructive',
+      })
+      return
+    }
+    speech.play()
+  }
+
   return (
     <div>
-      {/* Player placeholder */}
+      {/* Real Audio Player */}
       <div className="p-4 mb-3 rounded-xl bg-gradient-to-r from-pink-500 to-purple-500 text-white">
-        <div className="flex items-center gap-3">
-          <button className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">
-            <Podcast className="w-6 h-6" />
-          </button>
-          <div>
+        <div className="flex items-center gap-3 mb-3">
+          <Podcast className="w-8 h-8" />
+          <div className="flex-1">
             <p className="font-bold text-sm">بودكاست تعليمي</p>
             <p className="text-xs opacity-80">
               {script.length} مقطع • مدة تقديرية {Math.floor(script.length / 2)} دقيقة
             </p>
           </div>
+          {speech.supported && (
+            <Badge variant="outline" className="text-[10px] bg-white/20 border-white/30 text-white">
+              TTS جاهز
+            </Badge>
+          )}
         </div>
+
+        {/* Playback controls */}
+        {speech.supported && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={speech.skipPrevious}
+              disabled={speech.currentSegment === 0}
+              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center disabled:opacity-30"
+            >
+              <SkipBack className="w-4 h-4" />
+            </button>
+            {speech.isPlaying ? (
+              <button
+                onClick={speech.pause}
+                className="w-12 h-12 rounded-full bg-white text-pink-600 hover:bg-white/90 flex items-center justify-center"
+              >
+                <Pause className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                onClick={handlePlay}
+                className="w-12 h-12 rounded-full bg-white text-pink-600 hover:bg-white/90 flex items-center justify-center"
+              >
+                <Play className="w-5 h-5 mr-0.5" />
+              </button>
+            )}
+            <button
+              onClick={speech.stop}
+              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center"
+            >
+              <Square className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={speech.skipNext}
+              disabled={speech.currentSegment >= script.length - 1}
+              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center disabled:opacity-30"
+            >
+              <SkipForward className="w-4 h-4" />
+            </button>
+            {/* Progress */}
+            <div className="flex-1 mx-2">
+              <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-white transition-all"
+                  style={{ width: `${((speech.currentSegment + 1) / script.length) * 100}%` }}
+                />
+              </div>
+              <div className="text-[10px] mt-1 opacity-80 text-center">
+                {speech.currentSegment + 1} / {script.length}
+              </div>
+            </div>
+          </div>
+        )}
+        {!speech.supported && (
+          <p className="text-xs bg-white/10 px-2 py-1 rounded">
+            ⚠️ الصوت غير مدعوم في هذا المتصفح — السكريبت متاح أدناه
+          </p>
+        )}
       </div>
 
       {/* Script segments */}
       <div className="space-y-2">
         {script.map((seg, i) => {
           const isHost1 = seg.speaker === 'host1'
+          const isCurrent = speech.currentSegment === i && speech.isPlaying
           return (
             <div
               key={i}
               className={cn(
-                'p-3 rounded-lg border-r-4',
+                'p-3 rounded-lg border-r-4 transition-all cursor-pointer',
+                isCurrent
+                  ? 'ring-2 ring-pink-400 ring-offset-1'
+                  : '',
                 isHost1
                   ? 'bg-pink-50/50 border-pink-400'
                   : 'bg-muted/50 border-muted-foreground/30',
               )}
+              onClick={() => speech.skipTo(i)}
             >
               <div className="flex items-center gap-2 mb-1">
                 <div
@@ -381,6 +627,11 @@ function AudioScriptView({
                 >
                   {isHost1 ? 'أحمد' : 'فاطمة'} {emotionEmoji[seg.emotion || 'neutral']}
                 </span>
+                {isCurrent && (
+                  <Badge variant="outline" className="text-[9px] ml-auto bg-pink-100 text-pink-700 border-pink-300">
+                    ▶ يلعب الآن
+                  </Badge>
+                )}
               </div>
               <div className="text-xs leading-relaxed pl-8">
                 <CitationText text={seg.text} sources={sources} />

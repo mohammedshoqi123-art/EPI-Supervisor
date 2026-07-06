@@ -98,6 +98,39 @@ const SYNONYMS: Record<string, string[]> = {
   'خديج':      ['مبتسر', 'premature'],
   'حامل':      ['حبلى', 'pregnant'],
   'حبلى':      ['حامل', 'pregnant'],
+  // New: maintenance + surveillance + emergency + training + quality
+  'صيانة':     ['إصلاح', 'عطل', 'تصليح', 'maintenance', 'repair'],
+  'ثلاجة':     ['براد', 'تبريد', 'refrigerator', 'fridge'],
+  'كهرباء':    ['تيار', 'طاقة', 'electricity', 'power'],
+  'عطل':       ['صيانة', 'مشكلة', 'fault', 'breakdown'],
+  'ترصد':      ['رصد', 'مراقبة', 'surveillance', 'monitoring'],
+  'وبائي':     ['وبائية', 'وبائية', 'epidemic', 'outbreak'],
+  'تفشي':      ['انتشار', 'وباء', 'outbreak', 'epidemic'],
+  'طوارئ':     ['طارئ', 'طارئة', 'emergency', 'urgent'],
+  'تدريب':     ['تعليم', 'تأهيل', 'training', 'education'],
+  'تقييم':     ['تقدير', 'فحص', 'assessment', 'evaluation'],
+  'جودة':      ['نوعية', 'ممتاز', 'quality', 'qa'],
+  'تدقيق':     ['مراجعة', 'فحص', 'audit', 'review'],
+  'مراجعة':    ['تدقيق', 'فحص', 'review', 'audit'],
+  'استبيان':   ['استبانة', 'سؤال', 'survey', 'questionnaire'],
+  'شكوى':      ['تذمر', 'اعتراض', 'complaint', 'grievance'],
+  'مؤشر':      ['مقياس', 'دليل', 'indicator', 'kpi', 'metric'],
+  'مؤشرات':    ['مقاييس', 'أدلة', 'indicators', 'kpis'],
+  'اداء':      ['أداء', 'إنجاز', 'performance'],
+  'كفاءة':     ['فعالية', 'إتقان', 'efficiency'],
+  'معايرة':    ['ضبط', 'تظبيط', 'calibration'],
+  'استكشاف':   ['تشخيص', 'تحديد', 'troubleshooting', 'diagnosis'],
+  'ضاغط':      ['كمبروسر', 'compressor'],
+  'فريون':     ['غاز', 'مبرد', 'freon', 'refrigerant'],
+  'يعطي':      ['يقدم', 'يمنح', 'give', 'administer'],
+  'حقن':       ['إبرة', 'حقنه', 'injection', 'shot'],
+  'إبرة':      ['حقن', 'حقنه', 'needle', 'syringe'],
+  'إسعاف':     ['نجدة', 'طارئ', 'first aid', 'emergency'],
+  'صدمة':      ['رد فعل تحسسي', 'anaphylaxis', 'shock'],
+  'تحسسي':     ['حساسية', 'allergy', 'allergic'],
+  'إغماء':     ['غيبوبة', 'fainting', 'syncope'],
+  'تشنج':      ['تشنجات', 'convulsion', 'seizure'],
+  'خراج':      ['دمل', 'abscess'],
 }
 
 // ═══ Build Synonym Index ═══
@@ -194,6 +227,20 @@ const PHRASE_PATTERNS: Array<{ pattern: RegExp; boost: number; concept: string }
   { pattern: /(الحصبة|measles|mr1|mr2)/i, boost: 7, concept: 'measles' },
   { pattern: /(شلل\s*الأطفال|polio|opv|ipv)/i, boost: 7, concept: 'polio' },
   { pattern: /(الأشراف\s*الداعم|supervision)/i, boost: 8, concept: 'supervision' },
+  // New patterns for operational knowledge
+  { pattern: /(صيانة|عطل|إصلاح).*(ثلاجة|براد|مبريد)/i, boost: 10, concept: 'refrigerator_maintenance' },
+  { pattern: /(ثلاجة|براد).*(عطل|صيانة|إصلاح)/i, boost: 10, concept: 'refrigerator_maintenance' },
+  { pattern: /(انقطاع|انقطعت).*(كهرباء|تيار|طاقة)/i, boost: 9, concept: 'power_outage' },
+  { pattern: /(تجمد|تجمّد).*(لقاح|اللقاح)/i, boost: 10, concept: 'vaccine_freezing' },
+  { pattern: /(ترصد|رصد).*(وبائي|الأمراض)/i, boost: 9, concept: 'surveillance' },
+  { pattern: /(تفشي|انتشار).*(مرض|وباء|حصبة|شلل)/i, boost: 9, concept: 'outbreak' },
+  { pattern: /(طارئ|طوارئ|طارئة)/i, boost: 8, concept: 'emergency' },
+  { pattern: /(تدريب|تعليم).*(كوادر|عاملين|موظفين)/i, boost: 9, concept: 'training' },
+  { pattern: /(جودة|نوعية).*(البيانات|البرنامج|الخدمة)/i, boost: 9, concept: 'quality' },
+  { pattern: /(تدقيق|مراجعة).*(البيانات|السجلات|البرنامج)/i, boost: 9, concept: 'audit' },
+  { pattern: /(kpi|مؤشرات?\s*الأداء|مؤشرات?\s*الرئيسية)/i, boost: 10, concept: 'kpis' },
+  { pattern: /(إسعاف|نجدة).*(أولى|أولي)/i, boost: 8, concept: 'first_aid' },
+  { pattern: /(صدمة|رد\s*فعل).*(تحسسي|تأق)/i, boost: 10, concept: 'anaphylaxis' },
 ]
 
 // ═══ Tokenize (with stop word removal + synonym expansion) ═══
@@ -379,6 +426,19 @@ function getConceptKeywords(concept: string): string[] {
     case 'measles': return ['حصبة', 'mr', 'measles']
     case 'polio': return ['شلل', 'polio', 'opv', 'ipv']
     case 'supervision': return ['اشراف', 'داعم', 'مشرف', 'زيارة']
+    // New operational concepts
+    case 'refrigerator_maintenance': return ['صيانة', 'عطل', 'ثلاجة', 'براد', 'ضاغط', 'فريون', 'مكثف']
+    case 'power_outage': return ['كهرباء', 'انقطاع', 'مولد', 'احتياطي']
+    case 'vaccine_freezing': return ['تجمد', 'فاسد', 'فاسدة']
+    case 'surveillance': return ['ترصد', 'رصد', 'مراقبة', 'وبائي']
+    case 'outbreak': return ['تفشي', 'انتشار', 'وباء', 'استجابة']
+    case 'emergency': return ['طارئ', 'طوارئ', 'طارئة', 'استجابة']
+    case 'training': return ['تدريب', 'تعليم', 'تأهيل', 'كوادر', 'دورة']
+    case 'quality': return ['جودة', 'نوعية', 'دقة', 'اكتمال', 'kpi']
+    case 'audit': return ['تدقيق', 'مراجعة', 'فحص', 'تقييم']
+    case 'kpis': return ['مؤشر', 'kpi', 'اداء', 'تغطية', 'dropout']
+    case 'first_aid': return ['اسعاف', 'نجدة', 'ادرينالين', 'انعاش']
+    case 'anaphylaxis': return ['صدمة', 'تحسسي', 'تأق', 'ادرينالين', 'حساسية']
     default: return []
   }
 }

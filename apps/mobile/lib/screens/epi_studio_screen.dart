@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
+import '../services/epi_audio_service.dart';
 import 'citation_widgets.dart';
 
 /// ═══════════════════════════════════════════════════════════
@@ -99,6 +100,13 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
   StudioArtifact? _artifact;
   bool _loading = false;
   String? _selectedType;
+  bool _saving = false;
+  bool _showLibrary = false;
+  List<Map<String, dynamic>> _savedArtifacts = [];
+
+  final EpiAudioService _audio = EpiAudioService();
+  PlaybackState _playbackState = PlaybackState.stopped;
+  int _currentSegment = 0;
 
   static final _artifactTypes = [
     (
@@ -144,12 +152,110 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
     if (widget.initialTopic != null) {
       _topicCtrl.text = widget.initialTopic!;
     }
+    _audio.onStateChanged = (s) {
+      if (mounted) setState(() => _playbackState = s);
+    };
+    _audio.onSegmentChanged = (i) {
+      if (mounted) setState(() => _currentSegment = i);
+    };
+    _audio.init();
+    _loadSavedArtifacts();
   }
 
   @override
   void dispose() {
+    _audio.dispose();
     _topicCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSavedArtifacts() async {
+    try {
+      final api = ref.read(apiClientProvider);
+      final resp = await api.callFunction('ai-chat-v3', {
+        'mode': 'studio_list',
+      }).timeout(const Duration(seconds: 10));
+      if (mounted) {
+        setState(() {
+          _savedArtifacts = (resp['artifacts'] as List?)
+                  ?.map((e) => Map<String, dynamic>.from(e))
+                  .toList() ??
+              [];
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveArtifact() async {
+    if (_artifact == null) return;
+    setState(() => _saving = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.callFunction('ai-chat-v3', {
+        'mode': 'studio_save',
+        'artifact_type': _artifact!.type,
+        'title': _artifact!.title,
+        'topic': _topicCtrl.text,
+        'content': _artifact!.content,
+        'sources': _artifact!.sources
+            .map((s) => {
+                  'id': s.id,
+                  'type': s.type,
+                  'summary': s.summary,
+                  'quote': s.quote,
+                  'metadata': s.metadata,
+                })
+            .toList(),
+        'structured_data': _artifact!.structuredData ?? {},
+        'metadata': {
+          'generatedAt': DateTime.now().toIso8601String(),
+          'groundedInSources': _artifact!.groundedInSources,
+          'provider': _artifact!.provider,
+          'latencyMs': _artifact!.latencyMs,
+        },
+      }).timeout(const Duration(seconds: 10));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(children: [
+              Icon(Icons.check_circle, color: Colors.white, size: 16),
+              SizedBox(width: 8),
+              Text('تم حفظ المحتوى في مكتبتك', style: TextStyle(fontFamily: 'Tajawal')),
+            ]),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green.shade700,
+          ),
+        );
+        _loadSavedArtifacts();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل الحفظ: $e')),
+        );
+      }
+    }
+    if (mounted) setState(() => _saving = false);
+  }
+
+  Future<void> _loadSavedArtifact(Map<String, dynamic> saved) async {
+    final artifact = StudioArtifact(
+      type: saved['artifact_type'] as String? ?? '',
+      title: saved['title'] as String? ?? '',
+      content: saved['content'] as String? ?? '',
+      sources: (saved['sources'] as List?)
+              ?.map((s) => GroundingSource.fromJson(Map<String, dynamic>.from(s)))
+              .toList() ??
+          [],
+      structuredData: saved['structured_data'] as Map<String, dynamic>?,
+      groundedInSources: (saved['metadata'] as Map?)?['groundedInSources'] as int? ?? 0,
+      provider: (saved['metadata'] as Map?)?['provider'] as String?,
+      latencyMs: (saved['metadata'] as Map?)?['latencyMs'] as int? ?? 0,
+    );
+    setState(() {
+      _artifact = artifact;
+      _showLibrary = false;
+    });
   }
 
   Future<void> _generate(String type) async {
@@ -222,11 +328,36 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
         elevation: 0,
+        actions: [
+          if (_artifact != null && !_loading)
+            IconButton(
+              icon: _saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.bookmark_add_rounded, size: 22),
+              onPressed: _saving ? null : _saveArtifact,
+              tooltip: 'حفظ',
+            ),
+          IconButton(
+            icon: Badge(
+              isLabelVisible: _savedArtifacts.isNotEmpty,
+              label: Text('${_savedArtifacts.length}'),
+              child: const Icon(Icons.folder_rounded, size: 22),
+            ),
+            onPressed: () => setState(() => _showLibrary = !_showLibrary),
+            tooltip: 'مكتبتي',
+          ),
+        ],
       ),
       body: Column(
         children: [
           // Topic input
           _buildTopicInput(cs),
+          // Library panel (collapsible)
+          if (_showLibrary) _buildLibraryPanel(cs),
           // Artifact type selector
           _buildTypeSelector(cs),
           // Loading indicator
@@ -236,6 +367,97 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
             Expanded(child: _buildArtifactView(cs)),
           if (_artifact == null && !_loading)
             Expanded(child: _buildEmpty(cs)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLibraryPanel(ColorScheme cs) {
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.folder_rounded, size: 18, color: cs.primary),
+              const SizedBox(width: 6),
+              Text(
+                'المحتوى المحفوظ (${_savedArtifacts.length})',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: cs.primary,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: Icon(Icons.close_rounded, size: 16, color: cs.onSurfaceVariant),
+                onPressed: () => setState(() => _showLibrary = false),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_savedArtifacts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Center(
+                child: Text(
+                  'لا يوجد محتوى محفوظ بعد',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 12,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 250),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _savedArtifacts.length,
+                itemBuilder: (context, i) {
+                  final s = _savedArtifacts[i];
+                  final type = s['artifact_type'] as String? ?? '';
+                  final icon = switch (type) {
+                    'briefing_doc' => Icons.description_rounded,
+                    'study_guide' => Icons.menu_book_rounded,
+                    'faq' => Icons.quiz_rounded,
+                    'mind_map' => Icons.account_tree_rounded,
+                    'audio_overview' => Icons.graphic_eq_rounded,
+                    _ => Icons.auto_awesome_rounded,
+                  };
+                  return ListTile(
+                    leading: Icon(icon, color: cs.primary, size: 20),
+                    title: Text(
+                      s['title'] as String? ?? '',
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      (s['created_at'] as String?)?.split('T').first ?? '',
+                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 10, color: cs.onSurfaceVariant),
+                    ),
+                    trailing: s['is_favorite'] == true
+                        ? Icon(Icons.star_rounded, size: 16, color: Colors.amber)
+                        : null,
+                    onTap: () => _loadSavedArtifact(s),
+                    visualDensity: VisualDensity.compact,
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -679,9 +901,17 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
     final segments = (artifact.structuredData?['audio_script'] as List?) ?? [];
     if (segments.isEmpty) return _buildMarkdownView(cs, artifact);
 
+    // Load script into audio service
+    final audioSegments = segments
+        .map((s) => AudioSegment.fromJson(Map<String, dynamic>.from(s as Map)))
+        .toList();
+    if (_audio.totalSegments != audioSegments.length) {
+      _audio.loadScript(audioSegments);
+    }
+
     return Column(
       children: [
-        // Audio player placeholder
+        // ─── Real Audio Player with TTS controls ───
         Container(
           padding: const EdgeInsets.all(16),
           margin: const EdgeInsets.only(bottom: 12),
@@ -691,50 +921,144 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
             ),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Row(
+          child: Column(
             children: [
-              IconButton(
-                icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('🎧 ميزة تشغيل الصوت قريباً — السكريبت متاح أدناه'),
-                      behavior: SnackBarBehavior.floating,
-                      backgroundColor: artifact.color,
+              Row(
+                children: [
+                  Icon(Icons.graphic_eq_rounded, color: Colors.white, size: 28),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'بودكاست تعليمي',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          '${segments.length} مقطع • مدة تقديرية ${segments.length ~/ 2} دقيقة',
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 10,
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'بودكاست تعليمي',
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'TTS جاهز',
                       style: TextStyle(
                         fontFamily: 'Cairo',
-                        fontSize: 13,
+                        fontSize: 9,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
                       ),
                     ),
-                    Text(
-                      '${segments.length} مقطع • مدة تقديرية ${segments.length ~/ 2} دقيقة',
-                      style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 10,
-                        color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // ─── Playback controls ───
+              Row(
+                children: [
+                  // Previous
+                  IconButton(
+                    icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 22),
+                    onPressed: _currentSegment > 0 ? () => _audio.skipPrevious() : null,
+                  ),
+                  // Play/Pause
+                  GestureDetector(
+                    onTap: () {
+                      if (_playbackState == PlaybackState.playing) {
+                        _audio.pause();
+                      } else {
+                        _audio.play();
+                      }
+                    },
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _playbackState == PlaybackState.playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: artifact.color,
+                        size: 32,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  // Stop
+                  IconButton(
+                    icon: const Icon(Icons.stop_rounded, color: Colors.white, size: 20),
+                    onPressed: _audio.stop,
+                  ),
+                  // Next
+                  IconButton(
+                    icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 22),
+                    onPressed: _currentSegment < segments.length - 1
+                        ? () => _audio.skipNext()
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  // Progress
+                  Expanded(
+                    child: Column(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: segments.isEmpty
+                                ? 0
+                                : (_currentSegment + 1) / segments.length,
+                            backgroundColor: Colors.white.withValues(alpha: 0.2),
+                            valueColor: const AlwaysStoppedAnimation(Colors.white),
+                            minHeight: 4,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_currentSegment + 1} / ${segments.length}',
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 10,
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
         // Script segments
-        ...segments.map<Widget>((raw) {
+        ...segments.asMap().entries.map<Widget>((entry) {
+          final i = entry.key;
+          final raw = entry.value;
           final s = Map<String, dynamic>.from(raw as Map);
           final isHost1 = s['speaker'] == 'host1';
           final speaker = isHost1 ? 'أحمد' : 'فاطمة';
@@ -745,22 +1069,36 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
             'curious' => '🤔',
             _ => '💬',
           };
+          final isCurrent = i == _currentSegment && _playbackState == PlaybackState.playing;
 
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isHost1
-                  ? artifact.color.withValues(alpha: 0.08)
-                  : cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(12),
-              border: Border(
-                right: BorderSide(
-                  color: isHost1 ? artifact.color : cs.outlineVariant,
-                  width: 3,
+          return GestureDetector(
+            onTap: () => _audio.skipToSegment(i),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isCurrent
+                    ? artifact.color.withValues(alpha: 0.15)
+                    : isHost1
+                        ? artifact.color.withValues(alpha: 0.08)
+                        : cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+                border: Border(
+                  right: BorderSide(
+                    color: isHost1 ? artifact.color : cs.outlineVariant,
+                    width: 3,
+                  ),
                 ),
+                boxShadow: isCurrent
+                    ? [
+                        BoxShadow(
+                          color: artifact.color.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : null,
               ),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -810,6 +1148,7 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
                 ),
               ],
             ),
+          ),
           );
         }),
       ],

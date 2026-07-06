@@ -1,13 +1,152 @@
 // ═══════════════════════════════════════════════════════════
-// EPI Copilot — LLM Providers (Groq + Fallbacks)
+// EPI Copilot — AI Provider Gateway (Free-First Smart Router)
 // ═══════════════════════════════════════════════════════════
+//
+// Inspired by OmniRoute's multi-provider gateway concept.
+// Routes requests through a 4-tier fallback chain:
+//
+// Tier 1: Pollinations (100% FREE, no API key needed)
+//         Models: openai, openai-fast, mistral, deepseek, gemini, grok
+// Tier 2: Groq (FREE, 117M tokens/month, requires env key)
+//         Models: llama-3.3-70b, llama-4-scout, gpt-oss-120b
+// Tier 3: ZAI/GLM (existing system provider)
+//         Models: glm-4-flash
+// Tier 4: HuggingFace / OpenRouter / MiMo (fallbacks)
+//
+// All tiers are OpenAI-compatible API format.
+// The router automatically falls back on failure (429, 500, timeout).
 
 import type { GroqResponse } from '../utils/types.ts'
 
 const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions'
 const MIMO_API = 'https://api.xiaomimimo.com/v1/chat/completions'
+const POLLINATIONS_API = 'https://gen.pollinations.ai/v1/chat/completions'
+const ZAI_API = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
 
-// ═══ Groq — Primary LLM ═══
+// ═══ Provider Configuration ═══
+interface ProviderConfig {
+  name: string
+  tier: number
+  free: boolean
+  models: string[]
+  maxTokens: number
+  supportsTools: boolean
+  supportsStreaming: boolean
+}
+
+const PROVIDERS: Record<string, ProviderConfig> = {
+  pollinations: {
+    name: 'Pollinations',
+    tier: 1,
+    free: true,
+    models: ['openai', 'openai-fast', 'mistral', 'deepseek', 'gemini', 'grok'],
+    maxTokens: 2000,
+    supportsTools: false,  // Pollinations doesn't support tool calls
+    supportsStreaming: true,
+  },
+  groq: {
+    name: 'Groq',
+    tier: 2,
+    free: true,
+    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b'],
+    maxTokens: 4000,
+    supportsTools: true,
+    supportsStreaming: true,
+  },
+  zai: {
+    name: 'ZAI (GLM)',
+    tier: 3,
+    free: true,
+    models: ['glm-4-flash'],
+    maxTokens: 1024,
+    supportsTools: false,
+    supportsStreaming: false,
+  },
+  huggingface: {
+    name: 'HuggingFace',
+    tier: 4,
+    free: true,
+    models: ['meta-llama/Meta-Llama-3-8B-Instruct'],
+    maxTokens: 800,
+    supportsTools: false,
+    supportsStreaming: false,
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    tier: 4,
+    free: false,
+    models: ['deepseek/deepseek-chat'],
+    maxTokens: 2000,
+    supportsTools: false,
+    supportsStreaming: false,
+  },
+  mimo: {
+    name: 'MiMo (Xiaomi)',
+    tier: 4,
+    free: false,
+    models: ['mimo-v2-pro'],
+    maxTokens: 800,
+    supportsTools: false,
+    supportsStreaming: true,
+  },
+}
+
+// ═══ Tier 1: Pollinations — 100% FREE, no API key ═══
+export async function pollinationsChat(
+  messages: any[],
+  opts: {
+    model?: string
+    maxTokens?: number
+    temperature?: number
+    stream?: boolean
+  } = {},
+): Promise<string | Response | null> {
+  const model = opts.model || 'openai'
+  const body: Record<string, any> = {
+    model,
+    messages,
+    max_tokens: opts.maxTokens || 2000,
+    temperature: opts.temperature ?? 0.4,
+  }
+  if (opts.stream) body.stream = true
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 25_000)
+
+  try {
+    const r = await fetch(POLLINATIONS_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(opts.stream ? { 'Accept': 'text/event-stream' } : {}),
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+
+    if (!r.ok) {
+      console.error(`[POLLINATIONS_FAIL] status=${r.status} model=${model}`)
+      return null
+    }
+
+    if (opts.stream) return r
+
+    const json = await r.json().catch(() => null)
+    if (!json) return null
+
+    const content = json.choices?.[0]?.message?.content
+    if (!content?.trim()) return null
+    return content
+  } catch (e: any) {
+    if (e?.name === 'AbortError') { console.error('Pollinations timeout'); return null }
+    console.error('Pollinations error:', e)
+    return null
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+// ═══ Tier 2: Groq — FREE with API key ═══
 export async function groqChat(
   messages: any[],
   key: string,
@@ -70,7 +209,23 @@ export async function groqChat(
   }
 }
 
-// ═══ HuggingFace — Fallback 1 ═══
+// ═══ Tier 3: ZAI (GLM) — existing provider ═══
+export async function zaiChat(messages: any[], key: string, maxTokens = 1024): Promise<string | null> {
+  try {
+    const resp = await fetch(ZAI_API, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'glm-4-flash', messages, max_tokens: Math.min(maxTokens, 1024), temperature: 0.4 }),
+    })
+    if (!resp.ok) return null
+    const json = await resp.json()
+    return json.choices?.[0]?.message?.content || null
+  } catch {
+    return null
+  }
+}
+
+// ═══ Tier 4: HuggingFace — fallback ═══
 export async function huggingfaceChat(messages: any[], key: string): Promise<string | null> {
   try {
     const resp = await fetch('https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct/v1/chat/completions', {
@@ -86,7 +241,7 @@ export async function huggingfaceChat(messages: any[], key: string): Promise<str
   }
 }
 
-// ═══ OpenRouter (DeepSeek) — Fallback 2 ═══
+// ═══ Tier 4: OpenRouter — fallback ═══
 export async function openrouterChat(messages: any[], key: string, maxTokens = 2000): Promise<string | null> {
   try {
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -107,23 +262,7 @@ export async function openrouterChat(messages: any[], key: string, maxTokens = 2
   }
 }
 
-// ═══ ZAI (GLM) — Fallback 3 ═══
-export async function zaiChat(messages: any[], key: string, maxTokens = 1024): Promise<string | null> {
-  try {
-    const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'glm-4-flash', messages, max_tokens: Math.min(maxTokens, 1024), temperature: 0.4 }),
-    })
-    if (!resp.ok) return null
-    const json = await resp.json()
-    return json.choices?.[0]?.message?.content || null
-  } catch {
-    return null
-  }
-}
-
-// ═══ MiMo (Xiaomi) — Fallback 4 ═══
+// ═══ Tier 4: MiMo (Xiaomi) — fallback ═══
 export async function mimoChat(messages: any[], key: string, stream = false): Promise<any> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 25_000)
@@ -146,7 +285,212 @@ export async function mimoChat(messages: any[], key: string, stream = false): Pr
   }
 }
 
-// ═══ Summary generation (cheap model) ═══
+// ═══════════════════════════════════════════════════════════
+// SMART ROUTER — tries providers in tier order, falls back on failure
+// ═══════════════════════════════════════════════════════════
+
+export interface RouterOptions {
+  model?: string
+  maxTokens?: number
+  temperature?: number
+  tools?: any[]
+  tool_choice?: string
+  stream?: boolean
+  needTools?: boolean  // if true, skip providers that don't support tools
+}
+
+export interface RouterResult {
+  content: string | null
+  toolCalls?: any[]
+  usage?: any
+  provider: string  // which provider succeeded
+  tier: number
+}
+
+export interface RouterStreamResult {
+  response: Response | null
+  provider: string
+  tier: number
+}
+
+/**
+ * Smart router — tries providers in tier order.
+ * Tier 1: Pollinations (free, no key)
+ * Tier 2: Groq (free, needs key)
+ * Tier 3: ZAI (free, needs key)
+ * Tier 4: HuggingFace / OpenRouter / MiMo (fallbacks)
+ */
+export async function smartRouteChat(
+  messages: any[],
+  env: Record<string, string | undefined>,
+  opts: RouterOptions = {},
+): Promise<RouterResult> {
+  const { needTools, tools, tool_choice, maxTokens, temperature, model } = opts
+
+  // ─── Tier 1: Pollinations (FREE, no key) ───
+  // Skip if tools are needed (Pollinations doesn't support tool calls)
+  if (!needTools) {
+    console.log('[ROUTER] Trying Tier 1: Pollinations (free)')
+    const pollResult = await pollinationsChat(messages, {
+      model: model || 'openai',
+      maxTokens: maxTokens || 2000,
+      temperature,
+    })
+    if (pollResult && typeof pollResult === 'string') {
+      console.log('[ROUTER] ✓ Pollinations succeeded')
+      return { content: pollResult, provider: 'pollinations', tier: 1 }
+    }
+    console.log('[ROUTER] ✗ Pollinations failed, falling back')
+  }
+
+  // ─── Tier 2: Groq (FREE, needs key) ───
+  const groqKey = env.GROQ_API_KEY
+  if (groqKey) {
+    console.log('[ROUTER] Trying Tier 2: Groq (free)')
+    const groqResult = await groqChat(messages, groqKey, {
+      model: model || 'llama-3.3-70b-versatile',
+      maxTokens: maxTokens || 2000,
+      temperature,
+      tools,
+      tool_choice,
+    })
+    if (groqResult) {
+      if (groqResult.type === 'tool_calls') {
+        console.log('[ROUTER] ✓ Groq succeeded (tool calls)')
+        return {
+          content: null,
+          toolCalls: groqResult.tool_calls,
+          usage: groqResult.usage,
+          provider: 'groq',
+          tier: 2,
+        }
+      }
+      if (groqResult.type === 'message' && groqResult.content) {
+        console.log('[ROUTER] ✓ Groq succeeded')
+        return {
+          content: groqResult.content,
+          usage: groqResult.usage,
+          provider: 'groq',
+          tier: 2,
+        }
+      }
+    }
+    console.log('[ROUTER] ✗ Groq failed, falling back')
+  }
+
+  // ─── Tier 3: ZAI (existing provider) ───
+  const zaiKey = env.ZAI_API_KEY
+  if (zaiKey && !needTools) {
+    console.log('[ROUTER] Trying Tier 3: ZAI (free)')
+    const zaiResult = await zaiChat(messages, zaiKey, maxTokens || 1024)
+    if (zaiResult) {
+      console.log('[ROUTER] ✓ ZAI succeeded')
+      return { content: zaiResult, provider: 'zai', tier: 3 }
+    }
+    console.log('[ROUTER] ✗ ZAI failed, falling back')
+  }
+
+  // ─── Tier 4: HuggingFace ───
+  const hfKey = env.HF_API_TOKEN
+  if (hfKey && !needTools) {
+    console.log('[ROUTER] Trying Tier 4: HuggingFace')
+    const hfResult = await huggingfaceChat(messages, hfKey)
+    if (hfResult) {
+      console.log('[ROUTER] ✓ HuggingFace succeeded')
+      return { content: hfResult, provider: 'huggingface', tier: 4 }
+    }
+  }
+
+  // ─── Tier 4: OpenRouter ───
+  const orKey = env.OPENROUTER_API_KEY
+  if (orKey && !needTools) {
+    console.log('[ROUTER] Trying Tier 4: OpenRouter')
+    const orResult = await openrouterChat(messages, orKey, maxTokens || 2000)
+    if (orResult) {
+      console.log('[ROUTER] ✓ OpenRouter succeeded')
+      return { content: orResult, provider: 'openrouter', tier: 4 }
+    }
+  }
+
+  // ─── Tier 4: MiMo ───
+  const mimoKey = env.MIMO_API_KEY
+  if (mimoKey && !needTools) {
+    console.log('[ROUTER] Trying Tier 4: MiMo')
+    const mimoResult = await mimoChat(messages, mimoKey)
+    if (mimoResult) {
+      const content = mimoResult.choices?.[0]?.message?.content
+      if (content) {
+        console.log('[ROUTER] ✓ MiMo succeeded')
+        return { content, provider: 'mimo', tier: 4 }
+      }
+    }
+  }
+
+  // ─── All providers failed ───
+  console.error('[ROUTER] ❌ All providers failed!')
+  return { content: null, provider: 'none', tier: 0 }
+}
+
+/**
+ * Smart router for streaming — tries Groq first (supports streaming + tools),
+ * then falls back to Pollinations streaming.
+ */
+export async function smartRouteStream(
+  messages: any[],
+  env: Record<string, string | undefined>,
+  opts: RouterOptions = {},
+): Promise<RouterStreamResult> {
+  const { tools, tool_choice, maxTokens, temperature, model, needTools } = opts
+
+  // ─── Tier 2: Groq streaming (supports tools + streaming) ───
+  const groqKey = env.GROQ_API_KEY
+  if (groqKey) {
+    console.log('[ROUTER-STREAM] Trying Groq (streaming)')
+    const result = await groqChat(messages, groqKey, {
+      model: model || 'llama-3.3-70b-versatile',
+      maxTokens: maxTokens || 2000,
+      temperature,
+      tools,
+      tool_choice,
+      stream: true,
+    })
+    if (result instanceof Response) {
+      console.log('[ROUTER-STREAM] ✓ Groq streaming')
+      return { response: result, provider: 'groq', tier: 2 }
+    }
+  }
+
+  // ─── Tier 1: Pollinations streaming (no tools) ───
+  if (!needTools) {
+    console.log('[ROUTER-STREAM] Trying Pollinations (streaming)')
+    const result = await pollinationsChat(messages, {
+      model: model || 'openai',
+      maxTokens: maxTokens || 2000,
+      temperature,
+      stream: true,
+    })
+    if (result instanceof Response) {
+      console.log('[ROUTER-STREAM] ✓ Pollinations streaming')
+      return { response: result, provider: 'pollinations', tier: 1 }
+    }
+  }
+
+  // ─── Tier 4: MiMo streaming ───
+  const mimoKey = env.MIMO_API_KEY
+  if (mimoKey && !needTools) {
+    console.log('[ROUTER-STREAM] Trying MiMo (streaming)')
+    const result = await mimoChat(messages, mimoKey, true)
+    if (result instanceof Response) {
+      console.log('[ROUTER-STREAM] ✓ MiMo streaming')
+      return { response: result, provider: 'mimo', tier: 4 }
+    }
+  }
+
+  console.error('[ROUTER-STREAM] ❌ All streaming providers failed!')
+  return { response: null, provider: 'none', tier: 0 }
+}
+
+// ═══ Summary generation (cheap model via Groq) ═══
 export async function generateSummary(key: string, messages: any[]): Promise<string | null> {
   const summaryMessages = [
     { role: 'system', content: 'لخص هذه المحادثة في 2-3 جمل بالعربية. ركز على المواضيع الرئيسية. لا تتجاوز 100 كلمة.' },
@@ -164,5 +508,17 @@ export async function generateSummary(key: string, messages: any[]): Promise<str
     return json.choices?.[0]?.message?.content?.trim() || null
   } catch {
     return null
+  }
+}
+
+// ═══ Export provider info for health check ═══
+export function getProviderStatus(env: Record<string, string | undefined>) {
+  return {
+    pollinations: { available: true, free: true, tier: 1, models: PROVIDERS.pollinations.models },
+    groq: { available: !!env.GROQ_API_KEY, free: true, tier: 2, models: PROVIDERS.groq.models },
+    zai: { available: !!env.ZAI_API_KEY, free: true, tier: 3, models: PROVIDERS.zai.models },
+    huggingface: { available: !!env.HF_API_TOKEN, free: true, tier: 4, models: PROVIDERS.huggingface.models },
+    openrouter: { available: !!env.OPENROUTER_API_KEY, free: false, tier: 4, models: PROVIDERS.openrouter.models },
+    mimo: { available: !!env.MIMO_API_KEY, free: false, tier: 4, models: PROVIDERS.mimo.models },
   }
 }

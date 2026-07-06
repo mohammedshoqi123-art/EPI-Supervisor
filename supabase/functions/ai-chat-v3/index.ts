@@ -327,6 +327,13 @@ const TOOLS = [
   // System tools
   { type: 'function', function: { name: 'get_system_health', description: 'نقاط صحة النظام (0-100)', parameters: { type: 'object', properties: {}, required: [] } } },
   { type: 'function', function: { name: 'get_ai_usage', description: 'إحصائيات AI (Admin only)', parameters: { type: 'object', properties: {}, required: [] } } },
+  // ═══ AI Predictive Tools (NEW — advanced analytics) ═══
+  { type: 'function', function: { name: 'forecast_completion', description: 'تنبؤ ذكي بتاريخ اكتمال الجولة الحالية بناءً على معدل الإرساليات الحالي. يحلل الاتجاه ويعطي تاريخاً متوقعاً + نسبة احتمال.', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, target_submissions: { type: 'number', description: 'العدد المستهدف للإرساليات (افتراضي: يحسب من البيانات)' } }, required: [] } } },
+  { type: 'function', function: { name: 'get_smart_alerts', description: 'تنبيهات ذكية استباقية — يحلل الأنماط ويكشف المشاكل قبل تفاقمها: انخفاض الأداء، مشرفين خاملين، أنماط شاذة، نواقص حرجة متوقعة', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, sensitivity: { type: 'string', enum: ['high', 'medium', 'low'], description: 'حساسية الكشف (high = تنبيهات أكثر)' } }, required: [] } } },
+  { type: 'function', function: { name: 'get_recommendations', description: 'توصيات ذكية مبنية على البيانات — يقترح إجراءات تحسينية بناءً على تحليل الأنماط والمقارنات', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, focus: { type: 'string', enum: ['coverage', 'quality', 'speed', 'all'], description: 'مجال التركيز: التغطية، الجودة، السرعة' } }, required: [] } } },
+  { type: 'function', function: { name: 'detect_anomalies', description: 'كشف الأنماط الشاذة في البيانات — إرساليات مكررة، قيم غير منطقية، نشاط مشبوه، اختلافات كبيرة بين المحافظات', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, days: { type: 'number', description: 'عدد الأيام للتحليل (افتراضي 30)' } }, required: [] } } },
+  { type: 'function', function: { name: 'compare_rounds', description: 'مقارنة ذكية بين جولتين — يحلل الفروقات في الأداء، التغطية، السرعة، ويحدد أسباب التحسن/التراجع', parameters: { type: 'object', properties: { round1: { type: 'number', description: 'رقم الجولة الأولى' }, round2: { type: 'number', description: 'رقم الجولة الثانية' } }, required: ['round1', 'round2'] } } },
+  { type: 'function', function: { name: 'get_supervisor_insights', description: 'رؤى ذكية عن أداء المشرفين — يحدد الأكثر إنتاجية، الأقل نشاطاً، ويقترح تدخلات', parameters: { type: 'object', properties: { days: { type: 'number', description: 'عدد الأيام للتحليل' }, limit: { type: 'number', description: 'عدد المشرفين' } }, required: [] } } },
 ]
 
 // ═══════════════════════════════════════════════════════════
@@ -490,6 +497,430 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           } catch (e) { results.push({ step: i + 1, error: String(e), stopped: true }); break }
         }
         return { workflow: description || 'سلسلة عمليات', total_steps: steps.length, completed: results.filter(r => !r.error).length, results, message: `✅ ${results.filter(r => !r.error).length}/${steps.length} خطوات` }
+      }
+
+      // ═══ AI Predictive Tools (NEW) ═══
+      case 'forecast_completion': {
+        // Smart forecast: analyze trend + predict completion date
+        const days = args.days || 30
+        const since = daysAgo(days)
+        const formIds = await getCampaignFormIds(supa, args.campaign_type || 'all')
+        const roundFilter = context?.campaignRound ? { campaign_round: `eq.${context.campaignRound}` } : {}
+
+        let q = applyCampaignFilter(
+          supa.from('form_submissions').select('created_at, status').is('deleted_at', null).gte('created_at', since),
+          formIds, context?.campaignRound
+        )
+        const { data: subs } = await withTimeout(q.limit(10000), 10_000) ?? {}
+        if (!subs || subs.length === 0) return { error: 'لا توجد بيانات كافية للتنبؤ' }
+
+        // Calculate daily average
+        const byDay: Record<string, number> = {}
+        for (const s of subs) {
+          const day = s.created_at?.split('T')[0]
+          if (day) byDay[day] = (byDay[day] || 0) + 1
+        }
+        const dailyAvg = subs.length / Object.keys(byDay).length
+        const recentDays = Object.entries(byDay).sort().slice(-7)
+        const recentAvg = recentDays.length > 0 ? recentDays.reduce((s, [_, c]) => s + c, 0) / recentDays.length : dailyAvg
+
+        // Trend: is it increasing or decreasing?
+        const firstHalf = recentDays.slice(0, 3).reduce((s, [_, c]) => s + c, 0)
+        const secondHalf = recentDays.slice(3).reduce((s, [_, c]) => s + c, 0)
+        const trendPct = firstHalf > 0 ? Math.round(((secondHalf - firstHalf) / firstHalf) * 100) : 0
+
+        const total = subs.length
+        const target = args.target_submissions || Math.max(total * 2, 1000) // estimate
+        const remaining = Math.max(target - total, 0)
+        const daysToComplete = dailyAvg > 0 ? Math.ceil(remaining / recentAvg) : -1
+        const projectedDate = daysToComplete > 0
+          ? new Date(Date.now() + daysToComplete * 86400000).toISOString().split('T')[0]
+          : 'غير محدد'
+
+        return {
+          forecast: {
+            current_total: total,
+            target,
+            remaining,
+            daily_average: Math.round(dailyAvg),
+            recent_7day_average: Math.round(recentAvg),
+            trend: trendPct > 5 ? '↗️ متزايد' : trendPct < -5 ? '↘️ متناقص' : '→ مستقر',
+            trend_percentage: trendPct,
+            estimated_days_to_complete: daysToComplete,
+            projected_completion_date: projectedDate,
+            confidence: daysToComplete > 0 && daysToComplete < 60 ? 'عالية' : daysToComplete > 0 ? 'متوسطة' : 'منخفضة',
+            recommendation: trendPct < -10
+              ? `⚠️ معدل الإرساليات يتناقص بنسبة ${Math.abs(trendPct)}%. يُنصح بمتابعة المشرفين الخاملين.`
+              : trendPct > 10
+              ? `✅ معدل الإرساليات يتزايد بنسبة ${trendPct}%. الاستمرار على هذا النهج.`
+              : `معدل الإرساليات مستقر. الجولة ستكتمل تقريباً في ${projectedDate}`,
+          }
+        }
+      }
+
+      case 'get_smart_alerts': {
+        // Smart proactive alerts — detect issues before they escalate
+        const sensitivity = args.sensitivity || 'medium'
+        const formIds = await getCampaignFormIds(supa, args.campaign_type || 'all')
+        const alerts: any[] = []
+
+        // 1. Inactive supervisors (no submissions in X days)
+        const inactiveDays = sensitivity === 'high' ? 2 : sensitivity === 'medium' ? 5 : 7
+        const { data: activeUsers } = await withTimeout(
+          supa.from('form_submissions').select('submitted_by, created_at')
+            .is('deleted_at', null).gte('created_at', daysAgo(inactiveDays))
+            .limit(5000),
+          8_000
+        ) ?? {}
+        const activeSet = new Set((activeUsers || []).map(s => s.submitted_by))
+        const { data: allUsers } = await withTimeout(
+          supa.from('profiles').select('id, full_name, role, governorate_id, governorates(name_ar)')
+            .eq('is_active', true).is('deleted_at', null).in('role', ['data_entry', 'district', 'governorate']),
+          8_000
+        ) ?? {}
+        const inactive = (allUsers || []).filter(u => !activeSet.has(u.id))
+        if (inactive.length > 0) {
+          alerts.push({
+            type: 'inactive_supervisors',
+            severity: inactive.length > 10 ? 'critical' : 'warning',
+            title: `${inactive.length} مشرف بدون إرساليات منذ ${inactiveDays} أيام`,
+            details: inactive.slice(0, 10).map(u => ({
+              name: u.full_name,
+              role: u.role,
+              governorate: u.governorates?.name_ar || '—',
+            })),
+            recommendation: 'تواصل مع المشرفين الخاملين وتأكد من توفر الظروف الميدانية',
+          })
+        }
+
+        // 2. Governorates with zero submissions
+        const { data: govSubs } = await withTimeout(
+          supa.from('form_submissions').select('governorate_id').is('deleted_at', null)
+            .gte('created_at', daysAgo(3)).not('governorate_id', 'is', null),
+          8_000
+        ) ?? {}
+        const activeGovs = new Set((govSubs || []).map(s => s.governorate_id))
+        const { data: allGovs } = await withTimeout(
+          supa.from('governorates').select('id, name_ar').eq('is_active', true).is('deleted_at', null),
+          5_000
+        ) ?? {}
+        const inactiveGovs = (allGovs || []).filter(g => !activeGovs.has(g.id))
+        if (inactiveGovs.length > 0) {
+          alerts.push({
+            type: 'inactive_governorates',
+            severity: 'critical',
+            title: `${inactiveGovs.length} محافظة بدون إرساليات منذ 3 أيام`,
+            details: inactiveGovs.map(g => g.name_ar),
+            recommendation: 'تحقق من الاتصال بالفرق الميدانية في هذه المحافظات',
+          })
+        }
+
+        // 3. Critical shortages
+        const { data: shortages } = await withTimeout(
+          supa.from('supply_shortages').select('id, item_name, severity, governorates(name_ar)')
+            .is('deleted_at', null).eq('is_resolved', false).eq('severity', 'critical'),
+          5_000
+        ) ?? {}
+        if (shortages && shortages.length > 0) {
+          alerts.push({
+            type: 'critical_shortages',
+            severity: 'critical',
+            title: `${shortages.length} نقص حرج غير محلول`,
+            details: shortages.slice(0, 5).map(s => ({
+              item: s.item_name,
+              governorate: s.governorates?.name_ar || '—',
+            })),
+            recommendation: 'توفير الموارد العاجلة للمحافظات المتأثرة',
+          })
+        }
+
+        return {
+          total_alerts: alerts.length,
+          critical_count: alerts.filter(a => a.severity === 'critical').length,
+          warning_count: alerts.filter(a => a.severity === 'warning').length,
+          alerts,
+        }
+      }
+
+      case 'get_recommendations': {
+        // Smart recommendations based on data analysis
+        const focus = args.focus || 'all'
+        const formIds = await getCampaignFormIds(supa, args.campaign_type || 'all')
+        const recommendations: any[] = []
+
+        // Coverage recommendations
+        if (focus === 'all' || focus === 'coverage') {
+          const { data: govSubs } = await withTimeout(
+            supa.from('form_submissions').select('governorate_id').is('deleted_at', null)
+              .gte('created_at', daysAgo(7)).not('governorate_id', 'is', null),
+            8_000
+          ) ?? {}
+          const { data: allGovs } = await withTimeout(
+            supa.from('governorates').select('id, name_ar').eq('is_active', true),
+            5_000
+          ) ?? {}
+          const activeGovs = new Set((govSubs || []).map(s => s.governorate_id))
+          const inactiveGovs = (allGovs || []).filter(g => !activeGovs.has(g.id))
+          if (inactiveGovs.length > 0) {
+            recommendations.push({
+              priority: 1,
+              category: 'coverage',
+              title: `توسيع التغطية في ${inactiveGovs.length} محافظة`,
+              description: `المحافظات التالية ليس لها إرساليات منذ 7 أيام: ${inactiveGovs.map(g => g.name_ar).join('، ')}`,
+              action: `إرسال فرق ميدانية إضافية أو متابعة الفرق الحالية في هذه المحافظات`,
+              expected_impact: `زيادة التغطية بنسبة ${Math.round((inactiveGovs.length / (allGovs?.length || 1)) * 100)}%`,
+            })
+          }
+        }
+
+        // Speed recommendations
+        if (focus === 'all' || focus === 'speed') {
+          const { data: draftCount } = await withTimeout(
+            supa.from('form_submissions').select('id', { count: 'exact', head: true })
+              .is('deleted_at', null).eq('status', 'draft'),
+            5_000
+          ) ?? {}
+          if (draftCount && draftCount.count > 0) {
+            recommendations.push({
+              priority: 2,
+              category: 'speed',
+              title: `${draftCount.count} إرسالية في حالة مسودة`,
+              description: 'هناك إرساليات لم تُرسل بعد. قد تحتاج لمتابعة أو تدريب',
+              action: 'تذكير المشرفين بإرسال المسودات أو تدريبهم على عملية الإرسال',
+              expected_impact: `تسريع دورة البيانات بنسبة تصل إلى ${Math.min(draftCount.count, 50)}%`,
+            })
+          }
+        }
+
+        // Quality recommendations
+        if (focus === 'all' || focus === 'quality') {
+          const { data: noGps } = await withTimeout(
+            supa.from('form_submissions').select('id', { count: 'exact', head: true })
+              .is('deleted_at', null).is('gps_lat', null).eq('status', 'submitted'),
+            5_000
+          ) ?? {}
+          if (noGps && noGps.count > 0) {
+            recommendations.push({
+              priority: 3,
+              category: 'quality',
+              title: `${noGps.count} إرسالية بدون إحداثيات GPS`,
+              description: 'إرساليات مرسلة بدون موقع جغرافي — يؤثر على دقة الخريطة والتغطية',
+              action: 'تدريب المشرفين على تفعيل GPS قبل الإرسال + التحقق التلقائي',
+              expected_impact: 'تحسين جودة البيانات الجغرافية بنسبة كبيرة',
+            })
+          }
+        }
+
+        return {
+          total_recommendations: recommendations.length,
+          recommendations: recommendations.sort((a, b) => a.priority - b.priority),
+        }
+      }
+
+      case 'detect_anomalies': {
+        // Detect data anomalies — duplicates, outliers, suspicious patterns
+        const days = args.days || 30
+        const formIds = await getCampaignFormIds(supa, args.campaign_type || 'all')
+        const anomalies: any[] = []
+
+        // 1. Duplicate offline_id check
+        const { data: dupes } = await withTimeout(
+          supa.from('form_submissions').select('offline_id, count')
+            .is('deleted_at', null).not('offline_id', 'is', null)
+            .gte('created_at', daysAgo(days)),
+          8_000
+        ) ?? {}
+        // Note: Supabase doesn't support GROUP BY directly, so we check client-side
+        if (dupes && dupes.length > 0) {
+          const offlineCounts: Record<string, number> = {}
+          for (const d of dupes) {
+            const oid = d.offline_id
+            if (oid) offlineCounts[oid] = (offlineCounts[oid] || 0) + 1
+          }
+          const duplicates = Object.entries(offlineCounts).filter(([_, c]) => c > 1)
+          if (duplicates.length > 0) {
+            anomalies.push({
+              type: 'duplicate_submissions',
+              severity: 'high',
+              count: duplicates.length,
+              description: `${duplicates.length} إرسالية مكررة بنفس offline_id`,
+            })
+          }
+        }
+
+        // 2. Governorate with abnormally high/low submissions
+        const { data: govStats } = await withTimeout(
+          supa.rpc('get_governorate_performance', { p_days: days, p_campaign_round: context?.campaignRound ?? null }),
+          8_000
+        ) ?? {}
+        if (govStats && govStats.length > 3) {
+          const counts = govStats.map((g: any) => g.total || 0)
+          const avg = counts.reduce((s: number, c: number) => s + c, 0) / counts.length
+          const stdDev = Math.sqrt(counts.reduce((s: number, c: number) => s + Math.pow(c - avg, 2), 0) / counts.length)
+          const threshold = avg + 2 * stdDev
+          const outliers = govStats.filter((g: any) => (g.total || 0) > threshold)
+          if (outliers.length > 0) {
+            anomalies.push({
+              type: 'statistical_outlier',
+              severity: 'medium',
+              description: `محافظات بإرساليات أعلى من المعدل بـ 2 انحراف معياري: ${outliers.map((g: any) => `${g.name_ar} (${g.total})`).join('، ')}`,
+              average: Math.round(avg),
+              threshold: Math.round(threshold),
+            })
+          }
+        }
+
+        // 3. Submissions with no governorate (data quality)
+        const { data: noGov } = await withTimeout(
+          supa.from('form_submissions').select('id', { count: 'exact', head: true })
+            .is('deleted_at', null).is('governorate_id', null).gte('created_at', daysAgo(days)),
+          5_000
+        ) ?? {}
+        if (noGov && noGov.count > 0) {
+          anomalies.push({
+            type: 'missing_governorate',
+            severity: 'medium',
+            count: noGov.count,
+            description: `${noGov.count} إرسالية بدون محافظة محددة`,
+          })
+        }
+
+        return {
+          total_anomalies: anomalies.length,
+          anomalies,
+        }
+      }
+
+      case 'compare_rounds': {
+        // Smart comparison between two campaign rounds
+        const r1 = args.round1
+        const r2 = args.round2
+
+        const [r1Data, r2Data] = await Promise.all([
+          withTimeout(
+            supa.from('form_submissions').select('id, status, governorate_id, created_at')
+              .is('deleted_at', null).eq('campaign_round', r1).limit(10000),
+            10_000
+          ) ?? {},
+          withTimeout(
+            supa.from('form_submissions').select('id, status, governorate_id, created_at')
+              .is('deleted_at', null).eq('campaign_round', r2).limit(10000),
+            10_000
+          ) ?? {},
+        ])
+
+        const r1Subs = r1Data.data || []
+        const r2Subs = r2Data.data || []
+
+        if (r1Subs.length === 0 && r2Subs.length === 0) {
+          return { error: `لا توجد بيانات للجولتين ${r1} و ${r2}` }
+        }
+
+        const r1Submitted = r1Subs.filter(s => s.status === 'submitted').length
+        const r2Submitted = r2Subs.filter(s => s.status === 'submitted').length
+        const totalDiff = r2Subs.length - r1Subs.length
+        const submittedDiff = r2Submitted - r1Submitted
+        const totalPct = r1Subs.length > 0 ? Math.round((totalDiff / r1Subs.length) * 100) : 0
+
+        // Governorate comparison
+        const r1Govs: Record<string, number> = {}
+        const r2Govs: Record<string, number> = {}
+        for (const s of r1Subs) { if (s.governorate_id) r1Govs[s.governorate_id] = (r1Govs[s.governorate_id] || 0) + 1 }
+        for (const s of r2Subs) { if (s.governorate_id) r2Govs[s.governorate_id] = (r2Govs[s.governorate_id] || 0) + 1 }
+
+        const allGovIds = new Set([...Object.keys(r1Govs), ...Object.keys(r2Govs)])
+        const { data: govs } = await withTimeout(
+          supa.from('governorates').select('id, name_ar').in('id', Array.from(allGovIds)),
+          5_000
+        ) ?? {}
+        const govMap: Record<string, string> = {}
+        for (const g of govs || []) govMap[g.id] = g.name_ar
+
+        const govComparison = Array.from(allGovIds).map(id => ({
+          governorate: govMap[id] || id.slice(0, 8),
+          round1: r1Govs[id] || 0,
+          round2: r2Govs[id] || 0,
+          difference: (r2Govs[id] || 0) - (r1Govs[id] || 0),
+        })).sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference))
+
+        return {
+          comparison: {
+            round1: { number: r1, total: r1Subs.length, submitted: r1Submitted },
+            round2: { number: r2, total: r2Subs.length, submitted: r2Submitted },
+            total_difference: totalDiff,
+            total_percentage: totalPct,
+            submitted_difference: submittedDiff,
+            direction: totalDiff > 0 ? 'تحسن' : totalDiff < 0 ? 'تراجع' : 'ثابت',
+            governorate_comparison: govComparison.slice(0, 15),
+            insight: totalPct > 20
+              ? `تحسن ملحوظ بنسبة ${totalPct}% في الجولة ${r2} مقارنة بالجولة ${r1}`
+              : totalPct < -20
+              ? `تراجع بنسبة ${Math.abs(totalPct)}% في الجولة ${r2} — يحتاج تحقيق`
+              : `أداء مشابه بين الجولتين (فرق ${totalPct}%)`,
+          }
+        }
+      }
+
+      case 'get_supervisor_insights': {
+        // Smart supervisor insights — productivity, activity, recommendations
+        const days = args.days || 30
+        const limit = args.limit || 20
+        const since = daysAgo(days)
+
+        const { data: subs } = await withTimeout(
+          supa.from('form_submissions').select('submitted_by, status, created_at, gps_lat')
+            .is('deleted_at', null).gte('created_at', since).limit(10000),
+          10_000
+        ) ?? {}
+
+        if (!subs || subs.length === 0) return { error: 'لا توجد بيانات كافية' }
+
+        // Aggregate by user
+        const userStats: Record<string, { total: number, submitted: number, draft: number, withGps: number, lastActive: string }> = {}
+        for (const s of subs) {
+          const uid = s.submitted_by
+          if (!userStats[uid]) userStats[uid] = { total: 0, submitted: 0, draft: 0, withGps: 0, lastActive: '' }
+          userStats[uid].total++
+          if (s.status === 'submitted') userStats[uid].submitted++
+          if (s.status === 'draft') userStats[uid].draft++
+          if (s.gps_lat) userStats[uid].withGps++
+          if (s.created_at > userStats[uid].lastActive) userStats[uid].lastActive = s.created_at
+        }
+
+        // Get user details
+        const userIds = Object.keys(userStats).slice(0, 100)
+        const { data: users } = await withTimeout(
+          supa.from('profiles').select('id, full_name, role, governorates(name_ar)')
+            .in('id', userIds).is('deleted_at', null),
+          8_000
+        ) ?? {}
+
+        const userMap: Record<string, any> = {}
+        for (const u of users || []) userMap[u.id] = u
+
+        const insights = Object.entries(userStats)
+          .map(([uid, stats]) => ({
+            user_id: uid,
+            name: userMap[uid]?.full_name || 'غير معروف',
+            role: userMap[uid]?.role || '—',
+            governorate: userMap[uid]?.governorates?.name_ar || '—',
+            ...stats,
+            gps_rate: stats.total > 0 ? Math.round((stats.withGps / stats.total) * 100) : 0,
+            submission_rate: stats.total > 0 ? Math.round((stats.submitted / stats.total) * 100) : 0,
+          }))
+          .sort((a, b) => b.total - a.total)
+
+        const topPerformers = insights.slice(0, 5)
+        const leastActive = insights.slice(-5).reverse()
+
+        return {
+          total_supervisors: insights.length,
+          total_submissions: subs.length,
+          average_per_supervisor: Math.round(subs.length / insights.length),
+          top_performers: topPerformers.map(s => ({ name: s.name, total: s.total, governorate: s.governorate })),
+          least_active: leastActive.map(s => ({ name: s.name, total: s.total, last_active: s.lastActive?.split('T')[0] || '—' })),
+          insights: insights.slice(0, limit),
+        }
       }
 
       default: return { error: `وظيفة غير معروفة: ${name}` }

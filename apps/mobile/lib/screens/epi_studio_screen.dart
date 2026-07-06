@@ -67,7 +67,7 @@ class StudioArtifact {
         'study_guide' => Icons.menu_book_rounded,
         'faq' => Icons.quiz_rounded,
         'mind_map' => Icons.account_tree_rounded,
-        'audio_overview' => Icons.podcast_rounded,
+        'audio_overview' => Icons.graphic_eq_rounded,
         _ => Icons.auto_awesome_rounded,
       };
 
@@ -100,41 +100,41 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
   bool _loading = false;
   String? _selectedType;
 
-  static const _artifactTypes = [
+  static final _artifactTypes = [
     (
       type: 'briefing_doc',
       icon: Icons.description_rounded,
       label: 'وثيقة موجزة',
       desc: 'ملخص تنفيذي للمديرين',
-      color: Color(0xFF3B82F6),
+      color: const Color(0xFF3B82F6),
     ),
     (
       type: 'study_guide',
       icon: Icons.menu_book_rounded,
       label: 'دليل دراسي',
       desc: 'مفاهيم + أرقام + أسئلة',
-      color: Color(0xFF22C55E),
+      color: const Color(0xFF22C55E),
     ),
     (
       type: 'faq',
       icon: Icons.quiz_rounded,
       label: 'أسئلة شائعة',
       desc: '8-12 سؤال مع إجابات',
-      color: Color(0xFFF59E0B),
+      color: const Color(0xFFF59E0B),
     ),
     (
       type: 'mind_map',
       icon: Icons.account_tree_rounded,
       label: 'خريطة ذهنية',
       desc: 'فروع وتفاصيل مرئية',
-      color: Color(0xFF8B5CF6),
+      color: const Color(0xFF8B5CF6),
     ),
     (
       type: 'audio_overview',
-      icon: Icons.podcast_rounded,
+      icon: Icons.graphic_eq_rounded,
       label: 'بودكاست صوتي',
       desc: 'حوار بصوتين عن الموضوع',
-      color: Color(0xFFEC4899),
+      color: const Color(0xFFEC4899),
     ),
   ];
 
@@ -465,7 +465,7 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Icon(Icons.flash_rounded, size: 12, color: cs.onSurfaceVariant),
+                        Icon(Icons.bolt_rounded, size: 12, color: cs.onSurfaceVariant),
                         const SizedBox(width: 2),
                         Text(
                           artifact.latencyMs < 1000
@@ -607,7 +607,7 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: artifact.color.withValues(alpha: 0.3)),
       ),
-      child: _buildMindMapNode(nodes.first as Map<String, dynamic>, cs, artifact, depth: 0),
+      child: _buildMindMapNode(nodes.first as Map<String, dynamic>, cs, artifact, 0),
     );
   }
 
@@ -615,7 +615,7 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
     Map<String, dynamic> node,
     ColorScheme cs,
     StudioArtifact artifact,
-    required int depth,
+    int depth,
   ) {
     final label = node['label'] as String? ?? '';
     final citation = node['citation'] as int?;
@@ -666,7 +666,7 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
                         Map<String, dynamic>.from(c as Map),
                         cs,
                         artifact,
-                        depth: depth + 1,
+                        depth + 1,
                       ))
                   .toList(),
             ),

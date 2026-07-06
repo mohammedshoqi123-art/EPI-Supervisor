@@ -211,7 +211,7 @@ class CitationChip extends StatelessWidget {
   }
 
   void _showSourceDetails(BuildContext context) {
-    HapticFeedbackSelection.click();
+    HapticFeedback.selectionClick();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,

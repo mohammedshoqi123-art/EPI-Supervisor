@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'citation_widgets.dart' show GroundingSource;
 
 /// ═══════════════════════════════════════════════════════════
 ///  Chat Message Model + Persistence
@@ -68,9 +69,12 @@ class ChatMsg {
         if (toolsUsed != null) 'tools_used': toolsUsed,
         if (groundedInSources != null) 'grounded_in_sources': groundedInSources,
         if (groundingSources != null)
-          'grounding_sources': groundingSources!.map((s) => {
-            'id': s.id, 'type': s.type, 'summary': s.summary,
-            'quote': s.quote, 'metadata': s.metadata,
+          'grounding_sources': groundingSources!.map((s) => <String, dynamic>{
+            'id': s.id,
+            'type': s.type,
+            'summary': s.summary,
+            'quote': s.quote,
+            'metadata': s.metadata,
           }).toList(),
         if (suggestedFollowups != null) 'suggested_followups': suggestedFollowups,
         if (ungrounded != null) 'ungrounded': ungrounded,
@@ -154,9 +158,6 @@ class ChatMsg {
     }
   }
 }
-
-/// Re-export GroundingSource for convenience
-export 'citation_widgets.dart' show GroundingSource;
 
 /// ═══════════════════════════════════════════════════════════
 ///  CHAT PERSISTENCE

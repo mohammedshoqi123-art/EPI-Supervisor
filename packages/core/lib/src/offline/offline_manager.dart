@@ -565,7 +565,9 @@ class OfflineManager {
           'data': v['data'],
           'saved_at': v['saved_at'],
         });
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[OfflineManager] ⚠️ Draft $draftId failed to decrypt: $e');
+      }
     }
     return result;
   }

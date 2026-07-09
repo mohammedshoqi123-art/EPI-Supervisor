@@ -90,16 +90,17 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   void _onTabChanged() {
     if (!_tabController.indexIsChanging) return;
     HapticFeedback.selectionClick();
-    // Load data for the new tab if empty
+    // ═══ FIX: Always reload the active tab — removed isEmpty guard ═══
+    // Previously: tab only reloaded if list was empty, causing stale data
     switch (_tabController.index) {
       case 0:
-        if (_draftItems.isEmpty) _loadDraftsPage(0);
+        _loadDraftsPage(0);
         break;
       case 1:
-        if (_pendingItems.isEmpty) _loadPendingPage(0);
+        _loadPendingPage(0);
         break;
       case 2:
-        if (_submittedItems.isEmpty) _loadSubmittedPage(0);
+        _loadSubmittedPage(0);
         break;
     }
   }
@@ -281,13 +282,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       );
       final data = await ref.read(submissionsProvider(filter).future);
 
-      // Filter only submitted/reviewed/approved/rejected
+      // ═══ FIX P2-8: Only 'submitted' exists — migration 015 removed others ═══
       var allSubmitted = data
-          .where((s) =>
-              s['status'] == 'submitted' ||
-              s['status'] == 'reviewed' ||
-              s['status'] == 'approved' ||
-              s['status'] == 'rejected')
+          .where((s) => s['status'] == 'submitted')
           .toList();
 
       // Apply filters

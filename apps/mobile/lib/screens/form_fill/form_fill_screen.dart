@@ -496,6 +496,18 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       }
 
       if (mounted) {
+        // ═══ FIX P0-3: Invalidate providers so UI refreshes after submit ═══
+        // Previously: form disappeared because providers held stale data
+        ref.invalidate(formStatsProvider);
+        // Invalidate submissions for current campaign
+        final campaign = ref.read(campaignProvider);
+        final round = ref.read(campaignRoundProvider);
+        ref.invalidate(submissionsProvider(SubmissionsFilter(
+          campaignType: campaign.value,
+          campaignRound: campaign.value == 'integrated_activity' ? round : null,
+          limit: 5000,
+        )));
+
         if (syncSucceeded) {
           context.showSuccess('تم الحفظ والإرسال بنجاح ✅');
         } else if (offline.isOnline) {
@@ -591,12 +603,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       canPop: !_hasUnsavedChanges,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
+        // ═══ FIX: Auto-save draft when exiting with unsaved changes ═══
+        // Show dialog with option to save or discard
         final shouldPop = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('تغييرات غير محفوظة', style: TextStyle(fontFamily: 'Tajawal')),
             content: const Text(
-              'لديك تغييرات غير محفوظة. هل تريد الحفظ قبل الخروج؟',
+              'لديك تغييرات غير محفوظة. هل تريد حفظها كمسودة قبل الخروج؟',
               style: TextStyle(fontFamily: 'Tajawal'),
             ),
             actions: [

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_core/epi_core.dart';
+import 'app_providers.dart' show formStatsProvider;
 
 /// ═══════════════════════════════════════════════════════════════════════
 /// Realtime Sync Service
@@ -82,6 +83,42 @@ class RealtimeSyncService {
         callback: (payload) {
           debugPrint('[RealtimeSync] Districts changed: ${payload.eventType}');
           _changeController.add('districts');
+        },
+      );
+
+      // ═══ FIX P1-5: Subscribe to form_submissions for realtime updates ═══
+      // Previously: other users never saw new submissions in realtime
+      _channel!.onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'form_submissions',
+        callback: (payload) {
+          debugPrint('[RealtimeSync] New submission: ${payload.newRecord['id']}');
+          _changeController.add('form_submissions');
+          // Invalidate providers so UI refreshes
+          _ref.invalidate(formStatsProvider);
+        },
+      );
+
+      _channel!.onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'form_submissions',
+        callback: (payload) {
+          debugPrint('[RealtimeSync] Submission updated: ${payload.newRecord['id']}');
+          _changeController.add('form_submissions');
+          _ref.invalidate(formStatsProvider);
+        },
+      );
+
+      // ═══ FIX: Also subscribe to supply_shortages ═══
+      _channel!.onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'supply_shortages',
+        callback: (payload) {
+          debugPrint('[RealtimeSync] New shortage: ${payload.newRecord['id']}');
+          _changeController.add('supply_shortages');
         },
       );
 

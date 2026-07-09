@@ -276,22 +276,57 @@ class DatabaseService {
     String? campaignType,
     int? campaignRound,
   }) async {
-    if (campaignType != null && formId == null) {
-      final campaignForms = await getForms(campaignType: campaignType);
-      if (campaignForms.isEmpty) return 0;
-      final formIds = campaignForms.map((f) => f['id'] as String).toList();
-      final filters = <String, dynamic>{
-        'form_id': ApiClient.inList(formIds),
-      };
+    // ═══ FIX: Use RPC fetch_count to bypass PostgREST 1000-row limit ═══
+    try {
+      // If campaignType is set, we need to filter by form_ids
+      // fetch_count doesn't support form_id filter yet, so we fetch submissions
+      // via RPC and count client-side
+      if (campaignType != null && formId == null) {
+        final campaignForms = await getForms(campaignType: campaignType);
+        if (campaignForms.isEmpty) return 0;
+        final formIds = campaignForms.map((f) => f['id'] as String).toList();
+
+        // Use RPC to get ALL submissions (bypasses 1000 cap)
+        final allSubs = await _api.rpc('fetch_submissions', params: {
+          'p_limit': 50000,
+          'p_offset': 0,
+          if (status != null) 'p_status': status,
+          if (campaignRound != null) 'p_campaign_round': campaignRound,
+        });
+
+        // Filter by form_ids client-side
+        return allSubs.where((s) {
+          final fid = s['form_id'] as String?;
+          return fid != null && formIds.contains(fid);
+        }).length;
+      }
+
+      // No campaignType — use fetch_count RPC directly
+      return _api.rpcCount('fetch_count', params: {
+        'p_table': 'form_submissions',
+        if (status != null) 'p_status': status,
+        if (campaignRound != null) 'p_campaign_round': campaignRound,
+      });
+    } catch (e) {
+      debugPrint('[DatabaseService] getSubmissionsCount RPC error, falling back: $e');
+      // Fallback to old method (capped at 1000 by PostgREST)
+      if (campaignType != null && formId == null) {
+        final campaignForms = await getForms(campaignType: campaignType);
+        if (campaignForms.isEmpty) return 0;
+        final formIds = campaignForms.map((f) => f['id'] as String).toList();
+        final filters = <String, dynamic>{
+          'form_id': ApiClient.inList(formIds),
+        };
+        if (status != null) filters['status'] = status;
+        if (campaignRound != null) filters['campaign_round'] = campaignRound;
+        return _api.count('form_submissions', filters: filters);
+      }
+      final filters = <String, dynamic>{};
+      if (formId != null) filters['form_id'] = formId;
       if (status != null) filters['status'] = status;
       if (campaignRound != null) filters['campaign_round'] = campaignRound;
       return _api.count('form_submissions', filters: filters);
     }
-    final filters = <String, dynamic>{};
-    if (formId != null) filters['form_id'] = formId;
-    if (status != null) filters['status'] = status;
-    if (campaignRound != null) filters['campaign_round'] = campaignRound;
-    return _api.count('form_submissions', filters: filters);
   }
 
   Future<Map<String, dynamic>> submitForm(Map<String, dynamic> data) async {

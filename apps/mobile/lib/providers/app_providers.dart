@@ -474,18 +474,16 @@ final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
     final campaign = ref.read(campaignProvider);
     final round = ref.read(campaignRoundProvider);
 
-    // Count submitted items using server-side count (no data transfer)
-    final submittedStatuses = ['submitted', 'reviewed', 'approved', 'rejected'];
-    for (final status in submittedStatuses) {
-      try {
-        final count = await db.getSubmissionsCount(
-          campaignType: campaign.value,
-          campaignRound: round,
-          status: status,
-        );
-        submitted += count;
-      } catch (_) {}
-    }
+    // ═══ FIX P2-8: Only 'submitted' is valid — migration 015 removed others ═══
+    // Previously: tried 'reviewed', 'approved', 'rejected' which don't exist in enum
+    try {
+      final count = await db.getSubmissionsCount(
+        campaignType: campaign.value,
+        campaignRound: round,
+        status: 'submitted',
+      );
+      submitted = count;
+    } catch (_) {}
   } catch (_) {}
 
   return FormStats(drafts: drafts, pending: pending, submitted: submitted);

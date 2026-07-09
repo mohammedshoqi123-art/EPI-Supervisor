@@ -39,6 +39,10 @@ class ApiClient {
 
   // ===== Generic CRUD operations with RLS =====
 
+  /// Default safety limit — Supabase REST API returns max 1000 rows by default
+  /// when no .limit() is applied. We override to 10000 to prevent silent truncation.
+  static const int _defaultLimit = 10000;
+
   Future<List<Map<String, dynamic>>> select(
     String table, {
     String select = '*',
@@ -69,9 +73,13 @@ class ApiClient {
         finalQuery = finalQuery.order(orderBy, ascending: ascending);
       }
 
-      if (limit != null) finalQuery = finalQuery.limit(limit);
-      if (offset != null)
-        finalQuery = finalQuery.range(offset, offset + (limit ?? 20) - 1);
+      // ═══ FIX: Always apply a limit — Supabase default is 1000 which silently truncates ═══
+      final effectiveLimit = limit ?? _defaultLimit;
+      if (offset != null) {
+        finalQuery = finalQuery.range(offset, offset + effectiveLimit - 1);
+      } else {
+        finalQuery = finalQuery.limit(effectiveLimit);
+      }
 
       return List<Map<String, dynamic>>.from(await finalQuery);
     } on PostgrestException catch (e) {
@@ -120,9 +128,14 @@ class ApiClient {
       if (orderBy != null) {
         finalQuery = finalQuery.order(orderBy, ascending: ascending);
       }
-      if (limit != null) finalQuery = finalQuery.limit(limit);
-      if (offset != null)
-        finalQuery = finalQuery.range(offset, offset + (limit ?? 20) - 1);
+
+      // ═══ FIX: Always apply a limit — Supabase default is 1000 which silently truncates ═══
+      final effectiveLimit = limit ?? _defaultLimit;
+      if (offset != null) {
+        finalQuery = finalQuery.range(offset, offset + effectiveLimit - 1);
+      } else {
+        finalQuery = finalQuery.limit(effectiveLimit);
+      }
 
       return List<Map<String, dynamic>>.from(await finalQuery);
     } on PostgrestException catch (e) {

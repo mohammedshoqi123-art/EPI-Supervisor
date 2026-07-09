@@ -182,6 +182,7 @@ export function useSendNotification() {
         .select('id')
         .eq('is_active', true)
         .is('deleted_at', null)
+        .limit(10000)
 
       if (params.target === 'admin') {
         recipientQuery = recipientQuery.in('role', ['admin', 'central'])
@@ -279,6 +280,7 @@ export function useNotificationTemplates() {
         .from('notification_templates')
         .select('*')
         .order('created_at', { ascending: false })
+        .limit(1000)
       if (error) {
         // Table might not exist yet, return defaults
         if (error.code === '42P01') return getDefaultTemplates()

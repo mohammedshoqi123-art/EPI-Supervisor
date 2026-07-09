@@ -13,6 +13,7 @@ export function useShortages(campaignType?: string, campaignRound?: number) {
         .select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name), form_submissions(form_id, campaign_round, forms(title_ar))')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
+        .limit(10000)
 
       // Campaign filter via submission_id → form_submissions → forms
       query = await applyShortageCampaignFilter(query, campaignType)

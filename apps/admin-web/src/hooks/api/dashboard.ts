@@ -298,6 +298,7 @@ export function useRoleDistribution() {
         .from('profiles')
         .select('role')
         .is('deleted_at', null)
+        .limit(10000)
 
       if (!data) return []
 

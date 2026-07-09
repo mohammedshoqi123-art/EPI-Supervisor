@@ -295,6 +295,68 @@ class ApiClient {
         filters: filters);
   }
 
+  // ===== RPC calls (bypasses PostgREST 1000-row limit) =====
+
+  /// Call a Postgres RPC function that returns JSONB.
+  /// Use this for queries that need >1000 rows (PostgREST default limit).
+  Future<List<Map<String, dynamic>>> rpc(
+    String functionName, {
+    Map<String, dynamic>? params,
+  }) async {
+    try {
+      await _ensureFreshSession();
+      final response = await _safeClient.rpc(
+        functionName,
+        params: params,
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw TimeoutException(
+          'RPC $functionName timed out',
+        ),
+      );
+
+      if (response == null) return [];
+      if (response is List) {
+        return response.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      if (response is Map) {
+        return [Map<String, dynamic>.from(response)];
+      }
+      return [];
+    } on TimeoutException {
+      throw NetworkException('انتهت مهلة الطلب RPC');
+    } catch (e, stack) {
+      _reportUnexpectedError(e, stack, context: 'rpc($functionName)');
+      if (_isNetworkError(e)) throw const NetworkException();
+      debugPrint('[ApiClient] rpc($functionName) error: $e');
+      return [];
+    }
+  }
+
+  /// Call RPC and return a single integer (for count functions)
+  Future<int> rpcCount(
+    String functionName, {
+    Map<String, dynamic>? params,
+  }) async {
+    try {
+      await _ensureFreshSession();
+      final response = await _safeClient.rpc(
+        functionName,
+        params: params,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('RPC count timed out'),
+      );
+
+      if (response is int) return response;
+      if (response is num) return response.toInt();
+      return 0;
+    } catch (e) {
+      debugPrint('[ApiClient] rpcCount($functionName) error: $e');
+      return 0;
+    }
+  }
+
   // ===== Edge Function calls =====
 
   Future<Map<String, dynamic>> callFunction(

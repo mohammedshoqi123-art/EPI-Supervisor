@@ -15,6 +15,36 @@ export function useSubmissions(filters?: {
       const page = filters?.page || 1
       const pageSize = filters?.pageSize || 20
 
+      // ═══ FIX: Use RPC to bypass PostgREST 1000-row limit ═══
+      // When pageSize > 1000, use RPC function instead of direct query
+      if (pageSize > 1000) {
+        const { data: rpcData, error: rpcError } = await supabase
+          .rpc('fetch_submissions', {
+            p_limit: pageSize,
+            p_offset: (page - 1) * pageSize,
+            p_status: filters?.status || null,
+            p_form_id: filters?.formId || null,
+            p_governorate_id: filters?.governorateId || null,
+            p_campaign_round: (filters?.campaignRound && filters.campaignRound > 0) ? filters.campaignRound : null,
+          })
+
+        if (rpcError) {
+          console.error('[useSubmissions] RPC error:', rpcError)
+          // Fallback to direct query
+        } else {
+          const data = (rpcData as any[]) || []
+          // Get count via RPC
+          const { data: countData } = await supabase
+            .rpc('fetch_count', {
+              p_table: 'form_submissions',
+              p_status: filters?.status || null,
+              p_campaign_round: (filters?.campaignRound && filters.campaignRound > 0) ? filters.campaignRound : null,
+            })
+          return { data, count: (countData as number) || data.length }
+        }
+      }
+
+      // Standard query for small page sizes
       let query = supabase
         .from('form_submissions')
         .select(`
@@ -35,29 +65,24 @@ export function useSubmissions(filters?: {
       if (filters?.formId) query = query.eq('form_id', filters.formId)
       if (filters?.governorateId) query = query.eq('governorate_id', filters.governorateId)
 
-      // Role filter — filter by submitter's role via profiles join
       if (filters?.role && filters.role !== 'all') {
         query = query.eq('profiles.role', filters.role)
       }
 
-      // Search by submitter name or email
       if (filters?.search) {
         const s = filters.search
         query = query.or(`profiles.full_name.ilike.%${s}%,profiles.email.ilike.%${s}%`)
       }
 
-      // Campaign filter via form_id
       if (filters?.campaignType && filters.campaignType !== 'all') {
         const formIds = await getCampaignFormIds(filters.campaignType)
         if (formIds && formIds.length > 0) {
           query = query.in('form_id', formIds)
         } else {
-          // No forms for this campaign → return empty
           return { data: [], count: 0 }
         }
       }
 
-      // Campaign round filter
       if (filters?.campaignRound && filters.campaignRound > 0) {
         query = query.eq('campaign_round', filters.campaignRound)
       }

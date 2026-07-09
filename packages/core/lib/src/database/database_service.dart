@@ -168,53 +168,89 @@ class DatabaseService {
     String? orderBy,
     bool ascending = false,
   }) async {
-    // ═══ PERFORMANCE FIX: Single query with IN filter instead of N+1 loop ═══
-    if (campaignType != null && formId == null) {
-      final campaignForms = await getForms(campaignType: campaignType);
-      if (campaignForms.isEmpty) return [];
-      final formIds = campaignForms.map((f) => f['id'] as String).toList();
+    // ═══ FIX: Use RPC to bypass PostgREST 1000-row limit ═══
+    // PostgREST returns max 1000 rows per request regardless of .limit()
+    // RPC functions execute inside PostgreSQL and bypass this limit
+    try {
+      // If no campaignType filter, use the RPC directly
+      if (campaignType == null) {
+        return await _api.rpc('fetch_submissions', params: {
+          'p_limit': limit ?? 10000,
+          'p_offset': offset ?? 0,
+          if (status != null) 'p_status': status,
+          if (formId != null) 'p_form_id': formId,
+          if (governorateId != null) 'p_governorate_id': governorateId,
+          if (campaignRound != null) 'p_campaign_round': campaignRound,
+        });
+      }
 
-      // Build extra filters
-      final extraFilters = <String, dynamic>{};
-      if (status != null) extraFilters['status'] = status;
-      if (governorateId != null) extraFilters['governorate_id'] = governorateId;
-      if (districtId != null) extraFilters['district_id'] = districtId;
-      if (submittedBy != null) extraFilters['submitted_by'] = submittedBy;
-      if (campaignRound != null) extraFilters['campaign_round'] = campaignRound;
+      // ═══ PERFORMANCE FIX: Single query with IN filter instead of N+1 loop ═══
+      if (campaignType != null && formId == null) {
+        final campaignForms = await getForms(campaignType: campaignType);
+        if (campaignForms.isEmpty) return [];
+        final formIds = campaignForms.map((f) => f['id'] as String).toList();
 
-      // Single query with IN filter — replaces N separate queries
-      return _api.selectIn(
+        // Build extra filters
+        final extraFilters = <String, dynamic>{};
+        if (status != null) extraFilters['status'] = status;
+        if (governorateId != null) extraFilters['governorate_id'] = governorateId;
+        if (districtId != null) extraFilters['district_id'] = districtId;
+        if (submittedBy != null) extraFilters['submitted_by'] = submittedBy;
+        if (campaignRound != null) extraFilters['campaign_round'] = campaignRound;
+
+        // Single query with IN filter — replaces N separate queries
+        return _api.selectIn(
+          'form_submissions',
+          'form_id',
+          formIds,
+          select:
+              '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
+          extraFilters: extraFilters,
+          orderBy: orderBy ?? 'created_at',
+          ascending: ascending,
+          limit: limit,
+          offset: offset,
+        );
+      }
+
+      final filters = <String, dynamic>{};
+      if (formId != null) filters['form_id'] = formId;
+      if (status != null) filters['status'] = status;
+      if (governorateId != null) filters['governorate_id'] = governorateId;
+      if (districtId != null) filters['district_id'] = districtId;
+      if (submittedBy != null) filters['submitted_by'] = submittedBy;
+      if (campaignRound != null) filters['campaign_round'] = campaignRound;
+
+      return _api.select(
         'form_submissions',
-        'form_id',
-        formIds,
         select:
             '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
-        extraFilters: extraFilters,
+        filters: filters,
+        orderBy: orderBy ?? 'created_at',
+        ascending: ascending,
+        limit: limit,
+        offset: offset,
+      );
+    } catch (e) {
+      debugPrint('[DatabaseService] getSubmissions RPC error, falling back: $e');
+      // Fallback to old method if RPC fails
+      final filters = <String, dynamic>{};
+      if (formId != null) filters['form_id'] = formId;
+      if (status != null) filters['status'] = status;
+      if (governorateId != null) filters['governorate_id'] = governorateId;
+      if (campaignRound != null) filters['campaign_round'] = campaignRound;
+
+      return _api.select(
+        'form_submissions',
+        select:
+            '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
+        filters: filters,
         orderBy: orderBy ?? 'created_at',
         ascending: ascending,
         limit: limit,
         offset: offset,
       );
     }
-
-    final filters = <String, dynamic>{};
-    if (formId != null) filters['form_id'] = formId;
-    if (status != null) filters['status'] = status;
-    if (governorateId != null) filters['governorate_id'] = governorateId;
-    if (districtId != null) filters['district_id'] = districtId;
-    if (submittedBy != null) filters['submitted_by'] = submittedBy;
-    if (campaignRound != null) filters['campaign_round'] = campaignRound;
-
-    return _api.select(
-      'form_submissions',
-      select:
-          '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
-      filters: filters,
-      orderBy: orderBy ?? 'created_at',
-      ascending: ascending,
-      limit: limit,
-      offset: offset,
-    );
   }
 
   Future<Map<String, dynamic>> getSubmission(String id) async {

@@ -499,11 +499,11 @@ class AppTheme {
   static const Duration durationNormal = Duration(milliseconds: 300);
   static const Duration durationSlow = Duration(milliseconds: 500);
 
-  /// Standard border radii
-  static const double radiusS = 8;
-  static const double radiusM = 12;
-  static const double radiusL = 16;
-  static const double radiusXL = 24;
+  /// Standard border radii (double values — use with BorderRadius.circular())
+  static const double radiusSDouble = 8;
+  static const double radiusMDouble = 12;
+  static const double radiusLDouble = 16;
+  static const double radiusXLDouble = 24;
 
   /// Touch target size (M3 minimum)
   static const double minTouchTarget = 48;

@@ -172,7 +172,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         case 'unread':
           return !n.read;
         case 'urgent':
-          return n.priority == 'urgent' || n.priority == 'high';
+          return n.type == AppNotificationType.warning ||
+                 n.type == AppNotificationType.error ||
+                 n.category == 'urgent' ||
+                 n.category == 'critical';
         default:
           return true;
       }

@@ -316,12 +316,6 @@ class EpiDrawer extends StatelessWidget {
                   ),
                   _buildItem(
                     context,
-                    Icons.vaccines_rounded,
-                    'مستشار التحصين',
-                    '/ai',
-                  ),
-                  _buildItem(
-                    context,
                     Icons.auto_awesome_rounded,
                     'استوديو المحتوى ✨',
                     '/studio',

@@ -156,10 +156,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         child: const Icon(Icons.delete_outline, color: AppTheme.errorColor),
       ),
       onDismissed: (_) async {
-        if (!notification.read) {
-          await NotificationService.markAsRead(notification.id);
-        }
-        // Fix: trigger rebuild to update the list from NotificationService
+        // Actually delete the notification from local list + DB
+        await NotificationService.delete(notification.id);
         if (mounted) {
           setState(() {});
         }

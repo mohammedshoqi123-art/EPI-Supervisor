@@ -467,10 +467,44 @@ class AppTheme {
     switch (status) {
       case 'submitted':
         return infoColor;
+      case 'approved':
+        return successColor;
+      case 'rejected':
+        return errorColor;
+      case 'reviewed':
+        return warningColor;
+      case 'pending_sync':
+        return accentAmber;
       case 'draft':
         return textSecondary;
       default:
         return textSecondary;
     }
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // DESIGN TOKENS — spacing, durations, radii (M3 standard)
+  // ═══════════════════════════════════════════════════════════
+
+  /// Spacing scale — use these instead of raw numbers
+  static const double spaceXS = 4;
+  static const double spaceSM = 8;
+  static const double spaceMD = 16;
+  static const double spaceLG = 24;
+  static const double spaceXL = 32;
+  static const double spaceXXL = 48;
+
+  /// Animation durations
+  static const Duration durationFast = Duration(milliseconds: 150);
+  static const Duration durationNormal = Duration(milliseconds: 300);
+  static const Duration durationSlow = Duration(milliseconds: 500);
+
+  /// Standard border radii
+  static const double radiusS = 8;
+  static const double radiusM = 12;
+  static const double radiusL = 16;
+  static const double radiusXL = 24;
+
+  /// Touch target size (M3 minimum)
+  static const double minTouchTarget = 48;
 }

@@ -195,6 +195,25 @@ class NotificationService {
   /// Clear all notifications
   static void clear() => _notifications.clear();
 
+  /// Delete a single notification (local + DB)
+  static Future<void> delete(String id) async {
+    _notifications.removeWhere((n) => n.id == id);
+    _notify();
+
+    if (_api != null) {
+      try {
+        await _api!.delete('notifications', filters: {'id': id});
+      } catch (e) {
+        if (kDebugMode) print('Failed to delete notification in DB: $e');
+      }
+    }
+  }
+
+  /// Notify listeners of changes
+  static void _notify() {
+    _ctrl.add(List.unmodifiable(_notifications.reversed));
+  }
+
   /// Dispose resources
   static void dispose() => _ctrl.close();
 

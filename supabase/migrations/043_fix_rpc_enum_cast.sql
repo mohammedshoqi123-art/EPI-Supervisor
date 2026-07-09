@@ -1,10 +1,10 @@
 -- ═══════════════════════════════════════════════════════════
--- Migration 042: Fix RPC functions (USING clause instead of format)
+-- Migration 043: Fix RPC — cast status enum + fix count return type
 -- ═══════════════════════════════════════════════════════════
 
 BEGIN;
 
--- ═══ Fix fetch_submissions — use USING clause ═══
+-- ═══ Fix fetch_submissions — cast p_status to submission_status enum ═══
 
 CREATE OR REPLACE FUNCTION public.fetch_submissions(
   p_limit INTEGER DEFAULT 10000,
@@ -21,7 +21,17 @@ SECURITY DEFINER
 AS $$
 DECLARE
   result JSONB;
+  v_status submission_status;
 BEGIN
+  -- Cast text to enum safely
+  IF p_status IS NOT NULL THEN
+    BEGIN
+      v_status := p_status::submission_status;
+    EXCEPTION WHEN OTHERS THEN
+      v_status := NULL;
+    END;
+  END IF;
+
   EXECUTE
     'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb)
      FROM (
@@ -48,14 +58,14 @@ BEGIN
        ORDER BY s.created_at DESC
        LIMIT $6 OFFSET $7
      ) t'
-  USING p_status, p_form_id, p_governorate_id, p_campaign_round, p_days, p_limit, p_offset
+  USING v_status, p_form_id, p_governorate_id, p_campaign_round, p_days, p_limit, p_offset
   INTO result;
 
   RETURN result;
 END;
 $$;
 
--- ═══ Fix fetch_count ═══
+-- ═══ Fix fetch_count — cast status + return BIGINT properly ═══
 
 CREATE OR REPLACE FUNCTION public.fetch_count(
   p_table TEXT DEFAULT 'form_submissions',
@@ -69,26 +79,24 @@ SECURITY DEFINER
 AS $$
 DECLARE
   result BIGINT;
+  v_status submission_status;
 BEGIN
+  -- Cast text to enum safely
+  IF p_status IS NOT NULL THEN
+    BEGIN
+      v_status := p_status::submission_status;
+    EXCEPTION WHEN OTHERS THEN
+      v_status := NULL;
+    END;
+  END IF;
+
   IF p_table = 'form_submissions' THEN
-    IF p_days IS NOT NULL THEN
-      EXECUTE
-        'SELECT count(*) FROM public.form_submissions
-         WHERE deleted_at IS NULL
-           AND ($1 IS NULL OR status = $1)
-           AND ($2 IS NULL OR campaign_round = $2)
-           AND created_at >= NOW() - ($3 || '' days'')::INTERVAL'
-      USING p_status, p_campaign_round, p_days
-      INTO result;
-    ELSE
-      EXECUTE
-        'SELECT count(*) FROM public.form_submissions
-         WHERE deleted_at IS NULL
-           AND ($1 IS NULL OR status = $1)
-           AND ($2 IS NULL OR campaign_round = $2)'
-      USING p_status, p_campaign_round
-      INTO result;
-    END IF;
+    SELECT count(*) INTO result
+    FROM public.form_submissions
+    WHERE deleted_at IS NULL
+      AND (v_status IS NULL OR status = v_status)
+      AND (p_campaign_round IS NULL OR campaign_round = p_campaign_round)
+      AND (p_days IS NULL OR created_at >= NOW() - (p_days || ' days')::INTERVAL);
   ELSIF p_table = 'profiles' THEN
     SELECT count(*) INTO result FROM public.profiles WHERE deleted_at IS NULL;
   ELSIF p_table = 'supply_shortages' THEN
@@ -106,8 +114,5 @@ $$;
 -- Re-grant
 GRANT EXECUTE ON FUNCTION public.fetch_submissions(INTEGER, INTEGER, TEXT, UUID, UUID, INTEGER, INTEGER) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.fetch_count(TEXT, TEXT, INTEGER, INTEGER) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.fetch_all_submissions(INTEGER, INTEGER) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.fetch_all_profiles(INTEGER, INTEGER, BOOLEAN) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.fetch_all_shortages(INTEGER, INTEGER, BOOLEAN) TO authenticated, service_role;
 
 COMMIT;

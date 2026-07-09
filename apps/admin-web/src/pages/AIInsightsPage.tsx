@@ -373,6 +373,7 @@ export default function AIInsightsPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string>('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [aiHint, setAiHint] = useState(false)
 
   const criticalCount = quickInsights.filter(i => i.type === 'critical').length
   const warningCount = quickInsights.filter(i => i.type === 'warning').length
@@ -392,12 +393,13 @@ export default function AIInsightsPage() {
     }
   }
 
-  // Auto-fetch on load
+  // ─── FIX: No auto-fetch — user must click "Analyze" button to avoid burning AI credits ───
+  // Previous code auto-fetched on every page load, wasting credits even when user just browsing
   useEffect(() => {
+    // Only show a hint that analysis is available, don't auto-fetch
     if (stats && !aiAnalysis && !aiLoading) {
-      fetchAIAnalysis()
+      setAiHint(true)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stats])
 
   // Radar chart data

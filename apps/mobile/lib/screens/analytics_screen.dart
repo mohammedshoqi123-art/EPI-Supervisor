@@ -288,7 +288,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           controller: _tab,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          indicatorColor: Colors.amberAccent,
+          indicatorColor: Colors.white,
           indicatorWeight: 3,
           indicatorSize: TabBarIndicatorSize.label,
           labelColor: Colors.white,

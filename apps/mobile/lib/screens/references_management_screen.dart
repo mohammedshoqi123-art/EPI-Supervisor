@@ -299,6 +299,15 @@ class _ReferencesManagementScreenState
           style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
         ),
         centerTitle: true,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppTheme.primaryColor, AppTheme.primaryDark],
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),

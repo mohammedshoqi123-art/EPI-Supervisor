@@ -61,6 +61,15 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
           style: TextStyle(fontFamily: 'Cairo'),
         ),
         centerTitle: true,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppTheme.primaryColor, AppTheme.primaryDark],
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+            ),
+          ),
+        ),
       ),
       body: Column(
         children: [

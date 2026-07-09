@@ -16,6 +16,7 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  String _filter = 'all'; // all, unread, urgent
 
   @override
   void initState() {
@@ -59,6 +60,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
         ),
         centerTitle: true,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppTheme.primaryColor, AppTheme.primaryDark],
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+            ),
+          ),
+        ),
         actions: [
           if (unreadCount > 0)
             TextButton.icon(
@@ -82,22 +92,119 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           ? const Center(child: EpiLoading.shimmer())
           : notifications.isEmpty
               ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadNotifications,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: notifications.length +
-                        (NotificationService.hasMore ? 1 : 0),
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, indent: 72),
-                    itemBuilder: (context, index) {
-                      if (index >= notifications.length) {
-                        return _buildLoadMoreButton();
-                      }
-                      return _buildNotificationTile(notifications[index]);
-                    },
-                  ),
+              : Column(
+                  children: [
+                    _buildFilterChips(unreadCount),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _loadNotifications,
+                        child: _buildFilteredList(notifications),
+                      ),
+                    ),
+                  ],
                 ),
+    );
+  }
+
+  Widget _buildFilterChips(int unreadCount) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          _filterChip('all', 'الكل', null),
+          const SizedBox(width: 8),
+          _filterChip('unread', 'غير مقروء', unreadCount),
+          const SizedBox(width: 8),
+          _filterChip('urgent', 'عاجل', null),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String value, String label, int? count) {
+    final isSelected = _filter == value;
+    return FilterChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          )),
+          if (count != null && count > 0) ...[
+            const SizedBox(width: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.white.withValues(alpha: 0.3) : AppTheme.errorColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? Colors.white : Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      selected: isSelected,
+      onSelected: (_) => setState(() => _filter = value),
+      selectedColor: AppTheme.primaryColor,
+      labelStyle: TextStyle(color: isSelected ? Colors.white : AppTheme.textSecondary),
+      backgroundColor: AppTheme.surfaceLight,
+      side: BorderSide(
+        color: isSelected ? AppTheme.primaryColor : AppTheme.textHint.withValues(alpha: 0.3),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      showCheckmark: false,
+    );
+  }
+
+  Widget _buildFilteredList(List<AppNotification> notifications) {
+    final filtered = notifications.where((n) {
+      switch (_filter) {
+        case 'unread':
+          return !n.read;
+        case 'urgent':
+          return n.priority == 'urgent' || n.priority == 'high';
+        default:
+          return true;
+      }
+    }).toList();
+
+    if (filtered.isEmpty) {
+      return ListView(
+        children: [
+          const SizedBox(height: 100),
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.filter_alt_off_rounded, size: 48, color: AppTheme.textHint.withValues(alpha: 0.4)),
+                const SizedBox(height: 12),
+                Text('لا توجد إشعارات في هذا التصنيف', style: TextStyle(
+                  fontFamily: 'Tajawal', fontSize: 13, color: AppTheme.textHint,
+                )),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      itemCount: filtered.length + (NotificationService.hasMore ? 1 : 0),
+      separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+      itemBuilder: (context, index) {
+        if (index >= filtered.length) return _buildLoadMoreButton();
+        return _buildNotificationTile(filtered[index]);
+      },
     );
   }
 

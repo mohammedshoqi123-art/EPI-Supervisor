@@ -56,7 +56,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       if (_filterRole != null) query = query.eq('role', _filterRole!);
       if (_filterActive != null) query = query.eq('is_active', _filterActive!);
       final response =
-          await query.order('created_at', ascending: false).limit(200);
+          await query.order('created_at', ascending: false).limit(10000);
 
       // Load governorates for the form
       final govs = await client
@@ -335,6 +335,15 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
           style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
         ),
         centerTitle: true,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppTheme.primaryColor, AppTheme.primaryDark],
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list_rounded),

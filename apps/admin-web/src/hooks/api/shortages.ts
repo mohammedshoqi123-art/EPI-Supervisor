@@ -8,6 +8,20 @@ export function useShortages(campaignType?: string, campaignRound?: number) {
   return useQuery({
     queryKey: ['shortages', campaignType, campaignRound],
     queryFn: async () => {
+      // ═══ FIX: Use RPC to bypass PostgREST 1000-row limit ═══
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('fetch_all_shortages', { p_limit: 10000, p_offset: 0 })
+
+      if (!rpcError && rpcData) {
+        let data = rpcData as any[]
+        // Client-side round filter
+        if (campaignRound && campaignRound > 0) {
+          data = data.filter(s => s.campaign_round === campaignRound)
+        }
+        return data
+      }
+
+      // Fallback to direct query (capped at 1000 by PostgREST)
       let query = supabase
         .from('supply_shortages')
         .select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name), form_submissions(form_id, campaign_round, forms(title_ar))')
@@ -20,7 +34,6 @@ export function useShortages(campaignType?: string, campaignRound?: number) {
 
       // Round filter via form_submissions.campaign_round
       if (campaignRound && campaignRound > 0) {
-        // Need to filter by submission's campaign_round — use inner join filter
         const { data: roundSubs } = await supabase
           .from('form_submissions')
           .select('id')
@@ -30,7 +43,6 @@ export function useShortages(campaignType?: string, campaignRound?: number) {
         if (roundSubs && roundSubs.length > 0) {
           query = query.in('submission_id', roundSubs.map(s => s.id))
         } else {
-          // No submissions match the round → empty result
           return []
         }
       }

@@ -294,11 +294,11 @@ export function useRoleDistribution() {
   return useQuery({
     queryKey: ['role-distribution'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('role')
-        .is('deleted_at', null)
-        .limit(10000)
+      // ═══ FIX: Use RPC to bypass PostgREST 1000-row limit ═══
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('fetch_all_profiles', { p_limit: 10000, p_offset: 0 })
+
+      const data = rpcError ? null : rpcData
 
       if (!data) return []
 

@@ -8,6 +8,27 @@ export function useUsers(filters?: { role?: UserRole; search?: string }) {
   return useQuery({
     queryKey: ['users', filters],
     queryFn: async () => {
+      // ═══ FIX: Use RPC to bypass PostgREST 1000-row limit ═══
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('fetch_all_profiles', { p_limit: 10000, p_offset: 0 })
+
+      if (!rpcError && rpcData) {
+        let data = rpcData as any[]
+        // Apply client-side filters (RPC doesn't support all filters)
+        if (filters?.role) {
+          data = data.filter(u => u.role === filters.role)
+        }
+        if (filters?.search) {
+          const s = filters.search.toLowerCase()
+          data = data.filter(u =>
+            u.full_name?.toLowerCase().includes(s) ||
+            u.email?.toLowerCase().includes(s)
+          )
+        }
+        return data
+      }
+
+      // Fallback to direct query (capped at 1000 by PostgREST)
       let query = supabase
         .from('profiles')
         .select('id, full_name, email, phone, role, is_active, last_login, created_at, updated_at, governorate_id, district_id, governorates(name_ar), districts(name_ar)')

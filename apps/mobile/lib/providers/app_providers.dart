@@ -169,7 +169,7 @@ class SubmissionsFilter {
     this.districtId,
     this.campaignType,
     this.campaignRound,
-    this.limit = 200,
+    this.limit = 5000, // ═══ Was 200, caused silent truncation ═══
     this.offset = 0,
   });
 

@@ -229,7 +229,7 @@ export function useNotificationStats() {
         .select('type, category, is_read, created_at')
         .eq('recipient_id', userId)
         .order('created_at', { ascending: false })
-        .limit(500)
+        .limit(5000)
       if (error) throw error
 
       // By type

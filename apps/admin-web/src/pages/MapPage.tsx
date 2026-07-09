@@ -108,12 +108,11 @@ export default function MapPage() {
   const { campaign, labelAr, isFiltered, campaignRound, showRoundFilter } = useCampaign()
   const { previewProps, openPreview, closePreview } = useReportPreview()
 
-  // ═══ FIX: Use smaller page size (500) instead of 10000 — the map filters client-side ═══
-  // The old pageSize: 10000 was loading ALL submissions at once, causing severe freezing.
-  // Now we fetch 500 at a time with pagination. The map only shows GPS-tagged submissions
-  // (which are a small subset), so 500 per page is sufficient for most use cases.
-  // For full map data, users can use the "Map Report" button which uses bulkFetch.
-  const { data: submissions, isLoading, refetch } = useSubmissions({ pageSize: 500, campaignType: campaign, campaignRound: showRoundFilter ? campaignRound : undefined })
+  // ═══ FIX: pageSize 5000 — balance between data completeness and performance ═══
+  // Old: 10000 caused freezing, 500 caused silent truncation.
+  // 5000 is the sweet spot: shows enough pins without freezing.
+  // For full data, use "Map Report" button which uses bulkFetch.
+  const { data: submissions, isLoading, refetch } = useSubmissions({ pageSize: 5000, campaignType: campaign, campaignRound: showRoundFilter ? campaignRound : undefined })
   const { data: forms } = useForms({ pageSize: 100 })
   const { data: governorates } = useGovernorates()
   const { data: users } = useUsers()

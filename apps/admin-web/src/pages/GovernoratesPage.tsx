@@ -79,7 +79,7 @@ export default function GovernoratesPage() {
     formId: selectedForm !== 'all' ? selectedForm : undefined,
     status: statusFilter !== 'all' ? (statusFilter as any) : undefined,
     governorateId: selectedGov || undefined,
-    pageSize: 500,
+    pageSize: 5000,
     campaignType: campaign,
     campaignRound: showRoundFilter ? campaignRound : undefined,
   })

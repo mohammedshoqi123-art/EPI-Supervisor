@@ -84,15 +84,15 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         debugPrint('[FullSync] ❌ Forms: $e');
       }
 
-      // ═══ 4. Submissions (limit 500 — cache handles the rest) ═══
+      // ═══ 4. Submissions (limit 10000 — generous to avoid silent truncation) ═══
       try {
         final subData = await db.getSubmissions(
           campaignType: campaign.value,
-          limit: 500, // ═══ PERFORMANCE: Reduced from 2000 ═══
+          limit: 10000, // ═══ Was 500, caused silent data loss offline ═══
         );
         final filter = SubmissionsFilter(
           campaignType: campaign.value,
-          limit: 500,
+          limit: 10000,
         );
         await cache.putList(filter.cacheKey, subData);
         submissions = subData.length;

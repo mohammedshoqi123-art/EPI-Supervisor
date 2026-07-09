@@ -191,7 +191,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     q = q.eq('campaign_round', campaignRound)
   }
 
-  const { data, error } = await withTimeout(q.limit(500), 8_000) ?? {}
+  const { data, error } = await withTimeout(q.limit(5000), 10_000) ?? {}
 
   if (error || !data || data.length === 0) {
     return []
@@ -260,8 +260,8 @@ async function fetchGovernoratesData(supa: any, plan: QueryPlan, campaignRound: 
     supa.from('form_submissions')
       .select('id, status, governorates(name_ar), forms(campaign_type), campaign_round')
       .is('deleted_at', null)
-      .limit(2000),
-    8_000,
+      .limit(10000),
+    10_000,
   ) ?? {}
 
   if (error || !data) return []
@@ -299,8 +299,8 @@ async function fetchUsersData(supa: any): Promise<GroundingSource[]> {
     supa.from('profiles')
       .select('id, full_name, role, governorates(name_ar), is_active, created_at')
       .is('deleted_at', null)
-      .limit(500),
-    8_000,
+      .limit(5000),
+    10_000,
   ) ?? {}
 
   if (error || !data) return []
@@ -410,8 +410,8 @@ async function fetchTrendsData(supa: any, plan: QueryPlan): Promise<GroundingSou
       .select('created_at, status')
       .is('deleted_at', null)
       .gte('created_at', daysAgo(days))
-      .limit(2000),
-    8_000,
+      .limit(10000),
+    10_000,
   ) ?? {}
 
   if (error || !data) return []

@@ -71,7 +71,7 @@ serve(async (req) => {
         if (status) query = query.eq('status', status)
         if (campaignRound) query = query.eq('campaign_round', campaignRound)
 
-        const { data, error, count } = await query.limit(500)
+        const { data, error, count } = await query.limit(10000)
         if (error) return jsonResponse({ error: error.message }, 400, origin)
 
         // Aggregate stats
@@ -233,7 +233,7 @@ serve(async (req) => {
         if (governorate_id) query = query.eq('governorate_id', governorate_id)
         if (district_id) query = query.eq('district_id', district_id)
 
-        const { data, error, count } = await query.limit(500)
+        const { data, error, count } = await query.limit(10000)
         if (error) return jsonResponse({ error: error.message }, 400, origin)
 
         const severityCounts: Record<string, number> = {}

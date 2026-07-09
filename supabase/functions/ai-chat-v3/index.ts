@@ -240,7 +240,7 @@ async function fetchLiveData(supa: any, profile: UserProfile | null): Promise<st
       }
     } catch {}
     try {
-      const { data: shs } = await withTimeout(supa.from('supply_shortages').select('severity').is('deleted_at', null).eq('is_resolved', false).limit(200), 5_000) ?? {}
+      const { data: shs } = await withTimeout(supa.from('supply_shortages').select('severity').is('deleted_at', null).eq('is_resolved', false).limit(2000), 5_000) ?? {}
       if (shs?.length) {
         const critical = shs.filter((s: any) => s.severity === 'critical').length
         parts.push(`⚠️ نواقص نشطة: ${shs.length} (حرجة: ${critical})`)
@@ -357,7 +357,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
         if (args.status) q = q.eq('status', args.status)
         if (args.days) q = q.gte('created_at', daysAgo(args.days))
         q = applyCampaignFilter(q, formIds, context?.campaignRound)
-        const { data } = await withTimeout(q.limit(2000), 8_000) ?? {}
+        const { data } = await withTimeout(q.limit(10000), 10_000) ?? {}
         if (!data) return { error: 'لا توجد بيانات' }
         const byStatus: Record<string, number> = {}
         data.forEach((r: any) => { byStatus[r.status] = (byStatus[r.status] ?? 0) + 1 })
@@ -422,7 +422,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           const { data: gov } = await supa.from('governorates').select('id').ilike('name_ar', `%${target_governorate}%`).limit(1)
           if (gov?.[0]) uq = uq.eq('governorate_id', gov[0].id)
         }
-        const { data: users } = await withTimeout(uq.limit(500), 8_000) ?? {}
+        const { data: users } = await withTimeout(uq.limit(5000), 10_000) ?? {}
         if (!users?.length) return { error: 'لا يوجد مستلمين' }
         const notifications = users.map((u: any) => ({ user_id: u.id, title, body, priority: priority || 'normal', is_read: false, created_at: new Date().toISOString() }))
         const { error: err } = await withTimeout(supa.from('notifications').insert(notifications), 15_000)

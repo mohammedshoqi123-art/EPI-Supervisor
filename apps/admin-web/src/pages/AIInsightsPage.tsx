@@ -356,7 +356,7 @@ export default function AIInsightsPage() {
   const { data: chartData } = useSubmissionsChart(campaign, effectiveRound)
   const { data: shortages } = useShortages(campaign, effectiveRound)
   const { data: users } = useUsers()
-  const { data: submissionsData } = useSubmissions({ pageSize: 1000, campaignType: campaign, campaignRound: effectiveRound })
+  const { data: submissionsData } = useSubmissions({ pageSize: 5000, campaignType: campaign, campaignRound: effectiveRound })
   const { data: formsData } = useForms({ pageSize: 100 })
 
   const submissions = submissionsData?.data || []

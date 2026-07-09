@@ -327,14 +327,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
       // Fetch readiness submissions — use cache, reasonable limit
       final readinessSubs =
-          await db.getSubmissions(formId: _readinessFormId, limit: 200);
+          await db.getSubmissions(formId: _readinessFormId, limit: 5000);
       if (readinessSubs.isNotEmpty) {
         readinessData = _processReadinessData(readinessSubs);
       }
 
       // Fetch supervision submissions — use cache, reasonable limit
       final supervisionSubs =
-          await db.getSubmissions(formId: _supervisionFormId, limit: 200);
+          await db.getSubmissions(formId: _supervisionFormId, limit: 5000);
       if (supervisionSubs.isNotEmpty) {
         complianceData = _processComplianceData(supervisionSubs);
         serviceNumbersData = _processServiceNumbersData(supervisionSubs);

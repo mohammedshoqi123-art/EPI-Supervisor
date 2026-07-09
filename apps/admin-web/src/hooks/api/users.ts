@@ -13,7 +13,7 @@ export function useUsers(filters?: { role?: UserRole; search?: string }) {
         .select('id, full_name, email, phone, role, is_active, last_login, created_at, updated_at, governorate_id, district_id, governorates(name_ar), districts(name_ar)')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
-        .limit(500)
+        .limit(10000)
 
       if (filters?.role) {
         query = query.eq('role', filters.role)

@@ -66255,13 +66255,13 @@ k=A.y(n,m)
 if(a3!=null)k.k(0,"campaign_round",a3)
 j=p.a
 s=7
-return A.o(j.Jz(0,"form_submissions",k,1000,"id, status, created_at, governorate_id, district_id, form_id"),$async$zH)
+return A.o(j.Jz(0,"form_submissions",k,5000,"id, status, created_at, governorate_id, district_id, form_id"),$async$zH)
 case 7:i=b0
 if(o!=null){o=J.dF(i,new A.ayZ(a1))
 i=A.G(o,!0,o.$ti.i("p.E"))}a1.b=null
 if(a1.a!=null){o=J.dA(i,new A.az_(),n).jq(0)
 a1.b=A.G(o,!0,A.n(o).c)}s=8
-return A.o(j.Jz(0,"supply_shortages",A.y(n,m),1000,"id, severity, is_resolved, created_at, submission_id"),$async$zH)
+return A.o(j.Jz(0,"supply_shortages",A.y(n,m),5000,"id, severity, is_resolved, created_at, submission_id"),$async$zH)
 case 8:h=b0
 if(a1.b!=null){o=J.dF(h,new A.az0(a1))
 h=A.G(o,!0,o.$ti.i("p.E"))}o=t.S
@@ -69680,9 +69680,9 @@ case 20:s=4
 break
 case 23:p=27
 s=30
-return A.o(g.ap3(e.c,500),$async$jV)
+return A.o(g.ap3(e.c,1e4),$async$jV)
 case 30:a2=d2
-a3=A.ahU(null,e.c,500,0)
+a3=A.ahU(null,e.c,1e4,0)
 s=31
 return A.o(f.r5(a3.gagE(),a2),$async$jV)
 case 31:l=J.aS(a2)
@@ -72896,11 +72896,11 @@ h.a=h.b=h.c=h.d=null
 p=4
 m=n.gaS().aY(0,$.ka(),t.Js)
 s=7
-return A.o(m.a2w("8aa0f3d5-7ab0-430f-85fd-4488c0c129bb",200),$async$Ea)
+return A.o(m.a2w("8aa0f3d5-7ab0-430f-85fd-4488c0c129bb",5000),$async$Ea)
 case 7:l=b
 if(J.dL(l))h.d=n.aRE(l)
 s=8
-return A.o(m.a2w("97a4f2b3-c573-4812-b58c-5b0acf814e24",200),$async$Ea)
+return A.o(m.a2w("97a4f2b3-c573-4812-b58c-5b0acf814e24",5000),$async$Ea)
 case 8:k=b
 if(J.dL(k)){h.c=n.aRz(k)
 h.b=n.aRH(k)
@@ -75890,7 +75890,7 @@ s=q}while(true)switch(s){case 0:o.I(new A.bkZ(o))
 q=3
 n=o.gaS().aY(0,$.h8(),t.d)
 m=o.gaS().aY(0,$.kL(),t.S)
-l=A.ahU(m,n.c,500,0)
+l=A.ahU(m,n.c,5000,0)
 s=6
 return A.o(o.gaS().aY(0,$.ayd().$1(l).gej(),t.Of),$async$qb)
 case 6:k=a2
@@ -77025,7 +77025,7 @@ A.mR()
 s=p.gaS()
 r=$.ayd()
 q=p.gaS().aY(0,$.h8(),t.d)
-q=r.$1(A.ahU(p.gaS().aY(0,$.kL(),t.bo),q.c,500,0))
+q=r.$1(A.ahU(p.gaS().aY(0,$.kL(),t.bo),q.c,5000,0))
 if(s.e==null)A.Y(A.a7(o))
 s.ghZ().ey(q)
 s=p.gaS()
@@ -77057,7 +77057,7 @@ if(i>n)n=i
 h=j.b
 if(h<m)m=h
 if(h>l)l=h}g.w.C6(new A.i2((o+n)/2,(m+l)/2),A.c66(p))},
-Lm(){var s=this,r=s.gaS(),q=$.ayd(),p=s.gaS().cR($.h8(),t.d),o=A.f4(r.cR(q.$1(A.ahU(s.gaS().cR($.kL(),t.bo),p.c,500,0)),t.Fu))
+Lm(){var s=this,r=s.gaS(),q=$.ayd(),p=s.gaS().cR($.h8(),t.d),o=A.f4(r.cR(q.$1(A.ahU(s.gaS().cR($.kL(),t.bo),p.c,5000,0)),t.Fu))
 if(o==null)o=A.a([],t.Y)
 r=J.dF(o,new A.boj(s))
 return A.G(r,!0,r.$ti.i("p.E"))},
@@ -77094,7 +77094,7 @@ if(n===B.of||n===B.og||n===B.oh){n=B.f4.M(0.15)
 l=A.R(20)
 B.i.L(s,A.a([A.al(A.a([A.W(o,B.buh,B.v,o,o,new A.T(n,o,A.ci(B.f4.M(0.3),B.R,1),l,o,o,B.D),o,o,o,o,B.pv,o,o,o)],m),B.C,B.u,B.w,o)],m))}if(p.CW)B.i.L(s,A.a([B.b2,p.azq()],m))
 return A.hL(o,A.o5(!0,new A.at(B.f8,A.ar(s,B.a2,B.u,B.w),o),B.aW,!0),o,o,0,0,0,o)},
-azq(){var s,r,q,p=this,o=null,n=p.gaS(),m=$.ayd(),l=p.gaS().cR($.h8(),t.d),k=t.Fu,j=A.f4(n.cR(m.$1(A.ahU(p.gaS().cR($.kL(),t.bo),l.c,500,0)),k)),i=p.aGY(j==null?A.a([],t.Y):j),h=A.f4(p.gaS().aY(0,$.lJ(),k))
+azq(){var s,r,q,p=this,o=null,n=p.gaS(),m=$.ayd(),l=p.gaS().cR($.h8(),t.d),k=t.Fu,j=A.f4(n.cR(m.$1(A.ahU(p.gaS().cR($.kL(),t.bo),l.c,5000,0)),k)),i=p.aGY(j==null?A.a([],t.Y):j),h=A.f4(p.gaS().aY(0,$.lJ(),k))
 if(h==null)h=A.a([],t.Y)
 n=A.R(16)
 m=A.a([new A.bg(0,B.a6,B.T.M(0.08),B.hu,12)],t.R)

@@ -845,6 +845,7 @@ class _ChallengesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final subsAsync = ref.watch(_supervisionSubsProvider(_getAnalyticsParams(ref)));
+    final govAsync = ref.watch(governoratesProvider);
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -863,6 +864,11 @@ class _ChallengesTab extends ConsumerWidget {
           return const _Empty(
               icon: Icons.description_outlined,
               msg: 'لا توجد تحديات أو توصيات مسجلة');
+        }
+
+        final govNames = <String, String>{};
+        for (final g in (govAsync.valueOrNull ?? [])) {
+          govNames[g['id'] as String? ?? ''] = g['name_ar'] as String? ?? '';
         }
 
         return RefreshIndicator(
@@ -956,10 +962,7 @@ class _ChallengesTab extends ConsumerWidget {
                       ]),
                 ),
               );
-            },
-          ),
-        );
-      }).toList(),
+            }).toList(),
             ],
           ),
         );

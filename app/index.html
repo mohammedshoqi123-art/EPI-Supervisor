@@ -1,96 +1,208 @@
 <!DOCTYPE html>
-<html dir="ltr">
+<html dir="rtl">
 <head>
   <base href="/EPI-Supervisor/app/">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="EPI Supervisor's - نظام إشراف ميداني لحملات التطعيم">
+  <meta name="description" content="نظام الإشراف الإلكتروني لبرنامج التحصين الصحي الموسع">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="EPI Supervisor's">
+  <meta name="apple-mobile-web-app-title" content="EPI Supervisor">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <link rel="manifest" href="manifest.json">
-  <title>EPI Supervisor's</title>
+  <title>نظام الإشراف الإلكتروني لبرنامج التحصين الصحي الموسع</title>
 
   <style>
+    /* ═══ Modern Loading Screen — Teal Gradient Theme ═══ */
     .loading-screen {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 50%, #f0f4ff 100%);
-      font-family: 'Tajawal', 'Cairo', sans-serif; z-index: 9999;
+      background: linear-gradient(135deg, #004D40 0%, #00695C 30%, #00897B 60%, #4DB6AC 100%);
+      font-family: 'Tajawal', 'Cairo', 'Segoe UI', sans-serif;
+      z-index: 9999;
+      overflow: hidden;
     }
     .loading-screen.hidden { display: none; }
-    .loading-logo {
-      width: 80px; height: 80px; border-radius: 20px;
-      background: linear-gradient(135deg, #1565C0, #1976D2);
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 8px 32px rgba(21,101,192,0.3);
-      margin-bottom: 24px;
+
+    /* Decorative circles */
+    .loading-screen::before {
+      content: '';
+      position: absolute;
+      top: -100px; right: -100px;
+      width: 300px; height: 300px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.05);
     }
-    .loading-logo svg { width: 48px; height: 48px; fill: white; }
+    .loading-screen::after {
+      content: '';
+      position: absolute;
+      bottom: -150px; left: -150px;
+      width: 400px; height: 400px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.03);
+    }
+
+    /* Logo container */
+    .loading-logo {
+      width: 100px; height: 100px;
+      border-radius: 28px;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+      margin-bottom: 28px;
+      position: relative;
+      z-index: 1;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .loading-logo svg { width: 56px; height: 56px; }
+
+    /* Pulse animation on logo */
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
+      50% { transform: scale(1.05); box-shadow: 0 16px 50px rgba(0,0,0,0.3); }
+    }
+    .loading-logo { animation: pulse 2s ease-in-out infinite; }
+
+    /* Spinner */
     .loading-spinner {
-      width: 40px; height: 40px;
-      border: 3px solid #e3e8f0; border-top-color: #1976D2;
-      border-radius: 50%; animation: spin 0.8s linear infinite;
-      margin-bottom: 16px;
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 20px;
+      position: relative; z-index: 1;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .loading-title { color: #1a1a2e; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-    .loading-subtitle { color: #666; font-size: 13px; margin-bottom: 24px; }
-    .loading-bar { width: 200px; height: 4px; background: #e3e8f0; border-radius: 2px; overflow: hidden; }
-    .loading-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #1976D2, #42A5F5); border-radius: 2px; animation: progress 8s ease-in-out forwards; }
-    @keyframes progress { 0% { width: 5%; } 30% { width: 40%; } 60% { width: 70%; } 90% { width: 90%; } 100% { width: 95%; } }
-    .loading-hint { color: #999; font-size: 11px; margin-top: 16px; }
+
+    /* Title */
+    .loading-title {
+      color: #ffffff;
+      font-size: 18px; font-weight: 700;
+      margin-bottom: 6px;
+      text-align: center;
+      position: relative; z-index: 1;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .loading-subtitle {
+      color: rgba(255,255,255,0.7);
+      font-size: 12px;
+      margin-bottom: 28px;
+      text-align: center;
+      position: relative; z-index: 1;
+    }
+
+    /* Progress bar */
+    .loading-bar {
+      width: 220px; height: 4px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 2px; overflow: hidden;
+      position: relative; z-index: 1;
+    }
+    .loading-bar-fill {
+      width: 0%; height: 100%;
+      background: linear-gradient(90deg, #4DB6AC, #80CBC4, #B2DFDB);
+      border-radius: 2px;
+      animation: progress 30s ease-in-out forwards;
+    }
+    @keyframes progress {
+      0% { width: 5%; }
+      15% { width: 20%; }
+      30% { width: 40%; }
+      50% { width: 60%; }
+      70% { width: 75%; }
+      85% { width: 85%; }
+      100% { width: 95%; }
+    }
+
+    /* Loading hint */
+    .loading-hint {
+      color: rgba(255,255,255,0.5);
+      font-size: 11px;
+      margin-top: 16px;
+      position: relative; z-index: 1;
+    }
+
+    /* Error screen */
     .error-screen {
       display: none;
-      padding: 32px;
+      padding: 40px 24px;
       text-align: center;
       font-family: 'Tajawal', 'Cairo', sans-serif;
       color: #333;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(135deg, #004D40 0%, #00695C 30%, #00897B 60%, #4DB6AC 100%);
+      z-index: 10000;
+      flex-direction: column;
+      align-items: center; justify-content: center;
     }
-    .error-screen.visible { display: block; }
-    .error-screen h2 { color: #d32f2f; margin-bottom: 12px; }
+    .error-screen.visible { display: flex; }
+    .error-screen h2 {
+      color: #ffffff;
+      margin-bottom: 12px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .error-screen p {
+      color: rgba(255,255,255,0.8);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
     .error-screen button {
-      margin-top: 16px;
-      padding: 10px 24px;
-      background: #1976D2;
+      margin-top: 20px;
+      padding: 12px 32px;
+      background: rgba(255,255,255,0.2);
       color: white;
-      border: none;
-      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
       cursor: pointer;
       font-size: 14px;
+      font-family: 'Tajawal', sans-serif;
+      font-weight: 600;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s;
+    }
+    .error-screen button:hover {
+      background: rgba(255,255,255,0.3);
+      transform: scale(1.05);
     }
   </style>
 </head>
-<body style="background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 50%, #f0f4ff 100%);">
+<body style="margin:0; padding:0; background: #004D40;">
   <!-- Loading screen -->
   <div class="loading-screen" id="loading">
     <div class="loading-logo">
-      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+      <!-- Vaccination syringe + shield icon (EPI logo) -->
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L4 5v6c0 5.5 3.8 10.7 8 12 4.2-1.3 8-6.5 8-12V5l-8-3z" fill="white" fill-opacity="0.9"/>
+        <path d="M9 12l2 2 4-4" stroke="#00897B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <path d="M14.5 6.5l3 3M17 4l-1.5 1.5M19.5 6.5L18 8" stroke="white" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      </svg>
     </div>
     <div class="loading-spinner"></div>
-    <div class="loading-title">EPI Supervisor</div>
-    <div class="loading-subtitle">منصة الإشراف الميداني لحملات التطعيم</div>
+    <div class="loading-title">نظام الإشراف الإلكتروني</div>
+    <div class="loading-subtitle">لبرنامج التحصين الصحي الموسع</div>
     <div class="loading-bar"><div class="loading-bar-fill"></div></div>
     <div class="loading-hint" id="loadProgress">جاري التحميل...</div>
   </div>
 
-  <!-- Error screen (shown if Flutter fails to load) -->
+  <!-- Error screen -->
   <div class="error-screen" id="errorScreen">
     <h2>⚠️ خطأ في تحميل التطبيق</h2>
     <p id="errorMessage">حدث خطأ أثناء تحميل التطبيق. يرجى المحاولة مرة أخرى.</p>
-    <p id="errorDetail" style="font-size:12px;color:#999;margin-top:12px;"></p>
+    <p id="errorDetail" style="font-size:11px; opacity:0.6; margin-top:8px;"></p>
     <button onclick="location.reload(true)">إعادة المحاولة</button>
   </div>
 
   <script>
     // Track loading progress
     var progressEl = document.getElementById('loadProgress');
-    
+
     // Global error handler
     window.addEventListener('error', function(e) {
       console.error('Flutter error:', e.message, e.filename, e.lineno);
@@ -98,7 +210,7 @@
       var errDetail = document.getElementById('errorDetail');
       if (errScreen) {
         errDetail.textContent = e.filename ? (e.filename + ':' + e.lineno) : '';
-        errScreen.style.display = 'block';
+        errScreen.classList.add('visible');
       }
       var loading = document.getElementById('loading');
       if (loading) loading.classList.add('hidden');
@@ -110,7 +222,7 @@
       var errDetail = document.getElementById('errorDetail');
       if (errScreen) {
         errDetail.textContent = String(e.reason || '');
-        errScreen.style.display = 'block';
+        errScreen.classList.add('visible');
       }
       var loading = document.getElementById('loading');
       if (loading) loading.classList.add('hidden');
@@ -118,44 +230,44 @@
 
     // Update progress during load
     if (progressEl) {
-      setTimeout(function() { progressEl.textContent = 'تحميل الموارد...'; }, 500);
-      setTimeout(function() { progressEl.textContent = 'تجهيز المحرك...'; }, 2000);
-      setTimeout(function() { progressEl.textContent = 'الاتصال بالخادم...'; }, 4000);
-      setTimeout(function() { progressEl.textContent = 'جاري التهيئة...'; }, 6000);
+      setTimeout(function() { progressEl.textContent = 'تحميل الموارد...'; }, 1000);
+      setTimeout(function() { progressEl.textContent = 'تجهيز المحرك...'; }, 4000);
+      setTimeout(function() { progressEl.textContent = 'الاتصال بالخادم...'; }, 8000);
+      setTimeout(function() { progressEl.textContent = 'جاري التهيئة...'; }, 12000);
+      setTimeout(function() { progressEl.textContent = 'تقريباً جاهز...'; }, 16000);
+      setTimeout(function() { progressEl.textContent = 'جاري إكمال التحميل...'; }, 20000);
     }
 
-    // Unregister any stale service workers that may cache old builds
+    // Unregister any stale service workers
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
         registrations.forEach(function(reg) { reg.unregister(); });
       }).catch(function() {});
     }
-    // Clear all caches to prevent stale builds
+    // Clear all caches
     if ('caches' in window) {
       caches.keys().then(function(names) { names.forEach(function(n) { caches.delete(n); }); });
     }
 
-    // ═══ Detect if Flutter has started rendering (works for both HTML and CanvasKit renderers) ═══
+    // ═══ Detect if Flutter has started rendering ═══
     function hasFlutterRendered() {
       var fv = document.querySelector('flutter-view');
       if (!fv) return false;
-      // CanvasKit renderer
       if (fv.querySelector('canvas') || fv.querySelector('flt-canvas-container') || fv.querySelector('flt-scene-host')) return true;
-      // HTML renderer — flt-glass-pane has shadow root with scene content
       var gp = fv.querySelector('flt-glass-pane');
       if (gp && gp.shadowRoot && gp.shadowRoot.children.length > 0) return true;
       if (gp && gp.children.length > 0) return true;
-      // flt-platform-view-slot (hybrid views)
       if (fv.querySelector('flt-platform-view-slot')) return true;
-      // Shadow root check on flutter-view itself
       if (fv.shadowRoot && fv.shadowRoot.querySelector('canvas')) return true;
-      // Semantics host with content
       var sem = fv.querySelector('flt-semantics-host');
       if (sem && sem.children.length > 0) return true;
       return false;
     }
 
-    // ═══ Loading timeout: if Flutter doesn't start rendering within 30s, show error ═══
+    // ═══ Loading timeout: 120 SECONDS (was 30s — doubled twice) ═══
+    // Flutter Web with CanvasKit can take 60-90s on slow connections
+    var TIMEOUT_MS = 120000; // 120 seconds — was 30000
+
     setTimeout(function() {
       if (!hasFlutterRendered()) {
         var loading = document.getElementById('loading');
@@ -164,10 +276,10 @@
         if (loading) loading.style.display = 'none';
         if (errScreen) {
           errScreen.classList.add('visible');
-          if (errMsg) errMsg.textContent = 'انتهت مهلة تحميل التطبيق. حاول فتح الموقع في متصفح آخر أو تأكد من دعم WebGL.';
+          if (errMsg) errMsg.textContent = 'انتهت مهلة تحميل التطبيق (120 ثانية). حاول فتح الموقع في متصفح آخر أو تأكد من اتصال الإنترنت.';
         }
       }
-    }, 30000);
+    }, TIMEOUT_MS);
 
     // ═══ Auto-hide loading screen when Flutter renders first frame ═══
     var observer = new MutationObserver(function() {
@@ -181,15 +293,12 @@
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // ═══ FIX: Flutter HTML renderer coordinate issue with RTL ═══
-    // The html[dir=rtl] causes Flutter's absolute positioning to place
-    // elements outside the viewport. Force LTR on flutter-view.
+    // ═══ FIX: Flutter HTML renderer RTL issue ═══
     var _fixFlutterRTL = new MutationObserver(function() {
       var fv = document.querySelector('flutter-view');
       if (fv) {
         fv.setAttribute('dir', 'ltr');
         fv.style.direction = 'ltr';
-        // Fix canvas z-index so content is visible
         var gp = fv.querySelector('flt-glass-pane');
         if (gp && gp.shadowRoot) {
           gp.shadowRoot.querySelectorAll('canvas').forEach(function(c) {

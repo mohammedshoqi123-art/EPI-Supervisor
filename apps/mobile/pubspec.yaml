@@ -1,6 +1,6 @@
 name: epi_supervisor
 description: EPI Supervisor Platform - Mobile App
-version: 2.8.0+31
+version: 2.9.0+32
 publish_to: none
 
 environment:

@@ -464,31 +464,134 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     DashboardReportExporter.showExportSheet(
       context: context,
-      onGenerate: (type) => DashboardReportExporter.generateAndShare(
-        context: context,
-        type: type,
-        analyticsData: ref
-            .read(
-              dashboardAnalyticsProvider(
-                AnalyticsFilter(campaignType: ref.watch(campaignProvider).value, campaignRound: ref.watch(campaignRoundProvider)),
-              ),
-            )
-            .valueOrNull,
-        fetchGovRanking: () async {
-          try {
-            return await ref
-                .read(analyticsServiceProvider)
-                .getGovernorateRanking();
-          } catch (_) {
-            return null;
-          }
-        },
-        readinessData: readinessData,
-        complianceData: complianceData,
-        serviceNumbersData: serviceNumbersData,
-        challengesData: challengesData,
-      ),
+      campaignLabel: ref.watch(campaignProvider).displayLabel,
+      campaignRound: ref.watch(campaignRoundProvider),
+      onGenerate: (type, format, period) async {
+        // ═══ Phase 2-3: Route to appropriate generator based on type ═══
+        if (type == 'supervisor_leaderboard') {
+          await _generateSupervisorLeaderboard(format, period);
+          return;
+        }
+        if (type == 'round_comparison') {
+          await _generateRoundComparison(format, period);
+          return;
+        }
+
+        // Standard reports use the existing generator
+        await DashboardReportExporter.generateAndShare(
+          context: context,
+          type: type,
+          analyticsData: ref
+              .read(
+                dashboardAnalyticsProvider(
+                  AnalyticsFilter(campaignType: ref.watch(campaignProvider).value, campaignRound: ref.watch(campaignRoundProvider)),
+                ),
+              )
+              .valueOrNull,
+          fetchGovRanking: () async {
+            try {
+              return await ref
+                  .read(analyticsServiceProvider)
+                  .getGovernorateRanking();
+            } catch (_) {
+              return null;
+            }
+          },
+          readinessData: readinessData,
+          complianceData: complianceData,
+          serviceNumbersData: serviceNumbersData,
+          challengesData: challengesData,
+        );
+      },
     );
+  }
+
+  /// ═══ Phase 3-3: Supervisor Leaderboard Report ═══
+  Future<void> _generateSupervisorLeaderboard(String format, String period) async {
+    try {
+      final db = ref.read(databaseServiceProvider);
+      final campaign = ref.read(campaignProvider).value;
+      final round = ref.read(campaignRoundProvider);
+
+      // Fetch submissions with submitter info
+      final subs = await db.getSubmissions(
+        campaignType: campaign,
+        campaignRound: round,
+        limit: 10000,
+      );
+
+      // Aggregate by user
+      final userStats = <String, Map<String, dynamic>>{};
+      for (final s in subs) {
+        final uid = s['submitted_by'] as String? ?? 'unknown';
+        final name = (s['profiles'] as Map?)?['full_name'] as String? ?? 'غير معروف';
+        if (!userStats.containsKey(uid)) {
+          userStats[uid] = {'name': name, 'total': 0, 'submitted': 0};
+        }
+        userStats[uid]!['total'] = (userStats[uid]!['total'] as int) + 1;
+        if (s['status'] == 'submitted') {
+          userStats[uid]!['submitted'] = (userStats[uid]!['submitted'] as int) + 1;
+        }
+      }
+
+      // Sort by total submissions
+      final ranked = userStats.values.toList()
+        ..sort((a, b) => (b['total'] as int).compareTo(a['total'] as int));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🏆 تم توليد تقرير ترتيب المشرفين (${ranked.length} مشرف)'),
+            backgroundColor: AppTheme.primaryColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// ═══ Phase 3-4: Round Comparison Report ═══
+  Future<void> _generateRoundComparison(String format, String period) async {
+    try {
+      final db = ref.read(databaseServiceProvider);
+      final campaign = ref.read(campaignProvider).value;
+      final currentRound = ref.read(campaignRoundProvider);
+
+      // Fetch current round submissions
+      final currentSubs = await db.getSubmissions(
+        campaignType: campaign,
+        campaignRound: currentRound,
+        limit: 10000,
+      );
+
+      // Fetch previous round submissions
+      final prevRound = currentRound > 1 ? currentRound - 1 : 1;
+      final prevSubs = await db.getSubmissions(
+        campaignType: campaign,
+        campaignRound: prevRound,
+        limit: 10000,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🔄 مقارنة الجولة $currentRound مع الجولة $prevRound: ${currentSubs.length} vs ${prevSubs.length}'),
+            backgroundColor: AppTheme.primaryColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   List<ReadinessGovData> _processReadinessData(

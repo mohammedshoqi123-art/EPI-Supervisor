@@ -497,16 +497,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
       if (mounted) {
         // ═══ FIX P0-3: Invalidate providers so UI refreshes after submit ═══
-        // Previously: form disappeared because providers held stale data
-        ref.invalidate(formStatsProvider);
-        // Invalidate submissions for current campaign
-        final campaign = ref.read(campaignProvider);
-        final round = ref.read(campaignRoundProvider);
-        ref.invalidate(submissionsProvider(SubmissionsFilter(
-          campaignType: campaign.value,
-          campaignRound: campaign.value == 'integrated_activity' ? round : null,
-          limit: 5000,
-        )));
+        // Wrapped in try-catch to prevent crash if widget is disposing
+        try {
+          if (mounted) {
+            ref.invalidate(formStatsProvider);
+          }
+        } catch (_) {}
 
         if (syncSucceeded) {
           context.showSuccess('تم الحفظ والإرسال بنجاح ✅');
@@ -515,7 +511,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         } else {
           context.showSuccess(AppStrings.formSubmittedOffline);
         }
-        context.pop();
+        // ═══ FIX: Set _hasUnsavedChanges = false before pop to prevent PopScope loop ═══
+        _hasUnsavedChanges = false;
+        if (mounted) Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
@@ -569,6 +567,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     _syncControllersToFormData();
     if (_formData.isEmpty) return;
 
+    // ═══ FIX: Don't auto-save if widget is disposed ═══
+    if (!mounted) return;
+
     try {
       final offline = await ref.read(offlineManagerProvider.future).timeout(
         const Duration(seconds: 5),
@@ -576,6 +577,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           throw TimeoutException('Offline storage not ready for auto-save');
         },
       );
+      // Check mounted again after async gap
+      if (!mounted) return;
       await offline.saveDraft(
         _draftId,
         widget.formId,
@@ -586,9 +589,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         context.showSuccess('تم الحفظ التلقائي');
       }
     } on TimeoutException {
-      // ═══ FIX F6: Show feedback on repeated auto-save failures ═══
+      // Silent — auto-save will retry on next timer tick
     } catch (e) {
       debugPrint('[AutoSave] Failed: $e');
+      // Don't rethrow — auto-save should be non-blocking
     }
   }
 
@@ -598,14 +602,15 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ═══ FIX U3: Protect against losing unsaved changes ═══
+    // ═══ FIX: PopScope without infinite loop ═══
+    // Previous code: context.pop() after dialog triggered PopScope again
+    // because _hasUnsavedChanges was still true → infinite loop → app crash
     return PopScope(
       canPop: !_hasUnsavedChanges,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        // ═══ FIX: Auto-save draft when exiting with unsaved changes ═══
-        // Show dialog with option to save or discard
-        final shouldPop = await showDialog<bool>(
+
+        final shouldSave = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('تغييرات غير محفوظة', style: TextStyle(fontFamily: 'Tajawal')),
@@ -633,8 +638,13 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
             ],
           ),
         );
-        if (shouldPop == true && context.mounted) {
-          context.pop();
+
+        if (shouldSave == true && mounted) {
+          // ═══ CRITICAL FIX: Set _hasUnsavedChanges = false BEFORE popping ═══
+          // Otherwise PopScope fires again → infinite loop → app crash
+          _hasUnsavedChanges = false;
+          // Use Navigator.pop instead of context.pop to bypass PopScope
+          Navigator.of(context).pop();
         }
       },
       child: Scaffold(

@@ -4,8 +4,9 @@ import 'package:epi_core/epi_core.dart';
 
 /// ═══ Color mode for map markers ═══
 enum MapColorMode {
+  level,  // Color by admin level (مركزي/محافظة/مديرية) — DEFAULT
   status, // Color by submission status
-  role, // Color by supervisor role
+  role,   // Color by supervisor role (legacy)
 }
 
 /// Map utility helpers — colors, formatting, cluster logic
@@ -27,6 +28,55 @@ class MapHelpers {
         return const Color(0xFFEF4444); // أحمر
       default:
         return const Color(0xFF6B7280); // رمادي
+    }
+  }
+
+  // ═══ Level colors: مركزي = أحمر، محافظة = أزرق، مديرية = أخضر ═══
+  static Color levelColor(String? role) {
+    switch (role) {
+      case 'admin':
+      case 'central':
+        return const Color(0xFFEF4444); // أحمر — مركزي
+      case 'governorate':
+        return const Color(0xFF3B82F6); // أزرق — محافظة
+      case 'district':
+        return const Color(0xFF10B981); // أخضر — مديرية
+      case 'data_entry':
+        return const Color(0xFFF59E0B); // برتقالي — ميداني
+      default:
+        return const Color(0xFF6B7280); // رمادي
+    }
+  }
+
+  static String levelLabel(String? role) {
+    switch (role) {
+      case 'admin':
+      case 'central':
+        return 'مركزي';
+      case 'governorate':
+        return 'محافظة';
+      case 'district':
+        return 'مديرية';
+      case 'data_entry':
+        return 'ميداني';
+      default:
+        return 'غير محدد';
+    }
+  }
+
+  static IconData levelIcon(String? role) {
+    switch (role) {
+      case 'admin':
+      case 'central':
+        return Icons.account_balance_rounded;
+      case 'governorate':
+        return Icons.location_city_rounded;
+      case 'district':
+        return Icons.map_rounded;
+      case 'data_entry':
+        return Icons.person_rounded;
+      default:
+        return Icons.help_outline_rounded;
     }
   }
 

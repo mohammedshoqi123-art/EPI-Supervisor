@@ -10,8 +10,8 @@ import '../router/app_router.dart';
 import 'forms_status_widgets.dart';
 
 /// ═══ Forms Status Dashboard ═══
-/// Shows 3 tabs: المسودات (Drafts) | قيد المزامنة (Pending Sync) | المرسلة (Submitted)
-/// Each tab has page-based pagination (20 per page) with next/prev navigation.
+/// Shows 4 tabs: المسودات | قيد المزامنة | المرسلة | إرسالياتي
+/// With summary cards, level filter, and search.
 class FormsStatusScreen extends ConsumerStatefulWidget {
   const FormsStatusScreen({super.key});
 
@@ -34,6 +34,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   String? _filterSupervisorRole;
   String? _filterSupervisorName;
   bool _showFilters = false;
+
+  // ═══ Level filter: all / mine / above / below ═══
+  String _levelFilter = 'all';
 
   // ═══ Sort state ═══
   String _sortBy =
@@ -77,7 +80,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(_onTabChanged);
     _listenForSyncCompletion();
 
@@ -100,6 +103,10 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         _loadPendingPage(0);
         break;
       case 2:
+        _loadSubmittedPage(0);
+        break;
+      case 3:
+        // "إرسالياتي" tab — loads submitted filtered by current user
         _loadSubmittedPage(0);
         break;
     }
@@ -477,6 +484,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       case 2:
         _loadSubmittedPage(0);
         break;
+      case 3:
+        _loadSubmittedPage(0); // "إرسالياتي" reuses submitted data
+        break;
     }
   }
 
@@ -640,6 +650,17 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                     ],
                   ),
                 ),
+                // ═══ 4th tab: إرسالياتي ═══
+                const Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_rounded, size: 18),
+                      SizedBox(width: 6),
+                      Text('إرسالياتي'),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -748,6 +769,16 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
               ),
             ),
 
+          // ═══ Level Filter Chips ═══
+          LevelFilterChips(
+            selected: _levelFilter,
+            onChanged: (v) => setState(() {
+              _levelFilter = v;
+              _reloadCurrentTab();
+            }),
+            userRole: ref.read(authStateProvider).valueOrNull?.role?.name ?? 'data_entry',
+          ),
+
           // ═══ Tab Content ═══
           Expanded(
             child: TabBarView(
@@ -757,8 +788,10 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                 _buildDraftsTab(),
                 // Tab 2: Pending Sync
                 _buildPendingTab(),
-                // Tab 3: Submitted
+                // Tab 3: Submitted (all in scope)
                 _buildSubmittedTab(),
+                // Tab 4: My Submissions only
+                _buildMySubmissionsTab(),
               ],
             ),
           ),
@@ -942,6 +975,115 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         ),
       ],
     );
+  }
+
+  /// ═══ Tab 4: My Submissions — only current user's submissions ═══
+  Widget _buildMySubmissionsTab() {
+    if (_submittedLoading && _submittedItems.isEmpty) {
+      return const EpiLoading.shimmer();
+    }
+
+    // Filter to only show current user's submissions
+    final userId = ref.read(authStateProvider).valueOrNull?.userId;
+    final mySubs = _submittedItems.where((s) {
+      return s['submitted_by'] == userId ||
+          s['profiles']?['id'] == userId;
+    }).toList();
+
+    // Also apply search filter
+    final filtered = _applySearchFilter(mySubs);
+
+    if (filtered.isEmpty) {
+      return ListView(
+        children: const [
+          SizedBox(height: 80),
+          EpiEmptyState(
+            icon: Icons.person_outline_rounded,
+            title: 'لا توجد إرساليات خاصة بك',
+            subtitle: 'إرسالياتك المُرسلة ستظهر هنا',
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        // Count badge
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '${filtered.length} إرسالية',
+              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF9CA3AF)),
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: filtered.length,
+            itemBuilder: (ctx, i) {
+              return SubmittedCard(
+                submission: filtered[i],
+                onTap: () {
+                  final id = filtered[i]['id'];
+                  if (id != null) context.go('/submissions/$id');
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Apply search filter to a list
+  List<Map<String, dynamic>> _applySearchFilter(List<Map<String, dynamic>> items) {
+    if (_searchQuery.isEmpty) return items;
+    final q = _searchQuery.toLowerCase();
+    return items.where((s) {
+      final formTitle = (s['forms']?['title_ar'] ?? s['form_title'] ?? '').toString().toLowerCase();
+      final govName = (s['governorates']?['name_ar'] ?? s['governorate_name'] ?? '').toString().toLowerCase();
+      final submitterName = (s['profiles']?['full_name'] ?? s['submitter_name'] ?? '').toString().toLowerCase();
+      return formTitle.contains(q) || govName.contains(q) || submitterName.contains(q);
+    }).toList();
+  }
+
+  /// Apply level filter to a list of submissions
+  List<Map<String, dynamic>> _applyLevelFilter(List<Map<String, dynamic>> items) {
+    if (_levelFilter == 'all') return items;
+
+    final userId = ref.read(authStateProvider).valueOrNull?.userId;
+    final userRole = ref.read(authStateProvider).valueOrNull?.role?.name ?? 'data_entry';
+
+    return items.where((s) {
+      final submitterId = s['submitted_by'] as String?;
+      final submitterRole = (s['profiles']?['role'] ?? s['submitter_role'] ?? '').toString();
+
+      switch (_levelFilter) {
+        case 'mine':
+          return submitterId == userId;
+        case 'above':
+          // Submissions from users at a higher admin level
+          if (userRole == 'district') {
+            return submitterRole == 'governorate' || submitterRole == 'central' || submitterRole == 'admin';
+          } else if (userRole == 'governorate') {
+            return submitterRole == 'central' || submitterRole == 'admin';
+          }
+          return false;
+        case 'below':
+          // Submissions from users at a lower admin level
+          if (userRole == 'admin' || userRole == 'central') {
+            return submitterRole == 'governorate' || submitterRole == 'district' || submitterRole == 'data_entry';
+          } else if (userRole == 'governorate') {
+            return submitterRole == 'district' || submitterRole == 'data_entry';
+          }
+          return false;
+        default:
+          return true;
+      }
+    }).toList();
   }
 
   // ═══════════════════════════════════════════════════════════════

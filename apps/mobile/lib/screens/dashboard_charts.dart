@@ -305,12 +305,6 @@ class DashboardQuickActions extends StatelessWidget {
         '/map',
         const Color(0xFF1E88E5),
       ),
-      QuickAction(
-        Icons.smart_toy_outlined,
-        'المساعد الذكي',
-        '/ai',
-        const Color(0xFFFF8F00),
-      ),
     ];
 
     return SizedBox(

@@ -25,7 +25,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   late AnimationController _cardsAnim;
   late AnimationController _pulseAnim;
   int _selectedQuickAction = -1;
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -120,7 +119,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 campaignLabel: ref.watch(campaignProvider).displayLabel,
                 campaignRound: ref.watch(campaignRoundProvider),
                 showRoundFilter: ref.watch(campaignProvider).value == 'integrated_activity',
-                onCampaignTap: () => _scaffoldKey.currentState?.openDrawer(),
+                onCampaignTap: () => _showCampaignSelector(),
                 onRoundTap: () => _showRoundSelector(),
                 onRefresh: () {
                   HapticFeedback.mediumImpact();
@@ -204,17 +203,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final today = submissions['today'] as int? ?? 0;
     final drafts = localDrafts;
 
-    // ═══ P1-4: Build governorate ranking data ═══
-    final govData = data['governorates'] as List? ?? [];
-    final govCounts = <String, int>{};
-    for (final g in govData) {
-      final name = (g as Map<String, dynamic>)['name'] as String? ?? 'غير معروف';
-      final count = (g['submissions'] as num?)?.toInt() ?? 0;
-      if (count > 0) govCounts[name] = count;
-    }
-    final sortedGovs = govCounts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
     // ═══ P1-4: Build status donut data ═══
     final submittedCount = total - drafts;
     final draftCount = drafts;
@@ -237,8 +225,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           onExportPdf: _exportPdfReport,
         ),
         const SizedBox(height: 20),
-        // ═══ P1-4: Donut chart for status distribution ═══
-        _sectionTitle('توزيع الحالات'),
+        // ═══ P1-4: Donut chart for MY submissions only ═══
+        _sectionTitle('إرسالياتي'),
         const SizedBox(height: 12),
         SubmissionsStatusDonut(
           submitted: submittedCount > 0 ? submittedCount : total,
@@ -252,14 +240,122 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           dayData: submissions['byDay'] as Map<String, dynamic>? ?? {},
         ),
         const SizedBox(height: 20),
-        // ═══ P1-4: Governorate ranking bar chart ═══
+        // ═══ P1-4: Governorate ranking — fetch independently ═══
         _sectionTitle('ترتيب المحافظات'),
         const SizedBox(height: 12),
-        GovernorateRankingChart(
-          governorateData: sortedGovs,
-        ),
+        _buildGovernorateRanking(),
         const SizedBox(height: 20),
       ]),
+    );
+  }
+
+  /// Fetch governorate ranking independently (not from analytics data)
+  Widget _buildGovernorateRanking() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _getGovernorateRanking(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 180,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return Container(
+            height: 100,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Center(
+              child: Text('لا توجد بيانات للمحافظات', style: TextStyle(
+                fontFamily: 'Tajawal', fontSize: 13,
+                color: AppTheme.textHint.withValues(alpha: 0.5),
+              )),
+            ),
+          );
+        }
+
+        final govCounts = <String, int>{};
+        for (final g in snapshot.data!) {
+          final name = g['name_ar'] as String? ?? 'غير محدد';
+          final count = (g['count'] as num?)?.toInt() ?? 0;
+          if (count > 0) govCounts[name] = count;
+        }
+        final sortedGovs = govCounts.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+
+        return GovernorateRankingChart(governorateData: sortedGovs);
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _getGovernorateRanking() async {
+    try {
+      final analyticsService = ref.read(analyticsServiceProvider);
+      final round = ref.read(campaignRoundProvider);
+      return await analyticsService.getGovernorateRanking(
+        campaignRound: ref.read(campaignProvider).value == 'integrated_activity' ? round : null,
+      );
+    } catch (e) {
+      debugPrint('[Dashboard] Gov ranking failed: $e');
+      return [];
+    }
+  }
+
+  void _showCampaignSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(ctx).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('اختر النشاط', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            ...[
+              ('polio_campaign', 'حملة شلل الأطفال', Icons.vaccines_rounded),
+              ('integrated_activity', 'النشاط الإيصالي التكاملي', Icons.medical_services_rounded),
+            ].map((item) {
+              final value = item.$1;
+              final label = item.$2;
+              final icon = item.$3;
+              final current = ref.read(campaignProvider).value;
+              return ListTile(
+                leading: Icon(icon, color: AppTheme.primaryColor),
+                title: Text(label, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14)),
+                trailing: current == value
+                    ? Icon(Icons.check_circle, color: AppTheme.primaryColor, size: 20)
+                    : null,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  ref.read(campaignProvider.notifier).selectCampaign(CampaignType.fromString(value));
+                  Navigator.pop(ctx);
+                },
+              );
+            }),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
     );
   }
 

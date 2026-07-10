@@ -303,72 +303,7 @@ class _MainShellState extends ConsumerState<MainShell> {
             elevation: 4,
             child: const Icon(Icons.menu_rounded, size: 22),
           ),
-          const SizedBox(height: 10),
-          // ═══ زرار المزامنة الشامل — دائماً ظاهر ═══
-          FloatingActionButton.extended(
-            heroTag: 'sync_fab',
-            onPressed: _isSyncing ? null : _triggerFullSync,
-            backgroundColor: _isSyncing
-                ? Colors.grey
-                : isOnline
-                    ? AppTheme.primaryColor
-                    : Colors.orange,
-            foregroundColor: Colors.white,
-            elevation: 6,
-            icon: _isSyncing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.cloud_sync_rounded, size: 20),
-            label: Text(
-              _isSyncing ? 'جاري المزامنة...' : 'مزامنة',
-              style: const TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (pendingCount > 0) ...[
-            const SizedBox(height: 8),
-            // ═══ Pending uploads badge ═══
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.orange,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.orange.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.cloud_upload_rounded,
-                      size: 14, color: Colors.white),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$pendingCount في الانتظار',
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 11,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          // ═══ Removed: sync FAB + pending badge — sync is available in drawer ═══
           // ═══ AI Assistant — hidden on /ai page ═══
           if (!GoRouterState.of(context).matchedLocation.startsWith('/ai'))
             _AiFab(onTap: () => context.go('/ai')),

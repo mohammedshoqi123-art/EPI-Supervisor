@@ -769,16 +769,6 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
               ),
             ),
 
-          // ═══ Level Filter Chips ═══
-          LevelFilterChips(
-            selected: _levelFilter,
-            onChanged: (v) => setState(() {
-              _levelFilter = v;
-              _reloadCurrentTab();
-            }),
-            userRole: ref.read(authStateProvider).valueOrNull?.role?.name ?? 'data_entry',
-          ),
-
           // ═══ Tab Content ═══
           Expanded(
             child: TabBarView(
@@ -1367,6 +1357,12 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     final statsAsync = ref.watch(formStatsProvider);
     final stats = statsAsync.valueOrNull ?? const FormStats();
 
+    // ═══ Count user's own submissions from loaded data ═══
+    final userId = ref.read(authStateProvider).valueOrNull?.userId;
+    final myCount = _submittedItems.where((s) {
+      return s['submitted_by'] == userId;
+    }).length;
+
     return Container(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -1386,10 +1382,10 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
               },
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: FormsStatCard(
-              title: 'قيد المزامنة',
+              title: 'مزامنة',
               count: stats.pending,
               icon: Icons.sync,
               color: AppTheme.infoColor,
@@ -1402,7 +1398,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
               },
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: FormsStatCard(
               title: 'المرسلة',
@@ -1415,6 +1411,22 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
               onTap: () {
                 _tabController.animateTo(2);
                 _submittedTotal = stats.submitted;
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          // ═══ 4th card: إرسالياتي ═══
+          Expanded(
+            child: FormsStatCard(
+              title: 'إرسالياتي',
+              count: myCount,
+              icon: Icons.person,
+              color: AppTheme.primaryColor,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF00897B), Color(0xFF00695C)],
+              ),
+              onTap: () {
+                _tabController.animateTo(3);
               },
             ),
           ),

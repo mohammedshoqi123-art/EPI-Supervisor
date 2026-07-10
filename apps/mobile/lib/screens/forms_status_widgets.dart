@@ -341,11 +341,18 @@ class SubmittedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final formTitle = (submission['forms']?['title_ar'] ?? submission['form_title'] ?? 'استمارة') as String;
-    final createdAt = (submission['created_at'] as String? ?? '').split('T').first;
+    final createdAtStr = submission['created_at'] as String? ?? '';
     final govName = (submission['governorates']?['name_ar'] ?? submission['governorate_name'] ?? '') as String;
     final distName = (submission['districts']?['name_ar'] ?? submission['district_name'] ?? '') as String;
     final submitterName = (submission['profiles']?['full_name'] ?? submission['submitter_name'] ?? '') as String;
     final submitterRole = (submission['profiles']?['role'] ?? submission['submitter_role'] ?? '') as String;
+
+    // Parse date + day name
+    DateTime? dt;
+    try { dt = DateTime.parse(createdAtStr); } catch (_) {}
+    final dayName = dt != null ? _dayName(dt.weekday) : '';
+    final dateStr = dt != null ? '${dt.day}/${dt.month}/${dt.year}' : createdAtStr.split('T').first;
+    final timeStr = dt != null ? '${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}' : '';
 
     // Level badge
     final (levelLabel, levelColor) = _getLevelInfo(submitterRole);
@@ -366,7 +373,7 @@ class SubmittedCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header row
+              // ═══ Row 1: Form title + level badge ═══
               Row(
                 children: [
                   Container(
@@ -379,16 +386,10 @@ class SubmittedCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(formTitle, style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                        Text('📅 $createdAt', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 10, color: Color(0xFF9CA3AF))),
-                      ],
-                    ),
+                    child: Text(formTitle,
+                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
-                  // Level badge
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -396,41 +397,52 @@ class SubmittedCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: levelColor.withValues(alpha: 0.2)),
                     ),
-                    child: Text(levelLabel, style: TextStyle(fontFamily: 'Cairo', fontSize: 9, fontWeight: FontWeight.w700, color: levelColor)),
+                    child: Text(levelLabel,
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 9, fontWeight: FontWeight.w700, color: levelColor)),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              // Info row
-              Row(
-                children: [
-                  if (submitterName.isNotEmpty) ...[
-                    Icon(Icons.person_rounded, size: 12, color: Colors.grey[400]),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(submitterName, style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.grey[600]),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                  if (govName.isNotEmpty) ...[
-                    const SizedBox(width: 10),
-                    Icon(Icons.location_on_rounded, size: 12, color: Colors.grey[400]),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        distName.isNotEmpty ? '$govName — $distName' : govName,
-                        style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Colors.grey[600]),
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              const SizedBox(height: 10),
+              // ═══ Row 2: Supervisor name ═══
+              if (submitterName.isNotEmpty)
+                _infoRow(Icons.person_rounded, submitterName),
+              // ═══ Row 3: Level ═══
+              _infoRow(Icons.layers_rounded, 'المستوى: $levelLabel'),
+              // ═══ Row 4: Governorate + District ═══
+              if (govName.isNotEmpty || distName.isNotEmpty)
+                _infoRow(Icons.location_on_rounded,
+                  distName.isNotEmpty ? '$govName — $distName' : (govName.isNotEmpty ? govName : distName)),
+              // ═══ Row 5: Day + Date + Time ═══
+              if (dayName.isNotEmpty || dateStr.isNotEmpty)
+                _infoRow(Icons.calendar_today_rounded,
+                  [dayName, dateStr, timeStr].where((s) => s.isNotEmpty).join(' • ')),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _infoRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        children: [
+          Icon(icon, size: 13, color: const Color(0xFF9CA3AF)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text,
+              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF6B7280)),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _dayName(int weekday) {
+    const names = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
+    return names[weekday - 1];
   }
 
   (String, Color) _getLevelInfo(String role) {

@@ -10,6 +10,7 @@ import '../router/app_router.dart';
 import 'dashboard_header.dart';
 import 'dashboard_charts.dart';
 import 'dashboard_report.dart';
+import 'dashboard_widgets.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -24,6 +25,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   late AnimationController _cardsAnim;
   late AnimationController _pulseAnim;
   int _selectedQuickAction = -1;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -112,6 +114,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            // ═══ P1-1: Filter bar — campaign + round filter chips ═══
+            SliverToBoxAdapter(
+              child: DashboardFilterBar(
+                campaignLabel: ref.watch(campaignProvider).displayLabel,
+                campaignRound: ref.watch(campaignRoundProvider),
+                showRoundFilter: ref.watch(campaignProvider).value == 'integrated_activity',
+                onCampaignTap: () => _scaffoldKey.currentState?.openDrawer(),
+                onRoundTap: () => _showRoundSelector(),
+                onRefresh: () {
+                  HapticFeedback.mediumImpact();
+                  if (!ConnectivityUtils.isOnline) return;
+                  ref.read(forceRefreshProvider)('dashboard_analytics');
+                  ref.invalidate(
+                    dashboardAnalyticsProvider(
+                      AnalyticsFilter(
+                        campaignType: ref.watch(campaignProvider).value,
+                        campaignRound: ref.watch(campaignRoundProvider),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
             SliverToBoxAdapter(
               child: DashboardHeroHeader(
                 userName: authState.valueOrNull?.fullName ?? 'مستخدم',
@@ -122,7 +147,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 onNotificationsTap: () => context.go('/notifications'),
               ),
             ),
-            // ═══ FIX #1: Removed floating sync banner — sync happens automatically in background ═══
+            // ═══ P1-5: Sync status bar ═══
+            SliverToBoxAdapter(
+              child: SyncStatusBar(
+                pendingCount: pendingCount,
+                isSyncing: false,
+                onSync: () async {
+                  HapticFeedback.mediumImpact();
+                  try {
+                    final service = await ref.read(syncServiceProvider.future);
+                    await service.sync();
+                  } catch (e) {
+                    debugPrint('[Dashboard] Manual sync failed: $e');
+                  }
+                },
+              ),
+            ),
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: analytics.when(
@@ -162,8 +202,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final submissions = data['submissions'] as Map<String, dynamic>? ?? {};
     final total = submissions['total'] as int? ?? 0;
     final today = submissions['today'] as int? ?? 0;
-    // Use local drafts count (Hive) — more accurate than server-only count
     final drafts = localDrafts;
+
+    // ═══ P1-4: Build governorate ranking data ═══
+    final govData = data['governorates'] as List? ?? [];
+    final govCounts = <String, int>{};
+    for (final g in govData) {
+      final name = (g as Map<String, dynamic>)['name'] as String? ?? 'غير معروف';
+      final count = (g['submissions'] as num?)?.toInt() ?? 0;
+      if (count > 0) govCounts[name] = count;
+    }
+    final sortedGovs = govCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    // ═══ P1-4: Build status donut data ═══
+    final submittedCount = total - drafts;
+    final draftCount = drafts;
 
     return SliverList(
       delegate: SliverChildListDelegate([
@@ -183,13 +237,75 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           onExportPdf: _exportPdfReport,
         ),
         const SizedBox(height: 20),
+        // ═══ P1-4: Donut chart for status distribution ═══
+        _sectionTitle('توزيع الحالات'),
+        const SizedBox(height: 12),
+        SubmissionsStatusDonut(
+          submitted: submittedCount > 0 ? submittedCount : total,
+          draft: draftCount,
+          total: total > 0 ? total : 1,
+        ),
+        const SizedBox(height: 20),
         _sectionTitle('النشاط الأسبوعي'),
         const SizedBox(height: 12),
         DashboardTrendLine(
           dayData: submissions['byDay'] as Map<String, dynamic>? ?? {},
         ),
         const SizedBox(height: 20),
+        // ═══ P1-4: Governorate ranking bar chart ═══
+        _sectionTitle('ترتيب المحافظات'),
+        const SizedBox(height: 12),
+        GovernorateRankingChart(
+          governorateData: sortedGovs,
+        ),
+        const SizedBox(height: 20),
       ]),
+    );
+  }
+
+  void _showRoundSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(ctx).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('اختر الجولة', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            ...List.generate(5, (i) {
+              final round = i + 1;
+              final current = ref.read(campaignRoundProvider);
+              return ListTile(
+                leading: Icon(
+                  current == round ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: AppTheme.primaryColor,
+                ),
+                title: Text('الجولة $round', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14)),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  ref.read(campaignRoundProvider.notifier).selectRound(round);
+                  Navigator.pop(ctx);
+                },
+              );
+            }),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
     );
   }
 

@@ -34,6 +34,79 @@ class DashboardReportExporter {
     );
   }
 
+  /// ═══ Generate and share report (called by standard report types) ═══
+  static Future<void> generateAndShare({
+    required BuildContext context,
+    required String type,
+    Map<String, dynamic>? analyticsData,
+    Future<List<Map<String, dynamic>>?> Function()? fetchGovRanking,
+    List? readinessData,
+    List? complianceData,
+    List? serviceNumbersData,
+    List? challengesData,
+  }) async {
+    // Delegate to ReportGenerator in core package
+    try {
+      // Show progress
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(children: [
+              const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              const SizedBox(width: 12),
+              Text('جاري توليد التقرير...', style: const TextStyle(fontFamily: 'Tajawal')),
+            ]),
+            duration: const Duration(seconds: 30),
+            backgroundColor: AppTheme.primaryColor,
+          ),
+        );
+      }
+
+      // Fetch gov ranking if needed
+      List<Map<String, dynamic>>? govRanking;
+      if (fetchGovRanking != null) {
+        govRanking = await fetchGovRanking();
+      }
+
+      // Generate PDF report via core package
+      final reportInfo = getReportInfo(type);
+      final reportFile = await ReportGenerator.generatePDFReport(
+        title: reportInfo['title']!,
+        subtitle: reportInfo['subtitle']!,
+        period: reportInfo['period']!,
+        analyticsData: analyticsData ?? {},
+        governorateData: govRanking,
+        readinessData: readinessData as List<ReadinessGovData>?,
+        complianceData: complianceData as List<ComplianceSectionData>?,
+        serviceNumbersData: serviceNumbersData as List<ServiceNumberData>?,
+        challengesData: challengesData as List<ChallengeData>?,
+      );
+
+      // Share the file
+      await SharePlus.instance.share(ShareParams(files: [XFile(reportFile.path)]));
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ تم توليد التقرير بنجاح'),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل توليد التقرير: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   static Map<String, String> getReportInfo(String type) {
     final now = DateTime.now();
     final dateStr =

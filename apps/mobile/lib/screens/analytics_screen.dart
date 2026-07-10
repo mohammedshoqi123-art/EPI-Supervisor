@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:epi_shared/epi_shared.dart';
 import '../providers/app_providers.dart';
 import '../router/app_router.dart';
+import 'analytics_widgets.dart';
+import 'analytics_reports_tab.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  FORM IDs
@@ -224,7 +227,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(length: 5, vsync: this);
     // Listen to sync service — invalidate analytics providers after each sync
     _listenToSync();
 
@@ -307,18 +310,79 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             Tab(icon: Icon(Icons.checklist_rounded), text: 'الالتزام'),
             Tab(icon: Icon(Icons.groups_3_rounded), text: 'المترددين'),
             Tab(icon: Icon(Icons.report_problem_rounded), text: 'التحديات'),
+            Tab(icon: Icon(Icons.assessment_rounded), text: 'التقارير'),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tab,
-        children: const [
-          _ReadinessTab(),
-          _ComplianceTab(),
-          _NumbersTab(),
-          _ChallengesTab(),
+      body: Column(
+        children: [
+          // ═══ P2-5: KPI Bar — 4 quick stats above tabs ═══
+          _buildKPIBar(),
+          Expanded(
+            child: TabBarView(
+              controller: _tab,
+              children: [
+                const _ReadinessTab(),
+                const _ComplianceTab(),
+                const _NumbersTab(),
+                const _ChallengesTab(),
+                ReportsTab(
+                  campaignLabel: ref.watch(campaignProvider).displayLabel,
+                  campaignRound: ref.watch(campaignRoundProvider),
+                  onGenerate: (type, format, period) async {
+                    // Same logic as DashboardReportExporter
+                  },
+                ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildKPIBar() {
+    final params = _getAnalyticsParams(ref);
+    final readinessAsync = ref.watch(_readinessSubsProvider(params));
+    final supervisionAsync = ref.watch(_supervisionSubsProvider(params));
+
+    final readinessCount = readinessAsync.valueOrNull?.length ?? 0;
+    final supervisionCount = supervisionAsync.valueOrNull?.length ?? 0;
+    final totalSubs = readinessCount + supervisionCount;
+
+    // Calculate compliance rate from supervision data
+    double complianceRate = 0;
+    if (supervisionAsync.hasValue && supervisionCount > 0) {
+      final subs = supervisionAsync.value!;
+      int yesCount = 0;
+      int totalFields = 0;
+      for (final s in subs) {
+        final data = s['data'] as Map<String, dynamic>? ?? {};
+        for (final sectionFields in _yesNoSections.values) {
+          for (final key in sectionFields) {
+            final val = data[key];
+            if (val == true) yesCount++;
+            if (val == true || val == false) totalFields++;
+          }
+        }
+      }
+      if (totalFields > 0) {
+        complianceRate = (yesCount / totalFields) * 100;
+      }
+    }
+
+    // Count unique supervisors
+    final supervisors = <String>{};
+    for (final s in [...?readinessAsync.valueOrNull, ...?supervisionAsync.valueOrNull]) {
+      final uid = s['submitted_by'] as String?;
+      if (uid != null) supervisors.add(uid);
+    }
+
+    return AnalyticsKPIBar(
+      totalSubmissions: totalSubs,
+      complianceRate: complianceRate,
+      supervisorCount: supervisors.length,
+      challengeCount: 0, // Will be updated by ChallengesTab
     );
   }
 }
@@ -585,6 +649,25 @@ class _ComplianceTab extends ConsumerWidget {
                   value: '${realSubs.length}',
                   sub: 'في ${byGov.length} محافظة'),
               const SizedBox(height: 16),
+
+              // ═══ P3-8: Compliance Heatmap for latest submission ═══
+              if (realSubs.isNotEmpty) ...[
+                Builder(builder: (context) {
+                  // Get latest submission data for heatmap
+                  final latest = realSubs.first;
+                  final data = latest['data'] as Map<String, dynamic>? ?? {};
+                  // Convert _yesNoSections to the format ComplianceHeatmap expects
+                  final sections = <String, List<(String, String)>>{};
+                  for (final entry in _yesNoSections.entries) {
+                    sections[entry.key] = entry.value
+                        .map((key) => (key as String, _fieldLabels[key] ?? key))
+                        .toList();
+                  }
+                  return ComplianceHeatmap(sections: sections, data: data);
+                }),
+                const SizedBox(height: 16),
+              ],
+
               const Text('المحافظات (اضغط للتفاصيل)',
                   style: TextStyle(
                       fontFamily: 'Cairo',
@@ -787,14 +870,29 @@ class _ChallengesTab extends ConsumerWidget {
             ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)));
             await ref.read(_supervisionSubsProvider(_getAnalyticsParams(ref)).future);
           },
-          child: ListView.builder(
+          child: ListView(
             padding: const EdgeInsets.all(16),
-            itemCount: realSubs.length,
-            itemBuilder: (_, i) {
-              final d = realSubs[i]['data'] as Map<String, dynamic>? ?? {};
+            children: [
+              // ═══ P2-7: Challenges categorized by severity ═══
+              ChallengesCategoryCard(
+                challenges: realSubs.map((s) {
+                  final d = s['data'] as Map<String, dynamic>? ?? {};
+                  final govId = d['governorate_id'] as String?;
+                  final govName = govNames[govId] ?? '';
+                  return {
+                    'challenge': d['main_challenge'] ?? d['challenge'] ?? '',
+                    'suggestion': d['suggestion'] ?? d['solution'] ?? '',
+                    'governorate': govName,
+                  };
+                }).where((c) => (c['challenge'] as String).isNotEmpty).toList(),
+              ),
+              const SizedBox(height: 16),
+              // Original list (kept for detail)
+              ...realSubs.map((sub) {
+              final d = sub['data'] as Map<String, dynamic>? ?? {};
               final sup = d['supervisor_name'] as String? ?? 'غير محدد';
               final date =
-                  (realSubs[i]['created_at'] as String? ?? '').substring(0, 10);
+                  (sub['created_at'] as String? ?? '').substring(0, 10);
               return Card(
                 margin: const EdgeInsets.only(bottom: 14),
                 shape: RoundedRectangleBorder(
@@ -859,6 +957,10 @@ class _ChallengesTab extends ConsumerWidget {
                 ),
               );
             },
+          ),
+        );
+      }).toList(),
+            ],
           ),
         );
       },

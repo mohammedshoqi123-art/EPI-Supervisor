@@ -1375,18 +1375,38 @@ serve(async (req) => {
     const prediction = message ? predictBestProvider(message, needsTools) : null
     console.log(`[PREDICT] Best provider: ${prediction?.provider} (${prediction?.reason})`)
 
-    // ─── GROUNDING REFUSAL: if no data found, refuse immediately ───
+    // ─── GROUNDING REFUSAL: if no data found, try knowledge base fallback first ───
     if (grounding && !grounding.hasData && message) {
-      console.log('[GROUNDING] No data found — refusing with explanation')
-      return jsonResponse({
-        reply: `🔍 لم أجد بيانات مطابقة لاستفسارك في النظام.\n\n${grounding.refusalReason || ''}\n\n💡 جرّب:\n• "كم إرسالية اليوم؟"\n• "أي محافظة الأكثر إرسالاً؟"\n• "ما النواقص الحرجة؟"\n• "وش تطعيمات طفلي؟"`,
-        source: 'grounding_refusal',
-        grounded_in_sources: 0,
-        ungrounded: true,
-        suggested_followups: grounding.suggestedFollowups,
-        messageId: crypto.randomUUID(),
-        latency_ms: Date.now() - startMs,
-      }, 200, origin)
+      console.log('[GROUNDING] No data found — trying knowledge base fallback')
+
+      // Try knowledge base as fallback before refusing
+      try {
+        const { searchKnowledgeBase } = await import('./llm/grounding.ts')
+        const kbSources = await searchKnowledgeBase(message)
+        if (kbSources.length > 0) {
+          console.log(`[GROUNDING] Knowledge base fallback: ${kbSources.length} sources`)
+          grounding = {
+            sources: kbSources,
+            contextText: kbSources.map((s: any) => s.quote).join('\n\n---\n\n'),
+            hasData: true,
+            refusalReason: undefined,
+            suggestedFollowups: [],
+            detectedIntent: 'knowledge',
+          }
+          if (grounding.contextText) {
+            messages[0].content += grounding.contextText
+          }
+        }
+      } catch (kbErr) {
+        console.log('[GROUNDING] Knowledge base fallback also failed')
+      }
+
+      // If still no data, proceed WITHOUT grounding (don't refuse)
+      // — let the LLM answer based on its general knowledge
+      if (!grounding.hasData) {
+        console.log('[GROUNDING] Proceeding without grounding — LLM will use general knowledge')
+        // Don't return refusal — continue to LLM call
+      }
     }
 
     // Streaming mode — use hybrid streaming gateway

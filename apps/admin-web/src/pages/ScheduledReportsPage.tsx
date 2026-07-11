@@ -308,10 +308,9 @@ function ReportDialog({
               <Select
                 value={String(form.campaign_round ?? 0)}
                 onValueChange={v => setForm(f => ({ ...f, campaign_round: v === '0' ? null : Number(v) }))}
-                disabled={form.campaign_type !== 'integrated_activity'}
               >
                 <SelectTrigger className="mt-1.5">
-                  <SelectValue placeholder={form.campaign_type !== 'integrated_activity' ? 'متاح للإيصالي فقط' : 'كل الجولات'} />
+                  <SelectValue placeholder="كل الجولات" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="0">كل الجولات</SelectItem>

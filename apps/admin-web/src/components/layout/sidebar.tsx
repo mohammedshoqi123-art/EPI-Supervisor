@@ -559,6 +559,37 @@ export function MobileSidebar({ user }: { user?: { full_name: string; email: str
         </div>
         <Separator className="bg-white/10" />
 
+        {/* ═══ Round Filter (Mobile) — FIX: كان مفقود ═══ */}
+        {showRoundFilter && (
+          <div className="px-3 py-2">
+            <div className="flex items-center gap-1.5 px-2 mb-2">
+              <RotateCw className="w-3.5 h-3.5 text-blue-200" />
+              <span className="text-[11px] font-medium text-blue-200 uppercase tracking-wider">فلتر الجولة</span>
+            </div>
+            <div className="space-y-1">
+              {CAMPAIGN_ROUNDS.map((round) => {
+                const isActive = campaignRound === round
+                return (
+                  <button
+                    key={round}
+                    onClick={() => setCampaignRound(round)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-all',
+                      isActive
+                        ? 'bg-violet-500/20 text-white border border-violet-400/30'
+                        : 'text-blue-200/60 hover:bg-white/5 hover:text-white'
+                    )}
+                  >
+                    <span className="text-sm">🔄</span>
+                    <span>{getRoundLabel(round)}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        <Separator className="bg-white/10" />
+
         {/* Navigation — Collapsible Sections (Mobile) */}
         <nav className="px-3 py-4 space-y-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
           {navSections

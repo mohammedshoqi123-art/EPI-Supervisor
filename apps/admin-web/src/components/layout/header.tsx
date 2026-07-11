@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Search, RefreshCw, Clock, Filter, X } from 'lucide-react'
+import { Bell, Search, RefreshCw, Clock, Filter, X, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useNotifications } from '@/hooks/useApi'
@@ -18,7 +18,7 @@ export function Header({ title, subtitle, onRefresh, onSearch }: HeaderProps) {
   const [time, setTime] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
-  const { campaign, isFiltered, labelAr, currentOption } = useCampaign()
+  const { campaign, isFiltered, labelAr, currentOption, campaignRound, showRoundFilter, roundLabelAr } = useCampaign()
   const { data: notifications } = useNotifications()
 
   const unreadCount = (notifications || []).filter(n => !n.is_read).length
@@ -66,6 +66,13 @@ export function Header({ title, subtitle, onRefresh, onSearch }: HeaderProps) {
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200/60">
               <Filter className="w-3 h-3 text-blue-600" />
               <span className="text-[10px] font-medium text-blue-700">{currentOption.icon} {labelAr}</span>
+            </div>
+          )}
+          {/* ═══ Round Badge — FIX: كان مفقود ═══ */}
+          {showRoundFilter && (
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200/60">
+              <RotateCw className="w-3 h-3 text-violet-600" />
+              <span className="text-[10px] font-medium text-violet-700">{roundLabelAr}</span>
             </div>
           )}
         </div>

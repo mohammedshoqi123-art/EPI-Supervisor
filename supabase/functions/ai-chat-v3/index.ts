@@ -190,13 +190,22 @@ function buildCacheKey(role: string, intent: string, message: string): string {
 // ═══════════════════════════════════════════════════════════
 
 async function logUsage(supa: any, modelId: string, tokens: number, latencyMs: number, success: boolean, error?: string, source?: string) {
+  // ⚠️ FIX: Don't swallow errors silently — log them to console for debugging.
+  // Previous version used `catch {}` which made it impossible to diagnose
+  // why usage wasn't being recorded.
   try {
     const adminSupa = createAdminClient()
     if (adminSupa) {
-      await adminSupa.from('ai_model_usage').insert({ model_id: modelId, tokens_used: tokens, latency_ms: latencyMs, success, error_message: error || null, response_source: source || null })
+      const { error: insertErr } = await adminSupa.from('ai_model_usage').insert({ model_id: modelId, tokens_used: tokens, latency_ms: latencyMs, success, error_message: error || null, response_source: source || null })
+      if (insertErr) console.warn('[logUsage] admin insert failed:', insertErr.message)
+    } else {
+      console.warn('[logUsage] admin client unavailable — SUPABASE_SERVICE_ROLE_KEY not set?')
     }
-    await supa.rpc('log_ai_usage', { p_model_id: modelId, p_tokens: tokens, p_latency_ms: latencyMs, p_success: success, p_error: error || null })
-  } catch {}
+    const { error: rpcErr } = await supa.rpc('log_ai_usage', { p_model_id: modelId, p_tokens: tokens, p_latency_ms: latencyMs, p_success: success, p_error: error || null })
+    if (rpcErr) console.warn('[logUsage] log_ai_usage RPC failed:', rpcErr.message)
+  } catch (e) {
+    console.warn('[logUsage] unexpected error:', String(e).slice(0, 200))
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1085,8 +1094,10 @@ serve(async (req) => {
       return jsonResponse({ success: true }, 200, origin)
     }
 
-    if (!message && !template) return jsonResponse({ error: 'الرسالة مطلوبة' }, 400, origin)
-
+    // ⚠️ FIX: Moved env loading + mode checks BEFORE !message check.
+    // Previously, calling mode='health', 'gateway_health', 'model_status',
+    // 'suggestions' WITHOUT a `message` field would 400-out at the !message
+    // guard below, breaking admin UI health/status widgets.
     const groqKey = Deno.env.get('GROQ_API_KEY')
     const hfToken = Deno.env.get('HF_API_TOKEN')
     const mimoKey = Deno.env.get('MIMO_API_KEY') ?? Deno.env.get('GEMINI_API_KEY')
@@ -1267,6 +1278,10 @@ serve(async (req) => {
         return jsonResponse({ error: 'خطأ في الحذف' }, 500, origin)
       }
     }
+
+    // ⚠️ FIX: Now safe to require message — all mode handlers above have already returned.
+    // This guard only catches the normal chat path (no mode, no template).
+    if (!message && !template) return jsonResponse({ error: 'الرسالة مطلوبة' }, 400, origin)
 
     // Injection guard
     if (message) {

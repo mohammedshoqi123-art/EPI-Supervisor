@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import '../services/dynamic_bot_knowledge_service.dart';
+import '../services/ai_chat_thread_service.dart';
 import 'ai_chat_models.dart';
 import 'ai_provider_badge.dart';
 import 'citation_widgets.dart';
@@ -35,6 +36,10 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   final List<ChatMsg> _msgs = [];
   bool _loading = false;
   bool _mounted = true;
+
+  // ═══ Conversation Threads state ═══
+  String? _currentThreadId;
+  bool _savingToThread = false;
   DateTime? _lastSend;
   late AnimationController _typingAnimCtrl;
   bool _showWelcome = true;
@@ -146,6 +151,9 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     _typingAnimCtrl.repeat();
     _scrollDown();
     unawaited(ChatStore.save(_msgs));
+
+    // Save user message to thread
+    unawaited(_saveMessageToThread(role: 'user', content: text));
 
     try {
       // ═══ OFFLINE FALLBACK: Use local BotEngine when no internet ═══
@@ -359,6 +367,19 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         });
       }
       unawaited(ChatStore.save(_msgs));
+
+      // Save assistant response to thread
+      if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
+        unawaited(_saveMessageToThread(
+          role: 'assistant',
+          content: _msgs.last.content,
+          source: _msgs.last.source,
+          provider: _msgs.last.provider,
+          providerTier: _msgs.last.providerTier,
+          confidence: _msgs.last.providerConfidence,
+          latencyMs: _msgs.last.latencyMs,
+        ));
+      }
     } on TimeoutException {
       if (!_mounted) return;
       setState(() {
@@ -646,6 +667,32 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         ],
       ),
       actions: [
+        // ─── Threads button (conversation history) ───
+        Container(
+          margin: const EdgeInsets.only(left: 4),
+          decoration: BoxDecoration(
+            color: cs.onPrimary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.chat_rounded, size: 20),
+            onPressed: _showThreadsPanel,
+            tooltip: 'المحادثات',
+          ),
+        ),
+        // ─── New conversation button ───
+        Container(
+          margin: const EdgeInsets.only(left: 4),
+          decoration: BoxDecoration(
+            color: cs.onPrimary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.add_rounded, size: 20),
+            onPressed: _newConversation,
+            tooltip: 'محادثة جديدة',
+          ),
+        ),
         // ─── Studio access button (NotebookLM-style content generator) ───
         Container(
           margin: const EdgeInsets.only(left: 4),
@@ -712,6 +759,82 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   }
 
   // ═══════════════════════════════════════════════════════════
+
+  /// Show conversation threads panel (bottom sheet)
+  void _showThreadsPanel() {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => const _ThreadsPanel(),
+    );
+  }
+
+  /// Start a new conversation
+  Future<void> _newConversation() async {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _msgs.clear();
+      _showWelcome = true;
+      _currentThreadId = null;
+    });
+    unawaited(ChatStore.save(_msgs));
+
+    // Create new thread in DB
+    try {
+      final service = ref.read(aiChatThreadServiceProvider);
+      final threadId = await service.createThread();
+      if (mounted && threadId != null) {
+        setState(() => _currentThreadId = threadId);
+        ref.invalidate(aiChatThreadsProvider);
+      }
+    } catch (_) {}
+  }
+
+  /// Save a message to the current thread (or create one if needed)
+  Future<void> _saveMessageToThread({
+    required String role,
+    required String content,
+    String? source,
+    String? provider,
+    int? providerTier,
+    int? confidence,
+    int? latencyMs,
+  }) async {
+    if (_savingToThread) return;
+    _savingToThread = true;
+
+    try {
+      final service = ref.read(aiChatThreadServiceProvider);
+
+      // Create thread if none exists
+      if (_currentThreadId == null) {
+        _currentThreadId = await service.createThread(
+            title: role == 'user' ? content.substring(0, content.length > 50 ? 50 : content.length) : null);
+        if (_currentThreadId != null) {
+          ref.invalidate(aiChatThreadsProvider);
+        }
+      }
+
+      if (_currentThreadId != null) {
+        await service.saveMessage(
+          threadId: _currentThreadId!,
+          role: role,
+          content: content,
+          source: source,
+          provider: provider,
+          providerTier: providerTier,
+          confidence: confidence,
+          latencyMs: latencyMs,
+        );
+        ref.invalidate(aiChatThreadsProvider);
+      }
+    } catch (_) {
+    } finally {
+      _savingToThread = false;
+    }
+  }
 
   /// Quick action button for input bar
   Widget _inputActionBtn({
@@ -2701,3 +2824,199 @@ class _ModelOption {
   final String? model;
   const _ModelOption(this.id, this.label, this.model);
 }
+
+
+/// ═══════════════════════════════════════════════════════════
+/// _ThreadsPanel — لوحة المحادثات السابقة
+/// ═══════════════════════════════════════════════════════════
+class _ThreadsPanel extends ConsumerWidget {
+  const _ThreadsPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final threadsAsync = ref.watch(aiChatThreadsProvider);
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.chat_rounded, color: cs.onPrimary, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "المحادثات السابقة",
+                    style: TextStyle(
+                      fontFamily: "Cairo",
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: cs.onPrimary,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.add_rounded, color: cs.onPrimary),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    // Trigger new conversation
+                  },
+                  tooltip: "محادثة جديدة",
+                ),
+              ],
+            ),
+          ),
+          // Threads list
+          Expanded(
+            child: threadsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, __) => const Center(
+                child: Text("تعذر تحميل المحادثات",
+                    style: TextStyle(fontFamily: "Tajawal")),
+              ),
+              data: (threads) {
+                if (threads.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.chat_bubble_outline_rounded,
+                            size: 48, color: Colors.grey.shade300),
+                        const SizedBox(height: 12),
+                        const Text("لا توجد محادثات سابقة",
+                            style: TextStyle(fontFamily: "Tajawal", fontSize: 14)),
+                        const SizedBox(height: 4),
+                        Text("ابدأ محادثة جديدة وستظهر هنا",
+                            style: TextStyle(
+                                fontFamily: "Tajawal",
+                                fontSize: 12,
+                                color: Colors.grey.shade500)),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: threads.length,
+                  itemBuilder: (context, index) {
+                    final thread = threads[index];
+                    return _ThreadCard(thread: thread);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThreadCard extends ConsumerWidget {
+  final AIChatThread thread;
+  const _ThreadCard({required this.thread});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: cs.primaryContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(Icons.chat_rounded, size: 18, color: cs.primary),
+        ),
+        title: Text(
+          thread.title,
+          style: const TextStyle(fontFamily: "Cairo", fontSize: 13, fontWeight: FontWeight.w700),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Row(
+          children: [
+            Text(
+              "${thread.messageCount} رسالة",
+              style: TextStyle(fontFamily: "Tajawal", fontSize: 10, color: Colors.grey.shade500),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _formatTime(thread.updatedAt),
+              style: TextStyle(fontFamily: "Tajawal", fontSize: 10, color: Colors.grey.shade400),
+            ),
+          ],
+        ),
+        trailing: PopupMenuButton<String>(
+          icon: Icon(Icons.more_vert_rounded, size: 18, color: Colors.grey.shade400),
+          onSelected: (action) async {
+            final service = ref.read(aiChatThreadServiceProvider);
+            if (action == "delete") {
+              await service.deleteThread(thread.id);
+              ref.invalidate(aiChatThreadsProvider);
+            } else if (action == "pin") {
+              await service.togglePin(thread.id, !thread.isPinned);
+              ref.invalidate(aiChatThreadsProvider);
+            }
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: "pin",
+              child: Row(children: [
+                Icon(thread.isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, size: 16),
+                const SizedBox(width: 8),
+                Text(thread.isPinned ? "إلغاء التثبيت" : "تثبيت",
+                    style: const TextStyle(fontFamily: "Tajawal", fontSize: 13)),
+              ]),
+            ),
+            const PopupMenuItem(
+              value: "delete",
+              child: Row(children: [
+                Icon(Icons.delete_outline_rounded, size: 16, color: Colors.red),
+                SizedBox(width: 8),
+                Text("حذف", style: TextStyle(fontFamily: "Tajawal", fontSize: 13, color: Colors.red)),
+              ]),
+            ),
+          ],
+        ),
+        onTap: () {
+          Navigator.pop(context);
+          // TODO: Load thread messages
+        },
+      ),
+    );
+  }
+
+  String _formatTime(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return "الآن";
+    if (diff.inHours < 1) return "قبل ${diff.inMinutes} د";
+    if (diff.inDays < 1) return "قبل ${diff.inHours} س";
+    if (diff.inDays < 7) return "قبل ${diff.inDays} ي";
+    return "${dt.day}/${dt.month}";
+  }
+}
+

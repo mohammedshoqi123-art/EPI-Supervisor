@@ -42,6 +42,7 @@ class StudioArtifact {
 
   factory StudioArtifact.fromJson(Map<String, dynamic> j) {
     final metadata = j['metadata'] as Map<String, dynamic>? ?? {};
+    // ═══ FIX: backend sends camelCase, not snake_case ═══
     return StudioArtifact(
       type: j['type'] as String? ?? '',
       title: j['title'] as String? ?? '',
@@ -51,15 +52,32 @@ class StudioArtifact {
               .toList() ??
           [],
       structuredData: {
-        if (j['mind_map_nodes'] != null) 'mind_map_nodes': j['mind_map_nodes'],
-        if (j['faq_items'] != null) 'faq_items': j['faq_items'],
-        if (j['study_guide_sections'] != null)
+        // Check both camelCase (from backend) and snake_case (from saved DB)
+        if (j['mindMapNodes'] != null)
+          'mind_map_nodes': j['mindMapNodes']
+        else if (j['mind_map_nodes'] != null)
+          'mind_map_nodes': j['mind_map_nodes'],
+        if (j['faqItems'] != null)
+          'faq_items': j['faqItems']
+        else if (j['faq_items'] != null)
+          'faq_items': j['faq_items'],
+        if (j['studyGuideSections'] != null)
+          'study_guide_sections': j['studyGuideSections']
+        else if (j['study_guide_sections'] != null)
           'study_guide_sections': j['study_guide_sections'],
-        if (j['audio_script'] != null) 'audio_script': j['audio_script'],
+        if (j['audioScript'] != null)
+          'audio_script': j['audioScript']
+        else if (j['audio_script'] != null)
+          'audio_script': j['audio_script'],
       },
-      groundedInSources: metadata['grounded_in_sources'] as int? ?? 0,
+      // ═══ FIX: metadata keys are camelCase from backend ═══
+      groundedInSources: (metadata['groundedInSources'] as int?) ??
+          (metadata['grounded_in_sources'] as int?) ??
+          0,
       provider: metadata['provider'] as String?,
-      latencyMs: metadata['latency_ms'] as int? ?? 0,
+      latencyMs: (metadata['latencyMs'] as int?) ??
+          (metadata['latency_ms'] as int?) ??
+          0,
     );
   }
 
@@ -165,7 +183,8 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
 
   @override
   void dispose() {
-    _audio.dispose();
+    // Don't dispose singleton audio service — just stop playback
+    _audio.stop();
     _topicCtrl.dispose();
     super.dispose();
   }
@@ -237,6 +256,83 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
       }
     }
     if (mounted) setState(() => _saving = false);
+  }
+
+  /// Toggle favorite status of a saved artifact
+  Future<void> _toggleFavorite(Map<String, dynamic> artifact) async {
+    HapticFeedback.lightImpact();
+    final id = artifact['id'] as String?;
+    if (id == null) return;
+    final newFav = !(artifact['is_favorite'] == true);
+
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.callFunction('ai-chat-v3', {
+        'mode': 'studio_update',
+        'artifact_id': id,
+        'is_favorite': newFav,
+      });
+      // Update local state
+      setState(() {
+        final idx = _savedArtifacts.indexWhere((a) => a['id'] == id);
+        if (idx >= 0) _savedArtifacts[idx]['is_favorite'] = newFav;
+      });
+    } catch (_) {}
+  }
+
+  /// Delete a saved artifact
+  Future<void> _deleteArtifact(Map<String, dynamic> artifact) async {
+    HapticFeedback.lightImpact();
+    final id = artifact['id'] as String?;
+    if (id == null) return;
+
+    // Confirm
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف المحتوى',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+        content: Text(
+          'هل تريد حذف "${artifact['title']}"؟',
+          style: const TextStyle(fontFamily: 'Tajawal'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final api = ref.read(apiClientProvider);
+      await api.callFunction('ai-chat-v3', {
+        'mode': 'studio_delete',
+        'artifact_id': id,
+      });
+      // Remove from local state
+      setState(() {
+        _savedArtifacts.removeWhere((a) => a['id'] == id);
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم حذف المحتوى',
+                style: TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: Color(0xFF22C55E),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadSavedArtifact(Map<String, dynamic> saved) async {
@@ -499,9 +595,34 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
                       (s['created_at'] as String?)?.split('T').first ?? '',
                       style: TextStyle(fontFamily: 'Tajawal', fontSize: 10, color: cs.onSurfaceVariant),
                     ),
-                    trailing: s['is_favorite'] == true
-                        ? Icon(Icons.star_rounded, size: 16, color: Colors.amber)
-                        : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Favorite button
+                        IconButton(
+                          icon: Icon(
+                            s['is_favorite'] == true
+                                ? Icons.star_rounded
+                                : Icons.star_border_rounded,
+                            size: 16,
+                            color: s['is_favorite'] == true
+                                ? Colors.amber
+                                : cs.onSurfaceVariant,
+                          ),
+                          onPressed: () => _toggleFavorite(s),
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        ),
+                        // Delete button
+                        IconButton(
+                          icon: Icon(Icons.delete_outline_rounded,
+                              size: 16, color: cs.error),
+                          onPressed: () => _deleteArtifact(s),
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        ),
+                      ],
+                    ),
                     onTap: () => _loadSavedArtifact(s),
                     visualDensity: VisualDensity.compact,
                   );

@@ -127,6 +127,24 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
   PlaybackState _playbackState = PlaybackState.stopped;
   int _currentSegment = 0;
 
+  // ═══ Smart Templates — قوالب جاهزة للاستوديو ═══
+  static final _smartTemplates = [
+    _StudioTemplate('📊', 'تقرير الأداء الأسبوعي', 'briefing_doc',
+        'تحليل أداء الإرساليات هذا الأسبوع مع التوصيات'),
+    _StudioTemplate('💉', 'تغطية التطعيم', 'briefing_doc',
+        'تحليل تغطية التطعيم في المحافظات مع الفجوات'),
+    _StudioTemplate('📚', 'دليل المراقب الجديد', 'study_guide',
+        'دليل شامل للمراقب الميداني الجديد في برنامج التحصين'),
+    _StudioTemplate('❄️', 'سلسلة التبريد', 'study_guide',
+        'دليل دراسي عن سلسلة التبريد و VVM وإدارة اللقاحات'),
+    _StudioTemplate('❓', 'أسئلة شائعة', 'faq',
+        'الأسئلة الشائعة حول التطعيمات والرد على المخاوف'),
+    _StudioTemplate('🧠', 'خريطة الترصد', 'mind_map',
+        'خريطة ذهنية لنظام الترصد الوبائي والاستجابة'),
+    _StudioTemplate('🎧', 'بودكاست صباحي', 'audio_overview',
+        'ملخص صباحي للمراقبين الميدانيين بأولويات اليوم'),
+  ];
+
   static final _artifactTypes = [
     (
       type: 'briefing_doc',
@@ -675,6 +693,57 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
             ),
             onSubmitted: (_) => _selectedType != null ? _generate(_selectedType!) : null,
           ),
+          const SizedBox(height: 10),
+          // ═══ Smart Templates ═══
+          Text(
+            '📋 قوالب جاهزة',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _smartTemplates.map((tpl) {
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    _topicCtrl.text = tpl.topic;
+                    _selectedType = tpl.type;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(tpl.emoji, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 4),
+                      Text(
+                        tpl.label,
+                        style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: cs.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );
@@ -888,12 +957,88 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
           _buildFaqView(cs, artifact)
         else
           _buildMarkdownView(cs, artifact),
+        // ═══ Quick Regenerate buttons ═══
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            _regenerateBtn(cs, Icons.refresh_rounded, 'إعادة التوليد', () {
+              if (_topicCtrl.text.isNotEmpty && _selectedType != null) {
+                _generate(_selectedType!);
+              }
+            }),
+            _regenerateBtn(cs, Icons.expand_rounded, 'أطول', () {
+              if (_topicCtrl.text.isNotEmpty && _selectedType != null) {
+                _topicCtrl.text = '${_topicCtrl.text} — مفصّل وموسّع';
+                _generate(_selectedType!);
+              }
+            }),
+            _regenerateBtn(cs, Icons.compress_rounded, 'أقصر', () {
+              if (_topicCtrl.text.isNotEmpty && _selectedType != null) {
+                _topicCtrl.text = '${_topicCtrl.text} — مختصر وموجز';
+                _generate(_selectedType!);
+              }
+            }),
+            _regenerateBtn(cs, Icons.school_rounded, 'أبسط', () {
+              if (_topicCtrl.text.isNotEmpty && _selectedType != null) {
+                _topicCtrl.text = '${_topicCtrl.text} — بلغة مبسّطة للمبتدئين';
+                _generate(_selectedType!);
+              }
+            }),
+            _regenerateBtn(cs, Icons.copy_rounded, 'نسخ', () {
+              Clipboard.setData(ClipboardData(text: artifact.content));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('تم نسخ المحتوى',
+                      style: TextStyle(fontFamily: 'Tajawal')),
+                  behavior: SnackBarBehavior.floating,
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            }),
+          ],
+        ),
         // Sources
         if (artifact.sources.isNotEmpty) ...[
           const SizedBox(height: 16),
           _buildSourcesSection(cs, artifact),
         ],
       ],
+    );
+  }
+
+  /// Quick regenerate button helper
+  Widget _regenerateBtn(ColorScheme cs, IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: cs.primary),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: cs.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1396,3 +1541,17 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
     );
   }
 }
+
+
+/// ═══════════════════════════════════════════════════════════
+/// _StudioTemplate — قالب جاهز للاستوديو
+/// ═══════════════════════════════════════════════════════════
+class _StudioTemplate {
+  final String emoji;
+  final String label;
+  final String type;
+  final String topic;
+
+  const _StudioTemplate(this.emoji, this.label, this.type, this.topic);
+}
+

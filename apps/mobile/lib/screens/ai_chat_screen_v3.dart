@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import '../services/dynamic_bot_knowledge_service.dart';
@@ -711,12 +713,194 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
 
   // ═══════════════════════════════════════════════════════════
 
+  /// Quick action button for input bar
+  Widget _inputActionBtn({
+    required IconData icon,
+    required String label,
+    required ColorScheme cs,
+    required VoidCallback onTap,
+    bool enabled = true,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: enabled
+              ? cs.primaryContainer.withValues(alpha: 0.3)
+              : cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14,
+                color: enabled ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.4)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: enabled ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.4),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Show prompt templates bottom sheet
+  void _showPromptTemplates() {
+    HapticFeedback.lightImpact();
+    final templates = [
+      ('📊', 'حلل أداء محافظتي هذا الأسبوع'),
+      ('📈', 'قارن جولتي الحملة الأخيرتين'),
+      ('💉', 'ما تغطية التطعيم في منطقتي؟'),
+      ('📋', 'أنشئ تقرير الإشراف الداعم'),
+      ('⚠️', 'ما أكثر المشاكل شيوعاً في الإرساليات؟'),
+      ('👥', 'من هم أكثر المشرفين نشاطاً؟'),
+      ('📅', 'ما اتجاه الإرساليات آخر شهر؟'),
+      ('🗺️', 'ما توزيع الإرساليات حسب المحافظات؟'),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text('قوالب جاهزة',
+                  style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800)),
+            ),
+            ...templates.map((t) => ListTile(
+                  leading: Text(t.$1, style: const TextStyle(fontSize: 24)),
+                  title: Text(t.$2,
+                      style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _ctrl.text = t.$2;
+                    _send(t.$2);
+                  },
+                )),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Export last AI response
+  void _exportLastResponse() {
+    HapticFeedback.lightImpact();
+    if (_msgs.isEmpty) return;
+
+    // Find last assistant message
+    String? lastResponse;
+    for (int i = _msgs.length - 1; i >= 0; i--) {
+      if (_msgs[i].role == 'assistant' && _msgs[i].content.isNotEmpty) {
+        lastResponse = _msgs[i].content;
+        break;
+      }
+    }
+
+    if (lastResponse == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يوجد رد للتصدير')),
+      );
+      return;
+    }
+
+    // Copy to clipboard (simplest export)
+    Clipboard.setData(ClipboardData(text: lastResponse));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Text('تم نسخ الرد — يمكنك لصقه في أي تطبيق',
+                style: TextStyle(fontFamily: 'Tajawal')),
+          ],
+        ),
+        backgroundColor: Color(0xFF22C55E),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Voice input (placeholder — uses speech_to_text if available)
+  void _startVoiceInput() {
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('🎤 الإدخال الصوتي قيد التطوير',
+            style: TextStyle(fontFamily: 'Tajawal')),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Pick attachment for AI context
+  Future<void> _pickAttachmentForAI() async {
+    HapticFeedback.lightImpact();
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'txt', 'csv', 'xlsx'],
+        allowMultiple: false,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      // For text files, read content and append to message
+      if (file.extension == 'txt' || file.extension == 'csv') {
+        if (file.path != null) {
+          final content = await File(file.path!).readAsString();
+          final truncated = content.length > 2000
+              ? '${content.substring(0, 2000)}... (تم اقتطاع المحتوى)'
+              : content;
+          _ctrl.text = '📄 ملف: ${file.name}\n\n$truncated\n\nحلل هذا المحتوى:';
+        }
+      } else {
+        // For PDF/Excel — just mention the file name
+        _ctrl.text = '📄 مرفق: ${file.name} (${file.size} bytes)\n\nحلل هذا الملف:';
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل رفع الملف: $e',
+              style: const TextStyle(fontFamily: 'Tajawal'))),
+        );
+      }
+    }
+  }
+
   Widget _buildChatTab(ColorScheme cs) {
     return Column(
       children: [
-        // Model selector
-        _buildModelSelector(cs),
-        // ─── New: Gateway Status Indicator (real-time AI health) ───
+        // ─── Gateway Status Indicator (real-time AI health) ───
         _buildGatewayStatusBar(cs),
         Expanded(
           child: _showWelcome && _msgs.isEmpty
@@ -1345,7 +1529,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
 
   Widget _buildInputBar(ColorScheme cs) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
       decoration: BoxDecoration(
           color: cs.surface,
           border: Border(
@@ -1353,55 +1537,113 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                   BorderSide(color: cs.outlineVariant.withValues(alpha: 0.2)))),
       child: SafeArea(
         top: false,
-        child: Row(children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                  color: cs.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(24)),
-              child: TextField(
-                controller: _ctrl,
-                textDirection: TextDirection.rtl,
-                style: TextStyle(
-                    fontFamily: 'Tajawal', fontSize: 14, color: cs.onSurface),
-                decoration: InputDecoration(
-                  hintText: 'اسأل المساعد الذكي...',
-                  hintStyle: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 14,
-                      color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
-                  border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ═══ Quick actions row ═══
+            Row(
+              children: [
+                // Prompt templates button
+                _inputActionBtn(
+                  icon: Icons.dashboard_customize_rounded,
+                  label: 'قوالب',
+                  cs: cs,
+                  onTap: _showPromptTemplates,
                 ),
-                onSubmitted: (text) => _send(text),
+                const SizedBox(width: 6),
+                // Export button (export last response)
+                _inputActionBtn(
+                  icon: Icons.ios_share_rounded,
+                  label: 'تصدير',
+                  cs: cs,
+                  onTap: _exportLastResponse,
+                  enabled: _msgs.isNotEmpty,
+                ),
+                const SizedBox(width: 6),
+                // Voice input button
+                _inputActionBtn(
+                  icon: Icons.mic_rounded,
+                  label: 'صوت',
+                  cs: cs,
+                  onTap: _startVoiceInput,
+                ),
+                const Spacer(),
+                // Clear conversation button
+                if (_msgs.isNotEmpty)
+                  _inputActionBtn(
+                    icon: Icons.cleaning_services_rounded,
+                    label: 'مسح',
+                    cs: cs,
+                    onTap: () {
+                      setState(() {
+                        _msgs.clear();
+                        _showWelcome = true;
+                      });
+                      unawaited(ChatStore.save(_msgs));
+                    },
+                    enabled: true,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // ═══ Text input + send ═══
+            Row(children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(24)),
+                  child: TextField(
+                    controller: _ctrl,
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(
+                        fontFamily: 'Tajawal', fontSize: 14, color: cs.onSurface),
+                    decoration: InputDecoration(
+                      hintText: 'اسأل المساعد الذكي...',
+                      hintStyle: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 14,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+                      prefixIcon: IconButton(
+                        icon: Icon(Icons.attach_file_rounded,
+                            size: 20, color: cs.onSurfaceVariant),
+                        onPressed: _pickAttachmentForAI,
+                        tooltip: 'إرفاق ملف',
+                      ),
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    onSubmitted: (text) => _send(text),
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [cs.primary, cs.tertiary]),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                      color: cs.primary.withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4))
-                ]),
-            child: IconButton(
-              icon: _loading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.send_rounded,
-                      color: Colors.white, size: 20),
-              onPressed: _loading ? null : () => _send(_ctrl.text),
-            ),
-          ),
-        ]),
+              const SizedBox(width: 8),
+              Container(
+                decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [cs.primary, cs.tertiary]),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                          color: cs.primary.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4))
+                    ]),
+                child: IconButton(
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.send_rounded,
+                          color: Colors.white, size: 20),
+                  onPressed: _loading ? null : () => _send(_ctrl.text),
+                ),
+              ),
+            ]),
+          ],
+        ),
       ),
     );
   }

@@ -83,11 +83,10 @@ const CAMPAIGN_KEYWORDS: [RegExp, string][] = [
   [/إيصالي|تكاملي|integrated/i, 'integrated_activity'],
 ]
 
+// NOTE: 'approved', 'rejected', 'reviewed' keywords removed — not used in this system
 const STATUS_KEYWORDS: [RegExp, string][] = [
   [/مسودة|draft/i, 'draft'],
   [/مرسلة|مُرسلة|submitted/i, 'submitted'],
-  [/معتمدة|مقبولة|approved/i, 'approved'],
-  [/مرفوضة|rejected/i, 'rejected'],
 ]
 
 function extractDays(text: string): number | undefined {
@@ -216,7 +215,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     type: 'aggregate',
     table: 'form_submissions',
     summary: `إجمالي ${data.length} إرسالية${filters.days ? ` خلال آخر ${filters.days} يوم` : ''}${filters.status ? ` (حالة: ${filters.status})` : ''}`,
-    quote: `الإجمالي: ${data.length}\nمسودة: ${byStatus.draft || 0}\nمرسلة: ${byStatus.submitted || 0}\nمعتمدة: ${byStatus.approved || 0}\nمرفوضة: ${byStatus.rejected || 0}`,
+    quote: `الإجمالي: ${data.length}\nمسودة: ${byStatus.draft || 0}\nمرسلة: ${byStatus.submitted || 0}`,
     metadata: { campaign_type: filters.campaign_type, date: new Date().toISOString().split('T')[0] },
   })
 
@@ -266,14 +265,13 @@ async function fetchGovernoratesData(supa: any, plan: QueryPlan, campaignRound: 
 
   if (error || !data) return []
 
-  const byGov: Record<string, { total: number; submitted: number; approved: number; rejected: number }> = {}
+  const byGov: Record<string, { total: number; submitted: number; draft: number }> = {}
   for (const row of data) {
     const gov = row.governorates?.name_ar || 'غير محدد'
-    if (!byGov[gov]) byGov[gov] = { total: 0, submitted: 0, approved: 0, rejected: 0 }
+    if (!byGov[gov]) byGov[gov] = { total: 0, submitted: 0, draft: 0 }
     byGov[gov].total++
     if (row.status === 'submitted') byGov[gov].submitted++
-    if (row.status === 'approved') byGov[gov].approved++
-    if (row.status === 'rejected') byGov[gov].rejected++
+    if (row.status === 'draft') byGov[gov].draft++
   }
 
   const sorted = Object.entries(byGov).sort((a, b) => b[1].total - a[1].total).slice(0, 15)
@@ -286,7 +284,7 @@ async function fetchGovernoratesData(supa: any, plan: QueryPlan, campaignRound: 
       type: 'aggregate',
       table: 'form_submissions',
       summary: `محافظة ${gov} — ${stats.total} إرسالية`,
-      quote: `${gov}: ${stats.total} إرسالية (مرسلة: ${stats.submitted}، معتمدة: ${stats.approved}، مرفوضة: ${stats.rejected})`,
+      quote: `${gov}: ${stats.total} إرسالية (مرسلة: ${stats.submitted}، مسودة: ${stats.draft})`,
       metadata: { governorate: gov },
     })
   }
@@ -563,14 +561,14 @@ function generateFollowups(plan: QueryPlan, sources: GroundingSource[]): string[
 
   switch (plan.entity) {
     case 'submissions':
-      followups.push('كم نسبة المعتمدة من الإجمالي؟')
       followups.push('أي محافظة الأكثر إرسالاً؟')
       followups.push('ما اتجاه الإرساليات آخر أسبوع؟')
+      followups.push('كم نسبة المكتملة من الإجمالي؟')
       break
     case 'governorates':
       followups.push('ما أضعف المحافظات أداءً؟')
       followups.push('قارن بين أعلى 3 محافظات')
-      followups.push('كم نسبة الاعتماد في كل محافظة؟')
+      followups.push('ما توزيع الإرساليات حسب الحملة؟')
       break
     case 'users':
       followups.push('من هم أكثر المشرفين نشاطاً؟')
@@ -578,9 +576,9 @@ function generateFollowups(plan: QueryPlan, sources: GroundingSource[]): string[
       followups.push('ما توزيع المستخدمين على المحافظات؟')
       break
     case 'shortages':
-      followups.push('أي النواقص حرجة وعاجلة؟')
-      followups.push('كم نسبة النواقص المحلولة؟')
-      followups.push('ما أكثر المواد نقصاً؟')
+      // Shortages entity kept for grounding data but followups focus on solutions
+      followups.push('ما الحلول المقترحة للنواقص؟')
+      followups.push('كم نسبة الإرساليات المكتملة؟')
       break
     case 'knowledge':
       followups.push('ما الآثار الجانبية الشائعة؟')

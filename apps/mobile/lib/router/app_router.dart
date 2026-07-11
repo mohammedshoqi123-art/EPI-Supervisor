@@ -22,6 +22,8 @@ import '../screens/forms_status_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/references_screen.dart';
 import '../screens/chat_screen.dart';
+import '../screens/memos_screen.dart';
+import '../screens/feedback_screen.dart';
 
 import '../screens/profile_screen.dart';
 import '../screens/users_screen.dart';
@@ -45,6 +47,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     '/forms-status': 1, // everyone
     '/notifications': 1, // everyone
     '/profile': 1, // everyone
+    '/chat': 1, // everyone
+    '/memos': 1, // everyone (compose restricted by RLS)
+    '/feedback': 1, // everyone
   };
 
   return GoRouter(
@@ -171,6 +176,14 @@ final routerProvider = Provider<GoRouter>((ref) {
               if (tab == 'ai') initialTab = 2;
               return ChatScreen(initialTab: initialTab);
             },
+          ),
+          GoRoute(
+            path: '/memos',
+            builder: (context, state) => const MemosScreen(),
+          ),
+          GoRoute(
+            path: '/feedback',
+            builder: (context, state) => const FeedbackScreen(),
           ),
           GoRoute(
             path: '/profile',

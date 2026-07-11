@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_core/epi_core.dart';
 import 'package:epi_shared/epi_shared.dart';
 import '../services/chat_channel_service.dart';
 import 'channel_screen.dart';
 import 'ai_chat_screen_v3.dart';
+import 'daily_brief_widget.dart';
 
 /// ═══════════════════════════════════════════════════════════
 /// ChatScreen — Hierarchical Communication Hub
@@ -101,6 +103,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         centerTitle: true,
         backgroundColor: AppTheme.primaryColor,
         foregroundColor: Colors.white,
+        actions: [
+          // Quick access: Memos
+          IconButton(
+            icon: const Icon(Icons.description_rounded),
+            tooltip: 'التعاميم الرسمية',
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              context.go('/memos');
+            },
+          ),
+          // Quick access: Feedback
+          IconButton(
+            icon: const Icon(Icons.feedback_rounded),
+            tooltip: 'التغذية الراجعة',
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              context.go('/feedback');
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
@@ -139,6 +161,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   // ═══════════════════════════════════════════════════════════════
   // Tab 1: رسمي — Official Channels (announcements + feedback)
+  //  Includes: Daily Brief + Achievement Board + Emergency Banner + Channels
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildOfficialTab() {
@@ -153,6 +176,65 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       emptyTitle: 'لا توجد قنوات رسمية',
       emptySubtitle: 'ستظهر هنا التعاميم والتوجيهات والتغذية الراجعة',
       emptyIcon: Icons.campaign_outlined,
+      // ═══ Show Daily Brief + Achievement Board above the channel list ═══
+      headerBuilder: (context) => Column(
+        children: [
+          // Daily morning brief widget
+          DailyBriefWidget(userName: _currentUserName ?? 'مشرف'),
+          // Emergency banner (if any emergency channel has unread)
+          Consumer(
+            builder: (context, ref, _) {
+              final channelsAsync = ref.watch(channelsProvider);
+              return channelsAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (channels) {
+                  final emergency = channels
+                      .where((c) => c.code == 'emergency' && c.unreadCount > 0)
+                      .toList();
+                  if (emergency.isEmpty) return const SizedBox.shrink();
+                  return EmergencyBanner(
+                    emergencyCount: emergency.first.unreadCount,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChannelScreen(
+                            channel: emergency.first,
+                            currentUserId: _currentUserId ?? '',
+                            currentUserName: _currentUserName ?? 'مستخدم',
+                            currentUserRole: _currentUserRole,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+          // Achievement board
+          const AchievementBoard(),
+          const SizedBox(height: 8),
+          // Section title
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'القنوات الرسمية',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF374151),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -249,6 +331,7 @@ class _ChannelListTab extends ConsumerWidget {
   final String emptyTitle;
   final String emptySubtitle;
   final IconData emptyIcon;
+  final WidgetBuilder? headerBuilder;
 
   const _ChannelListTab({
     required this.filter,
@@ -258,6 +341,7 @@ class _ChannelListTab extends ConsumerWidget {
     required this.emptyTitle,
     required this.emptySubtitle,
     required this.emptyIcon,
+    this.headerBuilder,
   });
 
   @override
@@ -377,9 +461,14 @@ class _ChannelListTab extends ConsumerWidget {
           onRefresh: () async => ref.invalidate(channelsProvider),
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: channels.length,
+            itemCount: channels.length + (headerBuilder != null ? 1 : 0),
             itemBuilder: (context, index) {
-              final channel = channels[index];
+              // ═══ Header at position 0 ═══
+              if (headerBuilder != null && index == 0) {
+                return headerBuilder!(context);
+              }
+              final channelIndex = headerBuilder != null ? index - 1 : index;
+              final channel = channels[channelIndex];
               return _ChannelCard(
                 channel: channel,
                 currentUserRole: currentUserRole,

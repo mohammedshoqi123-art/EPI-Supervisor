@@ -133,99 +133,6 @@ class ChatChannelService {
       }
     }
   }
-
-  /// Fetch messages for a specific channel
-  Future<List<Map<String, dynamic>>> getChannelMessages(
-    String channelId, {
-    int limit = 200,
-  }) async {
-    try {
-      final client = Supabase.instance.client;
-      // First, get the channel code to also fetch legacy room messages
-      final channelResp = await client
-          .from('chat_channels')
-          .select('code')
-          .eq('id', channelId)
-          .maybeSingle();
-      final code = channelResp?['code'] as String? ?? 'general';
-
-      // Fetch by room (always exists) — channel_id may not exist in all deployments
-      final response = await client
-          .from('chat_messages')
-          .select('*')
-          .eq('room', code)
-          .order('created_at', ascending: true)
-          .limit(limit);
-
-      return (response as List).cast<Map<String, dynamic>>();
-    } catch (e) {
-      debugPrint('[ChatChannelService] getChannelMessages error: $e');
-      return [];
-    }
-  }
-
-  /// Send a message to a channel
-  Future<void> sendMessage({
-    required String channelId,
-    required String channelCode,
-    required String senderId,
-    required String senderName,
-    required String content,
-    bool isOfficial = false,
-    String priority = 'normal',
-  }) async {
-    try {
-      final client = Supabase.instance.client;
-      await client.from('chat_messages').insert({
-        'channel_id': channelId,
-        'sender_id': senderId,
-        'sender_name': senderName,
-        'content': content,
-        'room': channelCode, // For legacy compatibility + realtime filter
-        'is_official': isOfficial,
-        'priority': priority,
-      });
-    } catch (e) {
-      debugPrint('[ChatChannelService] sendMessage error: $e');
-      rethrow;
-    }
-  }
-
-  /// Mark a channel as read (resets unread count to 0)
-  Future<void> markChannelRead(String channelId) async {
-    try {
-      await _api.rpc('mark_channel_read', params: {
-        'p_channel_id': channelId,
-      });
-    } catch (e) {
-      debugPrint('[ChatChannelService] markChannelRead error: $e');
-      // Fallback: direct upsert
-      try {
-        final client = Supabase.instance.client;
-        final userId = client.auth.currentUser?.id;
-        if (userId == null) return;
-        await client.from('chat_read_state').upsert({
-          'user_id': userId,
-          'channel_id': channelId,
-          'unread_count': 0,
-          'last_read_at': DateTime.now().toUtc().toIso8601String(),
-        }, onConflict: 'user_id, channel_id');
-      } catch (e2) {
-        debugPrint('[ChatChannelService] markChannelRead fallback error: $e2');
-      }
-    }
-  }
-
-  /// Delete a message (sender only)
-  Future<void> deleteMessage(String messageId) async {
-    try {
-      final client = Supabase.instance.client;
-      await client.from('chat_messages').delete().eq('id', messageId);
-    } catch (e) {
-      debugPrint('[ChatChannelService] deleteMessage error: $e');
-      rethrow;
-    }
-  }
 }
 
 /// ═══════════════════════════════════════════════════════════
@@ -265,11 +172,4 @@ final channelsProvider = StreamProvider<List<ChatChannel>>((ref) async* {
   await for (final channels in controller.stream) {
     yield channels;
   }
-});
-
-/// Provider for messages in a specific channel
-final channelMessagesProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String>((ref, channelId) {
-  final service = ref.read(chatChannelServiceProvider);
-  return service.getChannelMessages(channelId);
 });

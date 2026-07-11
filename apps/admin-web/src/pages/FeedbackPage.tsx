@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import {
   MessageCircle, Plus, Clock, AlertTriangle, Send, Loader2,
-  RefreshCw, ChevronLeft, Reply, CheckCircle2, XCircle, Clock3,
-  ArrowUpCircle, AlertOctagon,
+  RefreshCw, Reply, CheckCircle2, XCircle, Clock3,
+  ArrowUpCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,7 +25,6 @@ import {
   useFeedbackTickets, useCreateTicket, useAddReply,
   useUpdateTicketStatus, useTicketResponses,
 } from '@/hooks/api/feedback'
-import { useAuth } from '@/hooks/api/auth'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import type {
   FeedbackTicket, FeedbackCategory, FeedbackPriority,

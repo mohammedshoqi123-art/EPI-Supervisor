@@ -72,24 +72,6 @@ export function useFeedbackTickets(filter: FeedbackFilter = 'all') {
 }
 
 /**
- * Fetch all feedback tickets (admin/central view — for moderation)
- */
-export function useAllFeedbackTickets() {
-  return useQuery({
-    queryKey: ['all-feedback-tickets'],
-    queryFn: async (): Promise<FeedbackTicket[]> => {
-      const { data, error } = await supabase
-        .from('feedback_tickets')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500)
-      if (error) throw error
-      return data || []
-    },
-  })
-}
-
-/**
  * Fetch responses for a specific ticket
  */
 export function useTicketResponses(ticketId: string | null) {

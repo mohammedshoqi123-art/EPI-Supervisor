@@ -10,105 +10,11 @@ import 'attachment_widgets.dart';
 /// ═══════════════════════════════════════════════════════════
 /// FeedbackScreen — التغذية الراجعة المنظمة بحالات + SLA
 /// ═══════════════════════════════════════════════════════════
-
-class FeedbackScreen extends ConsumerStatefulWidget {
-  const FeedbackScreen({super.key});
-
-  @override
-  ConsumerState<FeedbackScreen> createState() => _FeedbackScreenState();
-}
-
-class _FeedbackScreenState extends ConsumerState<FeedbackScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  String _currentFilter = 'all';
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {
-          switch (_tabController.index) {
-            case 0:
-              _currentFilter = 'all';
-              break;
-            case 1:
-              _currentFilter = 'received';
-              break;
-            case 2:
-              _currentFilter = 'overdue';
-              break;
-            case 3:
-              _currentFilter = 'resolved';
-              break;
-          }
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('التغذية الراجعة',
-            style:
-                TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
-        centerTitle: true,
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(
-              fontFamily: 'Cairo', fontWeight: FontWeight.w700, fontSize: 12),
-          unselectedLabelStyle:
-              const TextStyle(fontFamily: 'Tajawal', fontSize: 11),
-          tabs: const [
-            Tab(icon: Icon(Icons.list_rounded), text: 'الكل'),
-            Tab(icon: Icon(Icons.inbox_rounded), text: 'واردة'),
-            Tab(icon: Icon(Icons.warning_rounded), text: 'متأخرة'),
-            Tab(icon: Icon(Icons.check_circle_rounded), text: 'محلولة'),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_rounded),
-            tooltip: 'تغذية راجعة جديدة',
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const FeedbackComposerScreen(),
-                ),
-              ).then((_) => ref.invalidate(feedbackTicketsProvider(_currentFilter)));
-            },
-          ),
-        ],
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _TicketsListTab(filter: 'all'),
-          _TicketsListTab(filter: 'received'),
-          _TicketsListTab(filter: 'overdue'),
-          _TicketsListTab(filter: 'resolved'),
-        ],
-      ),
-    );
-  }
-}
+/// NOTE: FeedbackScreen (standalone) was removed — use FeedbackTab in
+/// communication_tabs.dart instead. The classes below (TicketCard,
+/// FeedbackDetailScreen, FeedbackComposerScreen, _TicketsListTab,
+/// _ResponseBubble) are still used by communication_tabs.dart.
+/// ═══════════════════════════════════════════════════════════
 
 /// ═══════════════════════════════════════════════════════════
 /// _TicketsListTab — قائمة التذاكر

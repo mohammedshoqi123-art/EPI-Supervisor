@@ -44,7 +44,7 @@ export interface MemoWithStats extends OfficialMemo {
 /**
  * Fetch all memos (admin view — all memos, not filtered by target)
  */
-export function useMemos() {
+export function useMemos(enabled = true) {
   return useQuery({
     queryKey: ['memos'],
     queryFn: async (): Promise<OfficialMemo[]> => {
@@ -56,13 +56,14 @@ export function useMemos() {
       if (error) throw error
       return data || []
     },
+    enabled,
   })
 }
 
 /**
  * Fetch memos for the current user (with acknowledgment status)
  */
-export function useUserMemos() {
+export function useUserMemos(enabled = true) {
   return useQuery({
     queryKey: ['user-memos'],
     queryFn: async (): Promise<OfficialMemo[]> => {
@@ -70,6 +71,7 @@ export function useUserMemos() {
       if (error) throw error
       return data || []
     },
+    enabled,
   })
 }
 

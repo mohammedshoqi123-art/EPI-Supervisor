@@ -9,85 +9,11 @@ import 'attachment_widgets.dart';
 /// ═══════════════════════════════════════════════════════════
 /// MemosScreen — قائمة التعاميم الرسمية
 /// ═══════════════════════════════════════════════════════════
-
-class MemosScreen extends ConsumerStatefulWidget {
-  const MemosScreen({super.key});
-
-  @override
-  ConsumerState<MemosScreen> createState() => _MemosScreenState();
-}
-
-class _MemosScreenState extends ConsumerState<MemosScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'التعاميم الرسمية',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
-        ),
-        centerTitle: true,
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(
-              fontFamily: 'Cairo', fontWeight: FontWeight.w700, fontSize: 13),
-          unselectedLabelStyle:
-              const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-          tabs: const [
-            Tab(icon: Icon(Icons.inbox_rounded), text: 'الواردة'),
-            Tab(icon: Icon(Icons.priority_high_rounded), text: 'إلزامي'),
-            Tab(icon: Icon(Icons.history_rounded), text: 'المُقَرّ بها'),
-          ],
-        ),
-        actions: [
-          // Compose button — admin/central/governorate only
-          IconButton(
-            icon: const Icon(Icons.edit_note_rounded),
-            tooltip: 'إصدار تعميم',
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MemoComposerScreen(),
-                ),
-              ).then((_) => ref.invalidate(memosProvider));
-            },
-          ),
-        ],
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _MemosListTab(filter: (m) => true),
-          _MemosListTab(
-              filter: (m) => m.needsUrgentAcknowledgment && !m.isExpired),
-          _MemosListTab(filter: (m) => m.isAcknowledged),
-        ],
-      ),
-    );
-  }
-}
+/// NOTE: MemosScreen (standalone) was removed — use MemosTab in
+/// communication_tabs.dart instead. The classes below (MemoCard,
+/// MemoDetailScreen, MemoComposerScreen, _MemosListTab) are still
+/// used by communication_tabs.dart.
+/// ═══════════════════════════════════════════════════════════
 
 /// ═══════════════════════════════════════════════════════════
 /// _MemosListTab — قائمة التعاميم مع فلتر

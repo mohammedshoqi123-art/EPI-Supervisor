@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import {
-  ScrollText, Plus, CheckCircle2, Clock, AlertTriangle, X,
-  FileText, Send, Loader2, ChevronLeft, Users, Calendar, Shield,
-  RefreshCw, Trash2, Eye, CheckCheck
+  ScrollText, Plus, CheckCircle2, Clock, AlertTriangle,
+  Send, Loader2, Users, Calendar, Shield,
+  RefreshCw, Trash2, CheckCheck
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -52,15 +52,21 @@ const ALL_ROLES = ['admin', 'central', 'governorate', 'district', 'data_entry']
 // ═══════════════════════════════════════
 
 export default function MemosPage() {
-  const { user } = useAuth()
+  const { data: authData } = useAuth()
+  const user = authData?.profile
   const [activeTab, setActiveTab] = useState<'incoming' | 'mandatory' | 'acknowledged'>('incoming')
   const [showComposer, setShowComposer] = useState(false)
   const [selectedMemo, setSelectedMemo] = useState<OfficialMemo | null>(null)
 
   // Admin/central can see all memos; others see only their memos
-  const isAdmin = user?.role === 'admin' || user?.role === 'central'
-  const memosQuery = isAdmin ? useMemos() : useUserMemos()
-  const allMemos = memosQuery.data || []
+  const userRole = user?.role as string | undefined
+  const isAdmin = userRole === 'admin' || userRole === 'central'
+  const canCompose = isAdmin || userRole === 'governorate'
+
+  // Always call both hooks (Rules of Hooks) — use `enabled` to control fetching
+  const memosQuery = useMemos(isAdmin)
+  const userMemosQuery = useUserMemos(!isAdmin)
+  const allMemos = (isAdmin ? memosQuery.data : userMemosQuery.data) || []
 
   // Filter by tab
   const filteredMemos = allMemos.filter((m) => {
@@ -69,7 +75,10 @@ export default function MemosPage() {
     return true // incoming
   })
 
-  const canCompose = isAdmin || user?.role === 'governorate'
+  const isFetching = isAdmin ? memosQuery.isFetching : userMemosQuery.isFetching
+  const refetch = () => (isAdmin ? memosQuery.refetch() : userMemosQuery.refetch())
+  const isLoading = isAdmin ? memosQuery.isLoading : userMemosQuery.isLoading
+  const isError = isAdmin ? !!memosQuery.error : !!userMemosQuery.error
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -90,8 +99,8 @@ export default function MemosPage() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => memosQuery.refetch()}>
-            <RefreshCw className={cn('h-4 w-4', memosQuery.isFetching && 'animate-spin')} />
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
             تحديث
           </Button>
           {canCompose && (
@@ -104,18 +113,18 @@ export default function MemosPage() {
       </div>
 
       {/* ═══ Memos List ═══ */}
-      {memosQuery.isLoading ? (
+      {isLoading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
             <Skeleton key={i} className="h-32 w-full" />
           ))}
         </div>
-      ) : memosQuery.error ? (
+      ) : isError ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <AlertTriangle className="h-10 w-10 text-red-500" />
             <p className="mt-3 text-sm text-muted-foreground">تعذّر تحميل التعاميم</p>
-            <Button variant="outline" size="sm" className="mt-3" onClick={() => memosQuery.refetch()}>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => refetch()}>
               إعادة المحاولة
             </Button>
           </CardContent>

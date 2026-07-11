@@ -363,7 +363,9 @@ CREATE POLICY "smart_replies_delete_own" ON smart_replies_cache FOR DELETE
   USING (user_id = auth.uid());
 GRANT SELECT, INSERT, DELETE ON smart_replies_cache TO authenticated;
 
--- ═══ 5) CHANNEL_STATS VIEW (safe — uses LEFT JOIN with room fallback) ═══
+-- ═══ 5) CHANNEL_STATS VIEW (safe — uses room fallback only) ═══
+-- Note: chat_messages.channel_id may not exist in all deployments.
+-- We use COALESCE to join by room (always exists) or channel_id (if exists).
 DROP VIEW IF EXISTS public.channel_stats;
 CREATE OR REPLACE VIEW public.channel_stats AS
 SELECT
@@ -377,8 +379,7 @@ SELECT
   COUNT(DISTINCT CASE WHEN m.created_at > now() - INTERVAL '7 days' THEN m.id END) AS messages_last_7d,
   COUNT(DISTINCT CASE WHEN m.created_at > now() - INTERVAL '24 hours' THEN m.id END) AS messages_last_24h
 FROM chat_channels c
-LEFT JOIN chat_messages m ON
-  (m.channel_id = c.id OR (m.channel_id IS NULL AND m.room = COALESCE(c.code, 'general')))
+LEFT JOIN chat_messages m ON m.room = COALESCE(c.code, 'general')
 WHERE c.is_active = true
 GROUP BY c.id, c.name, c.channel_type, c.is_official;
 

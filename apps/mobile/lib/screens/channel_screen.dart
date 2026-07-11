@@ -92,10 +92,11 @@ class _ChannelScreenState extends State<ChannelScreen> {
       final client = Supabase.instance.client;
       final channelCode = widget.channel.code ?? 'general';
 
+      // Fetch by room (always exists) — channel_id may not exist in all deployments
       final response = await client
           .from('chat_messages')
           .select('*')
-          .or('channel_id.eq.${widget.channel.id},room.eq.$channelCode')
+          .eq('room', channelCode)
           .order('created_at', ascending: true)
           .limit(200);
 
@@ -163,8 +164,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
     try {
       final client = Supabase.instance.client;
-      // Insert message
-      final msgResponse = await client.from('chat_messages').insert({
+      // Insert message — try with channel_id first, fallback without
+      Map<String, dynamic> insertData = {
         'channel_id': widget.channel.id,
         'sender_id': widget.currentUserId,
         'sender_name': widget.currentUserName,
@@ -174,8 +175,18 @@ class _ChannelScreenState extends State<ChannelScreen> {
         'room': widget.channel.code ?? 'general',
         'is_official': widget.channel.isAnnouncement,
         'priority': widget.channel.isAnnouncement ? 'high' : 'normal',
-      }).select('id').single();
+      };
 
+      dynamic msgResponse;
+      try {
+        msgResponse =
+            await client.from('chat_messages').insert(insertData).select('id').single();
+      } catch (_) {
+        // Fallback: channel_id column may not exist in some deployments
+        insertData.remove('channel_id');
+        msgResponse =
+            await client.from('chat_messages').insert(insertData).select('id').single();
+      }
       final messageId = msgResponse['id'] as String?;
 
       // Save attachments metadata

@@ -765,7 +765,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       _ModelOption('groq', '⚡ Groq', null),
       _ModelOption('zai', '🤖 Z AI', null),
       _ModelOption('openrouter', '🌐 OpenRouter', 'deepseek/deepseek-chat'),
-      _ModelOption('gemini', '📡 Gemini', null),
+      _ModelOption('pollinations', '🌸 Pollinations', null),
       _ModelOption('local', '📱 محلي', null),
     ];
 

@@ -601,9 +601,39 @@ class ApiClient {
           if (data == '[DONE]') return;
           try {
             final json = jsonDecode(data);
+
+            // ═══ Format 1: Custom SSE events from Edge Function ═══
+            // {type: 'answer', content: '...'} or {type: 'thinking', ...}
+            final type = json['type'];
+            if (type == 'answer') {
+              final content = json['content'];
+              if (content != null && content.toString().isNotEmpty) {
+                yield content.toString();
+              }
+              continue;
+            }
+            if (type == 'done' || type == 'error') {
+              continue;
+            }
+
+            // ═══ Format 2: OpenAI/Groq streaming format ═══
+            // {choices: [{delta: {content: '...'}}]}
+            final choices = json['choices'];
+            if (choices is List && choices.isNotEmpty) {
+              final delta = choices[0]?['delta'];
+              if (delta is Map) {
+                final content = delta['content'];
+                if (content != null && content.toString().isNotEmpty) {
+                  yield content.toString();
+                }
+              }
+              continue;
+            }
+
+            // ═══ Format 3: Simple text field (legacy) ═══
             final text = json['text'];
-            if (text != null && text.isNotEmpty) {
-              yield text as String;
+            if (text != null && text.toString().isNotEmpty) {
+              yield text.toString();
             }
           } catch (_) {}
         }

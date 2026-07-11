@@ -1059,14 +1059,19 @@ serve(async (req) => {
     const auth = await authenticateRequest(supabase, authHeader)
     if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
 
-    // Rate limit
+    // Rate limit — use modelConfig.rateLimit from DB (default 25)
+    const modelConfig = await getModelConfig(supabase).catch(() => ({ defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 6, rateLimit: 25 }))
     try {
-      const rl = await supabase.rpc('check_and_increment_rate_limit', { p_user_id: auth.userId, p_endpoint: 'ai-chat-v4', p_window_seconds: 60, p_max_requests: 25 })
+      const rl = await supabase.rpc('check_and_increment_rate_limit', {
+        p_user_id: auth.userId,
+        p_endpoint: 'ai-chat-v3', // ✅ Fixed: was 'ai-chat-v4'
+        p_window_seconds: 60,
+        p_max_requests: modelConfig.rateLimit || 25,
+      })
       if (!rl.data?.[0]?.allowed) return jsonResponse({ error: 'تم تجاوز الحد — حاول بعد دقيقة' }, 429, origin)
     } catch { return jsonResponse({ error: 'خطأ في التحقق — حاول لاحقاً' }, 429, origin) }
 
     const profile = await getUserProfile(supabase, auth.userId)
-    const modelConfig = await getModelConfig(supabase).catch(() => ({ defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 6, rateLimit: 25 }))
     if (!modelConfig.enabled) return jsonResponse({ error: 'خدمة AI معطلة' }, 503, origin)
 
     const body = await req.json()

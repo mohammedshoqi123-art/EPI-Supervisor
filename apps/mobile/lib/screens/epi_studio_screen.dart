@@ -1468,3 +1468,5 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
       ),
     );
 }
+
+}

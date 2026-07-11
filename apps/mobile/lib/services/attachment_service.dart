@@ -129,7 +129,7 @@ class Attachment {
   final DateTime? createdAt;
   final AttachmentType type;
 
-  const Attachment({
+  Attachment({
     this.id,
     required this.filePath,
     required this.fileName,

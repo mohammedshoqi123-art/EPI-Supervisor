@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
+import '../services/dynamic_bot_knowledge_service.dart';
 import 'ai_chat_models.dart';
 import 'ai_provider_badge.dart';
 import 'citation_widgets.dart';
@@ -1847,7 +1848,29 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         _botLoading = false;
       });
     }
+
+    // ═══ Save conversation context to DB (memory across sessions) ═══
+    _saveBotConversationContext(text);
+
     _botScrollDown();
+  }
+
+  /// Save conversation context so the bot remembers across sessions
+  Future<void> _saveBotConversationContext(String lastUserMessage) async {
+    try {
+      final service = ref.read(dynamicBotKnowledgeServiceProvider);
+      // Generate title from first user message (truncate)
+      final title = lastUserMessage.length > 40
+          ? '${lastUserMessage.substring(0, 40)}...'
+          : lastUserMessage;
+
+      await service.saveConversation(
+        title: title,
+        lastTopic: _botEngine.messages.isNotEmpty
+            ? _botEngine.messages.last.text.substring(0, 50)
+            : null,
+      );
+    } catch (_) {}
   }
 
   bool _isGenericResponse(String t) =>

@@ -89,6 +89,7 @@ const navSections: NavSection[] = [
       { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
       { icon: MessageCircle, label: 'التغذية الراجعة', href: '/feedback', roles: ['admin', 'central', 'governorate', 'district', 'data_entry'] },
       { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },
+      { icon: Brain, label: 'معرفة البوت', href: '/bot-knowledge', roles: ['admin', 'central'] },
       { icon: Sparkles, label: 'استوديو المحتوى', href: '/studio' },
       { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
     ],

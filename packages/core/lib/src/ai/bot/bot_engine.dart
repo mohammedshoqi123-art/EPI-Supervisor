@@ -56,6 +56,26 @@ class BotEngine {
   bool get isAILoading => _isAILoading;
   BotAIStatus get aiStatus => BotLLMService.currentStatus;
 
+  // ═══ Dynamic KB callback — set from UI to enable DB-based search ═══
+  /// Returns dynamic knowledge entries from database (null = not available)
+  Future<List<(String topic, String content, double relevance)>> Function(
+      String query)? dynamicKBSearch;
+  bool _searchedDynamicKB = false;
+  List<(String, String, double)>? _dynamicKBResults;
+
+  /// Search dynamic KB (call this before sendMessage in async context)
+  Future<void> preSearchDynamicKB(String query) async {
+    if (dynamicKBSearch == null) {
+      _dynamicKBResults = null;
+      return;
+    }
+    try {
+      _dynamicKBResults = await dynamicKBSearch!(query);
+    } catch (_) {
+      _dynamicKBResults = null;
+    }
+  }
+
   void setAIEnabled(bool enabled) {
     _isAIEnabled = enabled;
   }
@@ -302,6 +322,17 @@ class BotEngine {
 
   BotResponse _process(String raw) {
     final norm = SmartNLP.normalize(raw);
+
+    // ═══ Dynamic KB search (async results cached from previous call) ═══
+    // Note: dynamicKBResults is populated by searchDynamicKB() which should
+    // be called BEFORE _process() in async context
+    if (_dynamicKBResults != null && _dynamicKBResults!.isNotEmpty) {
+      final best = _dynamicKBResults!.first;
+      _ctx.lastTopic = best.$1;
+      _record('dynamic_kb', norm);
+      _dynamicKBResults = null; // consume
+      return BotResponse(best.$2, _ctxReplies(best.$1));
+    }
 
     // التحليلات العميقة
     final deepResult = DeepAnalyticsEngine.analyzeQuery(norm);

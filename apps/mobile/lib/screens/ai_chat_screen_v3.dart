@@ -55,7 +55,41 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     _restore();
     _botEngine = BotEngine();
     _botEngine.initialize();
+    _setupDynamicKB();
+    _loadLastConversation();
   }
+
+  /// Setup dynamic KB search callback for BotEngine
+  void _setupDynamicKB() {
+    _botEngine.dynamicKBSearch = (query) async {
+      try {
+        final service = ref.read(dynamicBotKnowledgeServiceProvider);
+        final entries = await service.search(query, limit: 3);
+        return entries
+            .map((e) => (e.topic, e.content, 1.0))
+            .toList();
+      } catch (_) {
+        return <(String, String, double)>[];
+      }
+    };
+  }
+
+  /// Load last conversation context (memory across sessions)
+  Future<void> _loadLastConversation() async {
+    try {
+      final service = ref.read(dynamicBotKnowledgeServiceProvider);
+      final conv = await service.getLastConversation();
+      if (conv != null && conv.hasContext && _mounted) {
+        setState(() {
+          _lastConversationTitle = conv.title;
+          _lastConversationTopic = conv.lastTopic;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String? _lastConversationTitle;
+  String? _lastConversationTopic;
 
   @override
   void dispose() {
@@ -1494,6 +1528,60 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 color: cs.onSurfaceVariant,
                 height: 1.5)),
         const SizedBox(height: 24),
+
+        // ═══ Last conversation card (memory) ═══
+        if (_lastConversationTitle != null) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.history_rounded, size: 20, color: cs.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('آخر محادثة',
+                          style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 10,
+                              color: cs.onSurfaceVariant)),
+                      const SizedBox(height: 2),
+                      Text(
+                        _lastConversationTitle!,
+                        style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (_lastConversationTopic != null)
+                        Text(
+                          'الموضوع: $_lastConversationTopic',
+                          style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 10,
+                              color: cs.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         Text('📌 مواضيع شائعة',
             style: TextStyle(
                 fontFamily: 'Cairo',
@@ -1779,7 +1867,10 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     _botScrollDown();
 
     try {
-      // Step 1: Local engine
+      // Step 0: Pre-search dynamic KB (database) before local engine
+      await _botEngine.preSearchDynamicKB(text);
+
+      // Step 1: Local engine (checks dynamic KB results first, then static KB)
       final localResp = _botEngine.sendMessage(text);
       if (localResp != null && !_isGenericResponse(localResp.text)) {
         setState(() {

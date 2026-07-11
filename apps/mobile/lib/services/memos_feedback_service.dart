@@ -420,18 +420,23 @@ class FeedbackTicketsService {
         final userId = client.auth.currentUser?.id;
         if (userId == null) return [];
 
-        var query = client
-            .from('feedback_tickets')
-            .select('*')
-            .order('created_at', ascending: false);
+        // Filters must be applied BEFORE order/limit (PostgrestTransformBuilder)
+        final query = client.from('feedback_tickets').select('*');
 
-        if (filter == 'sent') {
-          query = query.eq('from_user_id', userId);
-        } else if (filter == 'received') {
-          query = query.eq('to_user_id', userId);
-        }
+        final response = filter == 'sent'
+            ? await query
+                .eq('from_user_id', userId)
+                .order('created_at', ascending: false)
+                .limit(200)
+            : filter == 'received'
+                ? await query
+                    .eq('to_user_id', userId)
+                    .order('created_at', ascending: false)
+                    .limit(200)
+                : await query
+                    .order('created_at', ascending: false)
+                    .limit(200);
 
-        final response = await query.limit(200);
         return (response as List)
             .map((e) => FeedbackTicket.fromMap(e as Map<String, dynamic>))
             .toList();

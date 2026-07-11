@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';

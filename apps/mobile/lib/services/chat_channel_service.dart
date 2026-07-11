@@ -150,20 +150,19 @@ class ChatChannelService {
       final code = channelResp?['code'] as String?;
 
       // Build query — fetch by channel_id OR by room (legacy)
-      var query = client
-          .from('chat_messages')
-          .select('*')
-          .order('created_at', ascending: true)
-          .limit(limit);
+      // Note: filters must be applied BEFORE order/limit (PostgrestTransformBuilder)
+      final query = client.from('chat_messages').select('*');
 
-      if (code != null && code.isNotEmpty) {
-        // Use OR condition: channel_id = X OR room = code
-        query = query.or('channel_id.eq.$channelId,room.eq.$code');
-      } else {
-        query = query.eq('channel_id', channelId);
-      }
+      final response = code != null && code.isNotEmpty
+          ? await query
+              .or('channel_id.eq.$channelId,room.eq.$code')
+              .order('created_at', ascending: true)
+              .limit(limit)
+          : await query
+              .eq('channel_id', channelId)
+              .order('created_at', ascending: true)
+              .limit(limit);
 
-      final response = await query;
       return (response as List).cast<Map<String, dynamic>>();
     } catch (e) {
       debugPrint('[ChatChannelService] getChannelMessages error: $e');

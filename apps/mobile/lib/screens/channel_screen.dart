@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../services/chat_channel_service.dart';
+import '../services/attachment_service.dart';
+import 'attachment_widgets.dart';
 
 /// ═══════════════════════════════════════════════════════════
 /// ChannelScreen — single channel view with messages
@@ -36,6 +37,10 @@ class _ChannelScreenState extends State<ChannelScreen> {
   bool _isLoading = true;
   bool _isSending = false;
   RealtimeChannel? _realtimeChannel;
+
+  // ═══ Attachments state ═══
+  final List<Attachment> _pendingAttachments = [];
+  final Map<String, List<Attachment>> _messageAttachmentsCache = {};
 
   @override
   void initState() {
@@ -137,7 +142,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    final attachments = List<Attachment>.from(_pendingAttachments);
+    if (text.isEmpty && attachments.isEmpty) return;
     if (text.length > 1000) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -148,25 +154,46 @@ class _ChannelScreenState extends State<ChannelScreen> {
       return;
     }
 
-    setState(() => _isSending = true);
+    setState(() {
+      _isSending = true;
+      _pendingAttachments.clear();
+    });
     _messageController.clear();
     HapticFeedback.lightImpact();
 
     try {
       final client = Supabase.instance.client;
-      await client.from('chat_messages').insert({
+      // Insert message
+      final msgResponse = await client.from('chat_messages').insert({
         'channel_id': widget.channel.id,
         'sender_id': widget.currentUserId,
         'sender_name': widget.currentUserName,
-        'content': text,
+        'content': text.isEmpty && attachments.isNotEmpty
+            ? '📎 مرفق'
+            : text,
         'room': widget.channel.code ?? 'general',
         'is_official': widget.channel.isAnnouncement,
         'priority': widget.channel.isAnnouncement ? 'high' : 'normal',
-      });
+      }).select('id').single();
+
+      final messageId = msgResponse['id'] as String?;
+
+      // Save attachments metadata
+      if (messageId != null && attachments.isNotEmpty) {
+        for (final att in attachments) {
+          await AttachmentService.saveAttachmentMetadata(
+            attachment: att,
+            messageId: messageId,
+          );
+        }
+      }
+
       await _loadMessages(silent: true);
     } catch (e) {
       if (mounted) {
         _messageController.text = text;
+        // Restore attachments on failure
+        _pendingAttachments.addAll(attachments);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Row(
@@ -188,6 +215,35 @@ class _ChannelScreenState extends State<ChannelScreen> {
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  /// Pick an attachment to attach to the next message
+  Future<void> _pickAttachment() async {
+    HapticFeedback.lightImpact();
+    final att = await AttachmentPicker.show(
+      context,
+      folder: 'chat/${widget.channel.code ?? widget.channel.id}',
+    );
+    if (att != null && mounted) {
+      setState(() => _pendingAttachments.add(att));
+    }
+  }
+
+  /// Remove a pending attachment
+  void _removeAttachment(int index) {
+    HapticFeedback.lightImpact();
+    setState(() => _pendingAttachments.removeAt(index));
+  }
+
+  /// Fetch attachments for a message (with caching)
+  Future<List<Attachment>> _getMessageAttachments(String messageId) async {
+    if (_messageAttachmentsCache.containsKey(messageId)) {
+      return _messageAttachmentsCache[messageId]!;
+    }
+    final attachments =
+        await AttachmentService.getAttachments(messageId: messageId);
+    _messageAttachmentsCache[messageId] = attachments;
+    return attachments;
   }
 
   bool get _canWrite {
@@ -556,6 +612,29 @@ class _ChannelScreenState extends State<ChannelScreen> {
                             color: textColor,
                           ),
                         ),
+                        // ═══ Attachments ═══
+                        if (msg['id'] != null)
+                          FutureBuilder<List<Attachment>>(
+                            future: _getMessageAttachments(msg['id'] as String),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData ||
+                                  snapshot.data!.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: snapshot.data!
+                                      .map((att) => AttachmentBubble(
+                                            attachment: att,
+                                            isMe: isMe,
+                                          ))
+                                      .toList(),
+                                ),
+                              );
+                            },
+                          ),
                         const SizedBox(height: 4),
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -759,80 +838,122 @@ class _ChannelScreenState extends State<ChannelScreen> {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          GestureDetector(
-            onTap: _isSending ? null : _sendMessage,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: _messageController.text.trim().isNotEmpty
-                    ? LinearGradient(colors: [
-                        channelColor,
-                        channelColor.withValues(alpha: 0.8),
-                      ])
-                    : null,
-                color: _messageController.text.trim().isNotEmpty
-                    ? null
-                    : const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: _isSending
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Icon(
-                      Icons.send_rounded,
-                      color: _messageController.text.trim().isNotEmpty
-                          ? Colors.white
-                          : const Color(0xFF9CA3AF),
-                      size: 22,
-                    ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 120),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F7FA),
-                borderRadius: BorderRadius.circular(16),
-                border:
-                    Border.all(color: const Color(0xFFE5E7EB), width: 1),
-              ),
-              child: TextField(
-                controller: _messageController,
-                textDirection: TextDirection.rtl,
-                maxLines: 4,
-                minLines: 1,
-                textInputAction: TextInputAction.newline,
-                style: const TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 15,
-                  color: Color(0xFF1A2332),
+          // ═══ Pending attachments preview ═══
+          if (_pendingAttachments.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: AttachmentChips(
+                  attachments: _pendingAttachments,
+                  onRemove: _removeAttachment,
                 ),
-                decoration: InputDecoration(
-                  hintText: 'اكتب رسالتك في ${widget.channel.name}...',
-                  hintStyle: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 14,
-                    color: Color(0xFF9CA3AF),
+              ),
+            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // ═══ Attachment button ═══
+              GestureDetector(
+                onTap: _isSending ? null : _pickAttachment,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: channelColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: channelColor.withValues(alpha: 0.2)),
                   ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
+                  child: Icon(
+                    Icons.attach_file_rounded,
+                    color: channelColor,
+                    size: 22,
+                  ),
                 ),
-                onChanged: (_) => setState(() {}),
-                onSubmitted: (_) => _sendMessage(),
               ),
-            ),
+              const SizedBox(width: 8),
+              // ═══ Send button ═══
+              GestureDetector(
+                onTap: _isSending ? null : _sendMessage,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: (_messageController.text.trim().isNotEmpty ||
+                            _pendingAttachments.isNotEmpty)
+                        ? LinearGradient(colors: [
+                            channelColor,
+                            channelColor.withValues(alpha: 0.8),
+                          ])
+                        : null,
+                    color: (_messageController.text.trim().isNotEmpty ||
+                            _pendingAttachments.isNotEmpty)
+                        ? null
+                        : const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: _isSending
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(
+                          Icons.send_rounded,
+                          color: (_messageController.text.trim().isNotEmpty ||
+                                  _pendingAttachments.isNotEmpty)
+                              ? Colors.white
+                              : const Color(0xFF9CA3AF),
+                          size: 22,
+                        ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // ═══ Text field ═══
+              Expanded(
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 120),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                  ),
+                  child: TextField(
+                    controller: _messageController,
+                    textDirection: TextDirection.rtl,
+                    maxLines: 4,
+                    minLines: 1,
+                    textInputAction: TextInputAction.newline,
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 15,
+                      color: Color(0xFF1A2332),
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'اكتب رسالتك في ${widget.channel.name}...',
+                      hintStyle: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 14,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

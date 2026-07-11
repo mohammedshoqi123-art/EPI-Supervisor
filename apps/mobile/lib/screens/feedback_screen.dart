@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
 import '../services/memos_feedback_service.dart';
+import '../services/attachment_service.dart';
+import 'attachment_widgets.dart';
 
 /// ═══════════════════════════════════════════════════════════
 /// FeedbackScreen — التغذية الراجعة المنظمة بحالات + SLA
@@ -473,17 +475,35 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
   List<Map<String, dynamic>> _responses = [];
   bool _loadingResponses = true;
   bool _sendingReply = false;
+  List<Attachment> _attachments = [];
+  bool _loadingAttachments = true;
 
   @override
   void initState() {
     super.initState();
     _loadResponses();
+    _loadAttachments();
   }
 
   @override
   void dispose() {
     _replyCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAttachments() async {
+    try {
+      final attachments = await AttachmentService.getAttachments(
+          feedbackTicketId: widget.ticket.id);
+      if (mounted) {
+        setState(() {
+          _attachments = attachments;
+          _loadingAttachments = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingAttachments = false);
+    }
   }
 
   Future<void> _loadResponses() async {
@@ -686,6 +706,11 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
                     ),
                   ),
                 ),
+                // ═══ Attachments ═══
+                if (!_loadingAttachments && _attachments.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  AttachmentList(attachments: _attachments),
+                ],
                 if (widget.ticket.isOverdue)
                   Container(
                     margin: const EdgeInsets.only(top: 8),
@@ -973,12 +998,26 @@ class _FeedbackComposerScreenState
   String _toRole = 'governorate';
   int _slaHours = 24;
   bool _sending = false;
+  final List<Attachment> _attachments = [];
 
   @override
   void dispose() {
     _subjectCtrl.dispose();
     _bodyCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAttachment() async {
+    HapticFeedback.lightImpact();
+    final att = await AttachmentPicker.show(context, folder: 'feedback');
+    if (att != null && mounted) {
+      setState(() => _attachments.add(att));
+    }
+  }
+
+  void _removeAttachment(int index) {
+    HapticFeedback.lightImpact();
+    setState(() => _attachments.removeAt(index));
   }
 
   Future<void> _submit() async {
@@ -998,7 +1037,7 @@ class _FeedbackComposerScreenState
 
     try {
       final service = ref.read(feedbackTicketsServiceProvider);
-      await service.createTicket(
+      final ticketId = await service.createTicket(
         subject: _subjectCtrl.text.trim(),
         body: _bodyCtrl.text.trim(),
         category: _category,
@@ -1006,6 +1045,16 @@ class _FeedbackComposerScreenState
         toRole: _toRole,
         slaHours: _slaHours,
       );
+
+      // Save attachments metadata
+      if (ticketId != null && _attachments.isNotEmpty) {
+        for (final att in _attachments) {
+          await AttachmentService.saveAttachmentMetadata(
+            attachment: att,
+            feedbackTicketId: ticketId,
+          );
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1179,6 +1228,31 @@ class _FeedbackComposerScreenState
                 onSelected: (_) => setState(() => _slaHours = h),
               );
             }).toList(),
+          ),
+
+          // ═══ Attachments section ═══
+          const SizedBox(height: 16),
+          _label('المرفقات (صور / PDF / Excel)'),
+          const SizedBox(height: 8),
+          if (_attachments.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: AttachmentChips(
+                attachments: _attachments,
+                onRemove: _removeAttachment,
+              ),
+            ),
+          OutlinedButton.icon(
+            onPressed: _pickAttachment,
+            icon: const Icon(Icons.attach_file_rounded, size: 18),
+            label: const Text('إضافة مرفق',
+                style: TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
           ),
           const SizedBox(height: 24),
 

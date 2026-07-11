@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:epi_shared/epi_shared.dart';
 import '../services/memos_feedback_service.dart';
+import '../services/attachment_service.dart';
+import 'attachment_widgets.dart';
 
 /// ═══════════════════════════════════════════════════════════
 /// MemosScreen — قائمة التعاميم الرسمية
@@ -379,11 +381,29 @@ class MemoDetailScreen extends ConsumerStatefulWidget {
 class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
   bool _acknowledging = false;
   Map<String, dynamic>? _ackStats;
+  List<Attachment> _attachments = [];
+  bool _loadingAttachments = true;
 
   @override
   void initState() {
     super.initState();
     _loadAckStats();
+    _loadAttachments();
+  }
+
+  Future<void> _loadAttachments() async {
+    try {
+      final attachments =
+          await AttachmentService.getAttachments(memoId: widget.memo.id);
+      if (mounted) {
+        setState(() {
+          _attachments = attachments;
+          _loadingAttachments = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingAttachments = false);
+    }
   }
 
   Future<void> _loadAckStats() async {
@@ -622,6 +642,11 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
                     ),
                   ),
                 ),
+                // ═══ Attachments ═══
+                if (!_loadingAttachments && _attachments.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  AttachmentList(attachments: _attachments),
+                ],
                 // ═══ Ack Stats (admin only) ═══
                 if (_ackStats != null) ...[
                   const SizedBox(height: 20),
@@ -831,12 +856,26 @@ class _MemoComposerScreenState extends ConsumerState<MemoComposerScreen> {
   ];
   DateTime? _validUntil;
   bool _sending = false;
+  final List<Attachment> _attachments = [];
 
   @override
   void dispose() {
     _titleCtrl.dispose();
     _bodyCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAttachment() async {
+    HapticFeedback.lightImpact();
+    final att = await AttachmentPicker.show(context, folder: 'memos');
+    if (att != null && mounted) {
+      setState(() => _attachments.add(att));
+    }
+  }
+
+  void _removeAttachment(int index) {
+    HapticFeedback.lightImpact();
+    setState(() => _attachments.removeAt(index));
   }
 
   Future<void> _submit() async {
@@ -856,7 +895,7 @@ class _MemoComposerScreenState extends ConsumerState<MemoComposerScreen> {
 
     try {
       final service = ref.read(officialMemosServiceProvider);
-      await service.createMemo(
+      final memoId = await service.createMemo(
         title: _titleCtrl.text.trim(),
         body: _bodyCtrl.text.trim(),
         priority: _priority,
@@ -864,6 +903,16 @@ class _MemoComposerScreenState extends ConsumerState<MemoComposerScreen> {
         requiresAcknowledgment: _requiresAck,
         validUntil: _validUntil,
       );
+
+      // Save attachments metadata
+      if (memoId != null && _attachments.isNotEmpty) {
+        for (final att in _attachments) {
+          await AttachmentService.saveAttachmentMetadata(
+            attachment: att,
+            memoId: memoId,
+          );
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1041,6 +1090,32 @@ class _MemoComposerScreenState extends ConsumerState<MemoComposerScreen> {
               );
               if (dt != null) setState(() => _validUntil = dt);
             },
+          ),
+
+          // ═══ Attachments section ═══
+          const SizedBox(height: 16),
+          _label('المرفقات (صور / PDF / Excel)'),
+          const SizedBox(height: 8),
+          if (_attachments.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: AttachmentChips(
+                attachments: _attachments,
+                onRemove: _removeAttachment,
+              ),
+            ),
+          OutlinedButton.icon(
+            onPressed: _pickAttachment,
+            icon: const Icon(Icons.attach_file_rounded, size: 18),
+            label: const Text('إضافة مرفق',
+                style: TextStyle(
+                    fontFamily: 'Tajawal', fontSize: 13)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
           ),
           const SizedBox(height: 24),
 

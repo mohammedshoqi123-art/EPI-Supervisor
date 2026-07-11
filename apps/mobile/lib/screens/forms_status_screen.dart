@@ -932,27 +932,51 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       );
     }
 
+    // ═══ Apply search filter (level filter removed per request) ═══
+    final filtered = _applySearchFilter(_submittedItems);
+
     return Column(
       children: [
+        // Count badge
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '${filtered.length} إرسالية',
+              style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 11,
+                  color: Color(0xFF9CA3AF)),
+            ),
+          ),
+        ),
         Expanded(
           child: RefreshIndicator(
             onRefresh: () => _loadSubmittedPage(0),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _submittedItems.length,
-              itemBuilder: (context, index) {
-                final sub = _submittedItems[index];
-                return SubmittedTile(
-                  title: sub['forms']?['title_ar'] ?? 'نموذج',
-                  status: sub['status'] ?? 'submitted',
-                  date: sub['submitted_at'] ?? sub['created_at'],
-                  userName: sub['profiles']?['full_name'],
-                  isOffline: sub['is_offline'] == true,
-                  onTap: () =>
-                      context.go('/forms/status/submission/${sub['id']}'),
-                );
-              },
-            ),
+            child: filtered.isEmpty
+                ? ListView(
+                    children: const [
+                      SizedBox(height: 80),
+                      EpiEmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: 'لا توجد نتائج',
+                        subtitle: 'جرّب تعديل كلمات البحث',
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final sub = filtered[index];
+                      return SubmittedCard(
+                        submission: sub,
+                        onTap: () => context.go(
+                            '/forms/status/submission/${sub['id']}'),
+                      );
+                    },
+                  ),
           ),
         ),
         _buildPaginationControls(

@@ -134,7 +134,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
           GoRoute(
             path: '/analytics',
-            builder: (context, state) => const AnalyticsScreen(),
+            builder: (context, state) {
+              // ═══ Support ?tab=reports deep-link from Dashboard quick action ═══
+              final tab = state.uri.queryParameters['tab'];
+              int initialTab = 0;
+              if (tab == 'reports') initialTab = 4;
+              return AnalyticsScreen(initialTab: initialTab);
+            },
           ),
           GoRoute(
             path: '/ai',

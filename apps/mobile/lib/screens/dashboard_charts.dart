@@ -266,7 +266,6 @@ class DashboardQuickActions extends StatelessWidget {
   final int selectedAction;
   final ValueChanged<int> onActionTapDown;
   final VoidCallback onActionTapCancel;
-  final VoidCallback onExportPdf;
   final AnimationController? cardsAnim;
 
   const DashboardQuickActions({
@@ -274,7 +273,6 @@ class DashboardQuickActions extends StatelessWidget {
     required this.selectedAction,
     required this.onActionTapDown,
     required this.onActionTapCancel,
-    required this.onExportPdf,
     this.cardsAnim,
   });
 
@@ -294,9 +292,9 @@ class DashboardQuickActions extends StatelessWidget {
         const Color(0xFF5C6BC0),
       ),
       QuickAction(
-        Icons.picture_as_pdf_rounded,
-        'تصدير PDF',
-        '__export_pdf__',
+        Icons.assessment_rounded,
+        'التقارير',
+        '/analytics?tab=reports',
         const Color(0xFFE53935),
       ),
       QuickAction(
@@ -320,11 +318,7 @@ class DashboardQuickActions extends StatelessWidget {
             onTapDown: (_) => onActionTapDown(i),
             onTapUp: (_) {
               HapticFeedback.lightImpact();
-              if (a.route == '__export_pdf__') {
-                onExportPdf();
-              } else {
-                context.go(a.route);
-              }
+              context.go(a.route);
               Future.delayed(const Duration(milliseconds: 300), () {
                 onActionTapCancel();
               });

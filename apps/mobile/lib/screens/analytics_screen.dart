@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:epi_shared/epi_shared.dart';
+import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import '../router/app_router.dart';
 import 'analytics_widgets.dart';
 import 'analytics_reports_tab.dart';
+import 'dashboard_report.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  FORM IDs
@@ -214,7 +216,11 @@ final _supervisionSubsProvider = FutureProvider.family
 // ═══════════════════════════════════════════════════════════════════════════
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
-  const AnalyticsScreen({super.key});
+  /// Optional initial tab index (0-4). Used to deep-link from dashboard.
+  final int initialTab;
+
+  const AnalyticsScreen({super.key, this.initialTab = 0});
+
   @override
   ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
@@ -227,7 +233,13 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 5, vsync: this);
+    // ═══ Clamp initialTab to valid range [0, 4] ═══
+    final initial = widget.initialTab.clamp(0, 4);
+    _tab = TabController(
+      length: 5,
+      vsync: this,
+      initialIndex: initial,
+    );
     // Listen to sync service — invalidate analytics providers after each sync
     _listenToSync();
 
@@ -329,9 +341,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                 ReportsTab(
                   campaignLabel: ref.watch(campaignProvider).displayLabel,
                   campaignRound: ref.watch(campaignRoundProvider),
-                  onGenerate: (type, format, period) async {
-                    // Same logic as DashboardReportExporter
-                  },
+                  onGenerate: (type, format, period) =>
+                      _generateReport(type, format, period),
                 ),
               ],
             ),
@@ -384,6 +395,305 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       supervisorCount: supervisors.length,
       challengeCount: 0, // Will be updated by ChallengesTab
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // REPORT GENERATION — powers the Reports tab
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Readiness criteria keys (extracted from _readinessCriteria tuples)
+  static const _readinessCriteriaKeys = [
+    'budget_received',
+    'routine_vaccines_available',
+    'medicines_available',
+    'reproductive_supplies_available',
+    'staff_available',
+    'preparatory_meeting_held',
+  ];
+
+  /// Main report generation entry point — called from ReportsTab.onGenerate
+  Future<void> _generateReport(String type, String format, String period) async {
+    // ═══ Route specialized reports ═══
+    if (type == 'supervisor_leaderboard') {
+      await _generateSupervisorLeaderboard();
+      return;
+    }
+    if (type == 'round_comparison') {
+      await _generateRoundComparison();
+      return;
+    }
+
+    // ═══ Standard reports: fetch analytics data then generate ═══
+    List<ReadinessGovData>? readinessData;
+    List<ComplianceSectionData>? complianceData;
+    List<ServiceNumberData>? serviceNumbersData;
+    List<ChallengeData>? challengesData;
+
+    try {
+      final db = ref.read(databaseServiceProvider);
+
+      final readinessSubs =
+          await db.getSubmissions(formId: _readinessFormId, limit: 5000);
+      if (readinessSubs.isNotEmpty) {
+        readinessData = _processReadinessData(readinessSubs);
+      }
+
+      final supervisionSubs =
+          await db.getSubmissions(formId: _supervisionFormId, limit: 5000);
+      if (supervisionSubs.isNotEmpty) {
+        complianceData = _processComplianceData(supervisionSubs);
+        serviceNumbersData = _processServiceNumbersData(supervisionSubs);
+        challengesData = _processChallengesData(supervisionSubs);
+      }
+    } catch (_) {
+      // Analytics data is optional — report will still generate without it
+    }
+
+    if (!mounted) return;
+
+    await DashboardReportExporter.generateAndShare(
+      context: context,
+      type: type,
+      analyticsData: ref
+          .read(
+            dashboardAnalyticsProvider(
+              AnalyticsFilter(
+                campaignType: ref.read(campaignProvider).value,
+                campaignRound: ref.read(campaignRoundProvider),
+              ),
+            ),
+          )
+          .valueOrNull,
+      fetchGovRanking: () async {
+        try {
+          return await ref.read(analyticsServiceProvider).getGovernorateRanking();
+        } catch (_) {
+          return null;
+        }
+      },
+      readinessData: readinessData,
+      complianceData: complianceData,
+      serviceNumbersData: serviceNumbersData,
+      challengesData: challengesData,
+    );
+  }
+
+  /// ═══ Supervisor Leaderboard Report ═══
+  Future<void> _generateSupervisorLeaderboard() async {
+    try {
+      final db = ref.read(databaseServiceProvider);
+      final campaign = ref.read(campaignProvider).value;
+      final round = ref.read(campaignRoundProvider);
+
+      final subs = await db.getSubmissions(
+        campaignType: campaign,
+        campaignRound: round,
+        limit: 10000,
+      );
+
+      // Aggregate by user
+      final userStats = <String, Map<String, dynamic>>{};
+      for (final s in subs) {
+        final uid = s['submitted_by'] as String? ?? 'unknown';
+        final name =
+            (s['profiles'] as Map?)?['full_name'] as String? ?? 'غير معروف';
+        if (!userStats.containsKey(uid)) {
+          userStats[uid] = {'name': name, 'total': 0, 'submitted': 0};
+        }
+        userStats[uid]!['total'] = (userStats[uid]!['total'] as int) + 1;
+        if (s['status'] == 'submitted') {
+          userStats[uid]!['submitted'] =
+              (userStats[uid]!['submitted'] as int) + 1;
+        }
+      }
+
+      final ranked = userStats.values.toList()
+        ..sort((a, b) => (b['total'] as int).compareTo(a['total'] as int));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '🏆 تم توليد تقرير ترتيب المشرفين (${ranked.length} مشرف)'),
+            backgroundColor: AppTheme.primaryColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// ═══ Round Comparison Report ═══
+  Future<void> _generateRoundComparison() async {
+    try {
+      final db = ref.read(databaseServiceProvider);
+      final campaign = ref.read(campaignProvider).value;
+      final currentRound = ref.read(campaignRoundProvider);
+
+      final currentSubs = await db.getSubmissions(
+        campaignType: campaign,
+        campaignRound: currentRound,
+        limit: 10000,
+      );
+
+      final prevRound = currentRound > 1 ? currentRound - 1 : 1;
+      final prevSubs = await db.getSubmissions(
+        campaignType: campaign,
+        campaignRound: prevRound,
+        limit: 10000,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '🔄 مقارنة الجولة $currentRound مع الجولة $prevRound: ${currentSubs.length} vs ${prevSubs.length}'),
+            backgroundColor: AppTheme.primaryColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // ═══ Data processing helpers (same logic as dashboard) ═══
+
+  List<ReadinessGovData> _processReadinessData(List<Map<String, dynamic>> subs) {
+    final govAsync = ref.read(governoratesProvider);
+    final govNames = <String, String>{};
+    for (final g in (govAsync.valueOrNull ?? [])) {
+      govNames[g['id'] as String? ?? ''] = g['name_ar'] as String? ?? '';
+    }
+
+    final latestByGov = <String, Map<String, dynamic>>{};
+    for (final s in subs) {
+      final d = s['data'] as Map<String, dynamic>? ?? {};
+      final govId = d['governorate_id'] as String?;
+      if (govId == null) continue;
+      final existing = latestByGov[govId];
+      if (existing == null ||
+          (s['created_at'] as String? ?? '')
+                  .compareTo(existing['created_at'] as String? ?? '') >
+              0) {
+        latestByGov[govId] = s;
+      }
+    }
+
+    return latestByGov.entries.map((e) {
+      final d = e.value['data'] as Map<String, dynamic>? ?? {};
+      final govName = govNames[e.key] ?? 'غير محدد';
+      final readyStr = d['ready_for_launch'] as String?;
+      final status = readyStr == 'جاهزة'
+          ? 'ready'
+          : readyStr == 'جاهزة جزئياً' || readyStr == 'جاهزة جزئيا'
+              ? 'partial'
+              : readyStr == 'غير جاهزة'
+                  ? 'notReady'
+                  : 'unknown';
+
+      int score = 0;
+      for (final key in _readinessCriteriaKeys) {
+        if (d[key] == true) score++;
+      }
+
+      return ReadinessGovData(
+        govName: govName,
+        status: status,
+        score: score,
+        total: _readinessCriteriaKeys.length,
+        reasons: d['postponement_reasons'] as String?,
+      );
+    }).toList()
+      ..sort((a, b) {
+        final order = {'notReady': 0, 'partial': 1, 'unknown': 2, 'ready': 3};
+        return (order[a.status] ?? 9).compareTo(order[b.status] ?? 9);
+      });
+  }
+
+  List<ComplianceSectionData> _processComplianceData(
+      List<Map<String, dynamic>> subs) {
+    final realSubs = subs.where((s) {
+      final d = s['data'] as Map<String, dynamic>? ?? {};
+      return d['governorate_id'] != null;
+    }).toList();
+
+    return _yesNoSections.entries.map((section) {
+      int yesCount = 0, totalCount = 0;
+      for (final key in section.value) {
+        for (final s in realSubs) {
+          final d = s['data'] as Map<String, dynamic>? ?? {};
+          if (d.containsKey(key)) {
+            totalCount++;
+            if (d[key] == true) yesCount++;
+          }
+        }
+      }
+      return ComplianceSectionData(
+        sectionName: section.key,
+        yesCount: yesCount,
+        totalCount: totalCount,
+      );
+    }).toList();
+  }
+
+  List<ServiceNumberData> _processServiceNumbersData(
+      List<Map<String, dynamic>> subs) {
+    final realSubs = subs.where((s) {
+      final d = s['data'] as Map<String, dynamic>? ?? {};
+      return d['governorate_id'] != null;
+    }).toList();
+
+    final totals = <String, int>{};
+    final counts = <String, int>{};
+    for (final s in realSubs) {
+      final d = s['data'] as Map<String, dynamic>? ?? {};
+      for (final key in _serviceNumberFields.keys) {
+        final val = d[key];
+        if (val is num) {
+          totals[key] = (totals[key] ?? 0) + val.toInt();
+          counts[key] = (counts[key] ?? 0) + 1;
+        }
+      }
+    }
+
+    return _serviceNumberFields.entries.map((e) {
+      final total = totals[e.key] ?? 0;
+      final count = counts[e.key] ?? 0;
+      final avg = count > 0 ? total / count : 0.0;
+      return ServiceNumberData(label: e.value, total: total, avg: avg);
+    }).toList();
+  }
+
+  List<ChallengeData> _processChallengesData(List<Map<String, dynamic>> subs) {
+    return subs
+        .where((s) {
+          final d = s['data'] as Map<String, dynamic>? ?? {};
+          return d['challenges'] != null ||
+              d['actions_taken'] != null ||
+              d['recommendations'] != null;
+        })
+        .take(20)
+        .map((s) {
+          final d = s['data'] as Map<String, dynamic>? ?? {};
+          return ChallengeData(
+            supervisorName: d['supervisor_name'] as String? ?? 'غير محدد',
+            date: (s['created_at'] as String? ?? '').substring(0, 10),
+            challenges: d['challenges'] as String? ?? '',
+            actionsTaken: d['actions_taken'] as String? ?? '',
+            recommendations: d['recommendations'] as String? ?? '',
+          );
+        })
+        .toList();
   }
 }
 

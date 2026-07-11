@@ -162,10 +162,15 @@ function buildQueryPlan(message: string): QueryPlan {
   let aggregation: QueryPlan['aggregation'] = 'count'
 
   // Determine entity — expanded to cover 100% of system data
-  if (/إرسالي|إرسال|استمارة|نموذج|إدخال/.test(message)) {
+  // NOTE: "نماذج" (plural) → forms, "نموذج" (singular) → submissions
+  if (/نماذج|استمارات|forms/.test(message)) {
+    entity = 'forms'
+  } else if (/إرسالي|إرسال|استمارة|نموذج|إدخال/.test(message)) {
     entity = 'submissions'
   } else if (/نقص|نواقص|احتياج|مخزون/.test(message)) {
     entity = 'shortages'
+  } else if (/مديرية|مديريات/.test(message)) {
+    entity = 'districts'
   } else if (/محافظة|محافظات|مناطق/.test(message)) {
     entity = 'governorates'
     aggregation = 'compare'
@@ -193,10 +198,6 @@ function buildQueryPlan(message: string): QueryPlan {
     entity = 'campaigns'
   } else if (/تقرير مجدول|تقارير مجدولة/.test(message)) {
     entity = 'reports'
-  } else if (/مديرية|مديريات/.test(message)) {
-    entity = 'districts'
-  } else if (/نماذج|استمارات|forms/.test(message)) {
-    entity = 'forms'
   } else if (/إعدادات|إعداد|config/.test(message)) {
     entity = 'settings'
   }
@@ -1112,29 +1113,85 @@ async function fetchAppSettingsData(supa: any): Promise<GroundingSource[]> {
   }]
 }
 
-/// Fetcher: النماذج (forms) — جميع النماذج النشطة
-async function fetchFormsData(supa: any): Promise<GroundingSource[]> {
-  const { data, error } = await withTimeout(
-    supa.from('forms')
-      .select('id, title_ar, title_en, description_ar, campaign_type, is_active, version, requires_gps, requires_photo, max_photos, allowed_roles')
-      .eq('is_active', true)
-      .order('title_ar')
-      .limit(50),
+/// Fetcher: النماذج (forms) — جميع النماذج النشطة مع schema + عدّ الإرساليات
+async function fetchFormsData(supa: any, plan?: QueryPlan): Promise<GroundingSource[]> {
+  let q = supa.from('forms')
+    .select('id, title_ar, title_en, description_ar, schema, campaign_type, is_active, version, requires_gps, requires_photo, max_photos, allowed_roles')
+    .eq('is_active', true)
+    .is('deleted_at', null)
+
+  // فلترة حسب نوع الحملة إذا ذُكر في السؤال
+  const campaignType = plan?.filters?.campaign_type
+  if (campaignType && campaignType !== 'all') {
+    q = q.eq('campaign_type', campaignType)
+  }
+
+  const { data: forms, error } = await withTimeout(
+    q.order('title_ar').limit(50),
     5_000,
   ) ?? {}
 
-  if (error || !data || data.length === 0) return []
+  if (error || !forms || forms.length === 0) return []
 
-  return [{
+  // عدّ الإرساليات لكل نموذج
+  const formIds = forms.map((f: any) => f.id)
+  const { data: submissionCounts, error: countErr } = await withTimeout(
+    supa.from('form_submissions')
+      .select('form_id')
+      .in('form_id', formIds)
+      .is('deleted_at', null),
+    5_000,
+  ) ?? {}
+
+  const countsByForm: Record<string, number> = {}
+  if (submissionCounts) {
+    for (const s of submissionCounts) {
+      countsByForm[s.form_id] = (countsByForm[s.form_id] || 0) + 1
+    }
+  }
+
+  // تجميع حسب نوع الحملة
+  const byCampaign: Record<string, any[]> = {}
+  for (const f of forms) {
+    const ct = f.campaign_type || 'غير محدد'
+    if (!byCampaign[ct]) byCampaign[ct] = []
+    byCampaign[ct].push(f)
+  }
+
+  const sources: GroundingSource[] = []
+
+  // Source 1: قائمة كل النماذج مع تفاصيلها
+  sources.push({
     id: 1,
     type: 'aggregate',
     table: 'forms',
-    summary: `${data.length} نموذج نشط`,
-    quote: data.map((f: any, i: number) =>
-      `${i + 1}. ${f.title_ar}\n   ID: ${f.id}\n   الحملة: ${f.campaign_type}\n   الإصدار: ${f.version}\n   يتطلب GPS: ${f.requires_gps ? 'نعم' : 'لا'} | يتطلب صور: ${f.requires_photo ? `نعم (حد ${f.max_photos})` : 'لا'}\n   الأدوار المسموحة: ${(f.allowed_roles || []).join(', ')}`
-    ).join('\n\n'),
-    metadata: { count: data.length },
-  }]
+    summary: `${forms.length} نموذج نشط${campaignType ? ` (${campaignType === 'polio_campaign' ? 'حملة شلل الأطفال' : 'النشاط الإيصالي التكاملي'})` : ''}`,
+    quote: `النماذج النشطة (${forms.length}):\n\n${Object.entries(byCampaign).map(([ct, fs]) => {
+      const campaignLabel = ct === 'polio_campaign' ? '💉 حملة شلل الأطفال' : ct === 'integrated_activity' ? '📋 النشاط الإيصالي التكاملي' : ct
+      return `${campaignLabel} (${fs.length} نموذج):\n${fs.map((f: any, i: number) => {
+        const count = countsByForm[f.id] || 0
+        // استخراج أسماء الحقول من schema
+        let fieldNames: string[] = []
+        if (f.schema) {
+          if (Array.isArray(f.schema)) {
+            fieldNames = f.schema.map((s: any) => s.name || s.key || s.id || '').filter(Boolean)
+          } else if (f.schema.fields) {
+            fieldNames = f.schema.fields.map((s: any) => s.name || s.key || s.id || '').filter(Boolean)
+          } else if (f.schema.sections) {
+            for (const section of f.schema.sections) {
+              if (section.fields) {
+                fieldNames.push(...section.fields.map((s: any) => s.name || s.key || s.id || '').filter(Boolean))
+              }
+            }
+          }
+        }
+        return `  ${i + 1}. ${f.title_ar}\n     ID: ${f.id}\n     الإرساليات: ${count}\n     الإصدار: ${f.version}\n     GPS: ${f.requires_gps ? 'مطلوب' : 'غير مطلوب'} | صور: ${f.requires_photo ? `مطلوبة (حد ${f.max_photos})` : 'غير مطلوبة'}\n     الأدوار: ${(f.allowed_roles || []).join(', ')}\n     الحقول: ${fieldNames.length > 0 ? fieldNames.slice(0, 15).join(', ') + (fieldNames.length > 15 ? `... (+${fieldNames.length - 15})` : '') : 'غير محدد'}`
+      }).join('\n')}`
+    }).join('\n\n')}`,
+    metadata: { count: forms.length, byCampaign: Object.fromEntries(Object.entries(byCampaign).map(([k, v]) => [k, v.length])) },
+  })
+
+  return sources
 }
 
 // ═══ MAIN: Grounding Engine Entry Point ═══
@@ -1197,7 +1254,7 @@ export async function groundMessage(
         sources = await fetchDistrictsData(supa, plan.filters.governorate)
         break
       case 'forms':
-        sources = await fetchFormsData(supa)
+        sources = await fetchFormsData(supa, plan)
         break
       case 'settings':
         sources = await fetchAppSettingsData(supa)

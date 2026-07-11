@@ -139,10 +139,10 @@ export function useCreateTicket() {
       // Invalidate all 4 filters to ensure UI consistency
       queryClient.invalidateQueries({ queryKey: ['feedback-tickets'] })
       queryClient.invalidateQueries({ queryKey: ['all-feedback-tickets'] })
-      toast.success('تم إرسال التغذية الراجعة')
+      toast({ title: 'تم إرسال التغذية الراجعة', variant: 'success' })
     },
     onError: (error: any) => {
-      toast.error(`فشل: ${error.message}`)
+      toast({ title: `فشل: ${error.message}`, variant: 'destructive' })
     },
   })
 }
@@ -190,7 +190,7 @@ export function useAddReply() {
       queryClient.invalidateQueries({ queryKey: ['ticket-responses', variables.ticket_id] })
     },
     onError: (error: any) => {
-      toast.error(`فشل: ${error.message}`)
+      toast({ title: `فشل: ${error.message}`, variant: 'destructive' })
     },
   })
 }
@@ -252,10 +252,10 @@ export function useUpdateTicketStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feedback-tickets'] })
       queryClient.invalidateQueries({ queryKey: ['all-feedback-tickets'] })
-      toast.success('تم تحديث الحالة')
+      toast({ title: 'تم تحديث الحالة', variant: 'success' })
     },
     onError: (error: any) => {
-      toast.error(`فشل: ${error.message}`)
+      toast({ title: `فشل: ${error.message}`, variant: 'destructive' })
     },
   })
 }

@@ -85,9 +85,9 @@ export function useCreateBotKnowledge() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bot-knowledge'] })
-      toast.success('تم إضافة الموضوع بنجاح')
+      toast({ title: 'تم إضافة الموضوع بنجاح', variant: 'success' })
     },
-    onError: (error: any) => toast.error(`فشل: ${error.message}`),
+    onError: (error: any) => toast({ title: `فشل: ${error.message}`, variant: 'destructive' }),
   })
 }
 
@@ -111,9 +111,9 @@ export function useUpdateBotKnowledge() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bot-knowledge'] })
-      toast.success('تم تحديث الموضوع')
+      toast({ title: 'تم تحديث الموضوع', variant: 'success' })
     },
-    onError: (error: any) => toast.error(`فشل: ${error.message}`),
+    onError: (error: any) => toast({ title: `فشل: ${error.message}`, variant: 'destructive' }),
   })
 }
 
@@ -129,8 +129,8 @@ export function useDeleteBotKnowledge() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bot-knowledge'] })
-      toast.success('تم حذف الموضوع')
+      toast({ title: 'تم حذف الموضوع', variant: 'success' })
     },
-    onError: (error: any) => toast.error(`فشل: ${error.message}`),
+    onError: (error: any) => toast({ title: `فشل: ${error.message}`, variant: 'destructive' }),
   })
 }

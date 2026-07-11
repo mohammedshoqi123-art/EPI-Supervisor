@@ -145,10 +145,10 @@ export function useCreateMemo() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['memos'] })
       queryClient.invalidateQueries({ queryKey: ['user-memos'] })
-      toast.success('تم إصدار التعميم بنجاح')
+      toast({ title: 'تم إصدار التعميم بنجاح', variant: 'success' })
     },
     onError: (error: any) => {
-      toast.error(`فشل: ${error.message}`)
+      toast({ title: `فشل: ${error.message}`, variant: 'destructive' })
     },
   })
 }
@@ -178,10 +178,10 @@ export function useAcknowledgeMemo() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-memos'] })
       queryClient.invalidateQueries({ queryKey: ['memos'] })
-      toast.success('تم إقرار استلام التعميم')
+      toast({ title: 'تم إقرار استلام التعميم', variant: 'success' })
     },
     onError: (error: any) => {
-      toast.error(`فشل: ${error.message}`)
+      toast({ title: `فشل: ${error.message}`, variant: 'destructive' })
     },
   })
 }
@@ -202,10 +202,10 @@ export function useDeactivateMemo() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['memos'] })
       queryClient.invalidateQueries({ queryKey: ['user-memos'] })
-      toast.success('تم حذف التعميم')
+      toast({ title: 'تم حذف التعميم', variant: 'success' })
     },
     onError: (error: any) => {
-      toast.error(`فشل: ${error.message}`)
+      toast({ title: `فشل: ${error.message}`, variant: 'destructive' })
     },
   })
 }

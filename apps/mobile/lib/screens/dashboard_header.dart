@@ -113,65 +113,70 @@ class DashboardHeroHeader extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Communication icon with badge
-                  GestureDetector(
-                    onTap: onCommunicationTap,
-                    child: Container(
-                      margin: const EdgeInsets.only(left: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        unreadCommunication > 0
-                            ? Icons.chat_bubble_rounded
-                            : Icons.chat_bubble_outline_rounded,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                  // Badge for communication — positioned over the icon
-                  if (unreadCommunication > 0)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFB300),
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFFFB300)
-                                  .withValues(alpha: 0.4),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 20,
-                          minHeight: 20,
-                        ),
-                        child: Text(
-                          unreadCommunication > 99
-                              ? '99+'
-                              : '$unreadCommunication',
-                          style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                  // Communication icon with badge (wrapped in Stack for Positioned)
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      GestureDetector(
+                        onTap: onCommunicationTap,
+                        child: Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          textAlign: TextAlign.center,
+                          child: Icon(
+                            unreadCommunication > 0
+                                ? Icons.chat_bubble_rounded
+                                : Icons.chat_bubble_outline_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
                         ),
                       ),
-                    ),
+                      // Badge for communication — positioned over the icon
+                      if (unreadCommunication > 0)
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFB300),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFFB300)
+                                      .withValues(alpha: 0.4),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 20,
+                              minHeight: 20,
+                            ),
+                            child: Text(
+                              unreadCommunication > 99
+                                  ? '99+'
+                                  : '$unreadCommunication',
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                   // Notification bell with badge
                   GestureDetector(
                     onTap: onNotificationsTap,

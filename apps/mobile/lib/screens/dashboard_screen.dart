@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
-import '../router/app_router.dart';
 import '../services/memos_feedback_service.dart';
 import 'dashboard_header.dart';
 import 'dashboard_charts.dart';
@@ -199,15 +197,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   /// Compute unread communication count (memos + feedback tickets)
+  /// Uses ref.watch for reactive updates (badge updates automatically)
   int _computeUnreadCommunication(WidgetRef ref) {
     int count = 0;
     // Unread memos (need acknowledgment)
-    final memosAsync = ref.read(memosProvider);
+    final memosAsync = ref.watch(memosProvider);
     final memos = memosAsync.valueOrNull ?? [];
     count += memos.where((m) => m.needsUrgentAcknowledgment).length;
 
     // Pending feedback tickets (not resolved/closed)
-    final ticketsAsync = ref.read(feedbackTicketsProvider('all'));
+    final ticketsAsync = ref.watch(feedbackTicketsProvider('all'));
     final tickets = ticketsAsync.valueOrNull ?? [];
     count += tickets
         .where((t) => t.status != 'resolved' && t.status != 'closed')

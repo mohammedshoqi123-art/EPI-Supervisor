@@ -585,8 +585,13 @@ class _FeedbackTabState extends ConsumerState<FeedbackTab>
                     MaterialPageRoute(
                       builder: (_) => const FeedbackComposerScreen(),
                     ),
-                  ).then((_) => ref
-                      .invalidate(feedbackTicketsProvider(_currentFilter)));
+                  ).then((_) {
+                    // Invalidate all 4 filters to ensure UI consistency
+                    ref.invalidate(feedbackTicketsProvider('all'));
+                    ref.invalidate(feedbackTicketsProvider('received'));
+                    ref.invalidate(feedbackTicketsProvider('overdue'));
+                    ref.invalidate(feedbackTicketsProvider('resolved'));
+                  });
                 },
                 child: Container(
                   width: 44,

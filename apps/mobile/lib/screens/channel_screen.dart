@@ -38,6 +38,9 @@ class _ChannelScreenState extends State<ChannelScreen> {
   bool _isSending = false;
   RealtimeChannel? _realtimeChannel;
 
+  // ═══ Fallback timer (canceled in dispose) ═══
+  Timer? _fallbackTimer;
+
   // ═══ Attachments state ═══
   final List<Attachment> _pendingAttachments = [];
   final Map<String, List<Attachment>> _messageAttachmentsCache = {};
@@ -55,6 +58,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     _realtimeChannel?.unsubscribe();
+    _fallbackTimer?.cancel();
     super.dispose();
   }
 
@@ -81,7 +85,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
       _realtimeChannel!.subscribe();
     } catch (e) {
       debugPrint('[ChannelScreen] Realtime subscribe failed: $e');
-      Timer.periodic(const Duration(seconds: 15), (_) {
+      _fallbackTimer?.cancel();
+      _fallbackTimer = Timer.periodic(const Duration(seconds: 15), (_) {
         if (mounted) _loadMessages(silent: true);
       });
     }

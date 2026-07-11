@@ -8,7 +8,7 @@ import {
   AlertTriangle, Bell, Moon, Sun, Menu, X, Sparkles, Layout, Clock,
   Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
   FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare,
-  FileSpreadsheet, Calendar, RotateCw
+  FileSpreadsheet, Calendar, RotateCw, ScrollText as ScrollTextIcon, MessageCircle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -82,10 +82,12 @@ const navSections: NavSection[] = [
   },
   {
     id: 'communication',
-    label: 'التواصل',
+    label: 'مركز الاتصال',
     icon: MessageSquare,
     items: [
+      { icon: ScrollTextIcon, label: 'التعاميم الرسمية', href: '/memos', roles: ['admin', 'central', 'governorate', 'district', 'data_entry'] },
       { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
+      { icon: MessageCircle, label: 'التغذية الراجعة', href: '/feedback', roles: ['admin', 'central', 'governorate', 'district', 'data_entry'] },
       { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },
       { icon: Sparkles, label: 'استوديو المحتوى', href: '/studio' },
       { icon: BellRing, label: 'الإشعارات', href: '/notifications' },

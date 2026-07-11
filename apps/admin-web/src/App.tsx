@@ -31,6 +31,8 @@ const ScheduledReportsPage = lazy(() => import('@/pages/ScheduledReportsPage'))
 const GovernoratesPage = lazy(() => import('@/pages/GovernoratesPage'))
 const ShortagesPage = lazy(() => import('@/pages/ShortagesPage'))
 const PublicDashboardPage = lazy(() => import('@/pages/PublicDashboardPage'))
+const MemosPage = lazy(() => import('@/pages/MemosPage'))
+const FeedbackPage = lazy(() => import('@/pages/FeedbackPage'))
 
 function PageLoader() {
   return (
@@ -67,6 +69,8 @@ export default function App() {
             <Route path="forms" element={<Suspense fallback={<PageLoader />}><FormsPage /></Suspense>} />
             <Route path="map" element={<Suspense fallback={<PageLoader />}><MapPage /></Suspense>} />
             <Route path="chat" element={<Suspense fallback={<PageLoader />}><ChatPage /></Suspense>} />
+            <Route path="memos" element={<Suspense fallback={<PageLoader />}><MemosPage /></Suspense>} />
+            <Route path="feedback" element={<Suspense fallback={<PageLoader />}><FeedbackPage /></Suspense>} />
             <Route path="bot" element={<Suspense fallback={<PageLoader />}><BotChatPage /></Suspense>} />
             <Route path="studio" element={<Suspense fallback={<PageLoader />}><EpiStudioPage /></Suspense>} />
             <Route path="notifications" element={<Suspense fallback={<PageLoader />}><NotificationsPage /></Suspense>} />

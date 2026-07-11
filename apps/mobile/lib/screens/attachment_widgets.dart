@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:epi_shared/epi_shared.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:open_filex/open_filex.dart';
 import '../services/attachment_service.dart';
 
 /// ═══════════════════════════════════════════════════════════
@@ -442,30 +442,12 @@ class _AttachmentBubbleState extends State<AttachmentBubble> {
   Future<void> _openFile() async {
     if (_localPath == null) return;
     try {
-      // Use OpenFileX to open the file
-      // We import it lazily to avoid issues if not available
-      // ignore: implementation_imports
-      final openFilex = await _importOpenFilex();
-      if (openFilex != null) {
-        await openFilex(_localPath!);
+      final result = await OpenFilex.open(_localPath!);
+      if (result.type != ResultType.done) {
+        debugPrint('[AttachmentBubble] OpenFilex failed: ${result.message}');
       }
     } catch (e) {
       debugPrint('[AttachmentBubble] openFile error: $e');
-    }
-  }
-
-  /// Lazy import of OpenFileX
-  Future<dynamic Function(String)? > _importOpenFilex() async {
-    try {
-      // ignore: depend_on_referenced_packages
-      final lib = await Future.value();
-      return (String path) async {
-        // Use url_launcher or other mechanism
-        // For now, just print
-        debugPrint('[Attachment] Open file: $path');
-      };
-    } catch (_) {
-      return null;
     }
   }
 }

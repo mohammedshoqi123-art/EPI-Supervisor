@@ -551,6 +551,8 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
       await _loadResponses();
       ref.invalidate(feedbackTicketsProvider('all'));
       ref.invalidate(feedbackTicketsProvider('received'));
+      ref.invalidate(feedbackTicketsProvider('overdue'));
+      ref.invalidate(feedbackTicketsProvider('resolved'));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1075,6 +1077,9 @@ class _FeedbackComposerScreenState
           ),
         );
         ref.invalidate(feedbackTicketsProvider('all'));
+        ref.invalidate(feedbackTicketsProvider('received'));
+        ref.invalidate(feedbackTicketsProvider('overdue'));
+        ref.invalidate(feedbackTicketsProvider('resolved'));
         Navigator.pop(context);
       }
     } catch (e) {

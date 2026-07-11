@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import '../services/epi_audio_service.dart';
 import 'citation_widgets.dart';
@@ -1009,7 +1007,6 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
     return Column(
       children: items.map<Widget>((raw) {
         final item = Map<String, dynamic>.from(raw);
-        final citations = (item['citations'] as List?)?.cast<int>() ?? [];
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(14),
@@ -1470,3 +1467,4 @@ class _EpiStudioScreenState extends ConsumerState<EpiStudioScreen> {
         ],
       ),
     );
+}

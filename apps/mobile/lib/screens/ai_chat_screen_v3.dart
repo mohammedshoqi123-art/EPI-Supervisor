@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
@@ -568,7 +566,7 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
     }
 
     return DefaultTabController(
-      length: 4,
+      length: 3,
       child: Scaffold(
         backgroundColor: cs.surface,
         appBar: _buildAppBar(cs),

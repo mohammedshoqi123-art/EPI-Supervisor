@@ -162,14 +162,21 @@ function buildQueryPlan(message: string): QueryPlan {
   let aggregation: QueryPlan['aggregation'] = 'count'
 
   // Determine entity — expanded to cover 100% of system data
-  // NOTE: "نماذج" (plural) → forms, "نموذج" (singular) → submissions
-  if (/نماذج|استمارات|forms/.test(message)) {
+  // Priority: "حلل/تحليل استمارات الإشراف" → submissions (NOT forms)
+  // "ما النماذج" → forms (list form types)
+  if (/حلل|تحليل|قيّم|تقييم|أداء|نتائج|بيانات|مؤشرات/.test(message) &&
+      /استمارة|استمارات|نموذج|نماذج|إرسالي|إرسال/.test(message)) {
+    // User wants ANALYSIS of submission DATA → submissions entity
+    entity = 'submissions'
+    aggregation = 'list'
+  } else if (/نماذج|استمارات|forms/.test(message) && !/حلل|تحليل|أداء|نتائج|بيانات/.test(message)) {
+    // User wants to LIST form types → forms entity
     entity = 'forms'
   } else if (/إرسالي|إرسال|استمارة|نموذج|إدخال/.test(message)) {
     entity = 'submissions'
   } else if (/نقص|نواقص|احتياج|مخزون/.test(message)) {
     entity = 'shortages'
-  } else if (/مديرية|مديريات/.test(message)) {
+  } else if (/مديرية|مديريات/.test(message) && !/محافظة|محافظات/.test(message)) {
     entity = 'districts'
   } else if (/محافظة|محافظات|مناطق/.test(message)) {
     entity = 'governorates'
@@ -194,7 +201,7 @@ function buildQueryPlan(message: string): QueryPlan {
     entity = 'facilities'
   } else if (/وثيقة|مرجع|كتاب|دليل|ملف/.test(message)) {
     entity = 'documents'
-  } else if (/حملة|حملات|نشاط/.test(message)) {
+  } else if (/حملة|حملات|نشاط/.test(message) && !/استمارة|استمارات|نموذج|نماذج|إرسالي|إرسال/.test(message)) {
     entity = 'campaigns'
   } else if (/تقرير مجدول|تقارير مجدولة/.test(message)) {
     entity = 'reports'
@@ -248,6 +255,11 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     q = q.eq('form_id', filters.form_id)
   }
 
+  // ═══ FIX: Apply governorate filter ═══
+  if (filters.governorate) {
+    q = q.eq('governorates.name_ar', filters.governorate)
+  }
+
   // ═══ FIX: Use campaign_round from user question (fallback to active round) ═══
   const effectiveRound = filters.campaign_round ?? campaignRound
   if (effectiveRound && effectiveRound > 0) {
@@ -263,12 +275,15 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
   // Aggregate by status
   const byStatus: Record<string, number> = {}
   const byGovernorate: Record<string, number> = {}
+  const byDistrict: Record<string, number> = {}
   const byDay: Record<string, number> = {}
 
   for (const row of data) {
     byStatus[row.status] = (byStatus[row.status] || 0) + 1
     const govName = row.governorates?.name_ar || 'غير محدد'
     byGovernorate[govName] = (byGovernorate[govName] || 0) + 1
+    const distName = row.districts?.name_ar || 'غير محدد'
+    byDistrict[distName] = (byDistrict[distName] || 0) + 1
     const day = (row.created_at || '').split('T')[0]
     if (day) byDay[day] = (byDay[day] || 0) + 1
   }
@@ -293,6 +308,19 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
       summary: `أعلى 5 محافظات بالعدد`,
       quote: sortedGovs.map(([g, c], i) => `${i + 1}. ${g}: ${c}`).join('\n'),
       metadata: { campaign_type: filters.campaign_type },
+    })
+  }
+
+  // ═══ NEW Source 2b: District breakdown (if governorate filter applied or multiple districts) ═══
+  const sortedDists = Object.entries(byDistrict).sort((a, b) => b[1] - a[1]).slice(0, 15)
+  if (sortedDists.length > 0) {
+    sources.push({
+      id: 2.5,
+      type: 'aggregate',
+      table: 'form_submissions',
+      summary: `التوزيع حسب المديريات (${sortedDists.length} مديرية)`,
+      quote: sortedDists.map(([d, c], i) => `${i + 1}. ${d}: ${c} إرسالية`).join('\n'),
+      metadata: { campaign_type: filters.campaign_type, governorate: filters.governorate },
     })
   }
 

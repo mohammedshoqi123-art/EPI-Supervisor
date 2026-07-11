@@ -16,7 +16,10 @@ import 'epi_studio_screen.dart';
 // ═══════════════════════════════════════════════════════════
 
 class AiChatScreenV3 extends ConsumerStatefulWidget {
-  const AiChatScreenV3({super.key});
+  /// When true, renders without its own AppBar (used when embedded in another screen's tab)
+  final bool embedded;
+
+  const AiChatScreenV3({super.key, this.embedded = false});
 
   @override
   ConsumerState<AiChatScreenV3> createState() => _AiChatScreenV3State();
@@ -447,6 +450,56 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
+    // ═══ Embedded mode: no AppBar, just the body ═══
+    if (widget.embedded) {
+      return DefaultTabController(
+        length: 4,
+        child: Container(
+          color: cs.surface,
+          child: Column(
+            children: [
+              if (!ConnectivityUtils.isOnline)
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  color: Colors.orange.shade700,
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.wifi_off, color: Colors.white, size: 14),
+                      SizedBox(width: 8),
+                      Text(
+                        'أوفلاين — مستشار التحصين يعمل محلياً',
+                        style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 11,
+                            color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              Material(
+                color: cs.primary,
+                child: _buildTabBar(cs),
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _buildBotTab(cs),
+                    _buildChatTab(cs),
+                    _buildStudioTab(cs),
+                    _buildAlertsTab(cs),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return DefaultTabController(
       length: 4,
       child: Scaffold(

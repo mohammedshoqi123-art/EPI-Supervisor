@@ -285,7 +285,7 @@ class EpiDrawer extends StatelessWidget {
                   _buildItem(
                     context,
                     Icons.chat_rounded,
-                    'الشات الداخلي',
+                    'مركز الاتصال',
                     '/chat',
                   ),
 

@@ -163,7 +163,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/chat',
-            builder: (context, state) => const ChatScreen(),
+            builder: (context, state) {
+              // Support ?tab=official|discussion|ai deep-link
+              final tab = state.uri.queryParameters['tab'];
+              int initialTab = 0;
+              if (tab == 'discussion') initialTab = 1;
+              if (tab == 'ai') initialTab = 2;
+              return ChatScreen(initialTab: initialTab);
+            },
           ),
           GoRoute(
             path: '/profile',
@@ -310,8 +317,9 @@ class _MainShellState extends ConsumerState<MainShell> {
             child: const Icon(Icons.menu_rounded, size: 22),
           ),
           // ═══ Removed: sync FAB + pending badge — sync is available in drawer ═══
-          // ═══ AI Assistant — hidden on /ai page ═══
-          if (!GoRouterState.of(context).matchedLocation.startsWith('/ai'))
+          // ═══ AI Assistant — hidden on /ai and /chat pages (chat has AI tab) ═══
+          if (!GoRouterState.of(context).matchedLocation.startsWith('/ai') &&
+              !GoRouterState.of(context).matchedLocation.startsWith('/chat'))
             _AiFab(onTap: () => context.go('/ai')),
         ],
       ),

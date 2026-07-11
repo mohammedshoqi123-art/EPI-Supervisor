@@ -237,28 +237,22 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
   const sources: GroundingSource[] = []
   const filters = plan.filters
 
-  // ═══ FIX: Include `data` JSONB + district + review + submitter + GPS ═══
+  // ═══ Simplified SELECT to avoid PostgREST join issues ═══
   let q = supa.from('form_submissions')
-    .select('id, status, data, governorate_id, district_id, created_at, form_id, campaign_round, submitted_by, reviewed_by, reviewed_at, review_notes, gps_lat, gps_lng, is_offline, synced_at, submitted_at, notes, photos, governorates(name_ar), districts(name_ar), forms(title_ar, campaign_type), profiles:submitted_by(full_name)')
+    .select('id, status, data, governorate_id, district_id, created_at, form_id, campaign_round, submitted_by, reviewed_by, reviewed_at, gps_lat, gps_lng, is_offline, notes, photos, governorates!governorate_id(name_ar), districts!district_id(name_ar), forms!form_id(title_ar, campaign_type)')
     .is('deleted_at', null)
 
   if (filters.days) q = q.gte('created_at', daysAgo(filters.days))
   if (filters.status) q = q.eq('status', filters.status)
 
-  // Apply campaign filter — NOTE: forms.campaign_type is a joined column
-  // PostgREST can filter on it via the foreign key relationship
-  if (filters.campaign_type && filters.campaign_type !== 'all') {
-    // Use or filter to match forms.campaign_type — PostgREST supports this via FK
-    q = q.eq('forms.campaign_type', filters.campaign_type)
-  }
+  // ═══ Campaign filter applied CLIENT-SIDE (PostgREST can't filter on joined columns reliably) ═══
 
   // ═══ FIX: Apply form_id filter — distinguish supervision vs readiness ═══
   if (filters.form_id) {
     q = q.eq('form_id', filters.form_id)
   }
 
-  // ═══ NOTE: Governorate filter is applied CLIENT-SIDE after fetch ═══
-  // (PostgREST doesn't support .eq() on joined table columns)
+  // ═══ FIX: Apply campaign_round filter ═══
 
   // ═══ FIX: Use campaign_round from user question (fallback to active round) ═══
   const effectiveRound = filters.campaign_round ?? campaignRound
@@ -272,12 +266,15 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     return []
   }
 
-  // ═══ FIX: Apply governorate filter CLIENT-SIDE (PostgREST can't filter on joined columns) ═══
+  // ═══ FIX: Apply governorate + campaign_type filter CLIENT-SIDE ═══
   let filteredData = data
-  if (filters.governorate) {
-    filteredData = data.filter((row: any) => row.governorates?.name_ar === filters.governorate)
-    if (filteredData.length === 0) return []
+  if (filters.campaign_type && filters.campaign_type !== 'all') {
+    filteredData = filteredData.filter((row: any) => row.forms?.campaign_type === filters.campaign_type)
   }
+  if (filters.governorate) {
+    filteredData = filteredData.filter((row: any) => row.governorates?.name_ar === filters.governorate)
+  }
+  if (filteredData.length === 0) return []
 
   // Aggregate by status
   const byStatus: Record<string, number> = {}
@@ -524,7 +521,7 @@ function analyzeFormData(rows: any[], formId?: string): { summary: string; quote
 async function fetchGovernoratesData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {
   const { data, error } = await withTimeout(
     supa.from('form_submissions')
-      .select('id, status, governorates(name_ar), forms(campaign_type), campaign_round')
+      .select('id, status, governorates!governorate_id(name_ar), forms!form_id(campaign_type), campaign_round')
       .is('deleted_at', null)
       .limit(10000),
     10_000,
@@ -562,7 +559,7 @@ async function fetchGovernoratesData(supa: any, plan: QueryPlan, campaignRound: 
 async function fetchUsersData(supa: any): Promise<GroundingSource[]> {
   const { data, error } = await withTimeout(
     supa.from('profiles')
-      .select('id, full_name, role, governorates(name_ar), is_active, created_at')
+      .select('id, full_name, role, governorates!governorate_id(name_ar), is_active, created_at')
       .is('deleted_at', null)
       .limit(5000),
     10_000,
@@ -625,7 +622,7 @@ async function fetchUsersData(supa: any): Promise<GroundingSource[]> {
 
 async function fetchShortagesData(supa: any, plan: QueryPlan): Promise<GroundingSource[]> {
   let q = supa.from('supply_shortages')
-    .select('id, item_name, severity, governorates(name_ar), is_resolved, created_at, notes')
+    .select('id, item_name, severity, governorates!governorate_id(name_ar), is_resolved, created_at, notes')
     .is('deleted_at', null)
 
   if (plan.filters.governorate) {
@@ -999,7 +996,7 @@ async function fetchAchievementsData(supa: any): Promise<GroundingSource[]> {
 async function fetchHealthFacilitiesData(supa: any): Promise<GroundingSource[]> {
   const { data, error } = await withTimeout(
     supa.from('health_facilities')
-      .select('id, name_ar, facility_type, is_active, districts(name_ar)')
+      .select('id, name_ar, facility_type, is_active, districts!district_id(name_ar)')
       .eq('is_active', true)
       .limit(100),
     5_000,
@@ -1094,7 +1091,7 @@ async function fetchScheduledReportsData(supa: any): Promise<GroundingSource[]> 
 /// Fetcher: المديريات (districts)
 async function fetchDistrictsData(supa: any, governorateName?: string): Promise<GroundingSource[]> {
   let q = supa.from('districts')
-    .select('id, name_ar, name_en, governorates(name_ar), population, is_active')
+    .select('id, name_ar, name_en, governorates!governorate_id(name_ar), population, is_active')
     .eq('is_active', true)
     .is('deleted_at', null)
 

@@ -171,7 +171,7 @@ class _MemosListTab extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             itemCount: memos.length,
             itemBuilder: (context, index) {
-              return _MemoCard(
+              return MemoCard(
                 memo: memos[index],
                 onTap: () {
                   HapticFeedback.lightImpact();
@@ -196,11 +196,11 @@ class _MemosListTab extends ConsumerWidget {
 /// _MemoCard — بطاقة تعميم
 /// ═══════════════════════════════════════════════════════════
 
-class _MemoCard extends StatelessWidget {
+class MemoCard extends StatelessWidget {
   final OfficialMemo memo;
   final VoidCallback onTap;
 
-  const _MemoCard({required this.memo, required this.onTap});
+  const MemoCard({super.key, required this.memo, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

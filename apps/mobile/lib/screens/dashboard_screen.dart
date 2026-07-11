@@ -7,6 +7,7 @@ import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import '../router/app_router.dart';
+import '../services/memos_feedback_service.dart';
 import 'dashboard_header.dart';
 import 'dashboard_charts.dart';
 import 'dashboard_widgets.dart';
@@ -140,9 +141,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 userName: authState.valueOrNull?.fullName ?? 'مستخدم',
                 campaignLabel: ref.watch(campaignProvider).displayLabel,
                 unreadNotifications: unreadNotifs,
+                unreadCommunication: _computeUnreadCommunication(ref),
                 headerAnim: _headerAnim,
                 pulseAnim: _pulseAnim,
                 onNotificationsTap: () => context.go('/notifications'),
+                onCommunicationTap: () => context.go('/chat'),
               ),
             ),
             // ═══ P1-5: Sync status bar ═══
@@ -193,6 +196,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         ),
       ),
     );
+  }
+
+  /// Compute unread communication count (memos + feedback tickets)
+  int _computeUnreadCommunication(WidgetRef ref) {
+    int count = 0;
+    // Unread memos (need acknowledgment)
+    final memosAsync = ref.read(memosProvider);
+    final memos = memosAsync.valueOrNull ?? [];
+    count += memos.where((m) => m.needsUrgentAcknowledgment).length;
+
+    // Pending feedback tickets (not resolved/closed)
+    final ticketsAsync = ref.read(feedbackTicketsProvider('all'));
+    final tickets = ticketsAsync.valueOrNull ?? [];
+    count += tickets
+        .where((t) => t.status != 'resolved' && t.status != 'closed')
+        .length;
+
+    return count;
   }
 
   SliverList _buildDashboardContent(

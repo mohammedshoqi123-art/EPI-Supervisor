@@ -194,7 +194,7 @@ class _TicketsListTab extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             itemCount: tickets.length,
             itemBuilder: (context, index) {
-              return _TicketCard(
+              return TicketCard(
                 ticket: tickets[index],
                 onTap: () {
                   HapticFeedback.lightImpact();
@@ -220,11 +220,11 @@ class _TicketsListTab extends ConsumerWidget {
 /// _TicketCard — بطاقة تذكرة تغذية راجعة
 /// ═══════════════════════════════════════════════════════════
 
-class _TicketCard extends StatelessWidget {
+class TicketCard extends StatelessWidget {
   final FeedbackTicket ticket;
   final VoidCallback onTap;
 
-  const _TicketCard({required this.ticket, required this.onTap});
+  const TicketCard({super.key, required this.ticket, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

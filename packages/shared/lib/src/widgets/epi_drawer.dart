@@ -288,18 +288,6 @@ class EpiDrawer extends StatelessWidget {
                     'مركز الاتصال',
                     '/chat',
                   ),
-                  _buildItem(
-                    context,
-                    Icons.description_rounded,
-                    'التعاميم الرسمية',
-                    '/memos',
-                  ),
-                  _buildItem(
-                    context,
-                    Icons.feedback_rounded,
-                    'التغذية الراجعة',
-                    '/feedback',
-                  ),
 
                   // References — visible to all roles
                   const Padding(

@@ -286,9 +286,9 @@ class DashboardQuickActions extends StatelessWidget {
         const Color(0xFF00897B),
       ),
       QuickAction(
-        Icons.description_rounded,
-        'النماذج',
-        '/forms',
+        Icons.smart_toy_rounded,
+        'المساعد الذكي',
+        '/ai',
         const Color(0xFF5C6BC0),
       ),
       QuickAction(

@@ -239,15 +239,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           onActionTapCancel: () => setState(() => _selectedQuickAction = -1),
         ),
         const SizedBox(height: 20),
-        // ═══ P1-4: Submissions by level chart (mine / central / governorate / district) ═══
-        _sectionTitle('توزيع الإرساليات بحسب المستوى'),
-        const SizedBox(height: 12),
-        SubmissionsByLevelChart(
-          authState: ref.watch(authStateProvider),
-          campaignType: ref.watch(campaignProvider).value,
-          campaignRound: ref.watch(campaignRoundProvider),
-        ),
-        const SizedBox(height: 20),
         _sectionTitle('النشاط الأسبوعي'),
         const SizedBox(height: 12),
         DashboardTrendLine(

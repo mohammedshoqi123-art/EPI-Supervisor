@@ -140,7 +140,7 @@ class _AIInlineChartState extends State<AIInlineChart> {
   Widget _buildBarChart() {
     final items = _chartData!.items;
     final maxValue = items.fold<int>(0, (max, e) => e.value > max ? e.value : max);
-    final chartHeight = (items.length * 40.0).clamp(120, 250);
+    final chartHeight = (items.length * 40.0).clamp(120.0, 250.0).toDouble();
 
     return SizedBox(
       height: chartHeight,

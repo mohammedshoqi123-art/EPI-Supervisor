@@ -55,6 +55,8 @@ interface QueryPlan {
     days?: number
     campaign_type?: string
     status?: string
+    form_id?: string
+    campaign_round?: number
   }
   aggregation?: 'count' | 'sum' | 'avg' | 'list' | 'compare'
 }
@@ -88,6 +90,37 @@ const STATUS_KEYWORDS: [RegExp, string][] = [
   [/مسودة|draft/i, 'draft'],
   [/مرسلة|مُرسلة|submitted/i, 'submitted'],
 ]
+
+// ═══ Form ID mapping — ربط أسماء الاستمارات بالـ UUIDs ═══
+const FORM_KEYWORDS: [RegExp, string][] = [
+  [/استمارة الإشراف|إشرافي|الإشراف الداعم|مؤشرات الإشراف|استمارة إشراف/i, '97a4f2b3-c573-4812-b58c-5b0acf814e24'],
+  [/استمارة الجاهزية|جاهزية|استعدادات|استمارة جاهزية/i, '8aa0f3d5-7ab0-430f-85fd-4488c0c129bb'],
+]
+
+function extractFormId(text: string): string | undefined {
+  for (const [pattern, formId] of FORM_KEYWORDS) {
+    if (pattern.test(text)) return formId
+  }
+  return undefined
+}
+
+// ═══ Campaign Round extraction from user text ═══
+const ROUND_KEYWORDS: [RegExp, number][] = [
+  [/الجولة الأولى|الجولة الاولى|جولة 1|الجولة 1|round 1/i, 1],
+  [/الجولة الثانية|جولة 2|الجولة 2|round 2/i, 2],
+  [/الجولة الثالثة|جولة 3|الجولة 3|round 3/i, 3],
+  [/الجولة الرابعة|جولة 4|الجولة 4|round 4/i, 4],
+  [/الجولة الخامسة|جولة 5|الجولة 5|round 5/i, 5],
+  [/الجولة السادسة|جولة 6|الجولة 6|round 6/i, 6],
+  [/الجولة السابعة|جولة 7|الجولة 7|round 7/i, 7],
+]
+
+function extractCampaignRound(text: string): number | undefined {
+  for (const [pattern, round] of ROUND_KEYWORDS) {
+    if (pattern.test(text)) return round
+  }
+  return undefined
+}
 
 function extractDays(text: string): number | undefined {
   // Direct number extraction: "آخر 7 أيام", "خلال 14 يوم"
@@ -161,6 +194,8 @@ function buildQueryPlan(message: string): QueryPlan {
       days: extractDays(message),
       campaign_type: extractCampaignType(message),
       status: extractStatus(message),
+      form_id: extractFormId(message),
+      campaign_round: extractCampaignRound(message),
     },
     aggregation,
   }
@@ -172,9 +207,9 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
   const sources: GroundingSource[] = []
   const filters = plan.filters
 
-  // Build query
+  // ═══ FIX: Include `data` JSONB column — the actual form content ═══
   let q = supa.from('form_submissions')
-    .select('id, status, governorate_id, created_at, form_id, campaign_round, governorates(name_ar), forms(title_ar, campaign_type)')
+    .select('id, status, data, governorate_id, created_at, form_id, campaign_round, governorates(name_ar), forms(title_ar, campaign_type)')
     .is('deleted_at', null)
 
   if (filters.days) q = q.gte('created_at', daysAgo(filters.days))
@@ -185,9 +220,15 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     q = q.eq('forms.campaign_type', filters.campaign_type)
   }
 
-  // Apply campaign round filter
-  if (campaignRound && campaignRound > 0) {
-    q = q.eq('campaign_round', campaignRound)
+  // ═══ FIX: Apply form_id filter — distinguish supervision vs readiness ═══
+  if (filters.form_id) {
+    q = q.eq('form_id', filters.form_id)
+  }
+
+  // ═══ FIX: Use campaign_round from user question (fallback to active round) ═══
+  const effectiveRound = filters.campaign_round ?? campaignRound
+  if (effectiveRound && effectiveRound > 0) {
+    q = q.eq('campaign_round', effectiveRound)
   }
 
   const { data, error } = await withTimeout(q.limit(5000), 10_000) ?? {}
@@ -242,16 +283,178 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
       table: 'form_submissions',
       record: row,
       summary: `إرسالية #${i + 1} — ${row.governorates?.name_ar || 'غير محدد'} — ${row.status} — ${row.forms?.title_ar || ''}`,
-      quote: `ID: ${row.id}\nالمحافظة: ${row.governorates?.name_ar || 'غير محدد'}\nالحالة: ${row.status}\nالنموذج: ${row.forms?.title_ar || 'غير محدد'}\nالتاريخ: ${row.created_at}\nالجولة: ${row.campaign_round || 'غير محدد'}`,
+      quote: `ID: ${row.id}\nالمحافظة: ${row.governorates?.name_ar || 'غير محدد'}\nالحالة: ${row.status}\nالنموذج: ${row.forms?.title_ar || 'غير محدد'}\nالتاريخ: ${row.created_at}\nالجولة: ${row.campaign_round || 'غير محدد'}\nالبيانات: ${JSON.stringify(row.data).substring(0, 500)}`,
       metadata: {
         governorate: row.governorates?.name_ar,
         date: row.created_at,
         campaign_type: row.forms?.campaign_type,
+        form_data: row.data,
       },
     })
   }
 
+  // ═══ Source 4: Form data analysis (JSONB content) ═══
+  // Analyze the actual form content — supervision indicators, readiness, etc.
+  const formDataAnalysis = analyzeFormData(data, filters.form_id)
+  if (formDataAnalysis) {
+    sources.push({
+      id: 10,
+      type: 'aggregate',
+      table: 'form_submissions',
+      summary: formDataAnalysis.summary,
+      quote: formDataAnalysis.quote,
+      metadata: { analysis_type: 'form_data', form_id: filters.form_id },
+    })
+  }
+
   return sources
+}
+
+// ═══ Form Data Analyzer — تحليل محتوى الاستمارة JSONB ═══
+
+function analyzeFormData(rows: any[], formId?: string): { summary: string; quote: string } | null {
+  if (!rows || rows.length === 0) return null
+
+  // Supervision form analysis (8 sections)
+  const SUPERVISION_SECTIONS: Record<string, { label: string; fields: string[]; target: number }> = {
+    'team': { label: 'تركيبة الفريق', fields: ['team_members_present', 'woman_in_team', 'croquis_plan', 'team_briefing'], target: 100 },
+    'planning': { label: 'التخطيط', fields: ['activity_plan', 'daily_plan', 'supplies_check'], target: 100 },
+    'vaccination': { label: 'بروتوكول التطعيم', fields: ['aseptic_technique', 'correct_dose', 'correct_route', 'safe_injection'], target: 100 },
+    'registration': { label: 'التسجيل', fields: ['tally_sheets', 'child_cards', 'data_entry', 'report_submission'], target: 100 },
+    'logistics': { label: 'اللوجستيات', fields: ['cold_box', 'ice_packs', 'thermometer', 'needles', 'safety_box'], target: 100 },
+    'supervision': { label: 'الإشراف', fields: ['supervisor_present', 'feedback_given', 'issue_resolution', 'followup_plan'], target: 95 },
+    'safety': { label: 'السلامة', fields: ['ppe_worn', 'sharps_disposal', 'waste_management', 'hand_hygiene', 'covid_precautions', 'emergency_kit'], target: 100 },
+    'vitamin_a': { label: 'فيتامين أ', fields: ['vitamin_available', 'correct_dose_vitA', 'recording_vitA'], target: 100 },
+  }
+
+  // Readiness form analysis (6 criteria)
+  const READINESS_CRITERIA: Record<string, string> = {
+    'budget_received': 'الميزانية المالية',
+    'routine_vaccines_available': 'اللقاحات الروتينية',
+    'medicines_available': 'الأدوية',
+    'reproductive_supplies_available': 'الصحة الإنجابية',
+    'staff_available': 'الكادر الصحي',
+    'preparatory_meeting_held': 'الاجتماع التحضيري',
+  }
+
+  // Check if this is a supervision form
+  const isSupervision = formId === '97a4f2b3-c573-4812-b58c-5b0acf814e24'
+  const isReadiness = formId === '8aa0f3d5-7ab0-430f-85fd-4488c0c129bb'
+
+  if (isSupervision) {
+    // Analyze supervision form — 8 sections
+    const sectionResults: string[] = []
+    const challenges: string[] = []
+
+    for (const [key, section] of Object.entries(SUPERVISION_SECTIONS)) {
+      let yesCount = 0
+      let totalCount = 0
+
+      for (const row of rows) {
+        const d = row.data
+        if (!d || typeof d !== 'object') continue
+        for (const field of section.fields) {
+          if (field in d) {
+            totalCount++
+            if (d[field] === true || d[field] === 'yes' || d[field] === 'نعم') yesCount++
+          }
+        }
+      }
+
+      if (totalCount > 0) {
+        const rate = Math.round((yesCount / totalCount) * 100)
+        const status = rate >= section.target ? '✅' : rate >= 70 ? '⚠️' : '❌'
+        sectionResults.push(`${status} ${section.label}: ${rate}% (المستهدف ${section.target}%)`)
+        if (rate < section.target) {
+          challenges.push(`${section.label} (${rate}% < ${section.target}%)`)
+        }
+      }
+    }
+
+    if (sectionResults.length === 0) return null
+
+    let quote = `تحليل ${rows.length} استمارة إشراف — ${sectionResults.length} أقسام:\n\n`
+    quote += sectionResults.join('\n')
+    if (challenges.length > 0) {
+      quote += `\n\n⚠️ التحديات (${challenges.length}):\n${challenges.map(c => `• ${c}`).join('\n')}`
+    }
+
+    return {
+      summary: `تحليل استمارات الإشراف — ${rows.length} استمارة، ${challenges.length} تحدي`,
+      quote,
+    }
+  }
+
+  if (isReadiness) {
+    // Analyze readiness form — 6 criteria
+    const criteriaResults: string[] = []
+    let readyCount = 0
+    let totalChecks = 0
+
+    for (const [field, label] of Object.entries(READINESS_CRITERIA)) {
+      let yesCount = 0
+      let totalCount = 0
+      for (const row of rows) {
+        const d = row.data
+        if (!d || typeof d !== 'object') continue
+        if (field in d) {
+          totalCount++
+          totalChecks++
+          if (d[field] === true || d[field] === 'جاهز' || d[field] === 'نعم') {
+            yesCount++
+            readyCount++
+          }
+        }
+      }
+      if (totalCount > 0) {
+        const status = yesCount === totalCount ? '✅' : yesCount > totalCount / 2 ? '⚠️' : '❌'
+        criteriaResults.push(`${status} ${label}: ${yesCount}/${totalCount}`)
+      }
+    }
+
+    if (criteriaResults.length === 0) return null
+
+    const readinessRate = totalChecks > 0 ? Math.round((readyCount / totalChecks) * 100) : 0
+    let quote = `تحليل ${rows.length} استمارة جاهزية — معدل الجاهزية: ${readinessRate}%\n\n`
+    quote += criteriaResults.join('\n')
+
+    return {
+      summary: `تحليل استمارات الجاهزية — ${rows.length} استمارة، معدل الجاهزية ${readinessRate}%`,
+      quote,
+    }
+  }
+
+  // Generic form data analysis — extract all boolean fields
+  const fieldStats: Record<string, { yes: number; no: number }> = {}
+  for (const row of rows) {
+    const d = row.data
+    if (!d || typeof d !== 'object') continue
+    for (const [key, value] of Object.entries(d)) {
+      if (typeof value === 'boolean') {
+        if (!fieldStats[key]) fieldStats[key] = { yes: 0, no: 0 }
+        if (value) fieldStats[key].yes++
+        else fieldStats[key].no++
+      }
+    }
+  }
+
+  if (Object.keys(fieldStats).length === 0) return null
+
+  const topFields = Object.entries(fieldStats)
+    .sort((a, b) => (b[1].yes + b[1].no) - (a[1].yes + a[1].no))
+    .slice(0, 15)
+
+  let quote = `تحليل ${rows.length} استمارة — ${topFields.length} حقل:\n\n`
+  quote += topFields.map(([field, stats]) => {
+    const total = stats.yes + stats.no
+    const rate = Math.round((stats.yes / total) * 100)
+    return `${rate >= 80 ? '✅' : rate >= 50 ? '⚠️' : '❌'} ${field}: ${stats.yes}/${total} (${rate}%)`
+  }).join('\n')
+
+  return {
+    summary: `تحليل محتوى الاستمارات — ${rows.length} استمارة، ${topFields.length} حقل`,
+    quote,
+  }
 }
 
 async function fetchGovernoratesData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {

@@ -31,6 +31,7 @@ export default function BotKnowledgePage() {
   const [editingEntry, setEditingEntry] = useState<BotKnowledgeEntry | null>(null)
 
   const knowledgeQuery = useBotKnowledge()
+  const deleteMutation = useDeleteBotKnowledge()
   const allEntries = knowledgeQuery.data || []
 
   // Filter
@@ -103,7 +104,7 @@ export default function BotKnowledgePage() {
               key={entry.id}
               entry={entry}
               onEdit={() => { setEditingEntry(entry); setShowEditor(true) }}
-              onDelete={() => useDeleteBotKnowledge()}
+              onDelete={() => deleteMutation.mutate(entry.id)}
             />
           ))}
         </div>
@@ -146,8 +147,6 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: n
 // ═══════════════════════════════════════
 
 function KnowledgeCard({ entry, onEdit, onDelete }: { entry: BotKnowledgeEntry; onEdit: () => void; onDelete: () => void }) {
-  const deleteMutation = useDeleteBotKnowledge()
-
   return (
     <Card>
       <CardContent className="p-4">
@@ -189,8 +188,7 @@ function KnowledgeCard({ entry, onEdit, onDelete }: { entry: BotKnowledgeEntry; 
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => deleteMutation.mutate(entry.id)}
-              disabled={deleteMutation.isPending}
+              onClick={onDelete}
             >
               <Trash2 className="h-4 w-4 text-red-500" />
             </Button>

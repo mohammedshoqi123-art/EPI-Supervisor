@@ -20,8 +20,7 @@ CREATE POLICY "chat_delete_own" ON chat_messages FOR DELETE
 GRANT DELETE ON chat_messages TO authenticated;
 
 -- ═══ 2) P1-2: تقوية INSERT policy للتحقق من صلاحية الكتابة في القناة ═══
--- القديم: WITH CHECK (sender_id = auth.uid())
--- الجديد: WITH CHECK (sender_id = auth.uid() AND يمكنه الكتابة في القناة)
+-- ملاحظة: نستخدم room فقط (channel_id قد لا يكون موجوداً في كل الترتيبات)
 DROP POLICY IF EXISTS "chat_insert_auth" ON chat_messages;
 CREATE POLICY "chat_insert_auth" ON chat_messages FOR INSERT
   WITH CHECK (
@@ -29,14 +28,7 @@ CREATE POLICY "chat_insert_auth" ON chat_messages FOR INSERT
     AND EXISTS (
       SELECT 1 FROM chat_channels c
       WHERE c.is_active = true
-        AND (
-          -- إما channel_id يطابق
-          (channel_id IS NOT NULL AND c.id = channel_id)
-          -- أو room يطابق code
-          OR (room IS NOT NULL AND c.code = room)
-          -- أو room = 'general' والقناة 'open_discussion'
-          OR (room = 'general' AND c.code = 'open_discussion')
-        )
+        AND c.code = room
         AND (
           -- القنوات المفتوحة (open, inquiry) يحق للجميع الكتابة
           c.channel_type IN ('open', 'inquiry')

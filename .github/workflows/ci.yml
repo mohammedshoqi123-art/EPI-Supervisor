@@ -296,10 +296,7 @@ jobs:
 
       - name: Build iOS (no codesign)
         working-directory: apps/mobile
-        run: flutter build ios --no-codesign --release \
-          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
-          --dart-define=ENCRYPTION_KEY="${{ secrets.ENCRYPTION_KEY }}"
+        run: flutter build ios --no-codesign --release --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" --dart-define=ENCRYPTION_KEY="${{ secrets.ENCRYPTION_KEY }}"
 
   # ─── Deploy Flutter Web to GitHub Pages ──────────────────
   deploy-flutter-web:

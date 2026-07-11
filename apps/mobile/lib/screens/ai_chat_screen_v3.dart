@@ -13,6 +13,7 @@ import '../services/dynamic_bot_knowledge_service.dart';
 import '../services/ai_chat_thread_service.dart';
 import 'ai_chat_models.dart';
 import 'ai_provider_badge.dart';
+import 'ai_inline_chart.dart';
 import 'citation_widgets.dart';
 import 'epi_studio_screen.dart';
 
@@ -450,7 +451,16 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     _scrollDown();
   }
 
+  // ═══ Language preference ═══
+  String _language = 'ar'; // 'ar' or 'en'
+
   String _buildSystemPrompt() {
+    if (_language == 'en') {
+      return '''You are "EPI Assistant" — specialized in Yemen's Expanded Programme on Immunization (EPI) and the EPI Supervisor platform.
+Vaccines: BCG, OPV/IPV, Penta, PCV, Rotavirus, MR, HepB.
+Indicators: Penta3=reach, Dropout=continuity, Measles=herd immunity.
+Rules: concise (≤120 words). numbers from data. practical recommendations. English.''';
+    }
     return '''أنت "مساعد EPI" — متخصص في برنامج التطعيم الموسع في اليمن ومنصة مشرف EPI.
 التطعيمات: BCG, OPV/IPV, Penta, PCV, Rotavirus, MR, HepB.
 المؤشرات: Penta3=وصول, Dropout=استمرارية, الحصبة=حماية جماعية.
@@ -1515,6 +1525,9 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                   msg.source != 'streaming')
                 // ─── New: AI Provider Badge with confidence + latency ───
                 AiProviderBadge(msg: msg, cs: cs, compact: true),
+              // ─── New: Inline Chart (auto-detect numbers in response) ───
+              if (!isUser && !isStreaming && msg.content.isNotEmpty)
+                AIInlineChart(content: msg.content, cs: cs),
               // ─── New: Grounding Banner (NotebookLM-style) ───
               if (!isUser && msg.isGrounded && msg.groundingSources != null)
                 GroundingBanner(
@@ -1689,6 +1702,29 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                   label: 'صوت',
                   cs: cs,
                   onTap: _startVoiceInput,
+                ),
+                const SizedBox(width: 6),
+                // Language toggle
+                _inputActionBtn(
+                  icon: Icons.language_rounded,
+                  label: _language == 'ar' ? 'EN' : 'عربي',
+                  cs: cs,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    setState(() => _language = _language == 'ar' ? 'en' : 'ar');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          _language == 'ar'
+                              ? 'تم التبديل للعربية'
+                              : 'Switched to English',
+                          style: const TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
                 ),
                 const Spacer(),
                 // Clear conversation button

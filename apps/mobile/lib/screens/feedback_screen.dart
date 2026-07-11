@@ -43,7 +43,7 @@ class _TicketsListTab extends ConsumerWidget {
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: () =>
-                  ref.invalidate(feedbackTicketsProvider(filter)),
+                  ref.invalidate(allFeedbackTicketsProvider),
               icon: const Icon(Icons.refresh),
               label: const Text('إعادة'),
             ),
@@ -95,7 +95,7 @@ class _TicketsListTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async =>
-              ref.invalidate(feedbackTicketsProvider(filter)),
+              ref.invalidate(allFeedbackTicketsProvider),
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: tickets.length,
@@ -111,7 +111,7 @@ class _TicketsListTab extends ConsumerWidget {
                           FeedbackDetailScreen(ticket: tickets[index]),
                     ),
                   ).then((_) =>
-                      ref.invalidate(feedbackTicketsProvider(filter)));
+                      ref.invalidate(allFeedbackTicketsProvider));
                 },
               );
             },
@@ -455,10 +455,7 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
 
       _replyCtrl.clear();
       await _loadResponses();
-      ref.invalidate(feedbackTicketsProvider('all'));
-      ref.invalidate(feedbackTicketsProvider('received'));
-      ref.invalidate(feedbackTicketsProvider('overdue'));
-      ref.invalidate(feedbackTicketsProvider('resolved'));
+      ref.invalidate(allFeedbackTicketsProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -499,10 +496,7 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
       );
 
       await _loadResponses();
-      ref.invalidate(feedbackTicketsProvider('all'));
-      ref.invalidate(feedbackTicketsProvider('received'));
-      ref.invalidate(feedbackTicketsProvider('overdue'));
-      ref.invalidate(feedbackTicketsProvider('resolved'));
+      ref.invalidate(allFeedbackTicketsProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -982,10 +976,7 @@ class _FeedbackComposerScreenState
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
-        ref.invalidate(feedbackTicketsProvider('all'));
-        ref.invalidate(feedbackTicketsProvider('received'));
-        ref.invalidate(feedbackTicketsProvider('overdue'));
-        ref.invalidate(feedbackTicketsProvider('resolved'));
+        ref.invalidate(allFeedbackTicketsProvider);
         Navigator.pop(context);
       }
     } catch (e) {

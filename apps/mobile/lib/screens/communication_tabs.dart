@@ -104,6 +104,7 @@ class _MemosTabState extends ConsumerState<MemosTab>
                 currentUserId: widget.currentUserId,
                 currentUserName: widget.currentUserName,
                 currentUserRole: widget.currentUserRole,
+                showBatchAck: true, // Show "acknowledge all" button
               ),
               _MemosListTab(
                 filter: (m) => m.isAcknowledged,
@@ -123,7 +124,7 @@ class _MemosTabState extends ConsumerState<MemosTab>
 /// Tab 2: ChannelsTab — all channels (official + discussion merged)
 /// ═══════════════════════════════════════════════════════════
 
-class ChannelsTab extends ConsumerWidget {
+class ChannelsTab extends ConsumerStatefulWidget {
   final String currentUserId;
   final String currentUserName;
   final String currentUserRole;
@@ -136,42 +137,106 @@ class ChannelsTab extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChannelsTab> createState() => _ChannelsTabState();
+}
+
+class _ChannelsTabState extends ConsumerState<ChannelsTab> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final channelsAsync = ref.watch(channelsProvider);
 
-    return channelsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 48, color: Color(0xFFEF4444)),
-            const SizedBox(height: 12),
-            Text('تعذّر تحميل القنوات',
-                style: TextStyle(fontFamily: 'Tajawal', color: Colors.grey.shade700)),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () => ref.invalidate(channelsProvider),
-              icon: const Icon(Icons.refresh),
-              label: const Text('إعادة'),
+    return Column(
+      children: [
+        // ═══ Search bar ═══
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _searchController,
+            textDirection: TextDirection.rtl,
+            style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'بحث في القنوات...',
+              hintStyle: const TextStyle(
+                  fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF9CA3AF)),
+              prefixIcon:
+                  const Icon(Icons.search_rounded, size: 20, color: Color(0xFF9CA3AF)),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
-          ],
+            onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
+          ),
         ),
-      ),
-      data: (channels) {
-        if (channels.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
+        // ═══ Channels list ═══
+        Expanded(
+          child: channelsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                  const Icon(Icons.error_outline_rounded,
+                      size: 48, color: Color(0xFFEF4444)),
+                  const SizedBox(height: 12),
+                  Text('تعذّر تحميل القنوات',
+                      style: TextStyle(
+                          fontFamily: 'Tajawal', color: Colors.grey.shade700)),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () => ref.invalidate(channelsProvider),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('إعادة'),
+                  ),
+                ],
+              ),
+            ),
+            data: (channels) {
+              if (channels.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.08),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(Icons.forum_outlined,
@@ -212,16 +277,47 @@ class ChannelsTab extends ConsumerWidget {
           return a.sortOrder.compareTo(b.sortOrder);
         });
 
+        // Filter by search query
+        final filteredChannels = _searchQuery.isEmpty
+            ? channels
+            : channels.where((c) {
+                final name = c.name.toLowerCase();
+                final desc = (c.description ?? '').toLowerCase();
+                final lastMsg = (c.lastMessageContent ?? '').toLowerCase();
+                return name.contains(_searchQuery) ||
+                    desc.contains(_searchQuery) ||
+                    lastMsg.contains(_searchQuery);
+              }).toList();
+
+        if (filteredChannels.isEmpty && _searchQuery.isNotEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.search_off_rounded,
+                      size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  Text('لا توجد نتائج',
+                      style: TextStyle(
+                          fontFamily: 'Tajawal', color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+          );
+        }
+
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(channelsProvider),
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: channels.length,
+            itemCount: filteredChannels.length,
             itemBuilder: (context, index) {
-              final channel = channels[index];
+              final channel = filteredChannels[index];
               return _EmbeddedChannelCard(
                 channel: channel,
-                currentUserRole: currentUserRole,
+                currentUserRole: widget.currentUserRole,
                 onTap: () {
                   HapticFeedback.lightImpact();
                   Navigator.push(
@@ -229,9 +325,9 @@ class ChannelsTab extends ConsumerWidget {
                     MaterialPageRoute(
                       builder: (_) => ChannelScreen(
                         channel: channel,
-                        currentUserId: currentUserId,
-                        currentUserName: currentUserName,
-                        currentUserRole: currentUserRole,
+                        currentUserId: widget.currentUserId,
+                        currentUserName: widget.currentUserName,
+                        currentUserRole: widget.currentUserRole,
                       ),
                     ),
                   ).then((_) => ref.invalidate(channelsProvider));
@@ -241,6 +337,9 @@ class ChannelsTab extends ConsumerWidget {
           ),
         );
       },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -587,10 +686,7 @@ class _FeedbackTabState extends ConsumerState<FeedbackTab>
                     ),
                   ).then((_) {
                     // Invalidate all 4 filters to ensure UI consistency
-                    ref.invalidate(feedbackTicketsProvider('all'));
-                    ref.invalidate(feedbackTicketsProvider('received'));
-                    ref.invalidate(feedbackTicketsProvider('overdue'));
-                    ref.invalidate(feedbackTicketsProvider('resolved'));
+                    ref.invalidate(allFeedbackTicketsProvider);
                   });
                 },
                 child: Container(
@@ -812,101 +908,290 @@ class BriefTab extends ConsumerWidget {
 /// Helper: Memos list tab (extracted from MemosScreen)
 /// ═══════════════════════════════════════════════════════════
 
-class _MemosListTab extends ConsumerWidget {
+class _MemosListTab extends ConsumerStatefulWidget {
   final bool Function(OfficialMemo) filter;
   final String currentUserId;
   final String currentUserName;
   final String currentUserRole;
+  final bool showBatchAck; // Show "acknowledge all" button (for mandatory tab)
 
   const _MemosListTab({
     required this.filter,
     required this.currentUserId,
     required this.currentUserName,
     required this.currentUserRole,
+    this.showBatchAck = false,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MemosListTab> createState() => _MemosListTabState();
+}
+
+class _MemosListTabState extends ConsumerState<_MemosListTab> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Batch acknowledge all pending memos in this tab
+  Future<void> _batchAcknowledge() async {
+    final memos = ref.read(memosProvider).valueOrNull ?? [];
+    final pending = memos.where(widget.filter).toList();
+
+    if (pending.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد تعاميم بانتظار الإقرار',
+              style: TextStyle(fontFamily: 'Tajawal')),
+        ),
+      );
+      return;
+    }
+
+    HapticFeedback.mediumImpact();
+
+    // Confirm
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إقرار الكل',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+        content: Text(
+            'سيتم إقرار ${pending.length} تعميم. هل أنت متأكد؟',
+            style: const TextStyle(fontFamily: 'Tajawal')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء',
+                style: TextStyle(fontFamily: 'Tajawal')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('إقرار الكل',
+                style: TextStyle(fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final service = ref.read(officialMemosServiceProvider);
+    int successCount = 0;
+    for (final memo in pending) {
+      try {
+        await service.acknowledgeMemo(memo.id);
+        successCount++;
+      } catch (_) {
+        // Continue even if some fail
+      }
+    }
+
+    if (mounted) {
+      ref.invalidate(memosProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text('تم إقرار $successCount من ${pending.length} تعميم',
+                  style: const TextStyle(fontFamily: 'Tajawal')),
+            ],
+          ),
+          backgroundColor: const Color(0xFF22C55E),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final memosAsync = ref.watch(memosProvider);
 
-    return memosAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return Column(
+      children: [
+        // ═══ Search bar + optional batch acknowledge ═══
+        Row(
           children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 48, color: Color(0xFFEF4444)),
-            const SizedBox(height: 12),
-            Text('تعذّر تحميل التعاميم',
-                style: TextStyle(fontFamily: 'Tajawal', color: Colors.grey.shade700)),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () => ref.invalidate(memosProvider),
-              icon: const Icon(Icons.refresh),
-              label: const Text('إعادة'),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  textDirection: TextDirection.rtl,
+                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'بحث في التعاميم...',
+                    hintStyle: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 12,
+                        color: Color(0xFF9CA3AF)),
+                    prefixIcon: const Icon(Icons.search_rounded,
+                        size: 20, color: Color(0xFF9CA3AF)),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                  ),
+                  onChanged: (value) =>
+                      setState(() => _searchQuery = value.toLowerCase()),
+                ),
+              ),
             ),
+            // ═══ Batch acknowledge button ═══
+            if (widget.showBatchAck)
+              Container(
+                margin: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
+                child: FilledButton.icon(
+                  onPressed: _batchAcknowledge,
+                  icon: const Icon(Icons.done_all_rounded, size: 16),
+                  label: const Text('إقرار الكل',
+                      style:
+                          TextStyle(fontFamily: 'Cairo', fontSize: 11)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                  ),
+                ),
+              ),
           ],
         ),
-      ),
-      data: (allMemos) {
-        final memos = allMemos.where(filter).toList();
-
-        if (memos.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
+        // ═══ Memos list ═══
+        Expanded(
+          child: memosAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.description_outlined,
-                        size: 36,
-                        color: AppTheme.primaryColor.withValues(alpha: 0.5)),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'لا توجد تعاميم',
-                    style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700),
+                  const Icon(Icons.error_outline_rounded,
+                      size: 48, color: Color(0xFFEF4444)),
+                  const SizedBox(height: 12),
+                  Text('تعذّر تحميل التعاميم',
+                      style: TextStyle(
+                          fontFamily: 'Tajawal', color: Colors.grey.shade700)),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () => ref.invalidate(memosProvider),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('إعادة'),
                   ),
                 ],
               ),
             ),
-          );
-        }
+            data: (allMemos) {
+              var memos = allMemos.where(widget.filter).toList();
 
-        return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(memosProvider),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: memos.length,
-            itemBuilder: (context, index) {
-              return MemoCard(
-                memo: memos[index],
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          MemoDetailScreen(memo: memos[index]),
+              // Filter by search query
+              if (_searchQuery.isNotEmpty) {
+                memos = memos.where((m) {
+                  final title = m.title.toLowerCase();
+                  final body = m.body.toLowerCase();
+                  final number = m.memoNumber.toLowerCase();
+                  final issuer = m.issuerName.toLowerCase();
+                  return title.contains(_searchQuery) ||
+                      body.contains(_searchQuery) ||
+                      number.contains(_searchQuery) ||
+                      issuer.contains(_searchQuery);
+                }).toList();
+              }
+
+              if (memos.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                              Icons.description_outlined,
+                              size: 36,
+                              color: AppTheme.primaryColor
+                                  .withValues(alpha: 0.5)),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _searchQuery.isNotEmpty
+                              ? 'لا توجد نتائج'
+                              : 'لا توجد تعاميم',
+                          style: const TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700),
+                        ),
+                      ],
                     ),
-                  ).then((_) => ref.invalidate(memosProvider));
-                },
+                  ),
+                );
+              }
+
+              return RefreshIndicator(
+                onRefresh: () async => ref.invalidate(memosProvider),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: memos.length,
+                  itemBuilder: (context, index) {
+                    return MemoCard(
+                      memo: memos[index],
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                MemoDetailScreen(memo: memos[index]),
+                          ),
+                        ).then((_) => ref.invalidate(memosProvider));
+                      },
+                    );
+                  },
+                ),
               );
             },
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
@@ -938,7 +1223,7 @@ class _TicketsListTab extends ConsumerWidget {
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: () =>
-                  ref.invalidate(feedbackTicketsProvider(filter)),
+                  ref.invalidate(allFeedbackTicketsProvider),
               icon: const Icon(Icons.refresh),
               label: const Text('إعادة'),
             ),
@@ -980,7 +1265,7 @@ class _TicketsListTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async =>
-              ref.invalidate(feedbackTicketsProvider(filter)),
+              ref.invalidate(allFeedbackTicketsProvider),
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: tickets.length,
@@ -996,7 +1281,7 @@ class _TicketsListTab extends ConsumerWidget {
                           FeedbackDetailScreen(ticket: tickets[index]),
                     ),
                   ).then((_) =>
-                      ref.invalidate(feedbackTicketsProvider(filter)));
+                      ref.invalidate(allFeedbackTicketsProvider));
                 },
               );
             },

@@ -625,9 +625,52 @@ final memosProvider = StreamProvider<List<OfficialMemo>>((ref) async* {
   }
 });
 
-/// Feedback tickets provider — with filter
-final feedbackTicketsProvider =
-    FutureProvider.family<List<FeedbackTicket>, String>((ref, filter) {
+/// Feedback tickets provider — single StreamProvider (1 RPC call)
+/// All filters are applied client-side to reduce network calls from 4 → 1
+final allFeedbackTicketsProvider =
+    StreamProvider<List<FeedbackTicket>>((ref) async* {
   final service = ref.read(feedbackTicketsServiceProvider);
-  return service.getUserTickets(filter: filter);
+  final controller = StreamController<List<FeedbackTicket>>();
+
+  Future<void> refresh() async {
+    final tickets = await service.getUserTickets(filter: 'all');
+    if (!controller.isClosed) controller.add(tickets);
+  }
+
+  await refresh();
+  final timer = Timer.periodic(const Duration(seconds: 45), (_) => refresh());
+
+  ref.onDispose(() {
+    timer.cancel();
+    controller.close();
+  });
+
+  await for (final tickets in controller.stream) {
+    yield tickets;
+  }
+});
+
+/// Filtered feedback tickets provider — derives from allFeedbackTicketsProvider
+/// with client-side filtering (NO extra RPC call — reduces 4 RPC → 1)
+final feedbackTicketsProvider =
+    FutureProvider.family<List<FeedbackTicket>, String>((ref, filter) async {
+  final allTickets = await ref.watch(allFeedbackTicketsProvider.future);
+
+  switch (filter) {
+    case 'overdue':
+      return allTickets.where((t) => t.isOverdue).toList();
+    case 'pending':
+      return allTickets
+          .where((t) =>
+              t.status == 'sent' ||
+              t.status == 'received' ||
+              t.status == 'in_progress')
+          .toList();
+    case 'resolved':
+      return allTickets
+          .where((t) => t.status == 'resolved' || t.status == 'closed')
+          .toList();
+    default: // 'all', 'sent', 'received' — server already filters
+      return allTickets;
+  }
 });

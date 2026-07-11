@@ -49,7 +49,7 @@ export interface GroundingResult {
 
 interface QueryPlan {
   intent: string
-  entity: 'submissions' | 'shortages' | 'governorates' | 'users' | 'trends' | 'knowledge' | 'unknown'
+  entity: 'submissions' | 'shortages' | 'governorates' | 'users' | 'trends' | 'knowledge' | 'memos' | 'feedback' | 'chat' | 'achievements' | 'facilities' | 'documents' | 'campaigns' | 'reports' | 'districts' | 'forms' | 'settings' | 'unknown'
   filters: {
     governorate?: string
     days?: number
@@ -161,7 +161,7 @@ function buildQueryPlan(message: string): QueryPlan {
   let entity: QueryPlan['entity'] = 'unknown'
   let aggregation: QueryPlan['aggregation'] = 'count'
 
-  // Determine entity
+  // Determine entity — expanded to cover 100% of system data
   if (/إرسالي|إرسال|استمارة|نموذج|إدخال/.test(message)) {
     entity = 'submissions'
   } else if (/نقص|نواقص|احتياج|مخزون/.test(message)) {
@@ -177,6 +177,28 @@ function buildQueryPlan(message: string): QueryPlan {
   } else if (/تطعيم|لقاح|تحصين|جرعة|penta|opv|bcg|mr/.test(message)) {
     entity = 'knowledge'
     aggregation = 'list'
+  } else if (/تعميم|مذكرة|توجيه|إعلان رسمي/.test(message)) {
+    entity = 'memos'
+  } else if (/تغذية راجعة|تغذية راجعه|شكوى|ملاحظة|رد فعل/.test(message)) {
+    entity = 'feedback'
+  } else if (/شات|رسالة|قناة|محادثة/.test(message)) {
+    entity = 'chat'
+  } else if (/إنجاز|أفضل|تميز|منافسة/.test(message)) {
+    entity = 'achievements'
+  } else if (/مرفق|مستشفى|مركز صحي|وحدة صحية/.test(message)) {
+    entity = 'facilities'
+  } else if (/وثيقة|مرجع|كتاب|دليل|ملف/.test(message)) {
+    entity = 'documents'
+  } else if (/حملة|حملات|نشاط/.test(message)) {
+    entity = 'campaigns'
+  } else if (/تقرير مجدول|تقارير مجدولة/.test(message)) {
+    entity = 'reports'
+  } else if (/مديرية|مديريات/.test(message)) {
+    entity = 'districts'
+  } else if (/نماذج|استمارات|forms/.test(message)) {
+    entity = 'forms'
+  } else if (/إعدادات|إعداد|config/.test(message)) {
+    entity = 'settings'
   }
 
   // Determine aggregation
@@ -207,9 +229,9 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
   const sources: GroundingSource[] = []
   const filters = plan.filters
 
-  // ═══ FIX: Include `data` JSONB column — the actual form content ═══
+  // ═══ FIX: Include `data` JSONB + district + review + submitter + GPS ═══
   let q = supa.from('form_submissions')
-    .select('id, status, data, governorate_id, created_at, form_id, campaign_round, governorates(name_ar), forms(title_ar, campaign_type)')
+    .select('id, status, data, governorate_id, district_id, created_at, form_id, campaign_round, submitted_by, reviewed_by, reviewed_at, review_notes, gps_lat, gps_lng, is_offline, synced_at, submitted_at, notes, photos, governorates(name_ar), districts(name_ar), forms(title_ar, campaign_type), profiles:submitted_by(full_name)')
     .is('deleted_at', null)
 
   if (filters.days) q = q.gte('created_at', daysAgo(filters.days))
@@ -282,13 +304,19 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
       type: 'db_row',
       table: 'form_submissions',
       record: row,
-      summary: `إرسالية #${i + 1} — ${row.governorates?.name_ar || 'غير محدد'} — ${row.status} — ${row.forms?.title_ar || ''}`,
-      quote: `ID: ${row.id}\nالمحافظة: ${row.governorates?.name_ar || 'غير محدد'}\nالحالة: ${row.status}\nالنموذج: ${row.forms?.title_ar || 'غير محدد'}\nالتاريخ: ${row.created_at}\nالجولة: ${row.campaign_round || 'غير محدد'}\nالبيانات: ${JSON.stringify(row.data).substring(0, 500)}`,
+      summary: `إرسالية #${i + 1} — ${row.governorates?.name_ar || 'غير محدد'} — ${row.districts?.name_ar || ''} — ${row.status} — ${row.forms?.title_ar || ''}`,
+      quote: `ID: ${row.id}\nالمحافظة: ${row.governorates?.name_ar || 'غير محدد'}\nالمديرية: ${row.districts?.name_ar || 'غير محدد'}\nالحالة: ${row.status}\nالنموذج: ${row.forms?.title_ar || 'غير محدد'}\nالمُرسِل: ${row.profiles?.full_name || 'غير محدد'}\nالتاريخ: ${row.created_at}\nالجولة: ${row.campaign_round || 'غير محدد'}\nالمراجع: ${row.reviewed_by ? 'تمت المراجعة' : 'غير مراجع'}\nأوفلاين: ${row.is_offline ? 'نعم' : 'لا'}\nGPS: ${row.gps_lat ? `${row.gps_lat}, ${row.gps_lng}` : 'غير متوفر'}\nملاحظات: ${row.notes || 'لا يوجد'}\nالبيانات: ${JSON.stringify(row.data).substring(0, 500)}`,
       metadata: {
         governorate: row.governorates?.name_ar,
+        district: row.districts?.name_ar,
         date: row.created_at,
         campaign_type: row.forms?.campaign_type,
         form_data: row.data,
+        submitted_by: row.profiles?.full_name,
+        reviewed: !!row.reviewed_by,
+        is_offline: row.is_offline,
+        has_gps: !!row.gps_lat,
+        has_photos: row.photos && row.photos.length > 0,
       },
     })
   }
@@ -315,16 +343,16 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
 function analyzeFormData(rows: any[], formId?: string): { summary: string; quote: string } | null {
   if (!rows || rows.length === 0) return null
 
-  // Supervision form analysis (8 sections)
+  // Supervision form analysis (8 sections) — FIXED: actual field keys from supervision-form-report.ts
   const SUPERVISION_SECTIONS: Record<string, { label: string; fields: string[]; target: number }> = {
-    'team': { label: 'تركيبة الفريق', fields: ['team_members_present', 'woman_in_team', 'croquis_plan', 'team_briefing'], target: 100 },
-    'planning': { label: 'التخطيط', fields: ['activity_plan', 'daily_plan', 'supplies_check'], target: 100 },
-    'vaccination': { label: 'بروتوكول التطعيم', fields: ['aseptic_technique', 'correct_dose', 'correct_route', 'safe_injection'], target: 100 },
-    'registration': { label: 'التسجيل', fields: ['tally_sheets', 'child_cards', 'data_entry', 'report_submission'], target: 100 },
-    'logistics': { label: 'اللوجستيات', fields: ['cold_box', 'ice_packs', 'thermometer', 'needles', 'safety_box'], target: 100 },
-    'supervision': { label: 'الإشراف', fields: ['supervisor_present', 'feedback_given', 'issue_resolution', 'followup_plan'], target: 95 },
-    'safety': { label: 'السلامة', fields: ['ppe_worn', 'sharps_disposal', 'waste_management', 'hand_hygiene', 'covid_precautions', 'emergency_kit'], target: 100 },
-    'vitamin_a': { label: 'فيتامين أ', fields: ['vitamin_available', 'correct_dose_vitA', 'recording_vitA'], target: 100 },
+    'team': { label: 'تركيبة الفريق', fields: ['team_members_present', 'woman_in_team', 'local_member', 'id_cards'], target: 100 },
+    'planning': { label: 'التخطيط', fields: ['croquis_plan', 'site_marking', 'plan_commitment'], target: 100 },
+    'vaccination': { label: 'بروتوكول التطعيم', fields: ['personal_contact', 'ask_all', 'angle_45', 'swallow_check'], target: 100 },
+    'registration': { label: 'التسجيل', fields: ['daily_registration', 'absent_followup', 'finger_marks', 'house_marks'], target: 100 },
+    'logistics': { label: 'اللوجستيات', fields: ['supply_sufficient', 'vaccine_sufficient', 'cold_chain', 'vvm_understood', 'vvm_valid'], target: 100 },
+    'supervision': { label: 'الإشراف', fields: ['e_supervision', 'daily_visit', 'notes_recorded', 'suspects_asked'], target: 95 },
+    'safety': { label: 'السلامة', fields: ['supply_registered', 'bags_correct', 'collection_correct', 'labeling_clear', 'count_match', 'daily_delivery'], target: 100 },
+    'vitamin_a': { label: 'فيتامين أ', fields: ['vitamin_available', 'vitamin_correct', 'scissors_box'], target: 100 },
   }
 
   // Readiness form analysis (6 criteria)
@@ -798,6 +826,317 @@ function generateFollowups(plan: QueryPlan, sources: GroundingSource[]): string[
   return followups.slice(0, 3)
 }
 
+// ═══ NEW FETCHERS: توسيع الوصول لـ 100% من بيانات النظام ═══
+
+/// Fetcher: التعميمات الرسمية
+async function fetchMemosData(supa: any): Promise<GroundingSource[]> {
+  const { data, error } = await withTimeout(
+    supa.from('official_memos')
+      .select('id, memo_number, title, body, priority, issuer_name, issuer_role, target_roles, requires_acknowledgment, valid_until, is_active, created_at')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    10_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'official_memos',
+    summary: `${data.length} تعميم رسمي نشط`,
+    quote: data.map((m: any, i: number) =>
+      `${i + 1}. ${m.memo_number} — ${m.title}\n   الأولوية: ${m.priority}\n   المُصدِر: ${m.issuer_name} (${m.issuer_role})\n   التاريخ: ${(m.created_at || '').split('T')[0]}\n   إقرار إلزامي: ${m.requires_acknowledgment ? 'نعم' : 'لا'}\n   المحتوى: ${(m.body || '').substring(0, 200)}...`
+    ).join('\n\n'),
+    metadata: { count: data.length },
+  }]
+}
+
+/// Fetcher: التغذية الراجعة
+async function fetchFeedbackData(supa: any): Promise<GroundingSource[]> {
+  const { data, error } = await withTimeout(
+    supa.from('feedback_tickets')
+      .select('id, ticket_number, from_name, from_role, to_role, subject, body, category, priority, status, sla_hours, sla_deadline, resolved_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(30),
+    10_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  const byStatus: Record<string, number> = {}
+  const overdue: any[] = []
+  for (const t of data) {
+    byStatus[t.status] = (byStatus[t.status] || 0) + 1
+    if (t.sla_deadline && new Date(t.sla_deadline) < new Date() && t.status !== 'resolved' && t.status !== 'closed') {
+      overdue.push(t)
+    }
+  }
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'feedback_tickets',
+    summary: `${data.length} تذكرة تغذية راجعة (${overdue.length} متأخرة عن SLA)`,
+    quote: `الإجمالي: ${data.length}\nمُرسلة: ${byStatus.sent || 0}\nمستلمة: ${byStatus.received || 0}\nقيد المعالجة: ${byStatus.in_progress || 0}\nمحلولة: ${byStatus.resolved || 0}\nمُغلقة: ${byStatus.closed || 0}\nمُرحّلة: ${byStatus.escalated || 0}\nمتأخرة عن SLA: ${overdue.length}\n\nأحدث 5 تذاكر:\n${data.slice(0, 5).map((t: any, i: number) =>
+      `${i + 1}. ${t.ticket_number} — ${t.subject}\n   من: ${t.from_name} → ${t.to_role}\n   الحالة: ${t.status} | الأولوية: ${t.priority}\n   الفئة: ${t.category}\n   التاريخ: ${(t.created_at || '').split('T')[0]}`
+    ).join('\n\n')}`,
+    metadata: { count: data.length, overdue: overdue.length },
+  }]
+}
+
+/// Fetcher: رسائل الشات والقنوات
+async function fetchChatData(supa: any): Promise<GroundingSource[]> {
+  const { data: channels, error: chErr } = await withTimeout(
+    supa.from('chat_channels')
+      .select('id, name, channel_type, is_official, is_active, code')
+      .eq('is_active', true)
+      .limit(20),
+    5_000,
+  ) ?? {}
+
+  const { data: messages, error: msgErr } = await withTimeout(
+    supa.from('chat_messages')
+      .select('id, sender_name, content, room, is_official, priority, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20),
+    5_000,
+  ) ?? {}
+
+  if ((chErr && msgErr) || (!channels?.length && !messages?.length)) return []
+
+  const sources: GroundingSource[] = []
+
+  if (channels?.length) {
+    sources.push({
+      id: 1,
+      type: 'aggregate',
+      table: 'chat_channels',
+      summary: `${channels.length} قناة نشطة`,
+      quote: channels.map((c: any, i: number) => `${i + 1}. ${c.name} (${c.channel_type})${c.is_official ? ' — رسمي' : ''}`).join('\n'),
+      metadata: { count: channels.length },
+    })
+  }
+
+  if (messages?.length) {
+    sources.push({
+      id: 2,
+      type: 'aggregate',
+      table: 'chat_messages',
+      summary: `${messages.length} أحدث رسالة`,
+      quote: messages.map((m: any, i: number) =>
+        `${i + 1}. ${m.sender_name}: ${(m.content || '').substring(0, 100)}\n   القناة: ${m.room} | رسمي: ${m.is_official ? 'نعم' : 'لا'} | ${(m.created_at || '').split('T')[0]}`
+      ).join('\n\n'),
+      metadata: { count: messages.length },
+    })
+  }
+
+  return sources
+}
+
+/// Fetcher: الإنجازات
+async function fetchAchievementsData(supa: any): Promise<GroundingSource[]> {
+  const { data, error } = await withTimeout(
+    supa.from('achievements')
+      .select('id, achievement_type, period_type, recipient_name, metric_value, metric_unit, description, awarded_at')
+      .order('awarded_at', { ascending: false })
+      .limit(20),
+    5_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'achievements',
+    summary: `${data.length} إنجاز`,
+    quote: data.map((a: any, i: number) =>
+      `${i + 1}. ${a.recipient_name} — ${a.achievement_type}\n   القيمة: ${a.metric_value} ${a.metric_unit || ''}\n   الفترة: ${a.period_type}\n   الوصف: ${a.description || ''}\n   التاريخ: ${(a.awarded_at || '').split('T')[0]}`
+    ).join('\n\n'),
+    metadata: { count: data.length },
+  }]
+}
+
+/// Fetcher: المرافق الصحية
+async function fetchHealthFacilitiesData(supa: any): Promise<GroundingSource[]> {
+  const { data, error } = await withTimeout(
+    supa.from('health_facilities')
+      .select('id, name_ar, facility_type, is_active, districts(name_ar)')
+      .eq('is_active', true)
+      .limit(100),
+    5_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  const byType: Record<string, number> = {}
+  for (const f of data) {
+    byType[f.facility_type || 'غير محدد'] = (byType[f.facility_type || 'غير محدد'] || 0) + 1
+  }
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'health_facilities',
+    summary: `${data.length} مرفق صحي نشط`,
+    quote: `الإجمالي: ${data.length}\nالتوزيع حسب النوع:\n${Object.entries(byType).map(([t, c]) => `  • ${t}: ${c}`).join('\n')}\n\nأمثلة:\n${data.slice(0, 10).map((f: any, i: number) => `${i + 1}. ${f.name_ar} — ${f.facility_type} — ${f.districts?.name_ar || 'غير محدد'}`).join('\n')}`,
+    metadata: { count: data.length },
+  }]
+}
+
+/// Fetcher: الوثائق المرجعية
+async function fetchDocReferencesData(supa: any): Promise<GroundingSource[]> {
+  const { data, error } = await withTimeout(
+    supa.from('doc_references')
+      .select('id, title_ar, description_ar, file_url, category, is_active')
+      .eq('is_active', true)
+      .order('title_ar')
+      .limit(50),
+    5_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'doc_references',
+    summary: `${data.length} وثيقة مرجعية`,
+    quote: data.map((d: any, i: number) => `${i + 1}. ${d.title_ar}\n   الفئة: ${d.category}\n   الرابط: ${d.file_url || 'غير متوفر'}\n   الوصف: ${(d.description_ar || '').substring(0, 100)}`).join('\n\n'),
+    metadata: { count: data.length },
+  }]
+}
+
+/// Fetcher: أنواع الحملات
+async function fetchCampaignTypesData(supa: any): Promise<GroundingSource[]> {
+  const { data, error } = await withTimeout(
+    supa.from('campaign_types')
+      .select('key, label_ar, label_en, icon, color, built_in, visible, sort_order')
+      .eq('visible', true)
+      .order('sort_order')
+      .limit(20),
+    5_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'campaign_types',
+    summary: `${data.length} نوع حملة نشط`,
+    quote: data.map((c: any, i: number) => `${i + 1}. ${c.label_ar} (${c.key})\n   الأيقونة: ${c.icon} | اللون: ${c.color}`).join('\n'),
+    metadata: { count: data.length },
+  }]
+}
+
+/// Fetcher: التقارير المجدولة
+async function fetchScheduledReportsData(supa: any): Promise<GroundingSource[]> {
+  const { data, error } = await withTimeout(
+    supa.from('scheduled_reports')
+      .select('id, name, report_type, format, schedule_cron, is_active, created_at')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    5_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'scheduled_reports',
+    summary: `${data.length} تقرير مجدول نشط`,
+    quote: data.map((r: any, i: number) => `${i + 1}. ${r.name}\n   النوع: ${r.report_type} | التنسيق: ${r.format}\n   الجدولة: ${r.schedule_cron}\n   التاريخ: ${(r.created_at || '').split('T')[0]}`).join('\n\n'),
+    metadata: { count: data.length },
+  }]
+}
+
+/// Fetcher: المديريات (districts)
+async function fetchDistrictsData(supa: any, governorateName?: string): Promise<GroundingSource[]> {
+  let q = supa.from('districts')
+    .select('id, name_ar, name_en, governorates(name_ar), population, is_active')
+    .eq('is_active', true)
+    .is('deleted_at', null)
+
+  if (governorateName) {
+    q = q.eq('governorates.name_ar', governorateName)
+  }
+
+  const { data, error } = await withTimeout(
+    q.order('name_ar').limit(500),
+    5_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  // Group by governorate
+  const byGov: Record<string, number> = {}
+  for (const d of data) {
+    const govName = d.governorates?.name_ar || 'غير محدد'
+    byGov[govName] = (byGov[govName] || 0) + 1
+  }
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'districts',
+    summary: `${data.length} مديرية نشطة في ${Object.keys(byGov).length} محافظة`,
+    quote: `الإجمالي: ${data.length} مديرية\nالتوزيع حسب المحافظة:\n${Object.entries(byGov).sort((a, b) => b[1] - a[1]).map(([g, c]) => `  • ${g}: ${c} مديرية`).join('\n')}\n\nأمثلة:\n${data.slice(0, 15).map((d: any, i: number) => `${i + 1}. ${d.name_ar} — ${d.governorates?.name_ar || ''} (سكان: ${d.population || 'غير محدد'})`).join('\n')}`,
+    metadata: { count: data.length, governorates: Object.keys(byGov).length },
+  }]
+}
+
+/// Fetcher: الإعدادات (app_settings)
+async function fetchAppSettingsData(supa: any): Promise<GroundingSource[]> {
+  const { data, error } = await withTimeout(
+    supa.from('app_settings')
+      .select('key, value, label_ar, type, category')
+      .order('category')
+      .limit(50),
+    5_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'app_settings',
+    summary: `${data.length} إعداد نظام`,
+    quote: data.map((s: any) => `${s.label_ar || s.key}: ${JSON.stringify(s.value).substring(0, 100)} (${s.category})`).join('\n'),
+    metadata: { count: data.length },
+  }]
+}
+
+/// Fetcher: النماذج (forms) — جميع النماذج النشطة
+async function fetchFormsData(supa: any): Promise<GroundingSource[]> {
+  const { data, error } = await withTimeout(
+    supa.from('forms')
+      .select('id, title_ar, title_en, description_ar, campaign_type, is_active, version, requires_gps, requires_photo, max_photos, allowed_roles')
+      .eq('is_active', true)
+      .order('title_ar')
+      .limit(50),
+    5_000,
+  ) ?? {}
+
+  if (error || !data || data.length === 0) return []
+
+  return [{
+    id: 1,
+    type: 'aggregate',
+    table: 'forms',
+    summary: `${data.length} نموذج نشط`,
+    quote: data.map((f: any, i: number) =>
+      `${i + 1}. ${f.title_ar}\n   ID: ${f.id}\n   الحملة: ${f.campaign_type}\n   الإصدار: ${f.version}\n   يتطلب GPS: ${f.requires_gps ? 'نعم' : 'لا'} | يتطلب صور: ${f.requires_photo ? `نعم (حد ${f.max_photos})` : 'لا'}\n   الأدوار المسموحة: ${(f.allowed_roles || []).join(', ')}`
+    ).join('\n\n'),
+    metadata: { count: data.length },
+  }]
+}
+
 // ═══ MAIN: Grounding Engine Entry Point ═══
 
 export async function groundMessage(
@@ -829,6 +1168,39 @@ export async function groundMessage(
         break
       case 'knowledge':
         sources = await searchKnowledgeBase(message)
+        break
+      case 'memos':
+        sources = await fetchMemosData(supa)
+        break
+      case 'feedback':
+        sources = await fetchFeedbackData(supa)
+        break
+      case 'chat':
+        sources = await fetchChatData(supa)
+        break
+      case 'achievements':
+        sources = await fetchAchievementsData(supa)
+        break
+      case 'facilities':
+        sources = await fetchHealthFacilitiesData(supa)
+        break
+      case 'documents':
+        sources = await fetchDocReferencesData(supa)
+        break
+      case 'campaigns':
+        sources = await fetchCampaignTypesData(supa)
+        break
+      case 'reports':
+        sources = await fetchScheduledReportsData(supa)
+        break
+      case 'districts':
+        sources = await fetchDistrictsData(supa, plan.filters.governorate)
+        break
+      case 'forms':
+        sources = await fetchFormsData(supa)
+        break
+      case 'settings':
+        sources = await fetchAppSettingsData(supa)
         break
       case 'unknown':
       default:

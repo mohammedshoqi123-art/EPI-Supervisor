@@ -489,7 +489,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     // ═══ Embedded mode: no AppBar, just the body ═══
     if (widget.embedded) {
       return DefaultTabController(
-        length: 4,
+        length: 3,
         child: Container(
           color: cs.surface,
           child: Column(
@@ -522,7 +522,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
               Expanded(
                 child: TabBarView(
                   children: [
-                    _buildBotTab(cs),
                     _buildChatTab(cs),
                     _buildStudioTab(cs),
                     _buildAlertsTab(cs),
@@ -568,7 +567,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             Expanded(
               child: TabBarView(
                 children: [
-                  _buildBotTab(cs),
                   _buildChatTab(cs),
                   _buildStudioTab(cs),
                   _buildAlertsTab(cs),
@@ -697,9 +695,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         unselectedLabelStyle: const TextStyle(
             fontFamily: 'Cairo', fontWeight: FontWeight.w500, fontSize: 12),
         tabs: const [
-          Tab(
-              text: 'مستشار التحصين',
-              icon: Icon(Icons.vaccines_rounded, size: 20)),
           Tab(
               text: 'مساعد النظام',
               icon: Icon(Icons.smart_toy_rounded, size: 20)),

@@ -245,8 +245,10 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
   if (filters.days) q = q.gte('created_at', daysAgo(filters.days))
   if (filters.status) q = q.eq('status', filters.status)
 
-  // Apply campaign filter
+  // Apply campaign filter — NOTE: forms.campaign_type is a joined column
+  // PostgREST can filter on it via the foreign key relationship
   if (filters.campaign_type && filters.campaign_type !== 'all') {
+    // Use or filter to match forms.campaign_type — PostgREST supports this via FK
     q = q.eq('forms.campaign_type', filters.campaign_type)
   }
 
@@ -255,10 +257,8 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     q = q.eq('form_id', filters.form_id)
   }
 
-  // ═══ FIX: Apply governorate filter ═══
-  if (filters.governorate) {
-    q = q.eq('governorates.name_ar', filters.governorate)
-  }
+  // ═══ NOTE: Governorate filter is applied CLIENT-SIDE after fetch ═══
+  // (PostgREST doesn't support .eq() on joined table columns)
 
   // ═══ FIX: Use campaign_round from user question (fallback to active round) ═══
   const effectiveRound = filters.campaign_round ?? campaignRound
@@ -272,13 +272,20 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     return []
   }
 
+  // ═══ FIX: Apply governorate filter CLIENT-SIDE (PostgREST can't filter on joined columns) ═══
+  let filteredData = data
+  if (filters.governorate) {
+    filteredData = data.filter((row: any) => row.governorates?.name_ar === filters.governorate)
+    if (filteredData.length === 0) return []
+  }
+
   // Aggregate by status
   const byStatus: Record<string, number> = {}
   const byGovernorate: Record<string, number> = {}
   const byDistrict: Record<string, number> = {}
   const byDay: Record<string, number> = {}
 
-  for (const row of data) {
+  for (const row of filteredData) {
     byStatus[row.status] = (byStatus[row.status] || 0) + 1
     const govName = row.governorates?.name_ar || 'غير محدد'
     byGovernorate[govName] = (byGovernorate[govName] || 0) + 1
@@ -293,9 +300,9 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     id: 1,
     type: 'aggregate',
     table: 'form_submissions',
-    summary: `إجمالي ${data.length} إرسالية${filters.days ? ` خلال آخر ${filters.days} يوم` : ''}${filters.status ? ` (حالة: ${filters.status})` : ''}`,
-    quote: `الإجمالي: ${data.length}\nمسودة: ${byStatus.draft || 0}\nمرسلة: ${byStatus.submitted || 0}`,
-    metadata: { campaign_type: filters.campaign_type, date: new Date().toISOString().split('T')[0] },
+    summary: `إجمالي ${filteredData.length} إرسالية${filters.days ? ` خلال آخر ${filters.days} يوم` : ''}${filters.status ? ` (حالة: ${filters.status})` : ''}${filters.governorate ? ` — محافظة ${filters.governorate}` : ''}`,
+    quote: `الإجمالي: ${filteredData.length}\nمسودة: ${byStatus.draft || 0}\nمرسلة: ${byStatus.submitted || 0}`,
+    metadata: { campaign_type: filters.campaign_type, governorate: filters.governorate, date: new Date().toISOString().split('T')[0] },
   })
 
   // Source 2: Top governorates
@@ -325,7 +332,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
   }
 
   // Source 3: Sample actual rows (5 most recent)
-  const sample = data.slice(0, 5)
+  const sample = filteredData.slice(0, 5)
   for (let i = 0; i < sample.length; i++) {
     const row = sample[i]
     sources.push({
@@ -352,7 +359,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
 
   // ═══ Source 4: Form data analysis (JSONB content) ═══
   // Analyze the actual form content — supervision indicators, readiness, etc.
-  const formDataAnalysis = analyzeFormData(data, filters.form_id)
+  const formDataAnalysis = analyzeFormData(filteredData, filters.form_id)
   if (formDataAnalysis) {
     sources.push({
       id: 10,
@@ -1091,20 +1098,22 @@ async function fetchDistrictsData(supa: any, governorateName?: string): Promise<
     .eq('is_active', true)
     .is('deleted_at', null)
 
-  if (governorateName) {
-    q = q.eq('governorates.name_ar', governorateName)
-  }
-
+  // Governorate filter applied client-side (PostgREST can't filter on joined columns)
   const { data, error } = await withTimeout(
     q.order('name_ar').limit(500),
     5_000,
   ) ?? {}
 
-  if (error || !data || data.length === 0) return []
+  let filteredData = data || []
+  if (governorateName && filteredData.length > 0) {
+    filteredData = filteredData.filter((d: any) => d.governorates?.name_ar === governorateName)
+  }
+
+  if (error || !filteredData || filteredData.length === 0) return []
 
   // Group by governorate
   const byGov: Record<string, number> = {}
-  for (const d of data) {
+  for (const d of filteredData) {
     const govName = d.governorates?.name_ar || 'غير محدد'
     byGov[govName] = (byGov[govName] || 0) + 1
   }
@@ -1113,9 +1122,9 @@ async function fetchDistrictsData(supa: any, governorateName?: string): Promise<
     id: 1,
     type: 'aggregate',
     table: 'districts',
-    summary: `${data.length} مديرية نشطة في ${Object.keys(byGov).length} محافظة`,
-    quote: `الإجمالي: ${data.length} مديرية\nالتوزيع حسب المحافظة:\n${Object.entries(byGov).sort((a, b) => b[1] - a[1]).map(([g, c]) => `  • ${g}: ${c} مديرية`).join('\n')}\n\nأمثلة:\n${data.slice(0, 15).map((d: any, i: number) => `${i + 1}. ${d.name_ar} — ${d.governorates?.name_ar || ''} (سكان: ${d.population || 'غير محدد'})`).join('\n')}`,
-    metadata: { count: data.length, governorates: Object.keys(byGov).length },
+    summary: `${filteredData.length} مديرية نشطة في ${Object.keys(byGov).length} محافظة`,
+    quote: `الإجمالي: ${filteredData.length} مديرية\nالتوزيع حسب المحافظة:\n${Object.entries(byGov).sort((a, b) => b[1] - a[1]).map(([g, c]) => `  • ${g}: ${c} مديرية`).join('\n')}\n\nأمثلة:\n${filteredData.slice(0, 15).map((d: any, i: number) => `${i + 1}. ${d.name_ar} — ${d.governorates?.name_ar || ''} (سكان: ${d.population || 'غير محدد'})`).join('\n')}`,
+    metadata: { count: filteredData.length, governorates: Object.keys(byGov).length },
   }]
 }
 

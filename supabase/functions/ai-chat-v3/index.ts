@@ -1185,6 +1185,16 @@ serve(async (req) => {
 
       return jsonResponse({ debug: results, timestamp: new Date().toISOString() }, 200, origin)
     }
+    if (mode === 'pollinations_health') {
+      // ⚠️ Check Pollinations model lockout state
+      try {
+        const { getPollinationsHealth } = await import('./llm/pollinations-fallback.ts')
+        const health = getPollinationsHealth()
+        return jsonResponse({ health, timestamp: new Date().toISOString() }, 200, origin)
+      } catch (e) {
+        return jsonResponse({ error: String(e) }, 500, origin)
+      }
+    }
     if (mode === 'studio_generate') {
       // ─── NotebookLM Studio: generate Study Guide / Briefing / FAQ / Mind Map / Audio ───
       const artifactType = body.artifact_type as StudioArtifactType

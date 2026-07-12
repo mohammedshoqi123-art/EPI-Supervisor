@@ -1651,6 +1651,15 @@ serve(async (req) => {
       fallback_used: !!fallbackAnswer,
       attempted_providers: hybridResult.attempted,
       provider_errors: hybridResult.errors || [],  // ⚠️ debug: actual error per provider
+      // ⚠️ debug: message size info
+      message_size: {
+        system_prompt_chars: messages[0]?.content?.length || 0,
+        user_message_chars: message?.length || 0,
+        total_messages: messages.length,
+        history_count: (history || []).length,
+        grounding_sources: grounding?.sources.length || 0,
+        grounding_context_chars: grounding?.contextText?.length || 0,
+      },
       latency_ms: Date.now() - startMs,
     }, 200, origin)
 

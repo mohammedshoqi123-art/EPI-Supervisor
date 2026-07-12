@@ -1318,8 +1318,25 @@ export async function groundMessage(
     contextText += '3. إذا لم تجد الإجابة في المصادر، قل: "لا توجد معلومة في المصادر المتاحة"\n'
     contextText += '4. لا تستخدم معرفتك العامة — استخدم المصادر فقط\n\n'
 
+    // ⚠️ FIX: Cap total contextText to ~12000 chars to avoid token overflow on
+    // providers with smaller context windows (ZAI 1024 tokens, Pollinations free tier).
+    // The "100% data" update made contextText huge (sample rows + JSON data + analysis),
+    // causing 400/413 errors on providers. Truncate gracefully.
+    const MAX_CONTEXT_CHARS = 12000
+    let totalChars = contextText.length
     for (const src of sources) {
-      contextText += `[${src.id}] ${src.summary}\n${src.quote}\n\n`
+      const entry = `[${src.id}] ${src.summary}\n${src.quote}\n\n`
+      if (totalChars + entry.length > MAX_CONTEXT_CHARS) {
+        const remaining = MAX_CONTEXT_CHARS - totalChars
+        if (remaining > 200) {
+          const truncated = entry.slice(0, remaining - 20) + '...\n\n'
+          contextText += truncated
+          totalChars += truncated.length
+        }
+        break  // stop adding more sources to respect the cap
+      }
+      contextText += entry
+      totalChars += entry.length
     }
   }
 

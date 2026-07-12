@@ -20,7 +20,7 @@ import type { GroqResponse } from '../utils/types.ts'
 
 const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions'
 const MIMO_API = 'https://api.xiaomimimo.com/v1/chat/completions'
-const POLLINATIONS_API = 'https://gen.pollinations.ai/v1/chat/completions'
+const POLLINATIONS_API = 'https://text.pollinations.ai/v1/chat/completions'
 const ZAI_API = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
 
 // ═══ Provider Configuration ═══

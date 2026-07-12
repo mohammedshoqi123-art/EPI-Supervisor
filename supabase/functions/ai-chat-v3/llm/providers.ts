@@ -237,39 +237,212 @@ export async function zaiChat(messages: any[], key: string, maxTokens = 1024): P
 
 // ═══ Tier 4: HuggingFace — fallback ═══
 export async function huggingfaceChat(messages: any[], key: string): Promise<string | null> {
-  try {
-    const resp = await fetch('https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'meta-llama/Meta-Llama-3-8B-Instruct', messages, max_tokens: 800, temperature: 0.6 }),
-    })
-    if (!resp.ok) return null
-    const json = await resp.json()
-    return json.choices?.[0]?.message?.content || null
-  } catch {
-    return null
+  // ⚠️ Try the newer router endpoint first, fall back to legacy
+  const models = [
+    'meta-llama/Llama-3.3-70B-Instruct',
+    'meta-llama/Llama-3.1-8B-Instruct',
+    'mistralai/Mistral-7B-Instruct-v0.3',
+    'Qwen/Qwen2.5-7B-Instruct',
+  ]
+
+  for (const model of models) {
+    try {
+      // Try router endpoint first (newer, more reliable)
+      const resp = await fetch('https://router.huggingface.co/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, max_tokens: 800, temperature: 0.6 }),
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!resp.ok) {
+        console.warn(`[HF_FAIL] model=${model} status=${resp.status}`)
+        continue
+      }
+      const json = await resp.json()
+      const content = json.choices?.[0]?.message?.content
+      if (content?.trim()) return content
+    } catch (e: any) {
+      console.warn(`[HF_ERROR] model=${model}: ${String(e).slice(0, 80)}`)
+      continue
+    }
   }
+  return null
 }
 
-// ═══ Tier 4: OpenRouter — fallback ═══
+// ═══ Tier 4: OpenRouter — fallback with FREE models ═══
 export async function openrouterChat(messages: any[], key: string, maxTokens = 2000): Promise<string | null> {
-  try {
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://epi-supervisor.app',
-        'X-Title': 'EPI Supervisor',
-      },
-      body: JSON.stringify({ model: 'deepseek/deepseek-chat', messages, max_tokens: maxTokens, temperature: 0.4 }),
-    })
-    if (!resp.ok) return null
-    const json = await resp.json()
-    return json.choices?.[0]?.message?.content || null
-  } catch {
-    return null
+  // ⚠️ Try multiple FREE models on OpenRouter (:free suffix = free tier)
+  const freeModels = [
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'deepseek/deepseek-r1:free',
+    'qwen/qwen-2.5-72b-instruct:free',
+    'mistralai/mistral-7b-instruct:free',
+    'google/gemini-2.0-flash-exp:free',
+    'deepseek/deepseek-chat:free',
+  ]
+
+  for (const model of freeModels) {
+    try {
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://epi-supervisor.app',
+          'X-Title': 'EPI Supervisor',
+        },
+        body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.4 }),
+        signal: AbortSignal.timeout(20_000),
+      })
+      if (!resp.ok) {
+        console.warn(`[OR_FAIL] model=${model} status=${resp.status}`)
+        continue
+      }
+      const json = await resp.json()
+      const content = json.choices?.[0]?.message?.content
+      if (content?.trim()) return content
+    } catch (e: any) {
+      console.warn(`[OR_ERROR] model=${model}: ${String(e).slice(0, 80)}`)
+      continue
+    }
   }
+  return null
+}
+
+// ═══ Tier 5: Cloudflare Workers AI — keyless trial (NEW) ═══
+export async function cloudflareChat(messages: any[], key: string): Promise<string | null> {
+  // Cloudflare Workers AI - 13 free models, 10K neurons/day
+  // Requires CF_API_TOKEN + CF_ACCOUNT_ID in env
+  const accountId = Deno.env.get('CF_ACCOUNT_ID')
+  if (!accountId || !key) return null
+
+  const models = [
+    '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    '@cf/meta/llama-3.3-70b-instruct',
+    '@cf/meta/llama-3.1-8b-instruct',
+    '@cf/qwen/qwen2.5-coder-32b-instruct',
+    '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
+    '@cf/google/gemma-3-12b-it',
+    '@cf/mistral/mistral-7b-instruct-v0.2-lora',
+  ]
+
+  for (const model of models) {
+    try {
+      const resp = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages, max_tokens: 800, temperature: 0.4 }),
+          signal: AbortSignal.timeout(15_000),
+        }
+      )
+      if (!resp.ok) continue
+      const json = await resp.json()
+      // Cloudflare returns { result: { response: "..." } }
+      const content = json.result?.response || json.choices?.[0]?.message?.content
+      if (content?.trim()) return content
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+// ═══ Tier 5: NVIDIA NIM — keyless (NEW) ═══
+export async function nvidiaChat(messages: any[], key?: string): Promise<string | null> {
+  // NVIDIA NIM - 18 models, ~40 RPM keyless (or with key for higher limits)
+  // If no key, uses the public endpoint with rate limits
+  const models = [
+    'meta/llama-3.3-70b-instruct',
+    'meta/llama-3.1-405b-instruct',
+    'mistralai/mistral-large-2',
+    'qwen/qwen2.5-72b-instruct',
+    'deepseek-ai/deepseek-r1',
+    'nvidia/llama-3.1-nemotron-70b-instruct-hf',
+  ]
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (key) headers['Authorization'] = `Bearer ${key}`
+
+  for (const model of models) {
+    try {
+      const resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model, messages, max_tokens: 800, temperature: 0.4 }),
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!resp.ok) {
+        if (resp.status === 401) return null  // key required, don't try more models
+        continue
+      }
+      const json = await resp.json()
+      const content = json.choices?.[0]?.message?.content
+      if (content?.trim()) return content
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+// ═══ Tier 5: SiliconFlow — permanently free uncapped (NEW) ═══
+export async function siliconflowChat(messages: any[], key: string): Promise<string | null> {
+  // SiliconFlow - permanently free, uncapped (rate/concurrency-limited)
+  // Free models: Qwen2.5-7B, DeepSeek-V3, etc.
+  if (!key) return null
+
+  const models = [
+    'Qwen/Qwen2.5-7B-Instruct',
+    'Qwen/Qwen2.5-72B-Instruct',
+    'deepseek-ai/DeepSeek-V3',
+    'meta-llama/Meta-Llama-3.1-8B-Instruct',
+  ]
+
+  for (const model of models) {
+    try {
+      const resp = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, max_tokens: 800, temperature: 0.4 }),
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!resp.ok) continue
+      const json = await resp.json()
+      const content = json.choices?.[0]?.message?.content
+      if (content?.trim()) return content
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+// ═══ Tier 5: DeepSeek API (NEW) ═══
+export async function deepseekChat(messages: any[], key: string): Promise<string | null> {
+  // DeepSeek - 5M tokens free on signup
+  if (!key) return null
+
+  const models = ['deepseek-chat', 'deepseek-reasoner']
+
+  for (const model of models) {
+    try {
+      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, max_tokens: 800, temperature: 0.4 }),
+        signal: AbortSignal.timeout(20_000),
+      })
+      if (!resp.ok) continue
+      const json = await resp.json()
+      const content = json.choices?.[0]?.message?.content
+      if (content?.trim()) return content
+    } catch {
+      continue
+    }
+  }
+  return null
 }
 
 // ═══ Tier 4: MiMo (Xiaomi) — fallback ═══

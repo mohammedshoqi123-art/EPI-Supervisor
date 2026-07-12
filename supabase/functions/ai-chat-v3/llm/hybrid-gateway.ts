@@ -22,6 +22,7 @@
 import {
   pollinationsChat, groqChat, zaiChat, huggingfaceChat,
   openrouterChat, mimoChat,
+  cloudflareChat, nvidiaChat, siliconflowChat, deepseekChat,
 } from './providers.ts'
 
 // ═══ Circuit Breaker State ═══
@@ -290,6 +291,103 @@ function buildOpenRouterAttempt(
   return { name: 'openrouter', tier: 4, promise }
 }
 
+// ═══ NEW: Tier 5 providers (Cloudflare, NVIDIA, SiliconFlow, DeepSeek) ═══
+
+function buildCloudflareAttempt(
+  messages: any[],
+  env: Record<string, string | undefined>,
+  timeoutMs: number,
+): ProviderAttempt | null {
+  const key = env.CF_API_TOKEN
+  if (!key) return null
+
+  const promise = (async () => {
+    try {
+      const result = await Promise.race([
+        cloudflareChat(messages, key),
+        new Promise<null>((r) => setTimeout(() => r(null), timeoutMs)),
+      ])
+      if (result && result.trim()) return { content: result }
+      return null
+    } catch (e: any) {
+      throw new Error(`cloudflare: ${String(e.message || e).slice(0, 150)}`)
+    }
+  })()
+
+  return { name: 'cloudflare', tier: 5, promise }
+}
+
+function buildNvidiaAttempt(
+  messages: any[],
+  env: Record<string, string | undefined>,
+  timeoutMs: number,
+): ProviderAttempt | null {
+  const key = env.NVIDIA_API_KEY  // optional - works keyless with rate limits
+
+  const promise = (async () => {
+    try {
+      const result = await Promise.race([
+        nvidiaChat(messages, key),
+        new Promise<null>((r) => setTimeout(() => r(null), timeoutMs)),
+      ])
+      if (result && result.trim()) return { content: result }
+      return null
+    } catch (e: any) {
+      throw new Error(`nvidia: ${String(e.message || e).slice(0, 150)}`)
+    }
+  })()
+
+  return { name: 'nvidia', tier: 5, promise }
+}
+
+function buildSiliconflowAttempt(
+  messages: any[],
+  env: Record<string, string | undefined>,
+  timeoutMs: number,
+): ProviderAttempt | null {
+  const key = env.SILICONFLOW_API_KEY
+  if (!key) return null
+
+  const promise = (async () => {
+    try {
+      const result = await Promise.race([
+        siliconflowChat(messages, key),
+        new Promise<null>((r) => setTimeout(() => r(null), timeoutMs)),
+      ])
+      if (result && result.trim()) return { content: result }
+      return null
+    } catch (e: any) {
+      throw new Error(`siliconflow: ${String(e.message || e).slice(0, 150)}`)
+    }
+  })()
+
+  return { name: 'siliconflow', tier: 5, promise }
+}
+
+function buildDeepseekAttempt(
+  messages: any[],
+  env: Record<string, string | undefined>,
+  timeoutMs: number,
+): ProviderAttempt | null {
+  const key = env.DEEPSEEK_API_KEY
+  if (!key) return null
+
+  const promise = (async () => {
+    try {
+      const result = await Promise.race([
+        deepseekChat(messages, key),
+        new Promise<null>((r) => setTimeout(() => r(null), timeoutMs)),
+      ])
+      if (result && result.trim()) return { content: result }
+      return null
+    } catch (e: any) {
+      throw new Error(`deepseek: ${String(e.message || e).slice(0, 150)}`)
+    }
+  })()
+
+  return { name: 'deepseek', tier: 5, promise }
+}
+
 // ═══ Confidence Score Calculation ═══
 function calculateConfidence(
   provider: string,
@@ -495,6 +593,77 @@ export async function hybridRouteChat(
       } catch {
         recordFailure('mimo', 4)
       }
+    }
+  }
+
+  // ─── Tier 5 Fallbacks (NEW: Cloudflare, NVIDIA, SiliconFlow, DeepSeek) ───
+  if (!opts.needTools) {
+    const cfAttempt = buildCloudflareAttempt(messages, env, fallbackTimeout)
+    if (cfAttempt && isAvailable('cloudflare', 5)) {
+      attempted.push('cloudflare')
+      const result = await cfAttempt.promise
+      if (result?.content) {
+        const latencyMs = Date.now() - startTime
+        recordSuccess('cloudflare', 5, latencyMs)
+        const confidence = calculateConfidence('cloudflare', 5, result.content, false, false)
+        console.log(`[HYBRID] ✓ Cloudflare succeeded in ${latencyMs}ms`)
+        return {
+          content: result.content, provider: 'cloudflare', tier: 5,
+          latencyMs, confidence, raced: false, attempted, errors: raceErrors,
+        }
+      }
+      recordFailure('cloudflare', 5)
+    }
+
+    const nvAttempt = buildNvidiaAttempt(messages, env, fallbackTimeout)
+    if (nvAttempt && isAvailable('nvidia', 5)) {
+      attempted.push('nvidia')
+      const result = await nvAttempt.promise
+      if (result?.content) {
+        const latencyMs = Date.now() - startTime
+        recordSuccess('nvidia', 5, latencyMs)
+        const confidence = calculateConfidence('nvidia', 5, result.content, false, false)
+        console.log(`[HYBRID] ✓ NVIDIA succeeded in ${latencyMs}ms`)
+        return {
+          content: result.content, provider: 'nvidia', tier: 5,
+          latencyMs, confidence, raced: false, attempted, errors: raceErrors,
+        }
+      }
+      recordFailure('nvidia', 5)
+    }
+
+    const sfAttempt = buildSiliconflowAttempt(messages, env, fallbackTimeout)
+    if (sfAttempt && isAvailable('siliconflow', 5)) {
+      attempted.push('siliconflow')
+      const result = await sfAttempt.promise
+      if (result?.content) {
+        const latencyMs = Date.now() - startTime
+        recordSuccess('siliconflow', 5, latencyMs)
+        const confidence = calculateConfidence('siliconflow', 5, result.content, false, false)
+        console.log(`[HYBRID] ✓ SiliconFlow succeeded in ${latencyMs}ms`)
+        return {
+          content: result.content, provider: 'siliconflow', tier: 5,
+          latencyMs, confidence, raced: false, attempted, errors: raceErrors,
+        }
+      }
+      recordFailure('siliconflow', 5)
+    }
+
+    const dsAttempt = buildDeepseekAttempt(messages, env, fallbackTimeout)
+    if (dsAttempt && isAvailable('deepseek', 5)) {
+      attempted.push('deepseek')
+      const result = await dsAttempt.promise
+      if (result?.content) {
+        const latencyMs = Date.now() - startTime
+        recordSuccess('deepseek', 5, latencyMs)
+        const confidence = calculateConfidence('deepseek', 5, result.content, false, false)
+        console.log(`[HYBRID] ✓ DeepSeek succeeded in ${latencyMs}ms`)
+        return {
+          content: result.content, provider: 'deepseek', tier: 5,
+          latencyMs, confidence, raced: false, attempted, errors: raceErrors,
+        }
+      }
+      recordFailure('deepseek', 5)
     }
   }
 

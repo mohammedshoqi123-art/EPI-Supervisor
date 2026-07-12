@@ -1174,6 +1174,70 @@ serve(async (req) => {
         results.zai = { ok: false, error: String(e).slice(0, 200) }
       }
 
+      // Test HuggingFace (new router endpoint)
+      try {
+        const { huggingfaceChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r = await huggingfaceChat(testMsg, hfToken || '')
+        results.huggingface = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null }
+      } catch (e: any) {
+        results.huggingface = { ok: false, error: String(e).slice(0, 200) }
+      }
+
+      // Test OpenRouter (free models)
+      try {
+        const { openrouterChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r = await openrouterChat(testMsg, openrouterKey || '', 50)
+        results.openrouter = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null }
+      } catch (e: any) {
+        results.openrouter = { ok: false, error: String(e).slice(0, 200) }
+      }
+
+      // Test Cloudflare (if key set)
+      const cfKey = Deno.env.get('CF_API_TOKEN')
+      try {
+        const { cloudflareChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r = await cloudflareChat(testMsg, cfKey || '')
+        results.cloudflare = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null, hasKey: !!cfKey }
+      } catch (e: any) {
+        results.cloudflare = { ok: false, error: String(e).slice(0, 200), hasKey: !!cfKey }
+      }
+
+      // Test NVIDIA (keyless or with key)
+      const nvKey = Deno.env.get('NVIDIA_API_KEY')
+      try {
+        const { nvidiaChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r = await nvidiaChat(testMsg, nvKey)
+        results.nvidia = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null, hasKey: !!nvKey }
+      } catch (e: any) {
+        results.nvidia = { ok: false, error: String(e).slice(0, 200), hasKey: !!nvKey }
+      }
+
+      // Test SiliconFlow (if key set)
+      const sfKey = Deno.env.get('SILICONFLOW_API_KEY')
+      try {
+        const { siliconflowChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r = await siliconflowChat(testMsg, sfKey || '')
+        results.siliconflow = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null, hasKey: !!sfKey }
+      } catch (e: any) {
+        results.siliconflow = { ok: false, error: String(e).slice(0, 200), hasKey: !!sfKey }
+      }
+
+      // Test DeepSeek (if key set)
+      const dsKey = Deno.env.get('DEEPSEEK_API_KEY')
+      try {
+        const { deepseekChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r = await deepseekChat(testMsg, dsKey || '')
+        results.deepseek = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null, hasKey: !!dsKey }
+      } catch (e: any) {
+        results.deepseek = { ok: false, error: String(e).slice(0, 200), hasKey: !!dsKey }
+      }
+
       // Check env vars
       results.env = {
         GROQ_API_KEY: groqKey ? `${groqKey.slice(0, 10)}...${groqKey.slice(-4)} (${groqKey.length} chars)` : 'NOT SET',
@@ -1181,6 +1245,11 @@ serve(async (req) => {
         HF_API_TOKEN: hfToken ? `${hfToken.slice(0, 10)}... (${hfToken.length} chars)` : 'NOT SET',
         OPENROUTER_API_KEY: openrouterKey ? `${openrouterKey.slice(0, 10)}... (${openrouterKey.length} chars)` : 'NOT SET',
         MIMO_API_KEY: mimoKey ? `${mimoKey.slice(0, 10)}... (${mimoKey.length} chars)` : 'NOT SET',
+        CF_API_TOKEN: cfKey ? `${cfKey.slice(0, 10)}... (${cfKey.length} chars)` : 'NOT SET',
+        CF_ACCOUNT_ID: Deno.env.get('CF_ACCOUNT_ID') ? 'SET' : 'NOT SET',
+        NVIDIA_API_KEY: nvKey ? `${nvKey.slice(0, 10)}... (${nvKey.length} chars)` : 'NOT SET (keyless mode)',
+        SILICONFLOW_API_KEY: sfKey ? `${sfKey.slice(0, 10)}... (${sfKey.length} chars)` : 'NOT SET',
+        DEEPSEEK_API_KEY: dsKey ? `${dsKey.slice(0, 10)}... (${dsKey.length} chars)` : 'NOT SET',
       }
 
       return jsonResponse({ debug: results, timestamp: new Date().toISOString() }, 200, origin)

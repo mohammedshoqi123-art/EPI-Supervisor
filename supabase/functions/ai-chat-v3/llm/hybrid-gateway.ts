@@ -149,20 +149,22 @@ function buildPollinationsAttempt(
     const controller = new AbortController()
     const tid = setTimeout(() => controller.abort(), POLLINATIONS_TIMEOUT)
     try {
-      // pollinationsChat already has its own timeout, but we add another layer
-      // ⚠️ FIX: Always use 'openai' model for Pollinations — it doesn't support Groq model names
-      // The opts.model is from the DB (configured for Groq like 'llama-3.3-70b-versatile')
-      // Pollinations only supports: openai, openai-fast, mistral, deepseek, gemini, grok
+      // ⚠️ NEW: Use Multi-Model Fallback Chain
+      // Tries multiple Pollinations model variants (openai, openai-fast) in sequence
+      // If one fails (429/404/timeout), tries the next. This dramatically improves
+      // reliability since Pollinations has per-model rate limits.
+      const { pollinationsMultiModel } = await import('./pollinations-fallback.ts')
       const result = await Promise.race([
-        pollinationsChat(messages, {
-          model: 'openai',  // ⚠️ HARDCODED — ignore opts.model (it's for Groq)
+        pollinationsMultiModel(messages, {
           maxTokens: opts.maxTokens || 2000,
           temperature: opts.temperature,
+          timeoutMs: 25_000,  // per-attempt timeout
         }),
         new Promise<null>((r) => setTimeout(() => r(null), POLLINATIONS_TIMEOUT)),
       ])
-      if (typeof result === 'string' && result.trim()) {
-        return { content: result }
+
+      if (result && typeof result.content === 'string' && result.content.trim()) {
+        return { content: result.content }
       }
       return null
     } catch (e: any) {

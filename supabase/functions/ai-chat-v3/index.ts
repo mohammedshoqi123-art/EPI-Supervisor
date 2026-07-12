@@ -1138,6 +1138,53 @@ serve(async (req) => {
       const pred = predictBestProvider(message, false)
       return jsonResponse({ ...pred, message_preview: message.slice(0, 100) }, 200, origin)
     }
+    if (mode === 'debug_providers') {
+      // ⚠️ DEBUG MODE: Test each provider directly and return detailed results
+      // This helps diagnose WHY providers are failing from Supabase Edge Function
+      const testMsg = [{ role: 'user', content: message || 'مرحبا' }]
+      const results: any = {}
+
+      // Test Pollinations
+      try {
+        const { pollinationsChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r = await pollinationsChat(testMsg, { maxTokens: 50 })
+        results.pollinations = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null }
+      } catch (e: any) {
+        results.pollinations = { ok: false, error: String(e).slice(0, 200) }
+      }
+
+      // Test Groq
+      try {
+        const { groqChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r = await groqChat(testMsg, groqKey || '', { model: 'llama-3.3-70b-versatile', maxTokens: 50 })
+        results.groq = { ok: r?.type === 'message', latency: Date.now() - t1, type: r?.type, reply: r?.content?.slice(0, 100) }
+      } catch (e: any) {
+        results.groq = { ok: false, error: String(e).slice(0, 200) }
+      }
+
+      // Test ZAI
+      try {
+        const { zaiChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r = await zaiChat(testMsg, zaiKey || '', 50)
+        results.zai = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null }
+      } catch (e: any) {
+        results.zai = { ok: false, error: String(e).slice(0, 200) }
+      }
+
+      // Check env vars
+      results.env = {
+        GROQ_API_KEY: groqKey ? `${groqKey.slice(0, 10)}...${groqKey.slice(-4)} (${groqKey.length} chars)` : 'NOT SET',
+        ZAI_API_KEY: zaiKey ? `${zaiKey.slice(0, 10)}...${zaiKey.slice(-4)} (${zaiKey.length} chars)` : 'NOT SET',
+        HF_API_TOKEN: hfToken ? `${hfToken.slice(0, 10)}... (${hfToken.length} chars)` : 'NOT SET',
+        OPENROUTER_API_KEY: openrouterKey ? `${openrouterKey.slice(0, 10)}... (${openrouterKey.length} chars)` : 'NOT SET',
+        MIMO_API_KEY: mimoKey ? `${mimoKey.slice(0, 10)}... (${mimoKey.length} chars)` : 'NOT SET',
+      }
+
+      return jsonResponse({ debug: results, timestamp: new Date().toISOString() }, 200, origin)
+    }
     if (mode === 'studio_generate') {
       // ─── NotebookLM Studio: generate Study Guide / Briefing / FAQ / Mind Map / Audio ───
       const artifactType = body.artifact_type as StudioArtifactType

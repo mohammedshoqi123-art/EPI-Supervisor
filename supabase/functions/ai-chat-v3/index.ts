@@ -1650,6 +1650,7 @@ serve(async (req) => {
       source: 'all_failed',
       fallback_used: !!fallbackAnswer,
       attempted_providers: hybridResult.attempted,
+      provider_errors: hybridResult.errors || [],  // ⚠️ debug: actual error per provider
       latency_ms: Date.now() - startMs,
     }, 200, origin)
 

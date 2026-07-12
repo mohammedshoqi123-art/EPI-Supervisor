@@ -108,6 +108,7 @@ export interface HybridResult {
   confidence: number  // 0-100
   raced: boolean      // true if won a parallel race
   attempted: string[] // all providers attempted
+  errors?: string[]   // ⚠️ error details per provider (for debugging)
 }
 
 export interface HybridOptions {
@@ -381,15 +382,23 @@ export async function hybridRouteChat(
 
   // ─── RACE: First successful response wins ───
   // Use Promise.any — returns first resolved, rejects only if ALL reject
+  const raceErrors: string[] = []  // ⚠️ collect error details for debugging
   try {
     const racedResults = await Promise.any(
       candidates.map(async (attempt) => {
-        const result = await attempt.promise
-        if (!result || (!result.content && !result.toolCalls)) {
-          recordFailure(attempt.name, attempt.tier)
-          throw new Error(`${attempt.name} returned null`)
+        try {
+          const result = await attempt.promise
+          if (!result || (!result.content && !result.toolCalls)) {
+            recordFailure(attempt.name, attempt.tier)
+            const err = `${attempt.name} returned null (timeout or empty)`
+            raceErrors.push(err)
+            throw new Error(err)
+          }
+          return { ...result, _provider: attempt.name, _tier: attempt.tier }
+        } catch (e: any) {
+          raceErrors.push(`${attempt.name}: ${String(e).slice(0, 100)}`)
+          throw e
         }
-        return { ...result, _provider: attempt.name, _tier: attempt.tier }
       }),
     )
 
@@ -412,7 +421,7 @@ export async function hybridRouteChat(
       tier: racedResults._tier,
       latencyMs,
       confidence,
-      raced: candidates.length > 1,
+      raced: candidates.length > 1, errors: raceErrors,
       attempted,
     }
   } catch (allFailed) {
@@ -433,7 +442,7 @@ export async function hybridRouteChat(
         console.log(`[HYBRID] ✓ HuggingFace succeeded in ${latencyMs}ms`)
         return {
           content: result.content, provider: 'huggingface', tier: 4,
-          latencyMs, confidence, raced: false, attempted,
+          latencyMs, confidence, raced: false, attempted, errors: raceErrors,
         }
       }
       recordFailure('huggingface', 4)
@@ -450,7 +459,7 @@ export async function hybridRouteChat(
         console.log(`[HYBRID] ✓ OpenRouter succeeded in ${latencyMs}ms`)
         return {
           content: result.content, provider: 'openrouter', tier: 4,
-          latencyMs, confidence, raced: false, attempted,
+          latencyMs, confidence, raced: false, attempted, errors: raceErrors,
         }
       }
       recordFailure('openrouter', 4)
@@ -472,7 +481,7 @@ export async function hybridRouteChat(
           console.log(`[HYBRID] ✓ MiMo succeeded in ${latencyMs}ms`)
           return {
             content, provider: 'mimo', tier: 4,
-            latencyMs, confidence, raced: false, attempted,
+            latencyMs, confidence, raced: false, attempted, errors: raceErrors,
           }
         }
         recordFailure('mimo', 4)
@@ -488,7 +497,7 @@ export async function hybridRouteChat(
   return {
     content: null, provider: 'none', tier: 0,
     latencyMs: totalLatency, confidence: 0,
-    raced: false, attempted,
+    raced: false, attempted, errors: raceErrors,
   }
 }
 

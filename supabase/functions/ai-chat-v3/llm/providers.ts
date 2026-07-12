@@ -147,7 +147,8 @@ export async function pollinationsChat(
   } catch (e: any) {
     if (e?.name === 'AbortError') { console.error('Pollinations timeout'); return null }
     console.error('Pollinations error:', e)
-    return null
+    // ⚠️ Re-throw non-timeout errors so the hybrid gateway can see the actual error
+    throw e
   } finally {
     clearTimeout(timeoutId)
   }
@@ -198,7 +199,7 @@ export async function groqChat(
     if (opts.stream) return r
 
     const json = await r.json().catch(() => null)
-    if (!json) return null
+    if (!json) throw new Error('Groq: invalid JSON response')
 
     const choice = json.choices?.[0]
     if (choice?.message?.tool_calls?.length) {
@@ -206,12 +207,13 @@ export async function groqChat(
     }
 
     const content = choice?.message?.content
-    if (!content?.trim()) return null
+    if (!content?.trim()) throw new Error('Groq: empty content in response')
     return { type: 'message', content, usage: json.usage }
   } catch (e: any) {
     if (e?.name === 'AbortError') { console.error('Groq timeout'); return null }
     console.error('Groq error:', e)
-    return null
+    // ⚠️ Re-throw non-timeout errors so the hybrid gateway can see the actual error
+    throw e
   } finally {
     clearTimeout(timeoutId)
   }

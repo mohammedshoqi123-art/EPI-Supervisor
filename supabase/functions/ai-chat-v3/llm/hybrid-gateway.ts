@@ -162,8 +162,9 @@ function buildPollinationsAttempt(
         return { content: result }
       }
       return null
-    } catch {
-      return null
+    } catch (e: any) {
+      // ⚠️ Re-throw so the race wrapper can capture the actual error message
+      throw new Error(`pollinations: ${String(e.message || e).slice(0, 150)}`)
     } finally {
       clearTimeout(tid)
     }

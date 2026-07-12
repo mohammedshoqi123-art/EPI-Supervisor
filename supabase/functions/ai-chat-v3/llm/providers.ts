@@ -132,16 +132,17 @@ export async function pollinationsChat(
       // Log the actual error body for debugging (was silently failing before)
       const errBody = await r.text().catch(() => '')
       console.error(`[POLLINATIONS_FAIL] status=${r.status} model=${model} body=${errBody.slice(0, 200)}`)
-      return null
+      // ⚠️ Throw with error details instead of returning null
+      throw new Error(`Pollinations ${r.status}: ${errBody.slice(0, 150)}`)
     }
 
     if (opts.stream) return r
 
     const json = await r.json().catch(() => null)
-    if (!json) return null
+    if (!json) throw new Error('Pollinations: invalid JSON response')
 
     const content = json.choices?.[0]?.message?.content
-    if (!content?.trim()) return null
+    if (!content?.trim()) throw new Error('Pollinations: empty content in response')
     return content
   } catch (e: any) {
     if (e?.name === 'AbortError') { console.error('Pollinations timeout'); return null }

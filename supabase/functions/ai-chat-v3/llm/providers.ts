@@ -190,7 +190,8 @@ export async function groqChat(
     if (!r.ok) {
       const errorText = await r.text().catch(() => 'unknown')
       console.error(`[GROQ_FAIL] status=${r.status} model=${body.model} error=${errorText}`)
-      return null
+      // ⚠️ Throw with error details instead of returning null — hybrid gateway can now report the actual error
+      throw new Error(`Groq ${r.status}: ${errorText.slice(0, 200)}`)
     }
 
     if (opts.stream) return r

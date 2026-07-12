@@ -201,8 +201,9 @@ function buildGroqAttempt(
         return { content: result.content, usage: result.usage }
       }
       return null
-    } catch {
-      return null
+    } catch (e: any) {
+      // ⚠️ Re-throw so the race wrapper can capture the actual error message
+      throw new Error(`groq: ${String(e.message || e).slice(0, 150)}`)
     }
   })()
 

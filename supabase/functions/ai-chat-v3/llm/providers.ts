@@ -118,6 +118,10 @@ export async function pollinationsChat(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // ⚠️ Pollinations uses referrer to identify apps — registered apps get
+        // higher rate limits. Without this, anonymous IP-based limits apply (1 concurrent req).
+        'Referer': 'https://epi-supervisor.yemen.gov.ye',
+        'X-Source': 'EPI-Supervisor',
         ...(opts.stream ? { 'Accept': 'text/event-stream' } : {}),
       },
       body: JSON.stringify(body),
@@ -125,7 +129,9 @@ export async function pollinationsChat(
     })
 
     if (!r.ok) {
-      console.error(`[POLLINATIONS_FAIL] status=${r.status} model=${model}`)
+      // Log the actual error body for debugging (was silently failing before)
+      const errBody = await r.text().catch(() => '')
+      console.error(`[POLLINATIONS_FAIL] status=${r.status} model=${model} body=${errBody.slice(0, 200)}`)
       return null
     }
 

@@ -1460,8 +1460,8 @@ serve(async (req) => {
       temperature: dbTemperature,
       tools: needsTools ? TOOLS : undefined,
       needTools: needsTools,
-      raceTimeoutMs: 6_000,
-      fallbackTimeoutMs: 15_000,
+      raceTimeoutMs: 10_000,   // ⚠️ Increased from 6s — Pollinations needs ~3-8s with large context
+      fallbackTimeoutMs: 20_000,  // ⚠️ Increased from 15s for Tier 4 providers
     })
 
     // ─── If we got tool calls, execute them then ask LLM for final answer ───

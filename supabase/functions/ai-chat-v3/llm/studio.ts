@@ -437,16 +437,38 @@ export async function generateStudioArtifact(
 
   // ─── Step 3: Call LLM via Hybrid Gateway ───
   // Use higher tokens + longer timeout for Studio (longer generation)
+  // ⚠️ Studio needs longer timeout because Pollinations multi-model fallback
+  // can take up to 4×25s = 100s in worst case. We give it 60s.
   const maxTokens = type === 'audio_overview' ? 2500 : 4000
   const result = await hybridRouteChat(messages, env, {
     maxTokens,
     temperature: 0.6,
-    raceTimeoutMs: 20_000,   // longer for Studio (was 12s, often timed out)
-    fallbackTimeoutMs: 45_000,
+    raceTimeoutMs: 30_000,   // ⚠️ Increased from 20s to 30s for Studio
+    fallbackTimeoutMs: 60_000,  // ⚠️ Increased from 45s to 60s
   })
 
   const latencyMs = Date.now() - startTime
   console.log(`[STUDIO] LLM result: provider=${result.provider}, contentLength=${result.content?.length || 0}, latency=${latencyMs}ms`)
+
+  // ⚠️ If first attempt failed, retry with Pollinations multi-model directly
+  if (!result.content || result.content.trim().length < 50) {
+    console.log('[STUDIO] First attempt failed, trying Pollinations multi-model directly...')
+    try {
+      const { pollinationsMultiModel } = await import('./pollinations-fallback.ts')
+      const retry = await pollinationsMultiModel(messages, {
+        maxTokens,
+        temperature: 0.6,
+        timeoutMs: 25_000,
+      })
+      if (retry.content && retry.content.trim().length > 50) {
+        console.log(`[STUDIO] ✓ Pollinations multi-model succeeded: ${retry.modelUsed} (${retry.totalLatencyMs}ms)`)
+        // Use this content instead
+        return buildArtifact(type, options.topic, retry.content, sources, 'pollinations', Date.now() - startTime)
+      }
+    } catch (e) {
+      console.warn('[STUDIO] Pollinations multi-model retry failed:', e)
+    }
+  }
 
   // If LLM failed entirely, return a graceful error with sources visible
   if (!result.content || result.content.trim().length < 50) {
@@ -484,6 +506,42 @@ export async function generateStudioArtifact(
       groundedInSources: sources.length,
       model: 'hybrid',
       provider: result.provider,
+      latencyMs,
+    },
+  }
+
+  if (type === 'mind_map') {
+    artifact.mindMapNodes = parseMindMap(content)
+  } else if (type === 'faq') {
+    artifact.faqItems = parseFaq(content)
+  } else if (type === 'study_guide') {
+    artifact.studyGuideSections = parseStudyGuide(content)
+  } else if (type === 'audio_overview') {
+    artifact.audioScript = parseAudioScript(content)
+  }
+
+  return artifact
+}
+
+// ⚠️ Helper: Build final artifact object with parsing
+function buildArtifact(
+  type: StudioArtifactType,
+  topic: string | undefined,
+  content: string,
+  sources: GroundingSource[],
+  provider: string,
+  latencyMs: number,
+): StudioArtifact {
+  const artifact: StudioArtifact = {
+    type,
+    title: getArtifactTitle(type, topic),
+    content,
+    sources,
+    metadata: {
+      generatedAt: new Date().toISOString(),
+      groundedInSources: sources.length,
+      model: 'hybrid',
+      provider,
       latencyMs,
     },
   }

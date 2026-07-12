@@ -150,9 +150,12 @@ function buildPollinationsAttempt(
     const tid = setTimeout(() => controller.abort(), POLLINATIONS_TIMEOUT)
     try {
       // pollinationsChat already has its own timeout, but we add another layer
+      // ⚠️ FIX: Always use 'openai' model for Pollinations — it doesn't support Groq model names
+      // The opts.model is from the DB (configured for Groq like 'llama-3.3-70b-versatile')
+      // Pollinations only supports: openai, openai-fast, mistral, deepseek, gemini, grok
       const result = await Promise.race([
         pollinationsChat(messages, {
-          model: opts.model || 'openai',
+          model: 'openai',  // ⚠️ HARDCODED — ignore opts.model (it's for Groq)
           maxTokens: opts.maxTokens || 2000,
           temperature: opts.temperature,
         }),
@@ -547,7 +550,7 @@ export async function hybridRouteStream(
       score: successRate * 0.6 + latencyScore * 0.4,
       build: async () => {
         const result = await pollinationsChat(messages, {
-          model: opts.model || 'openai',
+          model: 'openai',  // ⚠️ HARDCODED — Pollinations doesn't support Groq model names
           maxTokens: opts.maxTokens || 2000,
           temperature: opts.temperature,
           stream: true,

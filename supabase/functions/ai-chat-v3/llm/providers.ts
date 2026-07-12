@@ -111,7 +111,7 @@ export async function pollinationsChat(
   if (opts.stream) body.stream = true
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 25_000)
+  const timeoutId = setTimeout(() => controller.abort(), 30_000)  // ⚠️ 30s — Pollinations cold start takes ~20s from Supabase
 
   try {
     const r = await fetch(POLLINATIONS_API, {

@@ -139,9 +139,14 @@ function buildPollinationsAttempt(
   opts: HybridOptions,
   timeoutMs: number,
 ): ProviderAttempt {
+  // ⚠️ Pollinations is slow (~20s cold start from Supabase Edge Function).
+  // Override the race timeout with a longer one so it doesn't get killed prematurely.
+  // The race timeout (timeoutMs) is typically 10s, but Pollinations needs ~25s.
+  const POLLINATIONS_TIMEOUT = Math.max(timeoutMs, 30_000)  // at least 30s for Pollinations
+
   const promise = (async () => {
     const controller = new AbortController()
-    const tid = setTimeout(() => controller.abort(), timeoutMs)
+    const tid = setTimeout(() => controller.abort(), POLLINATIONS_TIMEOUT)
     try {
       // pollinationsChat already has its own timeout, but we add another layer
       const result = await Promise.race([
@@ -150,7 +155,7 @@ function buildPollinationsAttempt(
           maxTokens: opts.maxTokens || 2000,
           temperature: opts.temperature,
         }),
-        new Promise<null>((r) => setTimeout(() => r(null), timeoutMs)),
+        new Promise<null>((r) => setTimeout(() => r(null), POLLINATIONS_TIMEOUT)),
       ])
       if (typeof result === 'string' && result.trim()) {
         return { content: result }

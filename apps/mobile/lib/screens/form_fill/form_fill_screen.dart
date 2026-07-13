@@ -12,6 +12,7 @@ import 'package:epi_core/epi_core.dart';
 import 'package:epi_shared/epi_shared.dart';
 import '../../providers/app_providers.dart';
 import 'form_field_builders.dart';
+import 'form_review_sheet.dart';
 
 class FormFillScreen extends ConsumerStatefulWidget {
   final String formId;
@@ -924,11 +925,29 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                         ),
                       const SizedBox(height: 24),
                       EpiButton(
-                        text: AppStrings.submit,
+                        text: 'مراجعة وإرسال',
                         isLoading: _isLoading,
-                        onPressed: _submit,
+                        onPressed: () {
+                          if (!_formKey.currentState!.validate()) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('يرجى تعبئة جميع الحقول المطلوبة', style: TextStyle(fontFamily: 'Tajawal')), behavior: SnackBarBehavior.floating),
+                            );
+                            return;
+                          }
+                          _syncControllersToFormData();
+                          FormReviewSheet.show(
+                            context,
+                            sections: _buildReviewSections(),
+                            gpsLat: _gpsLat,
+                            gpsLng: _gpsLng,
+                            photosCount: _totalPhotosCount,
+                            totalYesNoCount: _yesNoStats.total,
+                            yesCount: _yesNoStats.yes,
+                            onConfirm: () => _submit(),
+                          );
+                        },
                         width: double.infinity,
-                        icon: Icons.send,
+                        icon: Icons.fact_check_rounded,
                       ),
                     ],
                   ),

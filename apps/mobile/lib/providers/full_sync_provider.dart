@@ -270,3 +270,5 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
 
 final fullSyncProvider =
     StateNotifierProvider<FullSyncNotifier, FullSyncState>((ref) {
+  return FullSyncNotifier(ref);
+});

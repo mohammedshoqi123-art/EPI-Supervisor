@@ -5,12 +5,10 @@ import 'governorate_dropdown.dart';
 import 'district_dropdown.dart';
 import 'health_facility_dropdown.dart';
 import 'photo_picker_field.dart';
-import 'compact_yesno_table.dart';
-import 'compact_numbers_grid.dart';
 
 /// Builds section headers for grouped form fields.
-/// PRESERVES original field order — no reordering.
-/// Smart grouping only groups consecutive yesno or consecutive number fields.
+/// PRESERVES original field order — renders each field individually.
+/// Respects showIf conditions.
 List<Widget> buildFormSections({
   required List<dynamic> sections,
   required Map<String, dynamic> formData,
@@ -50,138 +48,26 @@ List<Widget> buildFormSections({
 
     if (visibleFields.isEmpty) continue;
 
-    // ═══ Check if ALL visible fields are yesno → use compact table ═══
-    final allYesNo = visibleFields.every((f) => f['type'] == 'yesno');
-    final allNumbers = visibleFields.every((f) => f['type'] == 'number');
-
-    if (allYesNo && visibleFields.length >= 2) {
-      // Entire section is yesno → compact table
-      widgets.add(
-        CompactYesNoTable(
-          sectionTitle: title,
-          sectionNumber: secIdx + 1,
-          items: visibleFields
-              .map((f) => YesNoItem(
-                    key: f['key'] as String,
-                    label: f['label_ar'] as String? ?? '',
-                    required: f['required'] as bool? ?? false,
-                  ))
-              .toList(),
-          formData: formData,
-          onChanged: (key, value) {
-            formData[key] = value;
-            markChanged();
-          },
-          runSetState: runSetState,
-        ),
-      );
-      continue;
-    }
-
-    if (allNumbers && visibleFields.length >= 2) {
-      // Entire section is numbers → compact grid
-      widgets.add(
-        CompactNumbersGrid(
-          sectionTitle: title,
-          sectionNumber: secIdx + 1,
-          items: visibleFields
-              .map((f) => NumberItem(
-                    key: f['key'] as String,
-                    label: f['label_ar'] as String? ?? '',
-                    required: f['required'] as bool? ?? false,
-                  ))
-              .toList(),
-          formData: formData,
-          textControllers: textControllers,
-          onChanged: (key, value) {
-            formData[key] = value;
-          },
-          markChanged: markChanged,
-        ),
-      );
-      continue;
-    }
-
-    // ═══ Mixed section: render header + fields in ORIGINAL ORDER ═══
-    // Build section header with number + title
+    // ═══ Section header with number + title ═══
     widgets.add(_buildSectionHeader(title, secIdx + 1, visibleFields.length));
 
-    // ═══ Group CONSECUTIVE yesno fields (3+) into compact tables ═══
-    // But preserve the position where they appear
-    int i = 0;
-    while (i < visibleFields.length) {
-      final field = visibleFields[i];
-      final type = field['type'] as String? ?? 'text';
-
-      if (type == 'yesno') {
-        // Collect consecutive yesno fields
-        final consecutive = <Map<String, dynamic>>[];
-        while (i < visibleFields.length &&
-            (visibleFields[i]['type'] == 'yesno')) {
-          consecutive.add(visibleFields[i]);
-          i++;
-        }
-
-        if (consecutive.length >= 3) {
-          // Use compact table for 3+ consecutive yesno
-          widgets.add(
-            CompactYesNoTable(
-              sectionTitle: 'مؤشرات التقييم',
-              sectionNumber: secIdx + 1,
-              items: consecutive
-                  .map((f) => YesNoItem(
-                        key: f['key'] as String,
-                        label: f['label_ar'] as String? ?? '',
-                        required: f['required'] as bool? ?? false,
-                      ))
-                  .toList(),
-              formData: formData,
-              onChanged: (key, value) {
-                formData[key] = value;
-                markChanged();
-              },
-              runSetState: runSetState,
-            ),
-          );
-        } else {
-          // Render individually if less than 3
-          for (final f in consecutive) {
-            widgets.add(
-              buildFormField(
-                field: f,
-                formData: formData,
-                textControllers: textControllers,
-                isGettingLocation: isGettingLocation,
-                gpsLat: gpsLat,
-                gpsLng: gpsLng,
-                markChanged: markChanged,
-                getLocation: getLocation,
-                runSetState: runSetState,
-                formSchema: formSchema,
-                photosByField: photosByField,
-              ),
-            );
-          }
-        }
-      } else {
-        // Non-yesno field → render individually
-        widgets.add(
-          buildFormField(
-            field: field,
-            formData: formData,
-            textControllers: textControllers,
-            isGettingLocation: isGettingLocation,
-            gpsLat: gpsLat,
-            gpsLng: gpsLng,
-            markChanged: markChanged,
-            getLocation: getLocation,
-            runSetState: runSetState,
-            formSchema: formSchema,
-            photosByField: photosByField,
-          ),
-        );
-        i++;
-      }
+    // ═══ Render ALL fields individually in ORIGINAL ORDER ═══
+    for (final f in visibleFields) {
+      widgets.add(
+        buildFormField(
+          field: f,
+          formData: formData,
+          textControllers: textControllers,
+          isGettingLocation: isGettingLocation,
+          gpsLat: gpsLat,
+          gpsLng: gpsLng,
+          markChanged: markChanged,
+          getLocation: getLocation,
+          runSetState: runSetState,
+          formSchema: formSchema,
+          photosByField: photosByField,
+        ),
+      );
     }
 
     widgets.add(const SizedBox(height: 8));

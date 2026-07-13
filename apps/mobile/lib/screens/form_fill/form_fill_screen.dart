@@ -322,17 +322,28 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   void _syncControllersToFormData() {
-    // ⚠️ FIX: Only sync text controllers for fields that USE text controllers
-    // Don't overwrite bool/yesno/list/number values that are stored directly in _formData
+    // ⚠️ FIX: Only sync text controllers for text/textarea/phone/number fields
+    // Don't overwrite bool (yesno), List (multiselect), or other non-string values
+    final textFieldTypes = {'text', 'textarea', 'phone', 'email', 'number', 'date', 'time'};
     for (final entry in _textControllers.entries) {
       final key = entry.key;
-      final currentValue = _formData[key];
+      // Find the field type for this key
+      final field = _allFields.where((f) => f['key'] == key).firstOrNull;
+      final type = field?['type'] as String? ?? 'text';
 
-      // Only update if the field uses text input (string-based)
-      // Don't overwrite bool (yesno), List (multiselect), or other non-string values
-      if (currentValue == null || currentValue is String) {
-        _formData[key] = entry.value.text;
+      if (textFieldTypes.contains(type)) {
+        // Text-based field — sync controller text
+        if (type == 'number') {
+          final numValue = num.tryParse(entry.value.text);
+          if (numValue != null) {
+            _formData[key] = numValue;
+          }
+        } else {
+          _formData[key] = entry.value.text;
+        }
       }
+      // Skip non-text fields (yesno, multiselect, governorate, etc.)
+      // Their values are stored directly in _formData by their widgets
     }
   }
 
@@ -844,21 +855,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                   icon: Icons.description,
                   title: 'لا توجد حقول في النموذج',
                 )
-              : _showReview
-                  ? FormReviewScreen(
-                      sections: _buildReviewSections(),
-                      gpsLat: _gpsLat,
-                      gpsLng: _gpsLng,
-                      photosCount: _totalPhotosCount,
-                      totalYesNoCount: _yesNoStats.total,
-                      yesCount: _yesNoStats.yes,
-                      onEdit: () => setState(() => _showReview = false),
-                      onConfirm: () {
-                        setState(() => _showReview = false);
-                        _submit();
-                      },
-                    )
-                  : Form(
+              : Form(
                   key: _formKey,
                   child: ListView(
                     padding: const EdgeInsets.all(16),
@@ -974,26 +971,13 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                           ),
                         ),
                       const SizedBox(height: 24),
-                      // Review button — shows review screen before submit
+                      // Submit button — validates then submits directly
                       EpiButton(
-                        text: 'مراجعة وإرسال',
+                        text: AppStrings.submit,
                         isLoading: _isLoading,
-                        onPressed: () {
-                          // Validate required fields first
-                          if (!_formKey.currentState!.validate()) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('يرجى تعبئة جميع الحقول المطلوبة',
-                                    style: TextStyle(fontFamily: 'Tajawal')),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                            return;
-                          }
-                          setState(() => _showReview = true);
-                        },
+                        onPressed: _submit,
                         width: double.infinity,
-                        icon: Icons.fact_check_rounded,
+                        icon: Icons.send,
                       ),
                     ],
                   ),

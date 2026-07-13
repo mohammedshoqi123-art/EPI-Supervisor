@@ -5,8 +5,11 @@ import 'governorate_dropdown.dart';
 import 'district_dropdown.dart';
 import 'health_facility_dropdown.dart';
 import 'photo_picker_field.dart';
+import 'compact_yesno_table.dart';
+import 'compact_numbers_grid.dart';
 
 /// Builds section headers for grouped form fields.
+/// Now with smart grouping: yesno fields → compact table, number fields → grid
 List<Widget> buildFormSections({
   required List<dynamic> sections,
   required Map<String, dynamic> formData,
@@ -28,11 +31,83 @@ List<Widget> buildFormSections({
     (a, b) => (a['order'] as int? ?? 0).compareTo(b['order'] as int? ?? 0),
   );
 
-  for (final section in sortedSections) {
+  for (int secIdx = 0; secIdx < sortedSections.length; secIdx++) {
+    final section = sortedSections[secIdx];
     final title = section['title_ar'] as String? ?? '';
     final fields =
         (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
+    // ═══ Smart grouping: separate fields by type ═══
+    final yesnoFields = <Map<String, dynamic>>[];
+    final numberFields = <Map<String, dynamic>>[];
+    final otherFields = <Map<String, dynamic>>[];
+
+    for (final f in fields) {
+      final type = f['type'] as String? ?? 'text';
+      // Check showIf condition
+      final showIf = f['showIf'];
+      if (showIf != null && !_evaluateShowIf(showIf, formData)) {
+        continue; // Skip hidden fields
+      }
+
+      if (type == 'yesno') {
+        yesnoFields.add(f);
+      } else if (type == 'number') {
+        numberFields.add(f);
+      } else {
+        otherFields.add(f);
+      }
+    }
+
+    // ═══ If 3+ yesno fields → use compact table ═══
+    if (yesnoFields.length >= 3 && otherFields.isEmpty && numberFields.isEmpty) {
+      widgets.add(
+        CompactYesNoTable(
+          sectionTitle: title,
+          sectionNumber: secIdx + 1,
+          items: yesnoFields
+              .map((f) => YesNoItem(
+                    key: f['key'] as String,
+                    label: f['label_ar'] as String? ?? '',
+                    required: f['required'] as bool? ?? false,
+                  ))
+              .toList(),
+          formData: formData,
+          onChanged: (key, value) {
+            formData[key] = value;
+            markChanged();
+          },
+          runSetState: runSetState,
+        ),
+      );
+      continue;
+    }
+
+    // ═══ If 3+ number fields and only numbers → use compact grid ═══
+    if (numberFields.length >= 3 && otherFields.isEmpty && yesnoFields.isEmpty) {
+      widgets.add(
+        CompactNumbersGrid(
+          sectionTitle: title,
+          sectionNumber: secIdx + 1,
+          items: numberFields
+              .map((f) => NumberItem(
+                    key: f['key'] as String,
+                    label: f['label_ar'] as String? ?? '',
+                    required: f['required'] as bool? ?? false,
+                  ))
+              .toList(),
+          formData: formData,
+          textControllers: textControllers,
+          onChanged: (key, value) {
+            formData[key] = value;
+          },
+          markChanged: markChanged,
+        ),
+      );
+      continue;
+    }
+
+    // ═══ Mixed section: render header + all fields individually ═══
     widgets.add(
       Container(
         margin: const EdgeInsets.only(bottom: 12, top: 8),
@@ -46,12 +121,24 @@ List<Widget> buildFormSections({
         ),
         child: Row(
           children: [
+            // Section number badge
             Container(
-              width: 4,
-              height: 24,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: AppTheme.primaryColor,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Text(
+                  '${secIdx + 1}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -59,9 +146,26 @@ List<Widget> buildFormSections({
               child: Text(
                 title,
                 style: const TextStyle(
-                  fontFamily: 'Tajawal',
+                  fontFamily: 'Cairo',
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 15,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ),
+            // Field count badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '${fields.length} حقل',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.primaryColor,
                 ),
               ),
@@ -71,22 +175,64 @@ List<Widget> buildFormSections({
       ),
     );
 
-    for (final field in fields) {
+    // ═══ If 3+ yesno fields in mixed section → group them in compact table ═══
+    if (yesnoFields.length >= 3) {
       widgets.add(
-        buildFormField(
-          field: field,
+        CompactYesNoTable(
+          sectionTitle: 'مؤشرات التقييم',
+          sectionNumber: secIdx + 1,
+          items: yesnoFields
+              .map((f) => YesNoItem(
+                    key: f['key'] as String,
+                    label: f['label_ar'] as String? ?? '',
+                    required: f['required'] as bool? ?? false,
+                  ))
+              .toList(),
           formData: formData,
-          textControllers: textControllers,
-          isGettingLocation: isGettingLocation,
-          gpsLat: gpsLat,
-          gpsLng: gpsLng,
-          markChanged: markChanged,
-          getLocation: getLocation,
+          onChanged: (key, value) {
+            formData[key] = value;
+            markChanged();
+          },
           runSetState: runSetState,
-          formSchema: formSchema,
-          photosByField: photosByField,
         ),
       );
+      // Add other fields below
+      for (final f in [...otherFields, ...numberFields]) {
+        widgets.add(
+          buildFormField(
+            field: f,
+            formData: formData,
+            textControllers: textControllers,
+            isGettingLocation: isGettingLocation,
+            gpsLat: gpsLat,
+            gpsLng: gpsLng,
+            markChanged: markChanged,
+            getLocation: getLocation,
+            runSetState: runSetState,
+            formSchema: formSchema,
+            photosByField: photosByField,
+          ),
+        );
+      }
+    } else {
+      // Render all fields individually
+      for (final f in [...otherFields, ...yesnoFields, ...numberFields]) {
+        widgets.add(
+          buildFormField(
+            field: f,
+            formData: formData,
+            textControllers: textControllers,
+            isGettingLocation: isGettingLocation,
+            gpsLat: gpsLat,
+            gpsLng: gpsLng,
+            markChanged: markChanged,
+            getLocation: getLocation,
+            runSetState: runSetState,
+            formSchema: formSchema,
+            photosByField: photosByField,
+          ),
+        );
+      }
     }
 
     widgets.add(const SizedBox(height: 8));
@@ -94,6 +240,15 @@ List<Widget> buildFormSections({
 
   return widgets;
 }
+
+/// Evaluate showIf condition
+bool _evaluateShowIf(Map<String, dynamic> showIf, Map<String, dynamic> formData) {
+  final field = showIf['field'] as String?;
+  final value = showIf['value'];
+  if (field == null || value == null) return true;
+  return formData[field] == value;
+}
+
 
 /// Builds a single form field widget based on its type.
 Widget buildFormField({

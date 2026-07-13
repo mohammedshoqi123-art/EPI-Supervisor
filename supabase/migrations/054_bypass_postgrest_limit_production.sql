@@ -19,6 +19,3 @@ EXCEPTION WHEN OTHERS THEN
   -- If it fails (role doesn't exist or no permission), skip silently
   RAISE NOTICE 'Could not set pgrst.db_max_rows: %', SQLERRM;
 END $$;
-
--- Comment
-COMMENT ON MIGRATION IS 'Bypass PostgREST 1000-row limit — allows up to 100000 rows per request';

@@ -800,8 +800,112 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => const _ThreadsPanel(),
+      builder: (_) => _ThreadsPanel(onLoadThread: _loadThreadMessages),
     );
+  }
+
+  /// Load messages from a saved thread
+  Future<void> _loadThreadMessages(AIChatThread thread) async {
+    try {
+      final service = ref.read(aiChatThreadServiceProvider);
+      final messages = await service.getMessages(thread.id);
+
+      if (messages.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('لا توجد رسائل في هذه المحادثة',
+                  style: const TextStyle(fontFamily: 'Tajawal')),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Convert to ChatMsg objects
+      final List<ChatMsg> loadedMsgs = [];
+      for (final msg in messages) {
+        final role = msg['role'] as String? ?? 'user';
+        final content = msg['content'] as String? ?? '';
+        if (content.isEmpty) continue;
+
+        final provider = msg['provider'] as String?;
+        final groundedInSources = msg['grounded_in_sources'] as int?;
+        final suggestedFollowupsJson = msg['suggested_followups'];
+        List<String>? suggestedFollowups;
+        if (suggestedFollowupsJson is List) {
+          suggestedFollowups = suggestedFollowupsJson.cast<String>();
+        }
+
+        loadedMsgs.add(ChatMsg(
+          role: role,
+          content: content,
+          source: msg['source'] as String?,
+          time: msg['created_at'] != null
+              ? DateTime.parse(msg['created_at'])
+              : DateTime.now(),
+          id: msg['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+          provider: provider,
+          groundedInSources: groundedInSources,
+          suggestedFollowups: suggestedFollowups,
+        ));
+      }
+
+      if (loadedMsgs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('لا توجد رسائل صالحة في هذه المحادثة',
+                  style: const TextStyle(fontFamily: 'Tajawal')),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Update state
+      setState(() {
+        _msgs.clear();
+        _msgs.addAll(loadedMsgs);
+        _currentThreadId = thread.id;
+        _showWelcome = false;
+      });
+
+      // Scroll to bottom
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) {
+          _scroll.animateTo(
+            _scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم تحميل المحادثة: ${thread.title} (${loadedMsgs.length} رسالة)',
+                style: const TextStyle(fontFamily: 'Tajawal')),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل تحميل المحادثة: $e',
+                style: const TextStyle(fontFamily: 'Tajawal')),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   /// Start a new conversation
@@ -2939,7 +3043,8 @@ class _ModelOption {
 /// _ThreadsPanel — لوحة المحادثات السابقة
 /// ═══════════════════════════════════════════════════════════
 class _ThreadsPanel extends ConsumerWidget {
-  const _ThreadsPanel();
+  final Function(AIChatThread)? onLoadThread;
+  const _ThreadsPanel({this.onLoadThread});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -3021,7 +3126,7 @@ class _ThreadsPanel extends ConsumerWidget {
                   itemCount: threads.length,
                   itemBuilder: (context, index) {
                     final thread = threads[index];
-                    return _ThreadCard(thread: thread);
+                    return _ThreadCard(thread: thread, onLoadThread: onLoadThread);
                   },
                 );
               },
@@ -3035,7 +3140,8 @@ class _ThreadsPanel extends ConsumerWidget {
 
 class _ThreadCard extends ConsumerWidget {
   final AIChatThread thread;
-  const _ThreadCard({required this.thread});
+  final Function(AIChatThread)? onLoadThread;
+  const _ThreadCard({required this.thread, this.onLoadThread});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -3112,7 +3218,10 @@ class _ThreadCard extends ConsumerWidget {
         ),
         onTap: () {
           Navigator.pop(context);
-          // TODO: Load thread messages
+          // Load thread messages via callback
+          if (onLoadThread != null) {
+            onLoadThread!(thread);
+          }
         },
       ),
     );

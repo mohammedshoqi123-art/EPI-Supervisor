@@ -322,8 +322,17 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   void _syncControllersToFormData() {
+    // ⚠️ FIX: Only sync text controllers for fields that USE text controllers
+    // Don't overwrite bool/yesno/list/number values that are stored directly in _formData
     for (final entry in _textControllers.entries) {
-      _formData[entry.key] = entry.value.text;
+      final key = entry.key;
+      final currentValue = _formData[key];
+
+      // Only update if the field uses text input (string-based)
+      // Don't overwrite bool (yesno), List (multiselect), or other non-string values
+      if (currentValue == null || currentValue is String) {
+        _formData[key] = entry.value.text;
+      }
     }
   }
 

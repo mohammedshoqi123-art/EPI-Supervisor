@@ -90,7 +90,7 @@ class QuickSectionJump extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.jump_to_rounded,
+                  Icon(Icons.menu_book_rounded,
                       size: 20, color: AppTheme.primaryColor),
                   const SizedBox(width: 8),
                   const Text(

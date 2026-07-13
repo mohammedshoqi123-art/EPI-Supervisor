@@ -348,8 +348,30 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     _syncControllersToFormData();
 
     final formState = _formKey.currentState;
-    if (formState == null) return;
-    if (!formState.validate()) return;
+    if (formState == null) {
+      // ⚠️ FIX: Show error instead of silent return
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('خطأ في النموذج — لا يمكن الإرسال', style: TextStyle(fontFamily: 'Tajawal')),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+    if (!formState.validate()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى تصحيح الأخطاء في النموذج', style: TextStyle(fontFamily: 'Tajawal')),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
 
     final missingFields = <String>[];
     for (final field in _allFields) {
@@ -414,6 +436,51 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
     setState(() => _isLoading = true);
 
+    // ═══ WEB: Submit directly to Supabase (bypass offline storage) ═══
+    if (kIsWeb) {
+      try {
+        final db = ref.read(databaseServiceProvider);
+        final campaignRound = ref.read(campaignRoundProvider);
+        
+        // Submit directly via Edge Function
+        await db.submitForm({
+          'form_id': widget.formId,
+          'data': Map<String, dynamic>.from(_formData),
+          if (_gpsLat != null) 'gps_lat': _gpsLat,
+          if (_gpsLng != null) 'gps_lng': _gpsLng,
+          'campaign_round': campaignRound,
+        }).timeout(const Duration(seconds: 30));
+
+        if (mounted) {
+          try { ref.invalidate(formStatsProvider); } catch (_) {}
+          _hasUnsavedChanges = false;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم الإرسال بنجاح ✅', style: TextStyle(fontFamily: 'Tajawal')),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('فشل الإرسال: $e', style: const TextStyle(fontFamily: 'Tajawal')),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+      return;
+    }
+
+    // ═══ MOBILE: Use offline storage + sync queue ═══
     final OfflineManager offline;
     try {
       offline = await ref.read(offlineManagerProvider.future).timeout(
@@ -550,9 +617,27 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     _syncControllersToFormData();
 
     if (_formData.isEmpty) {
-      context.showWarning('املأ بعض الحقول أولاً قبل الحفظ');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('املأ بعض الحقول أولاً قبل الحفظ', style: TextStyle(fontFamily: 'Tajawal')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
+
+    // ═══ WEB: لا يمكن حفظ مسودة على الويب (لا Hive) ═══
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('على الويب: استخدم زر الإرسال مباشرة (لا يوجد حفظ محلي)', style: TextStyle(fontFamily: 'Tajawal')),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSavingDraft = true);
     try {
       final offline = await ref.read(offlineManagerProvider.future).timeout(

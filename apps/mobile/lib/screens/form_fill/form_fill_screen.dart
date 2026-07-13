@@ -819,9 +819,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
               ),
               FilledButton.icon(
                 onPressed: () async {
-                  // ⚠️ FIX: استخدم _saveDraft بدلاً من _autoSave (أكثر موثوقية)
-                  Navigator.of(ctx).pop(true); // أغلق الـ dialog أولاً
-                  await _saveDraft(); // ثم احفظ
+                  // ⚠️ FIX: احفظ أولاً ثم أغلق (كان يغلق قبل الحفظ)
+                  await _saveDraft();
+                  if (ctx.mounted) Navigator.of(ctx).pop(true);
                 },
                 icon: const Icon(Icons.save, size: 18),
                 label: const Text('حفظ وخروج', style: TextStyle(fontFamily: 'Tajawal')),

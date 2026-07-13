@@ -9,10 +9,6 @@ import 'compact_yesno_table.dart';
 import 'compact_numbers_grid.dart';
 
 /// Builds section headers for grouped form fields.
-/// PRESERVES original field order — renders each field individually.
-/// Smart grouping: consecutive yesno (3+) → compact table, consecutive number (3+) → grid
-/// Respects showIf conditions.
-/// Adds section numbers + field count badges.
 List<Widget> buildFormSections({
   required List<dynamic> sections,
   required Map<String, dynamic> formData,
@@ -30,32 +26,25 @@ List<Widget> buildFormSections({
   final widgets = <Widget>[];
 
   final sortedSections = List.from(sections);
-  sortedSections.sort((a, b) => (a['order'] as int? ?? 0).compareTo(b['order'] as int? ?? 0));
+  sortedSections.sort(
+    (a, b) => (a['order'] as int? ?? 0).compareTo(b['order'] as int? ?? 0),
+  );
 
   for (int secIdx = 0; secIdx < sortedSections.length; secIdx++) {
     final section = sortedSections[secIdx];
     final title = section['title_ar'] as String? ?? '';
-    final fields = (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final fields =
+        (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-    // ═══ Filter visible fields (respect showIf) but PRESERVE original order ═══
-    final visibleFields = <Map<String, dynamic>>[];
-    for (final f in fields) {
-      final showIf = f['showIf'];
-      if (showIf != null && !_evaluateShowIf(showIf, formData)) continue;
-      visibleFields.add(f);
-    }
-    if (visibleFields.isEmpty) continue;
+    // Check if ALL fields are yesno → compact table (big perf win)
+    final allYesNo = fields.isNotEmpty && fields.every((f) => f['type'] == 'yesno');
+    final allNumbers = fields.isNotEmpty && fields.every((f) => f['type'] == 'number');
 
-    // ═══ Check if ALL visible fields are yesno → use compact table ═══
-    final allYesNo = visibleFields.every((f) => f['type'] == 'yesno');
-    final allNumbers = visibleFields.every((f) => f['type'] == 'number');
-
-    if (allYesNo && visibleFields.length >= 2) {
-      // Entire section is yesno → compact table
+    if (allYesNo && fields.length >= 2) {
       widgets.add(CompactYesNoTable(
         sectionTitle: title,
         sectionNumber: secIdx + 1,
-        items: visibleFields.map((f) => YesNoItem(key: f['key'] as String, label: f['label_ar'] as String? ?? '', required: f['required'] as bool? ?? false)).toList(),
+        items: fields.map((f) => YesNoItem(key: f['key'] as String, label: f['label_ar'] as String? ?? '', required: f['required'] as bool? ?? false)).toList(),
         formData: formData,
         onChanged: (key, value) { formData[key] = value; },
         markChanged: markChanged,
@@ -63,12 +52,11 @@ List<Widget> buildFormSections({
       continue;
     }
 
-    if (allNumbers && visibleFields.length >= 2) {
-      // Entire section is numbers → compact grid
+    if (allNumbers && fields.length >= 2) {
       widgets.add(CompactNumbersGrid(
         sectionTitle: title,
         sectionNumber: secIdx + 1,
-        items: visibleFields.map((f) => NumberItem(key: f['key'] as String, label: f['label_ar'] as String? ?? '', required: f['required'] as bool? ?? false)).toList(),
+        items: fields.map((f) => NumberItem(key: f['key'] as String, label: f['label_ar'] as String? ?? '', required: f['required'] as bool? ?? false)).toList(),
         formData: formData,
         textControllers: textControllers,
         onChanged: (key, value) { formData[key] = value; },
@@ -77,66 +65,66 @@ List<Widget> buildFormSections({
       continue;
     }
 
-    // ═══ Mixed section: header + fields in ORIGINAL ORDER ═══
-    widgets.add(_buildSectionHeader(title, secIdx + 1, visibleFields.length));
+    widgets.add(
+      Container(
+        margin: const EdgeInsets.only(bottom: 12, top: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.primaryColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppTheme.primaryColor.withValues(alpha: 0.3),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 24,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
 
-    // Group CONSECUTIVE yesno (3+) → compact table, preserve position
-    int i = 0;
-    while (i < visibleFields.length) {
-      final field = visibleFields[i];
-      final type = field['type'] as String? ?? 'text';
-
-      if (type == 'yesno') {
-        final consecutive = <Map<String, dynamic>>[];
-        while (i < visibleFields.length && visibleFields[i]['type'] == 'yesno') {
-          consecutive.add(visibleFields[i]);
-          i++;
-        }
-        if (consecutive.length >= 3) {
-          widgets.add(CompactYesNoTable(
-            sectionTitle: 'مؤشرات التقييم',
-            sectionNumber: secIdx + 1,
-            items: consecutive.map((f) => YesNoItem(key: f['key'] as String, label: f['label_ar'] as String? ?? '', required: f['required'] as bool? ?? false)).toList(),
-            formData: formData,
-            onChanged: (key, value) { formData[key] = value; },
-            markChanged: markChanged,
-          ));
-        } else {
-          for (final f in consecutive) {
-            widgets.add(buildFormField(field: f, formData: formData, textControllers: textControllers, isGettingLocation: isGettingLocation, gpsLat: gpsLat, gpsLng: gpsLng, markChanged: markChanged, getLocation: getLocation, runSetState: runSetState, formSchema: formSchema, photosByField: photosByField));
-          }
-        }
-      } else {
-        widgets.add(buildFormField(field: field, formData: formData, textControllers: textControllers, isGettingLocation: isGettingLocation, gpsLat: gpsLat, gpsLng: gpsLng, markChanged: markChanged, getLocation: getLocation, runSetState: runSetState, formSchema: formSchema, photosByField: photosByField));
-        i++;
-      }
+    for (final field in fields) {
+      widgets.add(
+        buildFormField(
+          field: field,
+          formData: formData,
+          textControllers: textControllers,
+          isGettingLocation: isGettingLocation,
+          gpsLat: gpsLat,
+          gpsLng: gpsLng,
+          markChanged: markChanged,
+          getLocation: getLocation,
+          runSetState: runSetState,
+          formSchema: formSchema,
+          photosByField: photosByField,
+        ),
+      );
     }
+
     widgets.add(const SizedBox(height: 8));
   }
+
   return widgets;
-}
-
-Widget _buildSectionHeader(String title, int number, int fieldCount) {
-  return Container(
-    margin: const EdgeInsets.only(bottom: 12, top: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    decoration: BoxDecoration(color: AppTheme.primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3))),
-    child: Row(children: [
-      Container(width: 28, height: 28, decoration: BoxDecoration(color: AppTheme.primaryColor, borderRadius: BorderRadius.circular(8)),
-        child: Center(child: Text('$number', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo')))),
-      const SizedBox(width: 12),
-      Expanded(child: Text(title, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.primaryColor))),
-      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: AppTheme.primaryColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-        child: Text('$fieldCount حقل', style: const TextStyle(fontSize: 11, fontFamily: 'Tajawal', fontWeight: FontWeight.w600, color: AppTheme.primaryColor))),
-    ]),
-  );
-}
-
-bool _evaluateShowIf(Map<String, dynamic> showIf, Map<String, dynamic> formData) {
-  final field = showIf['field'] as String?;
-  final value = showIf['value'];
-  if (field == null || value == null) return true;
-  return formData[field] == value;
 }
 
 /// Builds a single form field widget based on its type.

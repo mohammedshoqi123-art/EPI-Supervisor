@@ -305,13 +305,15 @@ class _MainShellState extends ConsumerState<MainShell> {
           Expanded(child: widget.child),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // ═══ Drawer menu button — hidden on /ai and /chat pages ═══
-          if (!GoRouterState.of(context).matchedLocation.startsWith('/ai') &&
-              !GoRouterState.of(context).matchedLocation.startsWith('/chat'))
+      // ⚠️ PERF: Single GoRouterState.of call — was 4 calls per build
+      floatingActionButton: Builder(builder: (context) {
+        final location = GoRouterState.of(context).matchedLocation;
+        final hideFab = location.startsWith('/ai') || location.startsWith('/chat');
+        if (hideFab) return const SizedBox.shrink();
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
             FloatingActionButton.small(
               heroTag: 'menu_fab',
               onPressed: () => _scaffoldKey.currentState?.openDrawer(),
@@ -320,13 +322,10 @@ class _MainShellState extends ConsumerState<MainShell> {
               elevation: 4,
               child: const Icon(Icons.menu_rounded, size: 22),
             ),
-          // ═══ Removed: sync FAB + pending badge — sync is available in drawer ═══
-          // ═══ AI Assistant — hidden on /ai and /chat pages (chat has AI tab) ═══
-          if (!GoRouterState.of(context).matchedLocation.startsWith('/ai') &&
-              !GoRouterState.of(context).matchedLocation.startsWith('/chat'))
             _AiFab(onTap: () => context.go('/ai')),
-        ],
-      ),
+          ],
+        );
+      }),
       bottomNavigationBar: EpiBottomNav(
         currentIndex: _getSelectedIndex(context),
         onTap: (index) => _onItemTapped(context, index),

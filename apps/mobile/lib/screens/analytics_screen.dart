@@ -286,6 +286,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
 
   @override
   void dispose() {
+    _refreshDebounce?.cancel();  // ⚠️ PERF FIX: was leaking
     _syncSub?.cancel();
     _tab.dispose();
     super.dispose();

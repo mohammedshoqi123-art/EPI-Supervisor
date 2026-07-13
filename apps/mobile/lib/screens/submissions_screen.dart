@@ -103,6 +103,7 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
 
     // Paginate
     final totalPages = (filtered.length / _pageSize).ceil();
+    _cachedFilteredCount = filtered.length;  // ⚠️ PERF: cache here
     final safePage = _currentPage.clamp(0, (totalPages - 1).clamp(0, 9999));
     final start = safePage * _pageSize;
     final end = (start + _pageSize).clamp(0, filtered.length);
@@ -172,18 +173,26 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
   }
 
   /// Get total filtered count
-  int get _totalFilteredCount {
-    if (_searchQuery.isEmpty) return _allItems.length;
-    return _allItems.where((sub) {
-      final formTitle =
-          (sub['forms']?['title_ar'] ?? '').toString().toLowerCase();
-      final userName =
-          (sub['profiles']?['full_name'] ?? '').toString().toLowerCase();
-      final status = (sub['status'] ?? '').toString().toLowerCase();
-      return formTitle.contains(_searchQuery) ||
-          userName.contains(_searchQuery) ||
-          status.contains(_searchQuery);
-    }).length;
+  // ⚠️ PERF: Cache filtered count — was recomputed 5x per build
+  int _cachedFilteredCount = 0;
+
+  int get _totalFilteredCount => _cachedFilteredCount;
+
+  void _updateFilteredCount() {
+    if (_searchQuery.isEmpty) {
+      _cachedFilteredCount = _allItems.length;
+    } else {
+      _cachedFilteredCount = _allItems.where((sub) {
+        final formTitle =
+            (sub['forms']?['title_ar'] ?? '').toString().toLowerCase();
+        final userName =
+            (sub['profiles']?['full_name'] ?? '').toString().toLowerCase();
+        final status = (sub['status'] ?? '').toString().toLowerCase();
+        return formTitle.contains(_searchQuery) ||
+            userName.contains(_searchQuery) ||
+            status.contains(_searchQuery);
+      }).length;
+    }
   }
 
   @override

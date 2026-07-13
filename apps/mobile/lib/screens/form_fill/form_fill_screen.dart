@@ -43,6 +43,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   // Auto-save timer
   Timer? _autoSaveTimer;
 
+  // ⚠️ PERF: Cache _allFields instead of recomputing on every build
+  List<Map<String, dynamic>> _allFieldsCache = [];
+  // ⚠️ PERF: Cache field type lookup for _syncControllersToFormData
+  final Map<String, String> _fieldTypeCache = {};
+
   late String _draftId;
 
   @override
@@ -50,8 +55,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     super.initState();
     _draftId = widget.draftId ?? const Uuid().v4();
     _loadForm();
-    // ⚠️ FIX: auto-save كل 30 ثانية (كان 60 — بيانات كثيرة تضيع)
-    _autoSaveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // ⚠️ PERF: 60 ثانية — PBKDF2 encryption مكلف، 30s تسبب تجميد
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (_hasUnsavedChanges && _formData.isNotEmpty) {
         _autoSave(showFeedback: false);
       }
@@ -101,6 +106,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         _flatFields = (schema['fields'] as List?) ?? [];
         _isLoading = false;
       });
+
+      // ⚠️ PERF: Build cache ONCE after form loads
+      _buildFieldsCache();
 
       // ═══ AUTO-FILL: populate fields from user profile ═══
       _autoFillFromProfile();
@@ -252,15 +260,26 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     super.dispose();
   }
 
-  List<Map<String, dynamic>> get _allFields {
+  /// ⚠️ PERF: Build cache once — avoids O(n) allocation per build
+  void _buildFieldsCache() {
     if (_sections.isNotEmpty) {
-      return _sections
+      _allFieldsCache = _sections
           .expand((s) => (s['fields'] as List? ?? []))
           .cast<Map<String, dynamic>>()
           .toList();
+    } else {
+      _allFieldsCache = _flatFields.cast<Map<String, dynamic>>().toList();
     }
-    return _flatFields.cast<Map<String, dynamic>>().toList();
+    // Build type lookup map for O(1) access in _syncControllersToFormData
+    _fieldTypeCache.clear();
+    for (final f in _allFieldsCache) {
+      final key = f['key'] as String?;
+      final type = f['type'] as String? ?? 'text';
+      if (key != null) _fieldTypeCache[key] = type;
+    }
   }
+
+  List<Map<String, dynamic>> get _allFields => _allFieldsCache;
 
   Future<void> _getLocation() async {
     setState(() => _isGettingLocation = true);
@@ -319,16 +338,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   void _syncControllersToFormData() {
-    // ⚠️ FIX: فقط مزامنة الحقول النصية — لا تكتب فوق bool/yesno/list/governorate
+    // ⚠️ PERF: O(1) lookup via _fieldTypeCache instead of O(n) scan
     final textFieldTypes = {'text', 'textarea', 'phone', 'email', 'number', 'date', 'time'};
     for (final entry in _textControllers.entries) {
       final key = entry.key;
-      // ابحث عن نوع الحقل
-      Map<String, dynamic>? field;
-      for (final f in _allFields) {
-        if (f['key'] == key) { field = f; break; }
-      }
-      final type = field?['type'] as String? ?? 'text';
+      final type = _fieldTypeCache[key] ?? 'text';
 
       if (textFieldTypes.contains(type)) {
         if (type == 'number') {
@@ -340,7 +354,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           _formData[key] = entry.value.text;
         }
       }
-      // yesno/multiselect/governorate/district: قيمها في _formData مباشرة — لا تمسها
     }
   }
 
@@ -792,96 +805,24 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      // ═══ Progress indicator (آمن — خارج Form validation) ═══
-                      if (_sections.isNotEmpty)
-                        Builder(builder: (context) {
-                          final total = _allFields.length;
-                          int answered = 0;
-                          for (final f in _allFields) {
-                            final key = f['key'] as String?;
-                            if (key == null) continue;
-                            final val = _formData[key];
-                            if (val != null) {
-                              if (val is String && val.isNotEmpty) answered++;
-                              else if (val is bool) answered++;
-                              else if (val is num) answered++;
-                              else if (val is List && val.isNotEmpty) answered++;
-                            }
-                          }
-                          final percent = total > 0 ? (answered / total * 100).round() : 0;
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
-                            ),
-                            child: Row(
-                              children: [
-                                // Progress ring
-                                SizedBox(
-                                  width: 40,
-                                  height: 40,
-                                  child: Stack(
-                                    children: [
-                                      CircularProgressIndicator(
-                                        value: total > 0 ? answered / total : 0,
-                                        strokeWidth: 3,
-                                        backgroundColor: Colors.grey.shade200,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          percent >= 80 ? Colors.green : percent >= 50 ? Colors.amber : Colors.red,
-                                        ),
-                                      ),
-                                      Center(
-                                        child: Text(
-                                          '$percent%',
-                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'تقدم التعبئة',
-                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: AppTheme.primaryColor),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '$answered من $total حقل مُعبأ',
-                                        style: TextStyle(fontSize: 11, fontFamily: 'Tajawal', color: AppTheme.textSecondary),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (_hasUnsavedChanges)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.edit_rounded, size: 12, color: Colors.orange),
-                                        SizedBox(width: 4),
-                                        Text('غير محفوظ', style: TextStyle(fontSize: 10, fontFamily: 'Tajawal', color: Colors.orange, fontWeight: FontWeight.w600)),
-                                      ],
-                                    ),
-                                  )
-                                else if (_formData.isNotEmpty)
-                                  const Icon(Icons.cloud_done_rounded, color: Colors.green, size: 20),
-                              ],
-                            ),
-                          );
-                        }),
+                      // ═══ Simple progress text (no Builder, no iteration) ═══
+                      if (_sections.isNotEmpty && _hasUnsavedChanges)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.edit_rounded, size: 14, color: Colors.orange),
+                              SizedBox(width: 6),
+                              Text('تغييرات غير محفوظة', style: TextStyle(fontSize: 11, fontFamily: 'Tajawal', color: Colors.orange, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
                       // ═══ Active campaign round indicator (only for integrated_activity) ═══
                       Builder(builder: (context) {
                         final campaign = ref.watch(campaignProvider);

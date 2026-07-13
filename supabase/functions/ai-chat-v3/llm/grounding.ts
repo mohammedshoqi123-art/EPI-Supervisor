@@ -829,34 +829,62 @@ function generateFollowups(plan: QueryPlan, sources: GroundingSource[]): string[
 
   switch (plan.entity) {
     case 'submissions':
-      followups.push('أي محافظة الأكثر إرسالاً؟')
-      followups.push('ما اتجاه الإرساليات آخر أسبوع؟')
-      followups.push('كم نسبة المكتملة من الإجمالي؟')
+      followups.push('حلل أداء الجولة الحالية')
+      followups.push('ما توزيع الإرساليات حسب المحافظات؟')
+      followups.push('كم نسبة الإرساليات المرسلة؟')
       break
     case 'governorates':
       followups.push('ما أضعف المحافظات أداءً؟')
+      followups.push('تقييم أداء المشرفين الشامل')
       followups.push('قارن بين أعلى 3 محافظات')
-      followups.push('ما توزيع الإرساليات حسب الحملة؟')
       break
     case 'users':
-      followups.push('من هم أكثر المشرفين نشاطاً؟')
-      followups.push('كم مستخدم غير نشط؟')
+      followups.push('من هم المشرفون الخاملون؟')
+      followups.push('تقييم أداء المشرفين الشامل')
       followups.push('ما توزيع المستخدمين على المحافظات؟')
       break
     case 'shortages':
-      // Shortages entity kept for grounding data but followups focus on solutions
-      followups.push('ما الحلول المقترحة للنواقص؟')
+      followups.push('ما النواقص الحرجة غير المحلولة؟')
       followups.push('كم نسبة الإرساليات المكتملة؟')
+      followups.push('حلل أداء الجولة الحالية')
       break
     case 'knowledge':
       followups.push('ما الآثار الجانبية الشائعة؟')
       followups.push('متى يجب تأجيل التطعيم؟')
-      followups.push('ما جدول التطعيم الكامل؟')
+      followups.push('ما جدول التطعيم الروتيني؟')
       break
     case 'trends':
       followups.push('هل هناك تحسن عن الأسبوع الماضي؟')
+      followups.push('حلل أداء الجولة الحالية')
       followups.push('ما توقعات الأسبوع القادم؟')
-      followups.push('ما أكثر يوم نشاطاً؟')
+      break
+    case 'supervision_evaluation':
+      followups.push('من هم المشرفون الخاملون؟')
+      followups.push('ما أضعف المحافظات أداءً؟')
+      followups.push('تحليلات النظام — جميع التبويبات')
+      break
+    case 'analytics_page':
+      followups.push('تقييم أداء المشرفين الشامل')
+      followups.push('ما النواقص الحرجة في النظام؟')
+      followups.push('حلل أداء الجولة الحالية')
+      break
+    case 'memos':
+      followups.push('ما آخر تعميم رسمي؟')
+      followups.push('كم تعميم نشط حالياً؟')
+      break
+    case 'facilities':
+      followups.push('كم مرفق صحي نشط؟')
+      followups.push('ما توزيع المرافق حسب النوع؟')
+      break
+    case 'districts':
+      followups.push('كم مديرية في كل محافظة؟')
+      followups.push('ما المديريات الأكثر نشاطاً؟')
+      break
+    default:
+      // Generic useful followups
+      followups.push('حلل أداء الجولة الحالية')
+      followups.push('تقييم أداء المشرفين الشامل')
+      followups.push('ما النواقص الحرجة في النظام؟')
       break
   }
 

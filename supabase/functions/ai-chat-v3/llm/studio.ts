@@ -179,40 +179,28 @@ function buildFaqPrompt(sources: GroundingSource[], topic?: string): any[] {
 }
 
 function buildMindMapPrompt(sources: GroundingSource[], topic?: string): any[] {
-  const sys = buildBaseSystemPrompt('خريطة ذهنية (Mind Map)') + '\n' +
-    sources.map(s => `[${s.id}] ${s.summary}\n${s.quote}`).join('\n\n')
+  const sys = `أنت "EPI Studio" — محرك توليد الخرائط الذهنية.
 
-  const user = `${topic ? `الموضوع المركزي: ${topic}\n\n` : ''}أنشئ خريطة ذهنية بتنسيق JSON صارم:
+== مهمتك ==
+تحويل المصادر إلى خريطة ذهنية منظمة بتنسيق JSON.
 
-\`\`\`json
-{
-  "root": {
-    "label": "الموضوع المركزي",
-    "children": [
-      {
-        "label": "الفرع 1",
-        "citation": 1,
-        "children": [
-          { "label": "تفصيل 1", "citation": 1 },
-          { "label": "تفصيل 2", "citation": 2 }
-        ]
-      },
-      {
-        "label": "الفرع 2",
-        "citation": 2,
-        "children": [...]
-      }
-    ]
-  }
-}
-\`\`\`
+== قواعد صارمة ==
+1. أعد JSON صالح فقط — بدون أي نص قبله أو بعده
+2. لا تستخدم \`\`\`json — فقط JSON مباشرة
+3. البنية: { "root": { "label": "...", "children": [...] } }
+4. كل label: 2-6 كلمات كحد أقصى
+5. 4-6 فروع رئيسية من المركز
+6. كل فرع له 2-4 تفاصيل (children)
+7. citation اختياري (رقم المصدر)
 
-قواعد:
-- 4-6 فروع رئيسية من المركز
-- كل فرع له 2-4 تفاصيل
-- كل node له citation [n] إن أمكن
-- الـ labels قصيرة (3-6 كلمات)
-- أعد JSON صالح فقط بدون شرح`
+== المصادر ==
+` + sources.map(s => `[${s.id}] ${s.summary}\n${s.quote}`).join('\n\n')
+
+  const user = `${topic ? `الموضوع المركزي: ${topic}\n\n` : ''}أنشئ خريطة ذهنية. أعد JSON فقط بهذا التنسيق بالضبط:
+
+{"root":{"label":"الموضوع","children":[{"label":"الفرع 1","children":[{"label":"تفصيل 1"},{"label":"تفصيل 2"}]},{"label":"الفرع 2","children":[{"label":"تفصيل 3"},{"label":"تفصيل 4"}]}]}}
+
+ابدأ بـ { مباشرة وانتهِ بـ }. لا تكتب أي شيء آخر.`
 
   return [
     { role: 'system', content: sys },
@@ -221,41 +209,29 @@ function buildMindMapPrompt(sources: GroundingSource[], topic?: string): any[] {
 }
 
 function buildAudioOverviewPrompt(sources: GroundingSource[], topic?: string): any[] {
-  const sys = `أنت "EPI Audio Studio" — مولّد بودكاست تعليمي مستوحى من NotebookLM Audio Overview.
+  const sys = `أنت "EPI Audio Studio" — مولّد بودكاست تعليمي.
 
 == مهمتك ==
-تحويل المصادر إلى سكريبت بودكاست بيراهيمين (مذيعين) يتحدثان عن الموضوع.
+تحويل المصادر إلى سكريبت بودكاست بتنسيق JSON.
 
 == القواعد ==
-1. مذيعان: "أحمد" (خبير) و"فاطمة" (مهتمة تطرح أسئلة)
+1. مذيعان: "أحمد" (host1 - خبير) و"فاطمة" (host2 - مهتمة)
 2. نبرة ودودة وعفوية لكن دقيقة
-3. كل ادعاء له [n] يشير لمصدر
-4. لا تختلق — المصادر فقط
-5. اللغة: عربية يمنية مبسطة (لهجة قريبة لكن مفهومة)
-6. المدة: 5-7 دقائق حوار
-
-== البنية ==
-1. افتتاحية جذابة (30 ثانية)
-2. مقدمة الموضوع (دقيقة)
-3. الأرقام الرئيسية (دقيقتين)
-4. تحليل ومناقشة (دقيقتين)
-5. توصيات وخاتمة (دقيقة)
+3. أعد JSON صالح فقط — بدون أي نص قبله أو بعده
+4. لا تستخدم \`\`\`json — فقط JSON مباشرة
+5. البنية: { "segments": [...] }
+6. كل segment: { "speaker": "host1"|"host2", "text": "...", "emotion": "neutral"|"enthusiastic"|"serious" }
+7. 8-12 segments (مدة 5-7 دقائق)
+8. كل text: جملة أو جملتين كحد أقصى
 
 == المصادر ==
 ` + sources.map(s => `[${s.id}] ${s.summary}\n${s.quote}`).join('\n\n')
 
-  const user = `${topic ? `الموضوع: ${topic}\n\n` : ''}اكتب السكريبت بتنسيق JSON:
+  const user = `${topic ? `الموضوع: ${topic}\n\n` : ''}اكتب سكريبت البودكاست. أعد JSON فقط بهذا التنسيق بالضبط:
 
-\`\`\`json
-{
-  "segments": [
-    { "speaker": "host2", "text": "...", "emotion": "enthusiastic", "citations": [1] },
-    { "speaker": "host1", "text": "...", "emotion": "neutral", "citations": [1, 2] }
-  ]
-}
-\`\`\`
+{"segments":[{"speaker":"host2","text":"مرحباً بكم...","emotion":"enthusiastic"},{"speaker":"host1","text":"أهلاً فاطمة...","emotion":"neutral"}]}
 
-كل segment جملة واحدة أو جملتين. أعد JSON صالح فقط.`
+ابدأ بـ { مباشرة وانتهِ بـ }. لا تكتب أي شيء آخر.`
 
   return [
     { role: 'system', content: sys },
@@ -269,19 +245,42 @@ function buildAudioOverviewPrompt(sources: GroundingSource[], topic?: string): a
 
 function parseMindMap(content: string): MindMapNode[] | undefined {
   try {
-    // Find JSON in content
-    const jsonMatch = content.match(/```json\s*([\s\S]*?)```/) || content.match(/(\{[\s\S]*\})/)
-    if (!jsonMatch) {
-      // ⚠️ Fallback: parse markdown headings as mind map structure
+    // ⚠️ Try multiple JSON extraction strategies
+    let jsonStr: string | null = null
+
+    // Strategy 1: ```json ... ``` block
+    const codeBlockMatch = content.match(/```json\s*([\s\S]*?)```/)
+    if (codeBlockMatch) jsonStr = codeBlockMatch[1]
+
+    // Strategy 2: Find first { to last }
+    if (!jsonStr) {
+      const firstBrace = content.indexOf('{')
+      const lastBrace = content.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonStr = content.substring(firstBrace, lastBrace + 1)
+      }
+    }
+
+    if (!jsonStr) {
       return parseMarkdownAsMindMap(content)
     }
-    const json = JSON.parse(jsonMatch[1])
+
+    const json = JSON.parse(jsonStr)
+
+    // Handle different JSON structures
     if (json.root) {
       return [transformMindMapNode(json.root, 'root')]
     }
-    if (Array.isArray(json)) return json.map((n, i) => transformMindMapNode(n, `node-${i}`))
-    if (json.nodes && Array.isArray(json.nodes)) return json.nodes.map((n, i) => transformMindMapNode(n, `node-${i}`))
-    // ⚠️ Fallback
+    if (json.nodes && Array.isArray(json.nodes)) {
+      return json.nodes.map((n: any, i: number) => transformMindMapNode(n, `node-${i}`))
+    }
+    if (json.children && Array.isArray(json.children)) {
+      return [transformMindMapNode(json, 'root')]
+    }
+    if (Array.isArray(json)) {
+      return json.map((n: any, i: number) => transformMindMapNode(n, `node-${i}`))
+    }
+
     return parseMarkdownAsMindMap(content)
   } catch {
     return parseMarkdownAsMindMap(content)
@@ -374,12 +373,28 @@ function parseStudyGuide(content: string): StudyGuideSection[] | undefined {
 
 function parseAudioScript(content: string): AudioScriptSegment[] | undefined {
   try {
-    const jsonMatch = content.match(/```json\s*([\s\S]*?)```/) || content.match(/(\{[\s\S]*\})/)
-    if (!jsonMatch) {
-      // ⚠️ Fallback: parse as dialogue (مذيع1: ... / مذيع2: ...)
+    // ⚠️ Try multiple JSON extraction strategies
+    let jsonStr: string | null = null
+
+    // Strategy 1: ```json ... ``` block
+    const codeBlockMatch = content.match(/```json\s*([\s\S]*?)```/)
+    if (codeBlockMatch) jsonStr = codeBlockMatch[1]
+
+    // Strategy 2: Find first { to last }
+    if (!jsonStr) {
+      const firstBrace = content.indexOf('{')
+      const lastBrace = content.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonStr = content.substring(firstBrace, lastBrace + 1)
+      }
+    }
+
+    if (!jsonStr) {
       return parseDialogueAsAudioScript(content)
     }
-    const json = JSON.parse(jsonMatch[1])
+
+    const json = JSON.parse(jsonStr)
+
     if (json.segments && Array.isArray(json.segments)) {
       return json.segments.map((s: any) => ({
         speaker: s.speaker === 'host1' ? 'host1' : 'host2',
@@ -388,7 +403,17 @@ function parseAudioScript(content: string): AudioScriptSegment[] | undefined {
         citations: Array.isArray(s.citations) ? s.citations : [],
       }))
     }
-    // ⚠️ Fallback
+
+    // Fallback: try to parse as array directly
+    if (Array.isArray(json)) {
+      return json.map((s: any, i: number) => ({
+        speaker: s.speaker === 'host1' ? 'host1' : (i % 2 === 0 ? 'host1' : 'host2'),
+        text: s.text || s.content || '',
+        emotion: s.emotion || 'neutral',
+        citations: Array.isArray(s.citations) ? s.citations : [],
+      }))
+    }
+
     return parseDialogueAsAudioScript(content)
   } catch {
     return parseDialogueAsAudioScript(content)

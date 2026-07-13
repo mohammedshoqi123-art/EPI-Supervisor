@@ -241,37 +241,81 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
   const sources: GroundingSource[] = []
   const filters = plan.filters
 
-  // ═══ Simplified SELECT to avoid PostgREST join issues ═══
-  let q = supa.from('form_submissions')
-    .select('id, status, data, governorate_id, district_id, created_at, form_id, campaign_round, submitted_by, reviewed_by, reviewed_at, gps_lat, gps_lng, is_offline, notes, photos, governorates!governorate_id(name_ar), districts!district_id(name_ar), forms!form_id(title_ar, campaign_type)')
-    .is('deleted_at', null)
-
-  if (filters.days) q = q.gte('created_at', daysAgo(filters.days))
-  if (filters.status) q = q.eq('status', filters.status)
-
-  // ═══ Campaign filter applied CLIENT-SIDE (PostgREST can't filter on joined columns reliably) ═══
-
-  // ═══ FIX: Apply form_id filter — distinguish supervision vs readiness ═══
-  if (filters.form_id) {
-    q = q.eq('form_id', filters.form_id)
-  }
-
-  // ═══ FIX: Apply campaign_round filter ═══
-
-  // ═══ FIX: Use campaign_round from user question (fallback to active round) ═══
+  // ⚠️ FIX: Use RPC to bypass PostgREST 1000-row limit
+  // Direct REST queries are capped at 1000 rows even with .limit(50000)
+  // RPC functions execute inside PostgreSQL and bypass this limit
   const effectiveRound = filters.campaign_round ?? campaignRound
-  if (effectiveRound && effectiveRound > 0) {
-    q = q.eq('campaign_round', effectiveRound)
-  }
 
-  const { data, error } = await withTimeout(q.limit(50000), 15_000) ?? {}
+  try {
+    // Use fetch_submissions RPC (bypasses 1000 limit, includes joins)
+    const { data: rpcData, error: rpcErr } = await withTimeout(
+      supa.rpc('fetch_submissions', {
+        p_limit: 50000,
+        p_offset: 0,
+        p_status: filters.status || null,
+        p_form_id: filters.form_id || null,
+        p_governorate_id: null,
+        p_campaign_round: (effectiveRound && effectiveRound > 0) ? effectiveRound : null,
+        p_days: filters.days || null,
+      }),
+      15_000,
+    ) ?? {}
 
-  if (error || !data || data.length === 0) {
+    if (rpcErr || !rpcData || !Array.isArray(rpcData) || rpcData.length === 0) {
+      // Fallback to direct query if RPC fails
+      console.warn('[GROUNDING] RPC fetch_submissions failed, falling back to direct query:', rpcErr?.message || 'no data')
+      let q = supa.from('form_submissions')
+        .select('id, status, data, governorate_id, district_id, created_at, form_id, campaign_round, submitted_by, reviewed_by, reviewed_at, gps_lat, gps_lng, is_offline, notes, photos, governorates!governorate_id(name_ar), districts!district_id(name_ar), forms!form_id(title_ar, campaign_type)')
+        .is('deleted_at', null)
+
+      if (filters.days) q = q.gte('created_at', daysAgo(filters.days))
+      if (filters.status) q = q.eq('status', filters.status)
+      if (filters.form_id) q = q.eq('form_id', filters.form_id)
+      if (effectiveRound && effectiveRound > 0) q = q.eq('campaign_round', effectiveRound)
+
+      const { data: fallbackData, error: fallbackErr } = await withTimeout(q.limit(50000), 15_000) ?? {}
+      if (fallbackErr || !fallbackData || fallbackData.length === 0) return []
+      
+      // Process fallback data (same format as before)
+      return processSubmissionsData(fallbackData, filters, effectiveRound)
+    }
+
+    // Process RPC data (already includes joins: form_title, governorate_name, district_name, etc.)
+    return processSubmissionsData(rpcData, filters, effectiveRound, true)
+  } catch (e) {
+    console.error('[GROUNDING] fetchSubmissionsData error:', e)
     return []
   }
+}
+
+/// Helper: Process submissions data (works for both RPC and direct query formats)
+function processSubmissionsData(
+  data: any[],
+  filters: QueryPlan['filters'],
+  effectiveRound: number | null,
+  isRpcFormat: boolean = false,
+): GroundingSource[] {
+  const sources: GroundingSource[] = []
+
+  if (!data || data.length === 0) return []
+
+  // Normalize data format (RPC returns snake_case joins, direct returns nested objects)
+  const normalizedData = data.map((row: any) => {
+    if (isRpcFormat) {
+      // RPC format: flat with _name suffixes
+      return {
+        ...row,
+        governorates: row.governorate_name ? { name_ar: row.governorate_name } : null,
+        districts: row.district_name ? { name_ar: row.district_name } : null,
+        forms: row.form_title ? { title_ar: row.form_title, campaign_type: row.campaign_type } : null,
+        profiles: row.submitter_name ? { full_name: row.submitter_name } : null,
+      }
+    }
+    return row
+  })
 
   // ═══ FIX: Apply governorate + campaign_type filter CLIENT-SIDE ═══
-  let filteredData = data
+  let filteredData = normalizedData
   if (filters.campaign_type && filters.campaign_type !== 'all') {
     filteredData = filteredData.filter((row: any) => row.forms?.campaign_type === filters.campaign_type)
   }

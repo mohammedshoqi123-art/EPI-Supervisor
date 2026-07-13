@@ -587,25 +587,32 @@ export async function generateStudioArtifact(
     }
   }
 
-  // If LLM failed entirely, return a graceful error with sources visible
+  // ⚠️ FINAL FALLBACK: Generate content without grounding constraints
+  // If all AI providers failed, generate a basic artifact from sources directly
   if (!result.content || result.content.trim().length < 50) {
+    console.log('[STUDIO] All AI providers failed — generating fallback from sources')
+    const fallbackContent = generateFallbackArtifact(type, sources, options.topic)
+    if (fallbackContent) {
+      return buildArtifact(type, options.topic, fallbackContent, sources, 'fallback', Date.now() - startTime)
+    }
+
     return {
       type,
       title: getArtifactTitle(type, options.topic),
-      content: `⚠️ تعذّر توليد المحتوى من النموذج الذكي (${result.provider || 'unknown'}).
+      content: `⚠️ تعذّر توليد المحتوى من النموذج الذكي في هذه اللحظة.
 
-        found ${sources.length} مصدر بيانات. حاول مرة أخرى بعد قليل.
+📚 وجدنا ${sources.length} مصدر بيانات حول "${options.topic || 'الموضوع'}".
 
-💡 إذا تكرر الفشل:
-• جرّب موضوعاً مختلفاً
-• تحقق من اتصال الإنترنت
-• قد يكون هناك ضغط على الخدمة`,
+💡 جرّب:
+• إعادة المحاولة بعد دقيقة
+• استخدام موضوع مختلف
+• استخدام نوع محتوى آخر (مثل وثيقة موجزة بدلاً من خريطة ذهنية)`,
       sources,
       metadata: {
         generatedAt: new Date().toISOString(),
         groundedInSources: sources.length,
-        provider: result.provider,
-        latencyMs,
+        provider: 'fallback',
+        latencyMs: Date.now() - startTime,
       },
     }
   }
@@ -641,6 +648,82 @@ export async function generateStudioArtifact(
 }
 
 // ⚠️ Helper: Build final artifact object with parsing
+// ⚠️ Fallback: Generate basic artifact content from sources directly (no LLM)
+function generateFallbackArtifact(type: StudioArtifactType, sources: GroundingSource[], topic?: string): string {
+  if (sources.length === 0) return ''
+
+  const topicStr = topic ? ` — ${topic}` : ''
+
+  switch (type) {
+    case 'briefing_doc':
+      return `# ملخص تنفيذي${topicStr}
+
+## الأرقام الرئيسية
+${sources.slice(0, 5).map(s => `• ${s.summary} [${s.id}]`).join('\n')}
+
+## الوضع الحالي
+${sources.slice(0, 3).map(s => s.quote?.slice(0, 200)).join('\n\n')}
+
+## التوصيات
+1. متابعة البيانات أعلاه بشكل دوري
+2. التحقق من المصادر لتفاصيل أكثر
+3. اتخاذ إجراءات بناءً على التحليل
+
+## المصادر
+${sources.map(s => `[${s.id}] ${s.summary}`).join('\n')}`
+
+    case 'study_guide':
+      return `# دليل دراسي${topicStr}
+
+## نظرة عامة
+${sources.slice(0, 3).map(s => s.summary).join('. ')}
+
+## المفاهيم الأساسية
+${sources.slice(0, 5).map((s, i) => `${i + 1}. ${s.summary} [${s.id}]\n   ${s.quote?.slice(0, 150) || ''}`).join('\n\n')}
+
+## الأسئلة للمراجعة
+${sources.slice(0, 3).map((s, i) => `${i + 1}. ما هي التفاصيل في "${s.summary}"؟`).join('\n')}
+
+## المصادر
+${sources.map(s => `[${s.id}] ${s.summary}`).join('\n')}`
+
+    case 'faq':
+      return `# أسئلة شائعة${topicStr}
+
+${sources.slice(0, 8).map((s, i) => `### سؤال: ما هو ${s.summary}؟
+**الجواب:** ${s.quote?.slice(0, 200) || s.summary} [${s.id}]`).join('\n\n---\n\n')}`
+
+    case 'mind_map':
+      // Generate JSON for mind map from sources
+      const mindMap = {
+        root: {
+          label: topic || 'الموضوع',
+          children: sources.slice(0, 6).map(s => ({
+            label: s.summary.slice(0, 40),
+            citation: s.id,
+            children: [
+              { label: s.quote?.slice(0, 50) || 'تفصيل', citation: s.id }
+            ]
+          }))
+        }
+      }
+      return JSON.stringify(mindMap)
+
+    case 'audio_overview':
+      // Generate dialogue from sources
+      const segments = sources.slice(0, 8).map((s, i) => ({
+        speaker: i % 2 === 0 ? 'host2' : 'host1',
+        text: s.quote?.slice(0, 150) || s.summary,
+        emotion: i === 0 ? 'enthusiastic' : 'neutral',
+        citations: [s.id]
+      }))
+      return JSON.stringify({ segments })
+
+    default:
+      return sources.map(s => `[${s.id}] ${s.summary}\n${s.quote}`).join('\n\n')
+  }
+}
+
 function buildArtifact(
   type: StudioArtifactType,
   topic: string | undefined,

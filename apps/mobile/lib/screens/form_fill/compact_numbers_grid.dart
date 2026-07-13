@@ -16,7 +16,7 @@ class CompactNumbersGrid extends StatelessWidget {
   final void Function(String key, num value) onChanged;
   final VoidCallback markChanged;
 
-  const CompactNumbersGrid({
+  CompactNumbersGrid({
     super.key,
     required this.sectionTitle,
     required this.sectionNumber,

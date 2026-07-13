@@ -718,6 +718,71 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     _hasUnsavedChanges = true;
   }
 
+  /// Build review sections for the review bottom sheet
+  List<SectionReview> _buildReviewSections() {
+    final reviews = <SectionReview>[];
+    if (_sections.isEmpty) return reviews;
+
+    for (int i = 0; i < _sections.length; i++) {
+      final sec = _sections[i] as Map<String, dynamic>;
+      final title = sec['title_ar'] as String? ?? '';
+      final fields = (sec['fields'] as List?) ?? [];
+
+      int fieldCount = 0, answeredCount = 0, yesNoCount = 0, yesCount = 0;
+      bool isComplete = true;
+
+      for (final f in fields) {
+        final field = f as Map<String, dynamic>;
+        final key = field['key'] as String?;
+        final type = field['type'] as String? ?? 'text';
+        final required = field['required'] as bool? ?? false;
+
+        final showIf = field['showIf'];
+        if (showIf != null) {
+          final condField = showIf['field'] as String?;
+          final condValue = showIf['value'];
+          if (condField != null && _formData[condField] != condValue) continue;
+        }
+
+        fieldCount++;
+        final val = key != null ? _formData[key] : null;
+        bool isAnswered = false;
+        if (val != null) {
+          if (val is String && val.isNotEmpty) isAnswered = true;
+          else if (val is bool) isAnswered = true;
+          else if (val is num) isAnswered = true;
+          else if (val is List && val.isNotEmpty) isAnswered = true;
+        }
+        if (isAnswered) answeredCount++;
+        if (required && !isAnswered) isComplete = false;
+        if (type == 'yesno') { yesNoCount++; if (val == true) yesCount++; }
+      }
+      reviews.add(SectionReview(number: i + 1, title: title, isComplete: isComplete, fieldCount: fieldCount, answeredCount: answeredCount, yesNoCount: yesNoCount, yesCount: yesCount));
+    }
+    return reviews;
+  }
+
+  int get _totalPhotosCount {
+    int count = 0;
+    for (final photos in _photosByField.values) { count += photos.length; }
+    return count;
+  }
+
+  ({int total, int yes}) get _yesNoStats {
+    int total = 0, yes = 0;
+    for (final sec in _sections) {
+      final fields = (sec['fields'] as List?) ?? [];
+      for (final f in fields) {
+        final field = f as Map<String, dynamic>;
+        if (field['type'] == 'yesno') {
+          total++;
+          if (_formData[field['key']] == true) yes++;
+        }
+      }
+    }
+    return (total: total, yes: yes);
+  }
+
   @override
   Widget build(BuildContext context) {
     // ═══ FIX: PopScope without infinite loop ═══

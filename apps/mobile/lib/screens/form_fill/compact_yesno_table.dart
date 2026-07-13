@@ -17,7 +17,7 @@ class CompactYesNoTable extends StatelessWidget {
   final VoidCallback markChanged;
   final void Function(VoidCallback) runSetState;
 
-  const CompactYesNoTable({
+  CompactYesNoTable({
     super.key,
     required this.sectionTitle,
     required this.sectionNumber,
@@ -121,17 +121,17 @@ class CompactYesNoTable extends StatelessWidget {
             child: Text(item.label, style: TextStyle(fontSize: 13, fontFamily: 'Tajawal', height: 1.4, color: isAnswered ? cs.onSurface : cs.onSurface.withValues(alpha: 0.8), fontWeight: isAnswered ? FontWeight.w600 : FontWeight.normal)),
           ),
           const SizedBox(width: 8),
-          _buildToggle('نعم', Icons.check_rounded, isYes, AppTheme.successColor),
+          _buildToggle('نعم', Icons.check_rounded, isYes, AppTheme.successColor, item.key, true),
           const SizedBox(width: 6),
-          _buildToggle('لا', Icons.close_rounded, isAnswered && !isYes, AppTheme.errorColor),
+          _buildToggle('لا', Icons.close_rounded, isAnswered && !isYes, AppTheme.errorColor, item.key, false),
         ],
       ),
     );
   }
 
-  Widget _buildToggle(String label, IconData icon, bool isSelected, Color color) {
+  Widget _buildToggle(String label, IconData icon, bool isSelected, Color color, String fieldKey, bool value) {
     return GestureDetector(
-      onTap: () => runSetState(() => onChanged(label == 'نعم' ? items.firstWhere((i) => i.key == _currentKey).key : _currentKey, label == 'نعم')),
+      onTap: () => runSetState(() => onChanged(fieldKey, value)),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -149,8 +149,12 @@ class CompactYesNoTable extends StatelessWidget {
     );
   }
 
-  // ⚠️ FIX: Use a proper callback instead of hack
-  String _currentKey = '';
+  // KPI footer
+          _buildKPIFooter(cs),
+        ],
+      ),
+    );
+  }
 
   Widget _buildKPIFooter(ColorScheme cs) {
     int answered = 0, yesCount = 0;

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:epi_core/epi_core.dart';
+import 'package:epi_core/src/utils/connectivity_utils.dart';
 import '../providers/app_providers.dart';
 
 /// ═══════════════════════════════════════════════════════════════════════
@@ -207,10 +208,16 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
 
       // ═══ 7. Sync pending uploads ═══
       try {
-        final syncService = await _ref.read(syncServiceProvider.future);
-        final result = await syncService.sync();
-        steps.add(SyncStepResult(name: 'الإرسالات المعلقة', success: true, count: result.synced));
-        _log('✅ Pending synced: ${result.synced}');
+        // ⚠️ OFFLINE FIX: تجاوز المزامنة بدون إنترنت
+        if (!ConnectivityUtils.isOnline) {
+          steps.add(SyncStepResult(name: 'الإرسالات المعلقة', success: false, error: 'لا يوجد اتصال'));
+          _log('⚠️ Pending sync skipped — offline');
+        } else {
+          final syncService = await _ref.read(syncServiceProvider.future);
+          final result = await syncService.sync();
+          steps.add(SyncStepResult(name: 'الإرسالات المعلقة', success: true, count: result.synced));
+          _log('✅ Pending synced: ${result.synced}');
+        }
       } catch (e) {
         steps.add(SyncStepResult(name: 'الإرسالات المعلقة', success: false, error: e.toString()));
         _log('❌ Pending sync: $e');

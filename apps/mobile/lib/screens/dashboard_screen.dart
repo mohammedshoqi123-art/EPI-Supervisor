@@ -57,6 +57,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       // ═══ PERFORMANCE: Background sync — don't block UI ═══
       Future.microtask(() async {
         try {
+          // ⚠️ OFFLINE FIX: لا تحاول المزامنة بدون إنترنت
+          if (!ConnectivityUtils.isOnline) return;
           final service = await ref.read(syncServiceProvider.future);
           if (service.currentState.pendingCount > 0) {
             await service.sync();

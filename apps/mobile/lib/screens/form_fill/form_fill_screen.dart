@@ -14,6 +14,9 @@ import '../../providers/app_providers.dart';
 import 'form_field_builders.dart';
 import 'form_review_sheet.dart';
 
+// ⚠️ ConnectivityUtils for offline checks
+import 'package:epi_core/src/utils/connectivity_utils.dart';
+
 class FormFillScreen extends ConsumerStatefulWidget {
   final String formId;
   final String? draftId;
@@ -91,6 +94,20 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       }
 
       if (form == null) {
+        // ⚠️ OFFLINE FIX: لا تحاول الشبكة بدون إنترنت
+        if (!ConnectivityUtils.isOnline) {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('لا يمكن تحميل النموذج بدون إنترنت — لم يتم تخزينه مسبقاً', style: TextStyle(fontFamily: 'Tajawal')),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
         final db = ref.read(databaseServiceProvider);
         form = await db.getForm(widget.formId).timeout(
               const Duration(seconds: 15),

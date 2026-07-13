@@ -114,6 +114,12 @@ class SyncService {
 
   /// تنفيذ دورة مزامنة كاملة
   Future<SyncCycleResult> sync() async {
+    // ⚠️ OFFLINE FIX: لا تحاول المزامنة بدون إنترنت
+    if (!_offline.isOnline) {
+      if (kDebugMode) debugPrint('[SyncService] Offline — skipping sync');
+      return SyncCycleResult.empty();
+    }
+
     // ═══ FIX: إذا sync شغال، نرجع نفس الـ Completer ═══
     if (_isSyncing) {
       final lockAge = _syncLockTime != null

@@ -75,6 +75,23 @@ class OfflineDataCache {
     }
 
     // 3. No cached data — fetch from network
+    // ⚠️ OFFLINE FIX: لا تحاول الشبكة بدون إنترنت — استخدم stale cache فوراً
+    if (!_offline.isOnline) {
+      final staleMemory =
+          _getFromMemory<List>(cacheKey, const Duration(days: 365));
+      if (staleMemory != null)
+        return List<Map<String, dynamic>>.from(staleMemory);
+
+      final stalePersisted = _getFromPersistentRaw<List>(cacheKey);
+      if (stalePersisted != null) {
+        _putToMemory(cacheKey, stalePersisted);
+        return List<Map<String, dynamic>>.from(stalePersisted);
+      }
+
+      // Nothing cached + offline → throw friendly error
+      throw Exception('لا توجد بيانات مخزنة ولا يوجد اتصال بالإنترنت');
+    }
+
     try {
       final data = await fetchFn();
       await _saveToCache(cacheKey, data);
@@ -127,6 +144,21 @@ class OfflineDataCache {
         }
         return Map<String, dynamic>.from(persisted);
       }
+    }
+
+    // ⚠️ OFFLINE FIX: لا تحاول الشبكة بدون إنترنت
+    if (!_offline.isOnline) {
+      final staleMemory =
+          _getFromMemory<Map>(cacheKey, const Duration(days: 365));
+      if (staleMemory != null) return Map<String, dynamic>.from(staleMemory);
+
+      final stalePersisted = _getFromPersistentRaw<Map>(cacheKey);
+      if (stalePersisted != null) {
+        _putToMemory(cacheKey, stalePersisted);
+        return Map<String, dynamic>.from(stalePersisted);
+      }
+
+      throw Exception('لا توجد بيانات مخزنة ولا يوجد اتصال بالإنترنت');
     }
 
     try {

@@ -12,8 +12,6 @@ import 'package:epi_core/epi_core.dart';
 import 'package:epi_shared/epi_shared.dart';
 import '../../providers/app_providers.dart';
 import 'form_field_builders.dart';
-import 'smart_progress_bar.dart';
-import 'form_review_screen.dart';
 
 class FormFillScreen extends ConsumerStatefulWidget {
   final String formId;
@@ -44,9 +42,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   // Auto-save timer
   Timer? _autoSaveTimer;
-
-  // Review screen state
-  bool _showReview = false;
 
   late String _draftId;
 
@@ -322,28 +317,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   void _syncControllersToFormData() {
-    // ⚠️ FIX: Only sync text controllers for text/textarea/phone/number fields
-    // Don't overwrite bool (yesno), List (multiselect), or other non-string values
-    final textFieldTypes = {'text', 'textarea', 'phone', 'email', 'number', 'date', 'time'};
     for (final entry in _textControllers.entries) {
-      final key = entry.key;
-      // Find the field type for this key
-      final field = _allFields.where((f) => f['key'] == key).firstOrNull;
-      final type = field?['type'] as String? ?? 'text';
-
-      if (textFieldTypes.contains(type)) {
-        // Text-based field — sync controller text
-        if (type == 'number') {
-          final numValue = num.tryParse(entry.value.text);
-          if (numValue != null) {
-            _formData[key] = numValue;
-          }
-        } else {
-          _formData[key] = entry.value.text;
-        }
-      }
-      // Skip non-text fields (yesno, multiselect, governorate, etc.)
-      // Their values are stored directly in _formData by their widgets
+      _formData[entry.key] = entry.value.text;
     }
   }
 
@@ -625,159 +600,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     _hasUnsavedChanges = true;
   }
 
-  /// Calculate form progress statistics
-  ({int totalSections, int completedSections, int totalFields, int answeredFields}) _calcProgress() {
-    if (_sections.isEmpty) {
-      final total = _flatFields.length;
-      final answered = _flatFields.where((f) {
-        final key = f['key'] as String?;
-        if (key == null) return false;
-        final val = _formData[key];
-        if (val == null) return false;
-        if (val is String && val.isEmpty) return false;
-        if (val is List && val.isEmpty) return false;
-        return true;
-      }).length;
-      return (totalSections: 1, completedSections: answered == total ? 1 : 0, totalFields: total, answeredFields: answered);
-    }
-
-    int totalSections = _sections.length;
-    int completedSections = 0;
-    int totalFields = 0;
-    int answeredFields = 0;
-
-    for (final sec in _sections) {
-      final fields = (sec['fields'] as List?) ?? [];
-      bool sectionComplete = true;
-      for (final f in fields) {
-        final field = f as Map<String, dynamic>;
-        final key = field['key'] as String?;
-        final type = field['type'] as String? ?? 'text';
-        final required = field['required'] as bool? ?? false;
-
-        // Check showIf
-        final showIf = field['showIf'];
-        if (showIf != null) {
-          final condField = showIf['field'] as String?;
-          final condValue = showIf['value'];
-          if (condField != null && _formData[condField] != condValue) {
-            continue; // Hidden field — skip
-          }
-        }
-
-        totalFields++;
-        final val = key != null ? _formData[key] : null;
-        bool isAnswered = false;
-        if (val != null) {
-          if (val is String && val.isNotEmpty) isAnswered = true;
-          else if (val is bool) isAnswered = true;
-          else if (val is num) isAnswered = true;
-          else if (val is List && val.isNotEmpty) isAnswered = true;
-        }
-
-        if (isAnswered) answeredFields++;
-        if (required && !isAnswered) sectionComplete = false;
-      }
-      if (sectionComplete && fields.isNotEmpty) completedSections++;
-    }
-
-    return (totalSections: totalSections, completedSections: completedSections, totalFields: totalFields, answeredFields: answeredFields);
-  }
-
-  /// Build review screen data
-  List<SectionReview> _buildReviewSections() {
-    final reviews = <SectionReview>[];
-
-    if (_sections.isEmpty) {
-      return reviews;
-    }
-
-    for (int i = 0; i < _sections.length; i++) {
-      final sec = _sections[i] as Map<String, dynamic>;
-      final title = sec['title_ar'] as String? ?? '';
-      final fields = (sec['fields'] as List?) ?? [];
-
-      int fieldCount = 0;
-      int answeredCount = 0;
-      int yesNoCount = 0;
-      int yesCount = 0;
-      bool isComplete = true;
-
-      for (final f in fields) {
-        final field = f as Map<String, dynamic>;
-        final key = field['key'] as String?;
-        final type = field['type'] as String? ?? 'text';
-        final required = field['required'] as bool? ?? false;
-
-        // Check showIf
-        final showIf = field['showIf'];
-        if (showIf != null) {
-          final condField = showIf['field'] as String?;
-          final condValue = showIf['value'];
-          if (condField != null && _formData[condField] != condValue) {
-            continue;
-          }
-        }
-
-        fieldCount++;
-        final val = key != null ? _formData[key] : null;
-        bool isAnswered = false;
-        if (val != null) {
-          if (val is String && val.isNotEmpty) isAnswered = true;
-          else if (val is bool) isAnswered = true;
-          else if (val is num) isAnswered = true;
-          else if (val is List && val.isNotEmpty) isAnswered = true;
-        }
-
-        if (isAnswered) answeredCount++;
-        if (required && !isAnswered) isComplete = false;
-
-        if (type == 'yesno') {
-          yesNoCount++;
-          if (val == true) yesCount++;
-        }
-      }
-
-      reviews.add(SectionReview(
-        number: i + 1,
-        title: title,
-        isComplete: isComplete,
-        fieldCount: fieldCount,
-        answeredCount: answeredCount,
-        yesNoCount: yesNoCount,
-        yesCount: yesCount,
-      ));
-    }
-
-    return reviews;
-  }
-
-  /// Count total photos
-  int get _totalPhotosCount {
-    int count = 0;
-    for (final photos in _photosByField.values) {
-      count += photos.length;
-    }
-    return count;
-  }
-
-  /// Count total yesno fields and yes answers
-  ({int total, int yes}) get _yesNoStats {
-    int total = 0;
-    int yes = 0;
-    for (final sec in _sections) {
-      final fields = (sec['fields'] as List?) ?? [];
-      for (final f in fields) {
-        final field = f as Map<String, dynamic>;
-        if (field['type'] == 'yesno') {
-          total++;
-          if (_formData[field['key']] == true) yes++;
-        }
-      }
-    }
-    return (total: total, yes: yes);
-  }
-
   @override
   Widget build(BuildContext context) {
     // ═══ FIX: PopScope without infinite loop ═══
@@ -860,17 +682,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      // ═══ Smart Progress Bar ═══
-                      if (_sections.isNotEmpty)
-                        Builder(builder: (context) {
-                          final progress = _calcProgress();
-                          return SmartProgressBar(
-                            totalSections: progress.totalSections,
-                            completedSections: progress.completedSections,
-                            totalFields: progress.totalFields,
-                            answeredFields: progress.answeredFields,
-                          );
-                        }),
                       // ═══ Active campaign round indicator (only for integrated_activity) ═══
                       Builder(builder: (context) {
                         final campaign = ref.watch(campaignProvider);
@@ -971,7 +782,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                           ),
                         ),
                       const SizedBox(height: 24),
-                      // Submit button — validates then submits directly
                       EpiButton(
                         text: AppStrings.submit,
                         isLoading: _isLoading,

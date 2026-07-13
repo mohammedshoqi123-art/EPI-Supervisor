@@ -7,8 +7,6 @@ import 'health_facility_dropdown.dart';
 import 'photo_picker_field.dart';
 
 /// Builds section headers for grouped form fields.
-/// PRESERVES original field order — renders each field individually.
-/// Respects showIf conditions.
 List<Widget> buildFormSections({
   required List<dynamic> sections,
   required Map<String, dynamic> formData,
@@ -30,32 +28,53 @@ List<Widget> buildFormSections({
     (a, b) => (a['order'] as int? ?? 0).compareTo(b['order'] as int? ?? 0),
   );
 
-  for (int secIdx = 0; secIdx < sortedSections.length; secIdx++) {
-    final section = sortedSections[secIdx];
+  for (final section in sortedSections) {
     final title = section['title_ar'] as String? ?? '';
     final fields =
         (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-    // ═══ Filter visible fields (respect showIf) but PRESERVE original order ═══
-    final visibleFields = <Map<String, dynamic>>[];
-    for (final f in fields) {
-      final showIf = f['showIf'];
-      if (showIf != null && !_evaluateShowIf(showIf, formData)) {
-        continue; // Skip hidden fields
-      }
-      visibleFields.add(f);
-    }
+    widgets.add(
+      Container(
+        margin: const EdgeInsets.only(bottom: 12, top: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.primaryColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppTheme.primaryColor.withValues(alpha: 0.3),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 24,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
 
-    if (visibleFields.isEmpty) continue;
-
-    // ═══ Section header with number + title ═══
-    widgets.add(_buildSectionHeader(title, secIdx + 1, visibleFields.length));
-
-    // ═══ Render ALL fields individually in ORIGINAL ORDER ═══
-    for (final f in visibleFields) {
+    for (final field in fields) {
       widgets.add(
         buildFormField(
-          field: f,
+          field: field,
           formData: formData,
           textControllers: textControllers,
           isGettingLocation: isGettingLocation,
@@ -75,83 +94,6 @@ List<Widget> buildFormSections({
 
   return widgets;
 }
-
-/// Build section header with number badge + title + field count
-Widget _buildSectionHeader(String title, int number, int fieldCount) {
-  return Container(
-    margin: const EdgeInsets.only(bottom: 12, top: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    decoration: BoxDecoration(
-      color: AppTheme.primaryColor.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(
-        color: AppTheme.primaryColor.withValues(alpha: 0.3),
-      ),
-    ),
-    child: Row(
-      children: [
-        // Section number badge
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: AppTheme.primaryColor,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Center(
-            child: Text(
-              '$number',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-              color: AppTheme.primaryColor,
-            ),
-          ),
-        ),
-        // Field count badge
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: AppTheme.primaryColor.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            '$fieldCount حقل',
-            style: const TextStyle(
-              fontSize: 11,
-              fontFamily: 'Tajawal',
-              fontWeight: FontWeight.w600,
-              color: AppTheme.primaryColor,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-/// Evaluate showIf condition — returns true if field should be visible
-bool _evaluateShowIf(Map<String, dynamic> showIf, Map<String, dynamic> formData) {
-  final field = showIf['field'] as String?;
-  final value = showIf['value'];
-  if (field == null || value == null) return true;
-  return formData[field] == value;
-}
-
 
 /// Builds a single form field widget based on its type.
 Widget buildFormField({

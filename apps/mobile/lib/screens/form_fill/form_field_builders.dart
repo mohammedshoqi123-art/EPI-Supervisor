@@ -57,9 +57,8 @@ List<Widget> buildFormSections({
         sectionNumber: secIdx + 1,
         items: visibleFields.map((f) => YesNoItem(key: f['key'] as String, label: f['label_ar'] as String? ?? '', required: f['required'] as bool? ?? false)).toList(),
         formData: formData,
-        onChanged: (key, value) { formData[key] = value; markChanged(); },
+        onChanged: (key, value) { formData[key] = value; },
         markChanged: markChanged,
-        runSetState: runSetState,
       ));
       continue;
     }
@@ -99,9 +98,8 @@ List<Widget> buildFormSections({
             sectionNumber: secIdx + 1,
             items: consecutive.map((f) => YesNoItem(key: f['key'] as String, label: f['label_ar'] as String? ?? '', required: f['required'] as bool? ?? false)).toList(),
             formData: formData,
-            onChanged: (key, value) { formData[key] = value; markChanged(); },
+            onChanged: (key, value) { formData[key] = value; },
             markChanged: markChanged,
-            runSetState: runSetState,
           ));
         } else {
           for (final f in consecutive) {

@@ -567,37 +567,81 @@ function analyzeFormData(rows: any[], formId?: string): { summary: string; quote
 }
 
 async function fetchGovernoratesData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {
-  const { data, error } = await withTimeout(
-    supa.from('form_submissions')
-      .select('id, status, governorates!governorate_id(name_ar), forms!form_id(campaign_type), campaign_round')
-      .is('deleted_at', null)
-      .limit(10000),
-    10_000,
-  ) ?? {}
+  // ⚠️ FIX: Apply campaign_round + campaign_type filters (were being ignored)
+  const effectiveRound = plan.filters.campaign_round ?? campaignRound
+
+  let q = supa.from('form_submissions')
+    .select('id, status, governorate_id, district_id, governorates!governorate_id(name_ar), districts!district_id(name_ar), forms!form_id(campaign_type), campaign_round')
+    .is('deleted_at', null)
+
+  if (effectiveRound && effectiveRound > 0) {
+    q = q.eq('campaign_round', effectiveRound)
+  }
+
+  const { data, error } = await withTimeout(q.limit(50000), 15_000) ?? {}
 
   if (error || !data) return []
 
-  const byGov: Record<string, { total: number; submitted: number; draft: number }> = {}
-  for (const row of data) {
+  // ⚠️ FIX: Apply campaign_type filter CLIENT-SIDE (PostgREST can't filter on joined columns reliably)
+  let filteredData = data
+  if (plan.filters.campaign_type && plan.filters.campaign_type !== 'all') {
+    filteredData = filteredData.filter((row: any) => row.forms?.campaign_type === plan.filters.campaign_type)
+  }
+  if (plan.filters.governorate) {
+    filteredData = filteredData.filter((row: any) => row.governorates?.name_ar === plan.filters.governorate)
+  }
+
+  if (filteredData.length === 0) return []
+
+  // Aggregate by governorate
+  const byGov: Record<string, { total: number; submitted: number; draft: number; districts: Set<string> }> = {}
+  // Also aggregate by district (for district breakdown)
+  const byDistrict: Record<string, { gov: string; total: number; submitted: number; draft: number }> = {}
+
+  for (const row of filteredData) {
     const gov = row.governorates?.name_ar || 'غير محدد'
-    if (!byGov[gov]) byGov[gov] = { total: 0, submitted: 0, draft: 0 }
+    if (!byGov[gov]) byGov[gov] = { total: 0, submitted: 0, draft: 0, districts: new Set() }
     byGov[gov].total++
     if (row.status === 'submitted') byGov[gov].submitted++
     if (row.status === 'draft') byGov[gov].draft++
+    if (row.districts?.name_ar) byGov[gov].districts.add(row.districts.name_ar)
+
+    // District breakdown
+    const distName = row.districts?.name_ar || 'غير محدد'
+    const distKey = `${gov} → ${distName}`
+    if (!byDistrict[distKey]) byDistrict[distKey] = { gov, total: 0, submitted: 0, draft: 0 }
+    byDistrict[distKey].total++
+    if (row.status === 'submitted') byDistrict[distKey].submitted++
+    if (row.status === 'draft') byDistrict[distKey].draft++
   }
 
-  const sorted = Object.entries(byGov).sort((a, b) => b[1].total - a[1].total).slice(0, 15)
+  const sorted = Object.entries(byGov).sort((a, b) => b[1].total - a[1].total)
   const sources: GroundingSource[] = []
 
-  for (let i = 0; i < sorted.length; i++) {
-    const [gov, stats] = sorted[i]
+  // Source 1: All governorates summary
+  sources.push({
+    id: 1,
+    type: 'aggregate',
+    table: 'form_submissions',
+    summary: `أداء ${sorted.length} محافظة${effectiveRound ? ` — الجولة ${effectiveRound}` : ''}${plan.filters.campaign_type ? ` (${plan.filters.campaign_type === 'polio_campaign' ? 'شلل الأطفال' : 'إيصالي'})` : ''}`,
+    quote: `== توزيع الإرساليات حسب المحافظات ==\n${sorted.map(([gov, stats], i) =>
+      `${i + 1}. ${gov}: ${stats.total} إرسالية (مرسلة: ${stats.submitted}، مسودة: ${stats.draft}) — ${stats.districts.size} مديرية`
+    ).join('\n')}`,
+    metadata: { count: sorted.length, campaignRound: effectiveRound },
+  })
+
+  // Source 2: District breakdown per governorate
+  const sortedDists = Object.entries(byDistrict).sort((a, b) => b[1].total - a[1].total).slice(0, 30)
+  if (sortedDists.length > 0) {
     sources.push({
-      id: i + 1,
+      id: 2,
       type: 'aggregate',
       table: 'form_submissions',
-      summary: `محافظة ${gov} — ${stats.total} إرسالية`,
-      quote: `${gov}: ${stats.total} إرسالية (مرسلة: ${stats.submitted}، مسودة: ${stats.draft})`,
-      metadata: { governorate: gov },
+      summary: `التوزيع حسب المديريات (${sortedDists.length} مديرية نشطة)`,
+      quote: `== توزيع الإرساليات حسب المديريات ==\n${sortedDists.map(([key, stats], i) =>
+        `${i + 1}. ${key}: ${stats.total} إرسالية (مرسلة: ${stats.submitted})`
+      ).join('\n')}`,
+      metadata: { count: sortedDists.length },
     })
   }
 
@@ -713,16 +757,20 @@ async function fetchShortagesData(supa: any, plan: QueryPlan): Promise<Grounding
   return sources
 }
 
-async function fetchTrendsData(supa: any, plan: QueryPlan): Promise<GroundingSource[]> {
+async function fetchTrendsData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {
   const days = plan.filters.days || 30
-  const { data, error } = await withTimeout(
-    supa.from('form_submissions')
-      .select('created_at, status')
-      .is('deleted_at', null)
-      .gte('created_at', daysAgo(days))
-      .limit(10000),
-    10_000,
-  ) ?? {}
+  const effectiveRound = plan.filters.campaign_round ?? campaignRound
+
+  let q = supa.from('form_submissions')
+    .select('created_at, status, campaign_round')
+    .is('deleted_at', null)
+    .gte('created_at', daysAgo(days))
+
+  if (effectiveRound && effectiveRound > 0) {
+    q = q.eq('campaign_round', effectiveRound)
+  }
+
+  const { data, error } = await withTimeout(q.limit(50000), 15_000) ?? {}
 
   if (error || !data) return []
 
@@ -1575,8 +1623,14 @@ async function fetchSupervisionEvaluationData(supa: any, plan: QueryPlan, campai
   for (const d of (dists || [])) distsMap.set(d.id, { name: d.name_ar, govId: d.governorate_id })
 
   // ── إثراء كل مستخدم ──
-  const isGeneralSupervisor = (name: string): boolean => {
-    const n = (name || '').trim()
+  // ⚠️ FIX: Identify general supervisors by ROLE (governorate) instead of name matching
+  // قبل: كان يبحث عن 'مدير عام مكتب الصحة' في الاسم (هش ولا يصنف الجميع)
+  // بعد: يستخدم role === 'governorate' كمشرف محافظة + يتحقق من الاسم كـ fallback
+  const isGeneralSupervisor = (user: any): boolean => {
+    // Primary: role-based (مشرف محافظة = general supervisor)
+    if (user.role === 'governorate') return true
+    // Fallback: name-based (for backwards compatibility)
+    const n = (user.full_name || '').trim()
     return n.includes('مدير عام مكتب الصحة العامة والسكان بالمحافظة')
   }
 
@@ -1594,7 +1648,7 @@ async function fetchSupervisionEvaluationData(supa: any, plan: QueryPlan, campai
         totalSubs: total,
         submittedCount: submitted,
         draftCount: draft,
-        isGenSupervisor: isGeneralSupervisor(u.full_name || ''),
+        isGenSupervisor: isGeneralSupervisor(u),
         govName,
         distName: distInfo?.name || '',
       }
@@ -1864,7 +1918,7 @@ export async function groundMessage(
         sources = await fetchShortagesData(supa, plan)
         break
       case 'trends':
-        sources = await fetchTrendsData(supa, plan)
+        sources = await fetchTrendsData(supa, plan, campaignRound)
         break
       case 'knowledge':
         sources = await searchKnowledgeBase(message)

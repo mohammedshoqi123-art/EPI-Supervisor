@@ -474,6 +474,27 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           const dayCounts: Record<string, number> = {}
           subs?.forEach((s: any) => { const d = s.created_at?.split('T')[0]; if (d) dayCounts[d] = (dayCounts[d] || 0) + 1 })
           chartData = Object.entries(dayCounts).sort(([a], [b]) => a.localeCompare(b)).slice(-(limit || 10)).map(([day, val]) => ({ label: day, value: val }))
+        } else if (data_source === 'users_by_role') {
+          // ⚠️ NEW: Users by role chart
+          const { data: users } = await withTimeout(supa.from('profiles').select('role').eq('is_active', true).is('deleted_at', null), 5_000) ?? {}
+          const roleCounts: Record<string, number> = {}
+          users?.forEach((u: any) => { const r = u.role || 'unknown'; roleCounts[r] = (roleCounts[r] || 0) + 1 })
+          const roleLabels: Record<string, string> = { admin: 'مدير', central: 'مركزي', governorate: 'مشرف محافظة', district: 'مديرية', data_entry: 'إدخال بيانات' }
+          chartData = Object.entries(roleCounts).map(([role, val]) => ({ label: roleLabels[role] || role, value: val }))
+        } else if (data_source === 'shortages_by_severity') {
+          // ⚠️ NEW: Shortages by severity chart
+          const { data: shortages } = await withTimeout(supa.from('supply_shortages').select('severity').is('deleted_at', null).eq('is_resolved', false), 5_000) ?? {}
+          const sevCounts: Record<string, number> = {}
+          shortages?.forEach((s: any) => { const sv = s.severity || 'unknown'; sevCounts[sv] = (sevCounts[sv] || 0) + 1 })
+          const sevLabels: Record<string, string> = { critical: 'حرج', high: 'عالي', medium: 'متوسط', low: 'منخفض' }
+          chartData = Object.entries(sevCounts).map(([sev, val]) => ({ label: sevLabels[sev] || sev, value: val }))
+        } else if (data_source === 'forms_by_campaign') {
+          // ⚠️ NEW: Forms by campaign type chart
+          const { data: forms } = await withTimeout(supa.from('forms').select('campaign_type').eq('is_active', true).is('deleted_at', null), 5_000) ?? {}
+          const campCounts: Record<string, number> = {}
+          forms?.forEach((f: any) => { const ct = f.campaign_type || 'unknown'; campCounts[ct] = (campCounts[ct] || 0) + 1 })
+          const campLabels: Record<string, string> = { polio_campaign: 'شلل الأطفال', integrated_activity: 'إيصالي تكاملي' }
+          chartData = Object.entries(campCounts).map(([ct, val]) => ({ label: campLabels[ct] || ct, value: val }))
         }
 
         return { chart_type, title: args.title || data_source, items: chartData.map((d, i) => ({ ...d, color: CHART_COLORS[i % CHART_COLORS.length] })), generated_at: new Date().toISOString() }

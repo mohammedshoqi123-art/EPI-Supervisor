@@ -1715,17 +1715,22 @@ serve(async (req) => {
       }, 200, origin)
     }
 
-    // ─── ALL FAILED — Data-only fallback ───
+    // ─── ALL FAILED — Data-only fallback with EPI expertise ───
     await logUsage(supabase, 'none', 0, Date.now() - startMs, false, `All providers failed (attempted: ${hybridResult.attempted.join(',')})`, 'all_failed')
     let fallbackAnswer = ''
     try {
       const health = await getSystemHealthScore(supabase)
-      if (health.score > 0) {
-        fallbackAnswer = `📊 **ملخص النظام المباشر**:\n• نقاط الصحة: ${health.score}/100 ${health.status}\n• إرساليات اليوم: ${health.today_submissions}\n• بانتظار المراجعة: ${health.pending_review}\n• نواقص حرجة: ${health.critical_shortages}\n\n⚠️ خدمة AI مؤقتاً غير متاحة (${hybridResult.attempted.length} مزود فشل).\nالبيانات أعلاه من قاعدة البيانات مباشرةً. حاول مرة أخرى بعد قليل.`
+      if (health.score >= 0) {
+        // ⚠️ توفير إجابة مفيدة بدلاً من رسالة خطأ فارغة
+        const groundingInfo = grounding && grounding.sources.length > 0
+          ? `\n\n📋 **البيانات المتاحة** (${grounding.sources.length} مصدر):\n${grounding.sources.slice(0, 3).map(s => `• ${s.summary}`).join('\n')}`
+          : ''
+
+        fallbackAnswer = `📊 **ملخص النظام المباشر**:\n• نقاط الصحة: ${health.score}/100 ${health.status}\n• إرساليات اليوم: ${health.today_submissions}\n• بانتظار المراجعة: ${health.pending_review}\n• نواقص حرجة: ${health.critical_shortages}\n• نشاط المحافظات: ${health.governorate_activity}${groundingInfo}\n\n💡 **توصيات فنية كمدير EPI**:\n• ${health.today_submissions === 0 ? 'لا توجد إرساليات اليوم — تابع المشرفين الخاملين' : 'استمرار النشاط جيد'}\n• ${health.pending_review > 50 ? 'مراجعة الإرساليات المعلقة عاجلاً' : 'المراجعات تحت السيطرة'}\n• ${health.critical_shortages > 0 ? 'معالجة النواقص الحرجة فوراً' : 'لا توجد نواقص حرجة'}\n\n⚠️ ملاحظة: الاستجابة الكاملة للذكاء الاصطناعي تأخرت (${hybridResult.attempted.length} مزود).\nالبيانات أعلاه من قاعدة البيانات مباشرةً. أعد المحاولة لتحليل أعمق.`
       }
     } catch {}
     return jsonResponse({
-      reply: fallbackAnswer || '⚠️ خدمة AI مؤقتاً غير متاحة. جميع المزودات فشلت. حاول مرة أخرى بعد قليل.',
+      reply: fallbackAnswer || '⚠️ خدمة AI مؤقتاً غير متاحة. يرجى إعادة المحاولة بعد لحظات — النظام يعمل على تحليل طلبك.',
       source: 'all_failed',
       fallback_used: !!fallbackAnswer,
       attempted_providers: hybridResult.attempted,

@@ -49,7 +49,7 @@ export interface GroundingResult {
 
 interface QueryPlan {
   intent: string
-  entity: 'submissions' | 'shortages' | 'governorates' | 'users' | 'trends' | 'knowledge' | 'memos' | 'feedback' | 'chat' | 'achievements' | 'facilities' | 'documents' | 'campaigns' | 'reports' | 'districts' | 'forms' | 'settings' | 'unknown'
+  entity: 'submissions' | 'shortages' | 'governorates' | 'users' | 'trends' | 'knowledge' | 'memos' | 'feedback' | 'chat' | 'achievements' | 'facilities' | 'documents' | 'campaigns' | 'reports' | 'districts' | 'forms' | 'settings' | 'supervision_evaluation' | 'unknown'
   filters: {
     governorate?: string
     days?: number
@@ -207,6 +207,8 @@ function buildQueryPlan(message: string): QueryPlan {
     entity = 'reports'
   } else if (/إعدادات|إعداد|config/.test(message)) {
     entity = 'settings'
+  } else if (/تقييم المشرفين|تقييم الإشراف|تقييم مشرف|أداء المشرفين|تقرير الإشراف|تحليل الإشراف|تقييم شامل للمشرف|التقرير الشامل المدمج|تقييم أداء المشرف|المشرفين الشامل|إشراف عام|المشرفين العامين|أداء الإشراف/.test(message)) {
+    entity = 'supervision_evaluation'
   }
 
   // Determine aggregation
@@ -1228,6 +1230,330 @@ async function fetchFormsData(supa: any, plan?: QueryPlan): Promise<GroundingSou
   return sources
 }
 
+// ═══ Fetcher: تقييم أداء المشرفين الشامل (من التقرير الشامل المدمج) ═══
+// يجلب نفس بيانات "التقرير الشامل المدمج للمشرفين" في لوحة التحكم
+async function fetchSupervisionEvaluationData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {
+  const sources: GroundingSource[] = []
+  const filters = plan.filters
+
+  // 1) جلب المستخدمين النشطين
+  const { data: users, error: usersErr } = await withTimeout(
+    supa.from('profiles')
+      .select('id, full_name, phone, role, governorate_id, district_id, is_active')
+      .is('deleted_at', null)
+      .order('governorate_id', { ascending: true })
+      .limit(5000),
+    8_000,
+  ) ?? {}
+
+  if (usersErr || !users || users.length === 0) return []
+
+  // 2) جلب المحافظات
+  const { data: govs } = await withTimeout(
+    supa.from('governorates')
+      .select('id, name_ar')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('name_ar'),
+    5_000,
+  ) ?? {}
+
+  // 3) جلب المديريات
+  const { data: dists } = await withTimeout(
+    supa.from('districts')
+      .select('id, name_ar, governorate_id')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('name_ar'),
+    5_000,
+  ) ?? {}
+
+  // 4) جلب كل الإرساليات (مع فلترة الجولة)
+  let subsQuery = supa.from('form_submissions')
+    .select('id, submitted_by, governorate_id, district_id, status, created_at, campaign_round, form_id')
+    .is('deleted_at', null)
+
+  if (campaignRound && campaignRound > 0) {
+    subsQuery = subsQuery.eq('campaign_round', campaignRound)
+  }
+
+  const { data: subs, error: subsErr } = await withTimeout(
+    subsQuery.order('created_at', { ascending: true }).limit(10000),
+    10_000,
+  ) ?? {}
+
+  if (subsErr || !subs) return []
+
+  // ── بناء lookup maps ──
+  const govsMap = new Map<string, string>()
+  for (const g of (govs || [])) govsMap.set(g.id, g.name_ar)
+
+  const distsMap = new Map<string, { name: string; govId: string }>()
+  for (const d of (dists || [])) distsMap.set(d.id, { name: d.name_ar, govId: d.governorate_id })
+
+  // ── إثراء كل مستخدم ──
+  const isGeneralSupervisor = (name: string): boolean => {
+    const n = (name || '').trim()
+    return n.includes('مدير عام مكتب الصحة العامة والسكان بالمحافظة')
+  }
+
+  const enriched = users
+    .filter((u: any) => u.is_active)
+    .map((u: any) => {
+      const userSubs = subs.filter((s: any) => s.submitted_by === u.id)
+      const submitted = userSubs.filter((s: any) => s.status === 'submitted').length
+      const draft = userSubs.filter((s: any) => s.status === 'draft').length
+      const total = userSubs.length
+      const govName = u.governorate_id ? govsMap.get(u.governorate_id) || '' : ''
+      const distInfo = u.district_id ? distsMap.get(u.district_id) : null
+      return {
+        ...u,
+        totalSubs: total,
+        submittedCount: submitted,
+        draftCount: draft,
+        isGenSupervisor: isGeneralSupervisor(u.full_name || ''),
+        govName,
+        distName: distInfo?.name || '',
+      }
+    })
+
+  // ── فلترة محافظة إذا ذُكرت ──
+  let filteredUsers = enriched
+  if (filters.governorate) {
+    filteredUsers = enriched.filter((u: any) => u.govName === filters.governorate)
+  }
+
+  // ── حساب الإحصائيات الشاملة ──
+  const totalSupervisors = filteredUsers.length
+  const activeTotal = filteredUsers.filter((u: any) => u.totalSubs > 0).length
+  const inactiveTotal = filteredUsers.filter((u: any) => u.totalSubs === 0 && !u.isGenSupervisor).length
+  const generalCount = filteredUsers.filter((u: any) => u.isGenSupervisor).length
+  const totalForms = filteredUsers.reduce((sum: number, u: any) => sum + u.totalSubs, 0)
+  const totalSubmitted = filteredUsers.reduce((sum: number, u: any) => sum + u.submittedCount, 0)
+  const totalDraft = filteredUsers.reduce((sum: number, u: any) => sum + u.draftCount, 0)
+
+  // المحافظات المغطاة
+  const coveredGovIds = new Set(filteredUsers.map((u: any) => u.governorate_id).filter(Boolean))
+  const coveredGovs = coveredGovIds.size
+  const totalGovs = (govs || []).length
+
+  // المديريات المغطاة
+  const allDistrictUsers = filteredUsers.filter((u: any) => u.role === 'district' || u.role === 'data_entry')
+  const coveredDistIds = new Set(allDistrictUsers.map((u: any) => u.district_id).filter(Boolean))
+  const coveredDists = coveredDistIds.size
+  const totalDists = (dists || []).length
+
+  // ── التجميع حسب المحافظة ──
+  const govGroups = new Map<string, { govName: string; users: any[]; totalSubs: number; active: number; inactive: number }>()
+  for (const u of filteredUsers) {
+    const govId = u.governorate_id || 'unknown'
+    if (!govGroups.has(govId)) {
+      govGroups.set(govId, {
+        govName: u.govName || 'غير محدد',
+        users: [],
+        totalSubs: 0,
+        active: 0,
+        inactive: 0,
+      })
+    }
+    const group = govGroups.get(govId)!
+    group.users.push(u)
+    group.totalSubs += u.totalSubs
+    if (u.totalSubs > 0 || u.isGenSupervisor) group.active++
+    else group.inactive++
+  }
+
+  // ── ترتيب المحافظات حسب النشاط ──
+  const sortedGovs = Array.from(govGroups.entries())
+    .map(([id, g]) => ({ id, ...g }))
+    .sort((a, b) => b.totalSubs - a.totalSubs)
+
+  // ── أعلى وأقل المشرفين نشاطاً ──
+  const sortedByActivity = [...filteredUsers]
+    .filter((u: any) => u.role !== 'admin' && u.role !== 'central')
+    .sort((a: any, b: any) => b.totalSubs - a.totalSubs)
+  const topPerformers = sortedByActivity.slice(0, 5)
+  const leastActive = sortedByActivity.filter((u: any) => u.totalSubs === 0 && !u.isGenSupervisor).slice(0, 5)
+
+  // ── Source 1: ملخص شامل ──
+  const inactiveRate = totalSupervisors > 0 ? Math.round((inactiveTotal / totalSupervisors) * 100) : 0
+  const submissionRate = totalForms > 0 ? Math.round((totalSubmitted / totalForms) * 100) : 0
+
+  sources.push({
+    id: 1,
+    type: 'aggregate',
+    table: 'profiles + form_submissions',
+    summary: `تقييم شامل لأداء ${totalSupervisors} مشرف${filters.governorate ? ` في محافظة ${filters.governorate}` : ''} — ${activeTotal} نشط، ${inactiveTotal} خامل (${inactiveRate}% خمول)`,
+    quote: `== تقييم أداء المشرفين الشامل ==
+
+📊 الإحصائيات الإجمالية:
+• إجمالي المشرفين: ${totalSupervisors}
+• مشرفين نشطين: ${activeTotal} (${totalSupervisors > 0 ? Math.round((activeTotal / totalSupervisors) * 100) : 0}%)
+• مشرفين خاملين: ${inactiveTotal} (${inactiveRate}%)
+• مشرفين عامين (مديري عام): ${generalCount}
+
+📋 الإرساليات:
+• إجمالي الإرساليات: ${totalForms}
+• مرسلة: ${totalSubmitted} (${submissionRate}%)
+• مسودات: ${totalDraft}
+
+🗺️ التغطية الجغرافية:
+• المحافظات المغطاة: ${coveredGovs} من ${totalGovs}
+• المديريات المغطاة: ${coveredDists} من ${totalDists}
+• نسبة تغطية المحافظات: ${totalGovs > 0 ? Math.round((coveredGovs / totalGovs) * 100) : 0}%
+• نسبة تغطية المديريات: ${totalDists > 0 ? Math.round((coveredDists / totalDists) * 100) : 0}%${campaignRound ? `\n• الجولة: ${campaignRound}` : ''}`,
+    metadata: { campaignRound, governorate: filters.governorate },
+  })
+
+  // ── Source 2: ترتيب المحافظات ──
+  if (sortedGovs.length > 0) {
+    sources.push({
+      id: 2,
+      type: 'aggregate',
+      table: 'profiles + form_submissions',
+      summary: `ترتيب ${sortedGovs.length} محافظة حسب النشاط`,
+      quote: `== ترتيب المحافظات حسب الإرساليات ==\n${sortedGovs.slice(0, 15).map((g, i) =>
+        `${i + 1}. ${g.govName}: ${g.totalSubs} إرسالية | ${g.active} نشط / ${g.inactive} خامل`
+      ).join('\n')}`,
+      metadata: { count: sortedGovs.length },
+    })
+  }
+
+  // ── Source 3: أعلى المشرفين نشاطاً ──
+  if (topPerformers.length > 0) {
+    sources.push({
+      id: 3,
+      type: 'aggregate',
+      table: 'profiles',
+      summary: `أعلى 5 مشرفين نشاطاً`,
+      quote: `== أعلى المشرفين نشاطاً ==\n${topPerformers.map((u: any, i: number) =>
+        `${i + 1}. ${u.full_name} — ${u.role} — ${u.govName} — ${u.totalSubs} إرسالية (${u.submittedCount} مرسلة / ${u.draftCount} مسودة)`
+      ).join('\n')}`,
+      metadata: {},
+    })
+  }
+
+  // ── Source 4: المشرفون الخاملون ──
+  if (leastActive.length > 0) {
+    sources.push({
+      id: 4,
+      type: 'aggregate',
+      table: 'profiles',
+      summary: `${leastActive.length} مشرف بدون أي إرسالية`,
+      quote: `== مشرفون خاملون (بدون إرساليات) ==\n${leastActive.map((u: any, i: number) =>
+        `${i + 1}. ${u.full_name} — ${u.role} — ${u.govName} — ${u.distName || 'غير محدد'}`
+      ).join('\n')}`,
+      metadata: { count: leastActive.length },
+    })
+  }
+
+  // ── Source 5: تحليل التغطية ──
+  const coverageGaps = []
+  if (inactiveRate > 30) coverageGaps.push(`⚠️ معدل الخمول ${inactiveRate}% — يتجاوز الحد المقبول (30%)`)
+  if (submissionRate < 70) coverageGaps.push(`⚠️ نسبة الإرسال ${submissionRate}% — أقل من المستهدف (70%)`)
+  if (coveredGovs < totalGovs * 0.8) coverageGaps.push(`⚠️ تغطية المحافظات ${coveredGovs}/${totalGovs} — أقل من 80%`)
+  if (coveredDists < totalDists * 0.5) coverageGaps.push(`⚠️ تغطية المديريات ${coveredDists}/${totalDists} — أقل من 50%`)
+
+  if (coverageGaps.length > 0) {
+    sources.push({
+      id: 5,
+      type: 'aggregate',
+      table: 'computed',
+      summary: `تحليل التغطية — ${coverageGaps.length} فجوة`,
+      quote: `== تحليل التغطية والفجوات ==\n${coverageGaps.join('\n')}\n\n💡 توصيات:\n• متابعة المشرفين الخاملين عاجلاً\n• تحسين نسبة الإرسال عبر التدريب\n• توسيع التغطية للمديريات غير المشمولة`,
+      metadata: { gaps: coverageGaps.length },
+    })
+  }
+
+  return sources
+}
+
+// ═══ Web Search — مصادر موثوقة (WHO, UNICEF, CDC) ═══
+// يبحث في الإنترنت عن معلومات EPI من مصادر موثوقة
+async function searchTrustedWebSources(message: string): Promise<GroundingSource[]> {
+  // قائمة المصادر الموثوقة لـ EPI
+  const TRUSTED_SOURCES = [
+    { name: 'WHO Immunization', url: 'https://www.who.int/health-topics/immunization', keywords: ['تطعيم', 'لقاح', 'تحصين', 'immunization', 'vaccine', 'vaccination'] },
+    { name: 'WHO Yemen', url: 'https://www.who.int/yemen', keywords: ['اليمن', 'yemen', 'صحة'] },
+    { name: 'UNICEF Immunization', url: 'https://www.unicef.org/immunization', keywords: ['أطفال', 'تطعيم', 'طفل', 'child', 'immunization'] },
+    { name: 'CDC Vaccines', url: 'https://www.cdc.gov/vaccines', keywords: ['vaccine', 'cdc', 'تطعيم'] },
+    { name: 'Gavi Vaccine Alliance', url: 'https://www.gavi.org', keywords: ['gavi', 'vaccine', 'تطعيم'] },
+  ]
+
+  // محاولة البحث عبر DuckDuckGo (لا يحتاج API key)
+  try {
+    const searchQuery = encodeURIComponent(`EPI immunization vaccine ${message.slice(0, 100)}`)
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${searchQuery}`
+
+    const resp = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'EPI-Copilot/1.0' },
+      signal: AbortSignal.timeout(8_000),
+    })
+
+    if (!resp.ok) return []
+
+    const html = await resp.text()
+    // استخراج النتائج (بسيط)
+    const results: GroundingSource[] = []
+    const linkRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/g
+    const snippetRegex = /<a[^>]+class="result__snippet"[^>]*>([^<]+)<\/a>/g
+
+    const links: { url: string; title: string }[] = []
+    let match
+    while ((match = linkRegex.exec(html)) !== null && links.length < 3) {
+      const rawUrl = match[1]
+      const title = match[2].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      // DuckDuckGo redirects — extract actual URL
+      const urlMatch = rawUrl.match(/uddg=([^&]+)/)
+      if (urlMatch) {
+        const actualUrl = decodeURIComponent(urlMatch[1])
+        // فقط المصادر الموثوقة
+        if (TRUSTED_SOURCES.some(s => actualUrl.includes(s.url.replace('https://', '').split('/')[0]))) {
+          links.push({ url: actualUrl, title })
+        }
+      }
+    }
+
+    // إضافة المصادر الموثوقة الموجودة كـ fallback
+    for (const link of links) {
+      results.push({
+        id: 100 + results.length,
+        type: 'knowledge_chunk',
+        summary: link.title,
+        quote: `المصدر: ${link.url}\n${link.title}`,
+        metadata: {
+          source_doc: link.url,
+          chunk_id: `web-${results.length}`,
+        },
+      })
+    }
+
+    // إذا لم نجد نتائج موثوقة، أضف روابط المصادر الموثوقة الأساسية
+    if (results.length === 0) {
+      const matchedSources = TRUSTED_SOURCES.filter(s =>
+        s.keywords.some(k => message.includes(k))
+      )
+      for (const src of matchedSources.slice(0, 3)) {
+        results.push({
+          id: 100 + results.length,
+          type: 'knowledge_chunk',
+          summary: `${src.name} — مصدر موثوق`,
+          quote: `للمزيد من المعلومات الفنية، راجع: ${src.url}`,
+          metadata: {
+            source_doc: src.url,
+            chunk_id: `trusted-${results.length}`,
+          },
+        })
+      }
+    }
+
+    return results
+  } catch (e) {
+    console.warn('[WEB_SEARCH] Error:', String(e).slice(0, 80))
+    return []
+  }
+}
+
 // ═══ MAIN: Grounding Engine Entry Point ═══
 
 export async function groundMessage(
@@ -1293,14 +1619,22 @@ export async function groundMessage(
       case 'settings':
         sources = await fetchAppSettingsData(supa)
         break
+      case 'supervision_evaluation':
+        sources = await fetchSupervisionEvaluationData(supa, plan, campaignRound)
+        break
       case 'unknown':
       default:
-        // Try both: knowledge + quick stats
-        const [kb, stats] = await Promise.all([
+        // Try: knowledge + quick stats + web search (trusted sources)
+        const [kb, stats, web] = await Promise.all([
           searchKnowledgeBase(message),
           fetchSubmissionsData(supa, { ...plan, entity: 'submissions' }, campaignRound),
+          searchTrustedWebSources(message),
         ])
-        sources = [...kb, ...stats.slice(0, 2).map(s => ({ ...s, id: s.id + kb.length }))]
+        sources = [
+          ...kb,
+          ...stats.slice(0, 2).map(s => ({ ...s, id: s.id + kb.length })),
+          ...web.map(s => ({ ...s, id: s.id + kb.length + 2 })),
+        ]
         break
     }
   } catch (e) {
@@ -1311,12 +1645,13 @@ export async function groundMessage(
   // ─── Build context text for LLM prompt ───
   let contextText = ''
   if (sources.length > 0) {
-    contextText = '\n\n== مصادر البيانات (استند إليها حصراً) ==\n'
-    contextText += '⚠️ تعليمات صارمة:\n'
-    contextText += '1. أجب فقط من المصادر أدناه — لا تختلق أرقاماً أو معلومات\n'
-    contextText += '2. ضع [n] بعد كل ادعاء يشير إلى رقم المصدر\n'
-    contextText += '3. إذا لم تجد الإجابة في المصادر، قل: "لا توجد معلومة في المصادر المتاحة"\n'
-    contextText += '4. لا تستخدم معرفتك العامة — استخدم المصادر فقط\n\n'
+    contextText = '\n\n== مصادر البيانات المتاحة ==\n'
+    contextText += '⚠️ تعليمات استخدام المصادر:\n'
+    contextText += '1. استخدم البيانات أعلاه كمرجع أساسي — ضع [n] بعد كل رقم أو ادعاء\n'
+    contextText += '2. إذا كانت المصادر لا تغطي السؤال بالكامل، أكمل بإجابتك كمدير EPI محترف وضع [عام]\n'
+    contextText += '3. لا ترفض الإجابة أبداً — أجب دائماً بمعلوماتك الفنية كمدير برنامج التحصين\n'
+    contextText += '4. إذا لم توجد أرقام في المصادر، أعطِ التحليل النوعي والتوصيات\n'
+    contextText += '5. ركّز على التحليل والتوصيات العملية، ليس فقط سرد الأرقام\n\n'
 
     // ⚠️ FIX: Cap total contextText to ~12000 chars to avoid token overflow on
     // providers with smaller context windows (ZAI 1024 tokens, Pollinations free tier).
@@ -1338,6 +1673,13 @@ export async function groundMessage(
       contextText += entry
       totalChars += entry.length
     }
+  } else {
+    // No sources found — provide EPI expert context instead of refusing
+    contextText = '\n\n== سياق EPI الخبير ==\n'
+    contextText += '⚠️ لا توجد بيانات محددة في النظام لهذا السؤال.\n'
+    contextText += 'أجب بمعلوماتك الفنية كمدير برنامج التحصين الصحي الموسع (EPI).\n'
+    contextText += 'استخدم المعايير الدولية (WHO, UNICEF) والخبرة الميدانية في اليمن.\n'
+    contextText += 'ضع [عام] بعد كل معلومة عامة. لا ترفض الإجابة أبداً.\n\n'
   }
 
   const followups = generateFollowups(plan, sources)
@@ -1345,10 +1687,8 @@ export async function groundMessage(
   return {
     sources,
     contextText,
-    hasData: sources.length > 0,
-    refusalReason: sources.length === 0
-      ? 'لا توجد بيانات مطابقة في النظام. حاول إعادة صياغة السؤال أو توسيع نطاق البحث.'
-      : undefined,
+    hasData: true,  // ⚠️ Always true — never refuse, always answer with EPI expertise
+    refusalReason: undefined,  // Never refuse — EPI manager always answers
     suggestedFollowups: followups,
     detectedIntent: plan.intent,
     queryPlan: plan,

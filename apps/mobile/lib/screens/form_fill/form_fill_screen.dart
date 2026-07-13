@@ -50,9 +50,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     super.initState();
     _draftId = widget.draftId ?? const Uuid().v4();
     _loadForm();
-    // ═══ FIX: Auto-save every 60s instead of 30s — reduces Hive encryption overhead ═══
-    // PBKDF2 encryption is expensive; 60s still protects against data loss
-    _autoSaveTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+    // ⚠️ FIX: auto-save كل 30 ثانية (كان 60 — بيانات كثيرة تضيع)
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (_hasUnsavedChanges && _formData.isNotEmpty) {
         _autoSave(showFeedback: false);
       }
@@ -317,8 +316,25 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   void _syncControllersToFormData() {
+    // ⚠️ FIX: فقط مزامنة الحقول النصية — لا تكتب فوق bool/yesno/list/governorate
+    final textFieldTypes = {'text', 'textarea', 'phone', 'email', 'number', 'date', 'time'};
     for (final entry in _textControllers.entries) {
-      _formData[entry.key] = entry.value.text;
+      final key = entry.key;
+      // ابحث عن نوع الحقل
+      final field = _allFields.where((f) => f['key'] == key).firstOrNull;
+      final type = field?['type'] as String? ?? 'text';
+
+      if (textFieldTypes.contains(type)) {
+        if (type == 'number') {
+          final numValue = num.tryParse(entry.value.text);
+          if (numValue != null) {
+            _formData[key] = numValue;
+          }
+        } else {
+          _formData[key] = entry.value.text;
+        }
+      }
+      // yesno/multiselect/governorate/district: قيمها في _formData مباشرة — لا تمسها
     }
   }
 
@@ -567,17 +583,15 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     _syncControllersToFormData();
     if (_formData.isEmpty) return;
 
-    // ═══ FIX: Don't auto-save if widget is disposed ═══
     if (!mounted) return;
 
     try {
       final offline = await ref.read(offlineManagerProvider.future).timeout(
-        const Duration(seconds: 5),
+        const Duration(seconds: 10), // ⚠️ FIX: 10s بدلاً من 5s
         onTimeout: () {
           throw TimeoutException('Offline storage not ready for auto-save');
         },
       );
-      // Check mounted again after async gap
       if (!mounted) return;
       await offline.saveDraft(
         _draftId,
@@ -589,10 +603,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         context.showSuccess('تم الحفظ التلقائي');
       }
     } on TimeoutException {
-      // Silent — auto-save will retry on next timer tick
+      // صامت — سيحاول مرة أخرى في الـ timer القادم
     } catch (e) {
       debugPrint('[AutoSave] Failed: $e');
-      // Don't rethrow — auto-save should be non-blocking
     }
   }
 
@@ -610,13 +623,20 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
 
+        // ⚠️ إظهار رسالة تحذيرية عند محاولة الخروج ببيانات غير محفوظة
         final shouldSave = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('تغييرات غير محفوظة', style: TextStyle(fontFamily: 'Tajawal')),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                SizedBox(width: 8),
+                Text('تغييرات غير محفوظة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+              ],
+            ),
             content: const Text(
-              'لديك تغييرات غير محفوظة. هل تريد حفظها كمسودة قبل الخروج؟',
-              style: TextStyle(fontFamily: 'Tajawal'),
+              'لديك بيانات غير محفوظة في هذه الاستمارة.\n\nهل تريد حفظها كمسودة قبل الخروج؟',
+              style: TextStyle(fontFamily: 'Tajawal', fontSize: 14),
             ),
             actions: [
               TextButton(
@@ -629,8 +649,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
               ),
               FilledButton.icon(
                 onPressed: () async {
-                  await _autoSave(showFeedback: false);
-                  if (ctx.mounted) Navigator.of(ctx).pop(true);
+                  // ⚠️ FIX: استخدم _saveDraft بدلاً من _autoSave (أكثر موثوقية)
+                  Navigator.of(ctx).pop(true); // أغلق الـ dialog أولاً
+                  await _saveDraft(); // ثم احفظ
                 },
                 icon: const Icon(Icons.save, size: 18),
                 label: const Text('حفظ وخروج', style: TextStyle(fontFamily: 'Tajawal')),
@@ -640,10 +661,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         );
 
         if (shouldSave == true && mounted) {
-          // ═══ CRITICAL FIX: Set _hasUnsavedChanges = false BEFORE popping ═══
-          // Otherwise PopScope fires again → infinite loop → app crash
+          // ⚠️ CRITICAL: اضبط _hasUnsavedChanges = false قبل pop لمنع التكرار
           _hasUnsavedChanges = false;
-          // Use Navigator.pop instead of context.pop to bypass PopScope
           Navigator.of(context).pop();
         }
       },

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import '../services/dynamic_bot_knowledge_service.dart';
@@ -50,6 +51,10 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   final List<BotMessage> _botMsgs = [];
   bool _botLoading = false;
 
+  // ═══ TTS for reading messages aloud ═══
+  FlutterTts? _tts;
+  bool _isSpeaking = false;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +68,25 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     _botEngine.initialize();
     _setupDynamicKB();
     _loadLastConversation();
+    _initTts();
+  }
+
+  /// Initialize TTS for reading messages aloud
+  Future<void> _initTts() async {
+    try {
+      _tts = FlutterTts();
+      await _tts!.setLanguage('ar-SA');
+      await _tts!.setSpeechRate(0.45);
+      await _tts!.setPitch(1.0);
+      _tts!.setCompletionHandler(() {
+        if (_mounted) setState(() => _isSpeaking = false);
+      });
+      _tts!.setErrorHandler((msg) {
+        if (_mounted) setState(() => _isSpeaking = false);
+      });
+    } catch (e) {
+      _tts = null;
+    }
   }
 
   /// Setup dynamic KB search callback for BotEngine
@@ -100,6 +124,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   @override
   void dispose() {
     _mounted = false;
+    _tts?.stop();
     _ctrl.dispose();
     _scroll.dispose();
     _botCtrl.dispose();
@@ -886,15 +911,18 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
   /// Show prompt templates bottom sheet
   void _showPromptTemplates() {
     HapticFeedback.lightImpact();
+    // ⚠️ قوالب محدثة — عملية ومفيدة لمدير EPI
     final templates = [
-      ('📊', 'حلل أداء محافظتي هذا الأسبوع'),
-      ('📈', 'قارن جولتي الحملة الأخيرتين'),
-      ('💉', 'ما تغطية التطعيم في منطقتي؟'),
-      ('📋', 'أنشئ تقرير الإشراف الداعم'),
-      ('⚠️', 'ما أكثر المشاكل شيوعاً في الإرساليات؟'),
-      ('👥', 'من هم أكثر المشرفين نشاطاً؟'),
-      ('📅', 'ما اتجاه الإرساليات آخر شهر؟'),
+      ('📊', 'حلل أداء الجولة الحالية'),
+      ('🏆', 'تقييم أداء المشرفين الشامل'),
+      ('📈', 'تحليلات النظام — جميع التبويبات'),
       ('🗺️', 'ما توزيع الإرساليات حسب المحافظات؟'),
+      ('⚠️', 'ما النواقص الحرجة في النظام؟'),
+      ('👥', 'من هم المشرفون الخاملون؟'),
+      ('💉', 'اشرح لي عن لقاح شلل الأطفال OPV'),
+      ('📋', 'ما هي معايير التغطية المقبولة؟'),
+      ('🎯', 'كيف نتعامل مع الرفض المجتمعي للتطعيم؟'),
+      ('📊', 'حلل أداء محافظة تعز'),
     ];
 
     showModalBottomSheet(
@@ -980,16 +1008,52 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
     );
   }
 
-  /// Voice input (placeholder — uses speech_to_text if available)
-  void _startVoiceInput() {
+  /// Read the last AI message aloud using TTS
+  Future<void> _startVoiceInput() async {
     HapticFeedback.lightImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🎤 الإدخال الصوتي قيد التطوير',
-            style: TextStyle(fontFamily: 'Tajawal')),
-        behavior: SnackBarBehavior.floating,
-      ),
+
+    // If currently speaking, stop
+    if (_isSpeaking && _tts != null) {
+      await _tts!.stop();
+      setState(() => _isSpeaking = false);
+      return;
+    }
+
+    // Find the last assistant message
+    final lastAiMsg = _msgs.lastWhere(
+      (m) => m.role == 'assistant' && m.content.isNotEmpty,
+      orElse: () => ChatMsg(role: '', content: ''),
     );
+
+    if (lastAiMsg.content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد رسالة لقراءتها', style: TextStyle(fontFamily: 'Tajawal')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (_tts == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('خدمة الصوت غير متاحة على هذا الجهاز', style: TextStyle(fontFamily: 'Tajawal')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Clean text: remove markdown symbols and [n] citations
+    String cleanText = lastAiMsg.content
+        .replaceAll(RegExp(r'\[(\d+|عام)\]'), '')
+        .replaceAll(RegExp(r'[*_#`>]'), '')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+
+    setState(() => _isSpeaking = true);
+    await _tts!.speak(cleanText);
   }
 
   /// Pick attachment for AI context
@@ -998,25 +1062,28 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'txt', 'csv', 'xlsx'],
+        allowedExtensions: ['txt', 'csv', 'json', 'log', 'md'],
         allowMultiple: false,
       );
 
       if (result == null || result.files.isEmpty) return;
 
       final file = result.files.first;
-      // For text files, read content and append to message
-      if (file.extension == 'txt' || file.extension == 'csv') {
-        if (file.path != null) {
-          final content = await File(file.path!).readAsString();
-          final truncated = content.length > 2000
-              ? '${content.substring(0, 2000)}... (تم اقتطاع المحتوى)'
-              : content;
-          _ctrl.text = '📄 ملف: ${file.name}\n\n$truncated\n\nحلل هذا المحتوى:';
-        }
-      } else {
-        // For PDF/Excel — just mention the file name
-        _ctrl.text = '📄 مرفق: ${file.name} (${file.size} bytes)\n\nحلل هذا الملف:';
+      // For text-based files, read content and append to message
+      if (file.path != null) {
+        final content = await File(file.path!).readAsString();
+        final truncated = content.length > 5000
+            ? '${content.substring(0, 5000)}\n\n... (تم اقتطاع ${content.length - 5000} حرف)'
+            : content;
+        _ctrl.text = '📄 ملف مرفق: ${file.name} (${file.size} bytes)\n\n== محتوى الملف ==\n$truncated\n\n== التحليل المطلوب ==\nحلل هذا المحتوى بدقة كمدير EPI:';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ تم رفع "${file.name}" — المحتوى جاهز للتحليل',
+                style: const TextStyle(fontFamily: 'Tajawal')),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -1694,10 +1761,10 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
                   enabled: _msgs.isNotEmpty,
                 ),
                 const SizedBox(width: 6),
-                // Voice input button
+                // Voice output button — reads last AI message aloud
                 _inputActionBtn(
-                  icon: Icons.mic_rounded,
-                  label: 'صوت',
+                  icon: _isSpeaking ? Icons.stop_rounded : Icons.volume_up_rounded,
+                  label: _isSpeaking ? 'إيقاف' : 'صوت',
                   cs: cs,
                   onTap: _startVoiceInput,
                 ),

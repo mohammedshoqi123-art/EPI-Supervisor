@@ -49,7 +49,7 @@ export interface GroundingResult {
 
 interface QueryPlan {
   intent: string
-  entity: 'submissions' | 'shortages' | 'governorates' | 'users' | 'trends' | 'knowledge' | 'memos' | 'feedback' | 'chat' | 'achievements' | 'facilities' | 'documents' | 'campaigns' | 'reports' | 'districts' | 'forms' | 'settings' | 'supervision_evaluation' | 'unknown'
+  entity: 'submissions' | 'shortages' | 'governorates' | 'users' | 'trends' | 'knowledge' | 'memos' | 'feedback' | 'chat' | 'achievements' | 'facilities' | 'documents' | 'campaigns' | 'reports' | 'districts' | 'forms' | 'settings' | 'supervision_evaluation' | 'analytics_page' | 'unknown'
   filters: {
     governorate?: string
     days?: number
@@ -209,6 +209,8 @@ function buildQueryPlan(message: string): QueryPlan {
     entity = 'settings'
   } else if (/تقييم المشرفين|تقييم الإشراف|تقييم مشرف|أداء المشرفين|تقرير الإشراف|تحليل الإشراف|تقييم شامل للمشرف|التقرير الشامل المدمج|تقييم أداء المشرف|المشرفين الشامل|إشراف عام|المشرفين العامين|أداء الإشراف/.test(message)) {
     entity = 'supervision_evaluation'
+  } else if (/صفحة التحليلات|تحليلات النظام|تبويب التحليلات|نظرة عامة|التغطية|أداء المشرفين الميدانيين|التوصيات|تحليل شامل|تحليل لوحة التحكم|التحليلات الأربعة|تبويبات التحليل/.test(message)) {
+    entity = 'analytics_page'
   }
 
   // Determine aggregation
@@ -262,7 +264,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     q = q.eq('campaign_round', effectiveRound)
   }
 
-  const { data, error } = await withTimeout(q.limit(5000), 10_000) ?? {}
+  const { data, error } = await withTimeout(q.limit(50000), 15_000) ?? {}
 
   if (error || !data || data.length === 0) {
     return []
@@ -304,16 +306,16 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
     metadata: { campaign_type: filters.campaign_type, governorate: filters.governorate, date: new Date().toISOString().split('T')[0] },
   })
 
-  // Source 2: Top governorates
-  const sortedGovs = Object.entries(byGovernorate).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  // Source 2: ALL governorates (no cap — was slice(0, 5))
+  const sortedGovs = Object.entries(byGovernorate).sort((a, b) => b[1] - a[1])
   if (sortedGovs.length > 0) {
     sources.push({
       id: 2,
       type: 'aggregate',
       table: 'form_submissions',
-      summary: `أعلى 5 محافظات بالعدد`,
+      summary: `أداء ${sortedGovs.length} محافظة بالعدد (مرتبة تنازلياً)`,
       quote: sortedGovs.map(([g, c], i) => `${i + 1}. ${g}: ${c}`).join('\n'),
-      metadata: { campaign_type: filters.campaign_type },
+      metadata: { campaign_type: filters.campaign_type, count: sortedGovs.length },
     })
   }
 
@@ -591,16 +593,16 @@ async function fetchUsersData(supa: any): Promise<GroundingSource[]> {
     },
   ]
 
-  // Top 5 governorates by user count
-  const sortedGovs = Object.entries(byGov).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  // ALL governorates by user count (no cap — was slice(0, 5))
+  const sortedGovs = Object.entries(byGov).sort((a, b) => b[1] - a[1])
   if (sortedGovs.length > 0) {
     sources.push({
       id: 2,
       type: 'aggregate',
       table: 'profiles',
-      summary: `أعلى 5 محافظات بعدد المستخدمين`,
+      summary: `توزيع ${sortedGovs.length} محافظة حسب عدد المستخدمين`,
       quote: sortedGovs.map(([g, c], i) => `${i + 1}. ${g}: ${c} مستخدم`).join('\n'),
-      metadata: {},
+      metadata: { count: sortedGovs.length },
     })
   }
 
@@ -632,7 +634,7 @@ async function fetchShortagesData(supa: any, plan: QueryPlan): Promise<Grounding
   }
   if (plan.filters.days) q = q.gte('created_at', daysAgo(plan.filters.days))
 
-  const { data, error } = await withTimeout(q.limit(200), 8_000) ?? {}
+  const { data, error } = await withTimeout(q.limit(5000), 10_000) ?? {}
   if (error || !data) return []
 
   const bySeverity: Record<string, number> = {}
@@ -1230,6 +1232,215 @@ async function fetchFormsData(supa: any, plan?: QueryPlan): Promise<GroundingSou
   return sources
 }
 
+// ═══ Fetcher: تحليلات صفحة التحليلات (4 تبويبات) ═══
+// يجلب نفس بيانات AIInsightsPage: نظرة عامة + التغطية + أداء المشرفين + التوصيات
+async function fetchAnalyticsPageData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {
+  const sources: GroundingSource[] = []
+
+  // 1) جلب الإرساليات (للاتجاه الأسبوعي + التغطية)
+  let subsQuery = supa.from('form_submissions')
+    .select('id, status, governorate_id, district_id, created_at, campaign_round, form_id')
+    .is('deleted_at', null)
+
+  if (campaignRound && campaignRound > 0) {
+    subsQuery = subsQuery.eq('campaign_round', campaignRound)
+  }
+
+  const { data: subs, error: subsErr } = await withTimeout(
+    subsQuery.order('created_at', { ascending: true }).limit(50000),
+    10_000,
+  ) ?? {}
+
+  if (subsErr || !subs || subs.length === 0) return []
+
+  // 2) جلب المحافظات
+  const { data: govs } = await withTimeout(
+    supa.from('governorates')
+      .select('id, name_ar')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('name_ar'),
+    5_000,
+  ) ?? {}
+
+  const govsMap = new Map<string, string>()
+  for (const g of (govs || [])) govsMap.set(g.id, g.name_ar)
+
+  // 3) جلب المستخدمين (لأداء المشرفين)
+  const { data: users } = await withTimeout(
+    supa.from('profiles')
+      .select('id, full_name, role, governorate_id, is_active')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .limit(5000),
+    5_000,
+  ) ?? {}
+
+  // ── Source 1: نظرة عامة (Overview Tab) ──
+  const now = new Date()
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+  const thisWeekSubs = subs.filter(s => new Date(s.created_at) >= weekAgo).length
+  const lastWeekSubs = subs.filter(s => {
+    const d = new Date(s.created_at)
+    return d >= twoWeeksAgo && d < weekAgo
+  }).length
+  const weeklyChange = lastWeekSubs > 0 ? Math.round(((thisWeekSubs - lastWeekSubs) / lastWeekSubs) * 100) : 0
+
+  // تجميع حسب اليوم (الاتجاه الأسبوعي)
+  const byDay: Record<string, number> = {}
+  for (const s of subs) {
+    const day = (s.created_at || '').split('T')[0]
+    if (day) byDay[day] = (byDay[day] || 0) + 1
+  }
+  const last7Days = Object.entries(byDay).sort().slice(-7)
+
+  const byStatus: Record<string, number> = {}
+  for (const s of subs) byStatus[s.status] = (byStatus[s.status] || 0) + 1
+
+  sources.push({
+    id: 1,
+    type: 'aggregate',
+    table: 'form_submissions',
+    summary: `تبويب نظرة عامة — ${subs.length} إرسالية، اتجاه أسبوعي ${weeklyChange >= 0 ? '+' : ''}${weeklyChange}%`,
+    quote: `== نظرة عامة ==
+
+📊 الإحصائيات الإجمالية:
+• إجمالي الإرساليات: ${subs.length}
+• مرسلة: ${byStatus.submitted || 0}
+• مسودة: ${byStatus.draft || 0}
+• نشطة اليوم: ${Object.entries(byDay).slice(-1)[0]?.[1] || 0}
+
+📈 الاتجاه الأسبوعي:
+• هذا الأسبوع: ${thisWeekSubs} إرسالية
+• الأسبوع الماضي: ${lastWeekSubs} إرسالية
+• نسبة التغيير: ${weeklyChange >= 0 ? '+' : ''}${weeklyChange}%
+
+📅 آخر 7 أيام:
+${last7Days.map(([d, c]) => `  ${d}: ${c} إرسالية`).join('\n')}`,
+    metadata: { tab: 'overview' },
+  })
+
+  // ── Source 2: التغطية (Coverage Tab) ──
+  const byGov: Record<string, number> = {}
+  for (const s of subs) {
+    const govName = s.governorate_id ? govsMap.get(s.governorate_id) || 'غير محدد' : 'غير محدد'
+    byGov[govName] = (byGov[govName] || 0) + 1
+  }
+
+  const totalSubs = subs.length
+  const coverageData = Object.entries(byGov)
+    .map(([name, count]) => ({
+      name,
+      submissions: count,
+      share: totalSubs > 0 ? Math.round((count / totalSubs) * 100) : 0,
+      status: count === 0 ? 'zero' : count < 10 ? 'low' : 'good',
+    }))
+    .sort((a, b) => b.submissions - a.submissions)
+
+  const goodCount = coverageData.filter(g => g.status === 'good').length
+  const lowCount = coverageData.filter(g => g.status === 'low').length
+  const zeroCount = coverageData.filter(g => g.status === 'zero').length
+
+  sources.push({
+    id: 2,
+    type: 'aggregate',
+    table: 'form_submissions + governorates',
+    summary: `تبويب التغطية — ${goodCount} نشطة، ${lowCount} منخفضة، ${zeroCount} بدون تغطية`,
+    quote: `== التغطية ==
+
+🗺️ توزيع المحافظات (${coverageData.length}):
+• نشطة: ${goodCount} محافظة
+• منخفضة: ${lowCount} محافظة
+• بدون تغطية: ${zeroCount} محافظة
+
+📊 تفصيل التغطية:
+${coverageData.map((g, i) => `${i + 1}. ${g.name}: ${g.submissions} (${g.share}%) — ${g.status === 'good' ? '✅ نشطة' : g.status === 'low' ? '⚠️ منخفضة' : '❌ بدون تغطية'}`).join('\n')}${zeroCount > 0 ? `\n\n🚨 محافظات بدون إرساليات:\n${coverageData.filter(g => g.status === 'zero').map(g => `  • ${g.name}`).join('\n')}` : ''}`,
+    metadata: { tab: 'coverage' },
+  })
+
+  // ── Source 3: أداء المشرفين (Performance Tab) ──
+  const userStats: Record<string, { total: number; submitted: number; draft: number; lastActive: string }> = {}
+  for (const s of subs) {
+    const uid = s.submitted_by
+    if (!uid) continue
+    if (!userStats[uid]) userStats[uid] = { total: 0, submitted: 0, draft: 0, lastActive: '' }
+    userStats[uid].total++
+    if (s.status === 'submitted') userStats[uid].submitted++
+    if (s.status === 'draft') userStats[uid].draft++
+    if (s.created_at > userStats[uid].lastActive) userStats[uid].lastActive = s.created_at
+  }
+
+  const userMap: Record<string, any> = {}
+  for (const u of (users || [])) userMap[u.id] = u
+
+  const topPerformers = Object.entries(userStats)
+    .map(([uid, stats]) => ({
+      name: userMap[uid]?.full_name || 'غير معروف',
+      role: userMap[uid]?.role || '—',
+      gov: userMap[uid]?.governorate_id ? govsMap.get(userMap[uid].governorate_id) || '—' : '—',
+      ...stats,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10)
+
+  const inactiveUsers = (users || []).filter((u: any) => !userStats[u.id] && u.role !== 'admin' && u.role !== 'central')
+  const activeCount = (users || []).filter((u: any) => userStats[u.id]).length
+
+  sources.push({
+    id: 3,
+    type: 'aggregate',
+    table: 'profiles + form_submissions',
+    summary: `تبويب أداء المشرفين — ${activeCount} نشط، ${inactiveUsers.length} خامل من ${(users || []).length}`,
+    quote: `== أداء المشرفين ==
+
+👥 إحصائيات المشرفين:
+• إجمالي المشرفين: ${(users || []).length}
+• نشطين: ${activeCount}
+• خاملين: ${inactiveUsers.length}
+• معدل النشاط: ${((users || []).length > 0 ? Math.round((activeCount / (users || []).length) * 100) : 0)}%
+
+🏆 أعلى 10 مشرفين:
+${topPerformers.map((s, i) => `${i + 1}. ${s.name} — ${s.gov} — ${s.total} إرسالية (${s.submitted} مرسلة)`).join('\n')}${inactiveUsers.length > 0 ? `\n\n⚠️ مشرفون خاملون (${Math.min(inactiveUsers.length, 10)}):\n${inactiveUsers.slice(0, 10).map((u: any, i: number) => `${i + 1}. ${u.full_name} — ${u.role} — ${u.governorate_id ? govsMap.get(u.governorate_id) || '—' : '—'}`).join('\n')}` : ''}`,
+    metadata: { tab: 'performance' },
+  })
+
+  // ── Source 4: التوصيات (Recommendations Tab) ──
+  const recommendations: string[] = []
+
+  if (zeroCount > 0) {
+    recommendations.push(`🚨 ${zeroCount} محافظة بدون إرساليات — تواصل مع المشرفين فوراً`)
+  }
+  if (lowCount > 0) {
+    recommendations.push(`⚠️ ${lowCount} محافظة بإرساليات منخفضة — تحتاج متابعة وتدريب`)
+  }
+  if (weeklyChange < 0) {
+    recommendations.push(`📉 انخفاض ${Math.abs(weeklyChange)}% في الإرساليات هذا الأسبوع — تحقق من الأسباب`)
+  } else if (weeklyChange > 20) {
+    recommendations.push(`📈 زيادة ${weeklyChange}% في الإرساليات — استمرار ممتاز`)
+  }
+  if (inactiveUsers.length > (users || []).length * 0.3) {
+    recommendations.push(`👥 ${inactiveUsers.length} مشرف خامل — ${Math.round((inactiveUsers.length / (users || []).length) * 100)}% من المشرفين`)
+  }
+  if ((byStatus.draft || 0) > totalSubs * 0.2) {
+    recommendations.push(`📝 ${byStatus.draft || 0} مسودة غير مرسلة — تابع المشرفين لإرسالها`)
+  }
+  if (recommendations.length === 0) {
+    recommendations.push('✅ الأداء العام جيد — استمرار في المتابعة')
+  }
+
+  sources.push({
+    id: 4,
+    type: 'aggregate',
+    table: 'computed',
+    summary: `تبويب التوصيات — ${recommendations.length} توصية`,
+    quote: `== التوصيات ==\n${recommendations.join('\n')}\n\n💡 إجراءات مقترحة:\n• متابعة المحافظات ذات التغطية المنخفضة\n• تدريب المشرفين الخاملين\n• مراجعة المسودات غير المرسلة`,
+    metadata: { tab: 'recommendations' },
+  })
+
+  return sources
+}
+
 // ═══ Fetcher: تقييم أداء المشرفين الشامل (من التقرير الشامل المدمج) ═══
 // يجلب نفس بيانات "التقرير الشامل المدمج للمشرفين" في لوحة التحكم
 async function fetchSupervisionEvaluationData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {
@@ -1621,6 +1832,9 @@ export async function groundMessage(
         break
       case 'supervision_evaluation':
         sources = await fetchSupervisionEvaluationData(supa, plan, campaignRound)
+        break
+      case 'analytics_page':
+        sources = await fetchAnalyticsPageData(supa, plan, campaignRound)
         break
       case 'unknown':
       default:

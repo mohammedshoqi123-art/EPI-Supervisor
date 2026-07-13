@@ -271,16 +271,60 @@ function parseMindMap(content: string): MindMapNode[] | undefined {
   try {
     // Find JSON in content
     const jsonMatch = content.match(/```json\s*([\s\S]*?)```/) || content.match(/(\{[\s\S]*\})/)
-    if (!jsonMatch) return undefined
+    if (!jsonMatch) {
+      // ⚠️ Fallback: parse markdown headings as mind map structure
+      return parseMarkdownAsMindMap(content)
+    }
     const json = JSON.parse(jsonMatch[1])
     if (json.root) {
       return [transformMindMapNode(json.root, 'root')]
     }
     if (Array.isArray(json)) return json.map((n, i) => transformMindMapNode(n, `node-${i}`))
-    return undefined
+    if (json.nodes && Array.isArray(json.nodes)) return json.nodes.map((n, i) => transformMindMapNode(n, `node-${i}`))
+    // ⚠️ Fallback
+    return parseMarkdownAsMindMap(content)
   } catch {
-    return undefined
+    return parseMarkdownAsMindMap(content)
   }
+}
+
+/// ⚠️ Fallback: parse markdown headings (#, ##, ###) as mind map structure
+function parseMarkdownAsMindMap(content: string): MindMapNode[] | undefined {
+  const lines = content.split('\n').filter(l => l.trim())
+  if (lines.length === 0) return undefined
+
+  const root: MindMapNode = { id: 'root', label: 'الخريطة الذهنية', children: [] }
+  const level1: MindMapNode[] = []
+  let currentL1: MindMapNode | null = null
+
+  for (const line of lines) {
+    const trimmed = line.replace(/^#+\s*/, '').replace(/^[-•]\s*/, '').trim()
+    if (!trimmed) continue
+
+    if (line.startsWith('# ') || line.startsWith('## ')) {
+      // Level 1 branch
+      currentL1 = { id: `l1-${level1.length}`, label: trimmed, children: [] }
+      level1.push(currentL1)
+    } else if (line.startsWith('### ') || line.startsWith('- ') || line.startsWith('• ')) {
+      // Level 2 detail
+      if (currentL1) {
+        currentL1.children = currentL1.children || []
+        currentL1.children.push({ id: `${currentL1.id}-${currentL1.children.length}`, label: trimmed })
+      } else {
+        level1.push({ id: `l1-${level1.length}`, label: trimmed })
+      }
+    } else {
+      // Plain text — add as level 1 if no current
+      if (!currentL1 && level1.length < 8) {
+        currentL1 = { id: `l1-${level1.length}`, label: trimmed.slice(0, 50), children: [] }
+        level1.push(currentL1)
+      }
+    }
+  }
+
+  if (level1.length === 0) return undefined
+  root.children = level1
+  return [root]
 }
 
 function transformMindMapNode(node: any, id: string): MindMapNode {
@@ -331,7 +375,10 @@ function parseStudyGuide(content: string): StudyGuideSection[] | undefined {
 function parseAudioScript(content: string): AudioScriptSegment[] | undefined {
   try {
     const jsonMatch = content.match(/```json\s*([\s\S]*?)```/) || content.match(/(\{[\s\S]*\})/)
-    if (!jsonMatch) return undefined
+    if (!jsonMatch) {
+      // ⚠️ Fallback: parse as dialogue (مذيع1: ... / مذيع2: ...)
+      return parseDialogueAsAudioScript(content)
+    }
     const json = JSON.parse(jsonMatch[1])
     if (json.segments && Array.isArray(json.segments)) {
       return json.segments.map((s: any) => ({
@@ -341,10 +388,53 @@ function parseAudioScript(content: string): AudioScriptSegment[] | undefined {
         citations: Array.isArray(s.citations) ? s.citations : [],
       }))
     }
-    return undefined
+    // ⚠️ Fallback
+    return parseDialogueAsAudioScript(content)
   } catch {
-    return undefined
+    return parseDialogueAsAudioScript(content)
   }
+}
+
+/// ⚠️ Fallback: parse text as dialogue (أحمد: ... / فاطمة: ... / Host1: ...)
+function parseDialogueAsAudioScript(content: string): AudioScriptSegment[] | undefined {
+  const segments: AudioScriptSegment[] = []
+  const lines = content.split('\n').filter(l => l.trim())
+  
+  let currentSpeaker: 'host1' | 'host2' = 'host1'
+  let currentText = ''
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    
+    // Detect speaker patterns
+    const ahmedMatch = trimmed.match(/^(أحمد|مذيع1|Host1|host1)[:：]\s*(.*)/)
+    const fatimaMatch = trimmed.match(/^(فاطمة|مذيع2|Host2|host2)[:：]\s*(.*)/)
+    
+    if (ahmedMatch) {
+      // Save previous segment
+      if (currentText.trim()) {
+        segments.push({ speaker: currentSpeaker, text: currentText.trim(), emotion: 'neutral' })
+      }
+      currentSpeaker = 'host1'
+      currentText = ahmedMatch[2]
+    } else if (fatimaMatch) {
+      if (currentText.trim()) {
+        segments.push({ speaker: currentSpeaker, text: currentText.trim(), emotion: 'neutral' })
+      }
+      currentSpeaker = 'host2'
+      currentText = fatimaMatch[2]
+    } else {
+      // Continuation of current speaker
+      currentText += ' ' + trimmed
+    }
+  }
+  
+  // Don't forget the last segment
+  if (currentText.trim()) {
+    segments.push({ speaker: currentSpeaker, text: currentText.trim(), emotion: 'neutral' })
+  }
+
+  return segments.length > 0 ? segments : undefined
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -437,14 +527,16 @@ export async function generateStudioArtifact(
 
   // ─── Step 3: Call LLM via Hybrid Gateway ───
   // Use higher tokens + longer timeout for Studio (longer generation)
-  // ⚠️ Studio needs longer timeout because Pollinations multi-model fallback
-  // can take up to 4×25s = 100s in worst case. We give it 60s.
+  // ⚠️ Studio needs longer timeout because:
+  // - Pollinations multi-model fallback can take up to 4×30s = 120s
+  // - Large generation (4000 tokens) needs time
+  // - mind_map and audio_overview need structured JSON output
   const maxTokens = type === 'audio_overview' ? 2500 : 4000
   const result = await hybridRouteChat(messages, env, {
     maxTokens,
     temperature: 0.6,
-    raceTimeoutMs: 30_000,   // ⚠️ Increased from 20s to 30s for Studio
-    fallbackTimeoutMs: 60_000,  // ⚠️ Increased from 45s to 60s
+    raceTimeoutMs: 45_000,   // ⚠️ Increased from 30s to 45s for Studio
+    fallbackTimeoutMs: 90_000,  // ⚠️ Increased from 60s to 90s
   })
 
   const latencyMs = Date.now() - startTime

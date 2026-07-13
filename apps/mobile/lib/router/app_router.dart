@@ -309,15 +309,17 @@ class _MainShellState extends ConsumerState<MainShell> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // ═══ Drawer menu button ═══
-          FloatingActionButton.small(
-            heroTag: 'menu_fab',
-            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-            backgroundColor: AppTheme.primaryDark,
-            foregroundColor: Colors.white,
-            elevation: 4,
-            child: const Icon(Icons.menu_rounded, size: 22),
-          ),
+          // ═══ Drawer menu button — hidden on /ai and /chat pages ═══
+          if (!GoRouterState.of(context).matchedLocation.startsWith('/ai') &&
+              !GoRouterState.of(context).matchedLocation.startsWith('/chat'))
+            FloatingActionButton.small(
+              heroTag: 'menu_fab',
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              backgroundColor: AppTheme.primaryDark,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              child: const Icon(Icons.menu_rounded, size: 22),
+            ),
           // ═══ Removed: sync FAB + pending badge — sync is available in drawer ═══
           // ═══ AI Assistant — hidden on /ai and /chat pages (chat has AI tab) ═══
           if (!GoRouterState.of(context).matchedLocation.startsWith('/ai') &&

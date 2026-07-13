@@ -792,6 +792,96 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
+                      // ═══ Progress indicator (آمن — خارج Form validation) ═══
+                      if (_sections.isNotEmpty)
+                        Builder(builder: (context) {
+                          final total = _allFields.length;
+                          int answered = 0;
+                          for (final f in _allFields) {
+                            final key = f['key'] as String?;
+                            if (key == null) continue;
+                            final val = _formData[key];
+                            if (val != null) {
+                              if (val is String && val.isNotEmpty) answered++;
+                              else if (val is bool) answered++;
+                              else if (val is num) answered++;
+                              else if (val is List && val.isNotEmpty) answered++;
+                            }
+                          }
+                          final percent = total > 0 ? (answered / total * 100).round() : 0;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                            ),
+                            child: Row(
+                              children: [
+                                // Progress ring
+                                SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: Stack(
+                                    children: [
+                                      CircularProgressIndicator(
+                                        value: total > 0 ? answered / total : 0,
+                                        strokeWidth: 3,
+                                        backgroundColor: Colors.grey.shade200,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          percent >= 80 ? Colors.green : percent >= 50 ? Colors.amber : Colors.red,
+                                        ),
+                                      ),
+                                      Center(
+                                        child: Text(
+                                          '$percent%',
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'تقدم التعبئة',
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: AppTheme.primaryColor),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '$answered من $total حقل مُعبأ',
+                                        style: TextStyle(fontSize: 11, fontFamily: 'Tajawal', color: AppTheme.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (_hasUnsavedChanges)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.edit_rounded, size: 12, color: Colors.orange),
+                                        SizedBox(width: 4),
+                                        Text('غير محفوظ', style: TextStyle(fontSize: 10, fontFamily: 'Tajawal', color: Colors.orange, fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  )
+                                else if (_formData.isNotEmpty)
+                                  const Icon(Icons.cloud_done_rounded, color: Colors.green, size: 20),
+                              ],
+                            ),
+                          );
+                        }),
                       // ═══ Active campaign round indicator (only for integrated_activity) ═══
                       Builder(builder: (context) {
                         final campaign = ref.watch(campaignProvider);

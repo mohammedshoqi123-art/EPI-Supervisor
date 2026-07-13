@@ -7,10 +7,24 @@ import '../providers/app_providers.dart';
 /// ═══════════════════════════════════════════════════════════════════════
 /// Full Data Sync — يجلب ALL data من السيرفر ويخزنها بالكاش
 /// بعد المزامنة: كل الشاشات تقرأ من الكاش (سريع)
-/// المستخدم يضغط الزرار بأي وقت يبي يحدث البيانات
 /// ═══════════════════════════════════════════════════════════════════════
 
 enum FullSyncState { idle, syncing, done, error }
+
+/// Sync step result — tracks success/failure per step
+class SyncStepResult {
+  final String name;
+  final bool success;
+  final int count;
+  final String? error;
+
+  const SyncStepResult({
+    required this.name,
+    required this.success,
+    this.count = 0,
+    this.error,
+  });
+}
 
 class FullSyncResult {
   final int forms;
@@ -20,6 +34,7 @@ class FullSyncResult {
   final int references;
   final int facilities;
   final String? error;
+  final List<SyncStepResult> stepResults;
 
   const FullSyncResult({
     this.forms = 0,
@@ -29,10 +44,38 @@ class FullSyncResult {
     this.references = 0,
     this.facilities = 0,
     this.error,
+    this.stepResults = const [],
   });
 
   int get total =>
       forms + submissions + governorates + districts + references + facilities;
+
+  /// عدد الخطوات الناجحة
+  int get successCount => stepResults.where((s) => s.success).length;
+
+  /// عدد الخطوات الفاشلة
+  int get failureCount => stepResults.where((s) => !s.success).length;
+
+  /// هل كل الخطوات نجحت؟
+  bool get allSuccess => stepResults.isNotEmpty && failureCount == 0;
+
+  /// رسالة ملخص للمستخدم
+  String get summary {
+    if (error != null) return 'خطأ فادح: $error';
+    final parts = <String>[];
+    if (governorates > 0) parts.add('$governorates محافظة');
+    if (districts > 0) parts.add('$districts مديرية');
+    if (forms > 0) parts.add('$forms نموذج');
+    if (submissions > 0) parts.add('$submissions إرسالية');
+    if (references > 0) parts.add('$references مرجع');
+    if (facilities > 0) parts.add('$facilities مرفق');
+    if (parts.isEmpty) return 'لم تتم مزامنة أي بيانات';
+    final base = 'تمت المزامنة: ${parts.join('، ')}';
+    if (failureCount > 0) {
+      return '$base\n⚠️ فشلت $failureCount خطوة من ${stepResults.length}';
+    }
+    return base;
+  }
 }
 
 class FullSyncNotifier extends StateNotifier<FullSyncState> {
@@ -48,6 +91,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
 
     state = FullSyncState.syncing;
     int forms = 0, submissions = 0, govs = 0, dists = 0, refs = 0, facs = 0;
+    final steps = <SyncStepResult>[];
 
     try {
       final db = _ref.read(databaseServiceProvider);
@@ -59,9 +103,11 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         final govData = await db.getGovernorates();
         await cache.putList('governorates', govData);
         govs = govData.length;
-        debugPrint('[FullSync] ✅ Governorates: $govs');
+        steps.add(SyncStepResult(name: 'المحافظات', success: true, count: govs));
+        _log('✅ Governorates: $govs');
       } catch (e) {
-        debugPrint('[FullSync] ❌ Governorates: $e');
+        steps.add(SyncStepResult(name: 'المحافظات', success: false, error: e.toString()));
+        _log('❌ Governorates: $e');
       }
 
       // ═══ 2. Districts ═══
@@ -69,9 +115,11 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         final distData = await db.getDistricts();
         await cache.putList('districts_all', distData);
         dists = distData.length;
-        debugPrint('[FullSync] ✅ Districts: $dists');
+        steps.add(SyncStepResult(name: 'المديريات', success: true, count: dists));
+        _log('✅ Districts: $dists');
       } catch (e) {
-        debugPrint('[FullSync] ❌ Districts: $e');
+        steps.add(SyncStepResult(name: 'المديريات', success: false, error: e.toString()));
+        _log('❌ Districts: $e');
       }
 
       // ═══ 3. Forms (for current campaign) ═══
@@ -79,26 +127,46 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         final formData = await db.getForms(campaignType: campaign.value);
         await cache.putList('forms_${campaign.value}', formData);
         forms = formData.length;
-        debugPrint('[FullSync] ✅ Forms: $forms');
+        steps.add(SyncStepResult(name: 'النماذج', success: true, count: forms));
+        _log('✅ Forms: $forms');
       } catch (e) {
-        debugPrint('[FullSync] ❌ Forms: $e');
+        steps.add(SyncStepResult(name: 'النماذج', success: false, error: e.toString()));
+        _log('❌ Forms: $e');
       }
 
-      // ═══ 4. Submissions (limit 10000 — generous to avoid silent truncation) ═══
+      // ═══ 4. Submissions (pagination — يجلب كل البيانات على دفعات) ═══
       try {
-        final subData = await db.getSubmissions(
-          campaignType: campaign.value,
-          limit: 10000, // ═══ Was 500, caused silent data loss offline ═══
-        );
+        final allSubs = <Map<String, dynamic>>[];
+        const pageSize = 2000;
+        int offset = 0;
+        bool hasMore = true;
+
+        while (hasMore) {
+          final batch = await db.getSubmissions(
+            campaignType: campaign.value,
+            limit: pageSize,
+            offset: offset,
+          );
+          if (batch.isEmpty || batch.length < pageSize) {
+            hasMore = false;
+          }
+          allSubs.addAll(batch);
+          offset += pageSize;
+          // حد أقصى 50000 (حماية من الحلقات اللانهائية)
+          if (allSubs.length >= 50000) break;
+        }
+
         final filter = SubmissionsFilter(
           campaignType: campaign.value,
-          limit: 10000,
+          limit: allSubs.length,
         );
-        await cache.putList(filter.cacheKey, subData);
-        submissions = subData.length;
-        debugPrint('[FullSync] ✅ Submissions: $submissions');
+        await cache.putList(filter.cacheKey, allSubs);
+        submissions = allSubs.length;
+        steps.add(SyncStepResult(name: 'الإرساليات', success: true, count: submissions));
+        _log('✅ Submissions: $submissions (paginated, ${offset ~/ pageSize} batches)');
       } catch (e) {
-        debugPrint('[FullSync] ❌ Submissions: $e');
+        steps.add(SyncStepResult(name: 'الإرساليات', success: false, error: e.toString()));
+        _log('❌ Submissions: $e');
       }
 
       // ═══ 5. References ═══
@@ -106,19 +174,19 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         final refData = await db.getReferences();
         await cache.putList('references', refData);
         refs = refData.length;
-        debugPrint('[FullSync] ✅ References: $refs');
+        steps.add(SyncStepResult(name: 'المراجع', success: true, count: refs));
+        _log('✅ References: $refs');
       } catch (e) {
-        debugPrint('[FullSync] ❌ References: $e');
+        steps.add(SyncStepResult(name: 'المراجع', success: false, error: e.toString()));
+        _log('❌ References: $e');
       }
 
-      // ═══ 6. Health Facilities (ALL in single query — no N+1) ═══
+      // ═══ 6. Health Facilities ═══
       try {
-        // ═══ PERFORMANCE FIX: Single query instead of loop per district ═══
         final facData = await db.getHealthFacilities();
         await cache.putList('facilities_all', facData);
         facs = facData.length;
 
-        // Also cache per-district for quick lookup
         final byDistrict = <String, List<Map<String, dynamic>>>{};
         for (final fac in facData) {
           final distId = fac['district_id'] as String? ?? '';
@@ -130,39 +198,42 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
           await cache.putList('facilities_${entry.key}', entry.value);
         }
 
-        debugPrint('[FullSync] ✅ Facilities: $facs (${byDistrict.length} districts)');
+        steps.add(SyncStepResult(name: 'المرافق', success: true, count: facs));
+        _log('✅ Facilities: $facs');
       } catch (e) {
-        debugPrint('[FullSync] ❌ Facilities: $e');
+        steps.add(SyncStepResult(name: 'المرافق', success: false, error: e.toString()));
+        _log('❌ Facilities: $e');
       }
 
       // ═══ 7. Sync pending uploads ═══
       try {
         final syncService = await _ref.read(syncServiceProvider.future);
         final result = await syncService.sync();
-        debugPrint('[FullSync] ✅ Pending synced: ${result.synced}');
+        steps.add(SyncStepResult(name: 'الإرسالات المعلقة', success: true, count: result.synced));
+        _log('✅ Pending synced: ${result.synced}');
       } catch (e) {
-        debugPrint('[FullSync] ❌ Pending sync: $e');
+        steps.add(SyncStepResult(name: 'الإرسالات المعلقة', success: false, error: e.toString()));
+        _log('❌ Pending sync: $e');
       }
 
-      // ═══ 8. Invalidate Riverpod providers to pick up new cache ═══
+      // ═══ 8. Invalidate Riverpod providers ═══
       _ref.invalidate(governoratesProvider);
       _ref.invalidate(districtsProvider);
       _ref.invalidate(formsProvider);
       _ref.invalidate(formStatsProvider);
       _ref.invalidate(dashboardAnalyticsProvider);
-      // Note: submissionsProvider, shortagesProvider, submissionTrendProvider, governorateRankingProvider
-      // are now FutureProvider.family.autoDispose — their consumers re-read with the new context
-      // automatically when invalidated providers downstream change.
 
-      // Fix: check if at least some data was fetched — don't report success if all failed
+      // ═══ 9. Determine final state ═══
       final totalSynced = forms + submissions + govs + dists + refs + facs;
       if (totalSynced == 0) {
         state = FullSyncState.error;
-        debugPrint('[FullSync] ⚠️ All sync steps returned 0 items — possible network issue');
+        _log('⚠️ All sync steps returned 0 — possible network issue');
+      } else if (steps.any((s) => !s.success)) {
+        state = FullSyncState.done; // partial success
+        _log('⚠️ Partial sync: ${steps.where((s) => s.success).length}/${steps.length} steps succeeded');
       } else {
         state = FullSyncState.done;
-        debugPrint(
-            '[FullSync] ✅ Complete: $forms forms, $submissions subs, $govs govs, $dists dists');
+        _log('✅ Complete: $forms forms, $submissions subs, $govs govs, $dists dists');
       }
 
       return FullSyncResult(
@@ -172,12 +243,24 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         districts: dists,
         references: refs,
         facilities: facs,
+        stepResults: steps,
       );
     } catch (e) {
       state = FullSyncState.error;
-      debugPrint('[FullSync] ❌ Fatal error: $e');
-      return FullSyncResult(error: e.toString());
+      _log('❌ Fatal error: $e');
+      return FullSyncResult(
+        error: e.toString(),
+        stepResults: steps,
+      );
     }
+  }
+
+  /// تسجيل آمن — فقط في debug mode
+  void _log(String msg) {
+    if (kDebugMode) {
+      debugPrint('[FullSync] $msg');
+    }
+    // TODO: في الإنتاج، أرسل الأخطاء إلى Sentry/Crashlytics
   }
 
   void reset() {
@@ -187,5 +270,3 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
 
 final fullSyncProvider =
     StateNotifierProvider<FullSyncNotifier, FullSyncState>((ref) {
-  return FullSyncNotifier(ref);
-});

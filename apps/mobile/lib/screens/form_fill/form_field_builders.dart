@@ -7,6 +7,9 @@ import 'health_facility_dropdown.dart';
 import 'photo_picker_field.dart';
 
 /// Builds section headers for grouped form fields.
+/// PRESERVES original field order — renders each field individually.
+/// Respects showIf conditions.
+/// Adds section numbers + field count badges.
 List<Widget> buildFormSections({
   required List<dynamic> sections,
   required Map<String, dynamic> formData,
@@ -28,11 +31,25 @@ List<Widget> buildFormSections({
     (a, b) => (a['order'] as int? ?? 0).compareTo(b['order'] as int? ?? 0),
   );
 
-  for (final section in sortedSections) {
+  for (int secIdx = 0; secIdx < sortedSections.length; secIdx++) {
+    final section = sortedSections[secIdx];
     final title = section['title_ar'] as String? ?? '';
     final fields =
         (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
+    // ═══ Filter visible fields (respect showIf) ═══
+    final visibleFields = <Map<String, dynamic>>[];
+    for (final f in fields) {
+      final showIf = f['showIf'];
+      if (showIf != null && !_evaluateShowIf(showIf, formData)) {
+        continue;
+      }
+      visibleFields.add(f);
+    }
+
+    if (visibleFields.isEmpty) continue;
+
+    // ═══ Section header with number badge + title + field count ═══
     widgets.add(
       Container(
         margin: const EdgeInsets.only(bottom: 12, top: 8),
@@ -46,12 +63,24 @@ List<Widget> buildFormSections({
         ),
         child: Row(
           children: [
+            // Section number badge
             Container(
-              width: 4,
-              height: 24,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: AppTheme.primaryColor,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Text(
+                  '${secIdx + 1}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -66,15 +95,33 @@ List<Widget> buildFormSections({
                 ),
               ),
             ),
+            // Field count badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '${visibleFields.length} حقل',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
 
-    for (final field in fields) {
+    // ═══ Render ALL fields in ORIGINAL ORDER ═══
+    for (final f in visibleFields) {
       widgets.add(
         buildFormField(
-          field: field,
+          field: f,
           formData: formData,
           textControllers: textControllers,
           isGettingLocation: isGettingLocation,
@@ -93,6 +140,14 @@ List<Widget> buildFormSections({
   }
 
   return widgets;
+}
+
+/// Evaluate showIf condition — returns true if field should be visible
+bool _evaluateShowIf(Map<String, dynamic> showIf, Map<String, dynamic> formData) {
+  final field = showIf['field'] as String?;
+  final value = showIf['value'];
+  if (field == null || value == null) return true;
+  return formData[field] == value;
 }
 
 /// Builds a single form field widget based on its type.

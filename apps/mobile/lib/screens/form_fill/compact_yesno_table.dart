@@ -149,13 +149,6 @@ class CompactYesNoTable extends StatelessWidget {
     );
   }
 
-  // KPI footer
-          _buildKPIFooter(cs),
-        ],
-      ),
-    );
-  }
-
   Widget _buildKPIFooter(ColorScheme cs) {
     int answered = 0, yesCount = 0;
     for (final item in items) {

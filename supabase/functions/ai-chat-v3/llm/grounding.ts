@@ -424,16 +424,19 @@ function processSubmissionsData(
 function analyzeFormData(rows: any[], formId?: string): { summary: string; quote: string } | null {
   if (!rows || rows.length === 0) return null
 
-  // Supervision form analysis (8 sections) — FIXED: actual field keys from supervision-form-report.ts
+  // Supervision form analysis (11 sections) — محدثة لتطابق الـ schema الفعلي من قاعدة البيانات
   const SUPERVISION_SECTIONS: Record<string, { label: string; fields: string[]; target: number }> = {
-    'team': { label: 'تركيبة الفريق', fields: ['team_members_present', 'woman_in_team', 'local_member', 'id_cards'], target: 100 },
-    'planning': { label: 'التخطيط', fields: ['croquis_plan', 'site_marking', 'plan_commitment'], target: 100 },
-    'vaccination': { label: 'بروتوكول التطعيم', fields: ['personal_contact', 'ask_all', 'angle_45', 'swallow_check'], target: 100 },
-    'registration': { label: 'التسجيل', fields: ['daily_registration', 'absent_followup', 'finger_marks', 'house_marks'], target: 100 },
-    'logistics': { label: 'اللوجستيات', fields: ['supply_sufficient', 'vaccine_sufficient', 'cold_chain', 'vvm_understood', 'vvm_valid'], target: 100 },
-    'supervision': { label: 'الإشراف', fields: ['e_supervision', 'daily_visit', 'notes_recorded', 'suspects_asked'], target: 95 },
-    'safety': { label: 'السلامة', fields: ['supply_registered', 'bags_correct', 'collection_correct', 'labeling_clear', 'count_match', 'daily_delivery'], target: 100 },
-    'vitamin_a': { label: 'فيتامين أ', fields: ['vitamin_available', 'vitamin_correct', 'scissors_box'], target: 100 },
+    'team_info': { label: 'معلومات الفريق', fields: ['has_activity_plan', 'has_doctor_or_trained', 'wearing_uniform'], target: 100 },
+    'work_environment': { label: 'بيئة العمل والتنسيق', fields: ['suitable_location', 'community_coordination', 'has_speaker', 'has_transport', 'previous_visit'], target: 100 },
+    'records_docs': { label: 'السجلات والوثائق', fields: ['complete_records', 'daily_work_forms', 'correct_data_entry', 'next_visit_noted'], target: 100 },
+    'vaccination_cards': { label: 'بطاقات التحصين', fields: ['child_vaccination_cards', 'women_vaccination_cards'], target: 100 },
+    'service_quality': { label: 'جودة الخدمة', fields: ['good_acceptance', 'safe_vaccination', 'respiratory_rate_check', 'muac_measurement', 'ors_provision', 'clean_delivery_kit', 'nutrition_assessment'], target: 100 },
+    'vitamins_referral': { label: 'الفيتامينات والإحالة', fields: ['vitamin_a_children', 'vitamin_a_women', 'facility_referral', 'correct_medication', 'nutrition_counseling'], target: 100 },
+    'vaccine_handling': { label: 'التعامل مع اللقاحات', fields: ['vaccine_disposal', 'safety_box_usage', 'cold_chain_proper'], target: 100 },
+    'supplies_equipment': { label: 'الإمدادات والمعدات', fields: ['family_planning_available', 'folic_iron_stock', 'fetal_stethoscope', 'bp_device', 'muac_tape', 'height_board', 'thermometer', 'scale', 'daily_supply_tracking'], target: 100 },
+    'catch_up_policy': { label: 'سياسة الالتحاق بالركب', fields: ['has_vaccine_carrier', 'vaccines_sufficient', 'correct_vaccine_site', 'catch_up_knowledge', 'catch_up_training', 'catch_up_2to5_registration', 'team_target_knowledge'], target: 100 },
+    'defaulter_tracking': { label: 'تتبع المتخلفين', fields: ['has_defaulter_mechanism', 'has_previous_vaccination_records'], target: 95 },
+    'aefi': { label: 'الآثار الجانبية', fields: ['aefi_knowledge', 'aefi_mothers_info'], target: 100 },
   }
 
   // Readiness form analysis (6 criteria)
@@ -451,7 +454,7 @@ function analyzeFormData(rows: any[], formId?: string): { summary: string; quote
   const isReadiness = formId === '8aa0f3d5-7ab0-430f-85fd-4488c0c129bb'
 
   if (isSupervision) {
-    // Analyze supervision form — 8 sections
+    // Analyze supervision form — 11 sections (محدثة لتطابق الـ schema الفعلي)
     const sectionResults: string[] = []
     const challenges: string[] = []
 

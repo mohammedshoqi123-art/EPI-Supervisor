@@ -28,55 +28,73 @@ import {
   roundSuffix,
 } from './shared'
 
-// ─── Supervision Form Sections (EPI Standard) ───────────────
+// ─── Supervision Form Sections (محدثة لتطابق الـ schema الفعلي من قاعدة البيانات) ───────────────
 
 const SECTIONS: Record<string, { title: string; icon: string; fields: string[]; target: number }> = {
-  'team': {
-    title: 'أ — تركيبة الفريق',
+  'team_info': {
+    title: 'أ — معلومات الفريق',
     icon: '👥',
-    fields: ['team_members_present', 'woman_in_team', 'local_member', 'id_cards'],
+    fields: ['has_activity_plan', 'has_doctor_or_trained', 'wearing_uniform'],
     target: 100,
   },
-  'planning': {
-    title: 'ب — التخطيط',
+  'work_environment': {
+    title: 'ب — بيئة العمل والتنسيق',
+    icon: '🏥',
+    fields: ['suitable_location', 'community_coordination', 'has_speaker', 'has_transport', 'previous_visit'],
+    target: 100,
+  },
+  'records_docs': {
+    title: 'ج — السجلات والوثائق',
     icon: '📋',
-    fields: ['croquis_plan', 'site_marking', 'plan_commitment'],
+    fields: ['complete_records', 'daily_work_forms', 'correct_data_entry', 'next_visit_noted'],
     target: 100,
   },
-  'vaccination': {
-    title: 'ج — بروتوكول التطعيم',
+  'vaccination_cards': {
+    title: 'د — بطاقات التحصين',
+    icon: '💳',
+    fields: ['child_vaccination_cards', 'women_vaccination_cards'],
+    target: 100,
+  },
+  'service_quality': {
+    title: 'هـ — جودة الخدمة',
+    icon: '⭐',
+    fields: ['good_acceptance', 'safe_vaccination', 'respiratory_rate_check', 'muac_measurement', 'ors_provision', 'clean_delivery_kit', 'nutrition_assessment'],
+    target: 100,
+  },
+  'vitamins_referral': {
+    title: 'و — الفيتامينات والإحالة',
+    icon: '💊',
+    fields: ['vitamin_a_children', 'vitamin_a_women', 'facility_referral', 'correct_medication', 'nutrition_counseling'],
+    target: 100,
+  },
+  'vaccine_handling': {
+    title: 'ز — التعامل مع اللقاحات',
     icon: '💉',
-    fields: ['personal_contact', 'ask_all', 'angle_45', 'swallow_check'],
+    fields: ['vaccine_disposal', 'safety_box_usage', 'cold_chain_proper'],
     target: 100,
   },
-  'registration': {
-    title: 'د — التسجيل',
-    icon: '📝',
-    fields: ['daily_registration', 'absent_followup', 'finger_marks', 'house_marks'],
-    target: 100,
-  },
-  'logistics': {
-    title: 'هـ — اللوجستيات',
+  'supplies_equipment': {
+    title: 'ح — الإمدادات والمعدات',
     icon: '📦',
-    fields: ['supply_sufficient', 'vaccine_sufficient', 'cold_chain', 'vvm_understood', 'vvm_valid'],
+    fields: ['family_planning_available', 'folic_iron_stock', 'fetal_stethoscope', 'bp_device', 'muac_tape', 'height_board', 'thermometer', 'scale', 'daily_supply_tracking'],
     target: 100,
   },
-  'supervision': {
-    title: 'و — الإشراف',
-    icon: '👁️',
-    fields: ['e_supervision', 'daily_visit', 'notes_recorded', 'suspects_asked'],
+  'catch_up_policy': {
+    title: 'ط — سياسة الالتحاق بالركب',
+    icon: '🎯',
+    fields: ['has_vaccine_carrier', 'vaccines_sufficient', 'correct_vaccine_site', 'catch_up_knowledge', 'catch_up_training', 'catch_up_2to5_registration', 'team_target_knowledge'],
+    target: 100,
+  },
+  'defaulter_tracking': {
+    title: 'ي — تتبع المتخلفين',
+    icon: '🔍',
+    fields: ['has_defaulter_mechanism', 'has_previous_vaccination_records'],
     target: 95,
   },
-  'safety': {
-    title: 'ز — السلامة',
-    icon: '🛡️',
-    fields: ['supply_registered', 'bags_correct', 'collection_correct', 'labeling_clear', 'count_match', 'daily_delivery'],
-    target: 100,
-  },
-  'vitamin_a': {
-    title: 'ح — فيتامين أ',
-    icon: '💊',
-    fields: ['vitamin_available', 'vitamin_correct', 'scissors_box'],
+  'aefi': {
+    title: 'ك — الآثار الجانبية',
+    icon: '⚠️',
+    fields: ['aefi_knowledge', 'aefi_mothers_info'],
     target: 100,
   },
 }
@@ -84,47 +102,66 @@ const SECTIONS: Record<string, { title: string; icon: string; fields: string[]; 
 // ─── Field Labels ────────────────────────────────────────────
 
 const FIELD_LABELS: Record<string, string> = {
-  // أ — تركيبة الفريق
-  team_members_present: 'عنصري الفريق متواجدين',
-  woman_in_team: 'امرأة في الفريق',
-  local_member: 'عضو من نفس المنطقة',
-  id_cards: 'كروت تعريف',
-  // ب — التخطيط
-  croquis_plan: 'خطة كروكي',
-  site_marking: 'تحديد الموقع',
-  plan_commitment: 'الالتزام بالخطة',
-  // ج — بروتوكول التطعيم
-  personal_contact: 'اتصال شخصي',
-  ask_all: 'سؤال الجميع',
-  angle_45: 'زاوية 45 درجة',
-  swallow_check: 'التأكد من البلع',
-  // د — التسجيل
-  daily_registration: 'تسجيل يومي',
-  absent_followup: 'متابعة متغيبين',
-  finger_marks: 'تعليم أصابع',
-  house_marks: 'علامات منازل',
-  // هـ — اللوجستيات
-  supply_sufficient: 'تمويل كاف',
-  vaccine_sufficient: 'لقاح كاف',
-  cold_chain: 'حفظ حراري',
-  vvm_understood: 'فهم VVM',
-  vvm_valid: 'VVM سليم',
-  // و — الإشراف
-  e_supervision: 'إشراف إلكتروني',
-  daily_visit: 'زيارة يومية',
-  notes_recorded: 'تدوين ملاحظات',
-  suspects_asked: 'سؤال مشتبهات',
-  // ز — السلامة
-  supply_registered: 'تسجيل إمداد',
-  bags_correct: 'أكياس صحيحة',
-  collection_correct: 'جمع صحيح',
-  labeling_clear: 'تسجيل واضح',
-  count_match: 'تطابق عدد',
-  daily_delivery: 'تسليم يومي',
-  // ح — فيتامين أ
-  vitamin_available: 'فيتامين أ متوفر',
-  vitamin_correct: 'إعطاء صحيح',
-  scissors_box: 'مقص وعلبة',
+  // أ — معلومات الفريق
+  has_activity_plan: 'لدى الفريق خطة وخارطة القرى المستهدفة',
+  has_doctor_or_trained: 'أحد أعضاء الفريق طبيب أو فني مدرب',
+  wearing_uniform: 'يلتزم الفريق بلبس الزي (البالطو)',
+  // ب — بيئة العمل والتنسيق
+  suitable_location: 'المكان مناسب ويضمن الخصوصية',
+  community_coordination: 'تم التنسيق المسبق مع المجتمع',
+  has_speaker: 'يتوفر مع الفريق مكبر صوت',
+  has_transport: 'توجد وسيلة نقل مناسبة',
+  previous_visit: 'تمت زيارة الفريق من المستوى الأعلى',
+  // ج — السجلات والوثائق
+  complete_records: 'تتوفر سجلات مكتملة',
+  daily_work_forms: 'توجد استمارات العمل اليومي',
+  correct_data_entry: 'يتم تدوين البيانات بشكل صحيح',
+  next_visit_noted: 'يتم تدوين العودة للزيارة القادمة',
+  // د — بطاقات التحصين
+  child_vaccination_cards: 'يتم صرف بطاقة تحصين للأطفال',
+  women_vaccination_cards: 'يتم صرف بطاقة تحصين للنساء',
+  // هـ — جودة الخدمة
+  good_acceptance: 'يوجد إقبال جيد على الخدمة',
+  safe_vaccination: 'يتم ممارسة التطعيم الآمن',
+  respiratory_rate_check: 'يتم احتساب سرعة التنفس',
+  muac_measurement: 'يتم قياس محيط منتصف الذراع',
+  ors_provision: 'يتم إعطاء محلول الإرواء',
+  clean_delivery_kit: 'يتم تزويد الحوامل بعلبة الولادة النظيفة',
+  nutrition_assessment: 'يقوم العامل بتقييم مشاكل التغذية',
+  // و — الفيتامينات والإحالة
+  vitamin_a_children: 'يعطي فيتامين أ للأطفال وفق البروتوكول',
+  vitamin_a_women: 'يعطي فيتامين أ للنساء وفق البروتوكول',
+  facility_referral: 'يتم الإحالة للمرفق الصحي',
+  correct_medication: 'يتم إعطاء الأدوية بطريقة سليمة',
+  nutrition_counseling: 'يقوم العامل بالنصح حول التغذية',
+  // ز — التعامل مع اللقاحات
+  vaccine_disposal: 'يتم التخلص من اللقاحات في الفترة المحددة',
+  safety_box_usage: 'يتم استخدام صندوق الأمان بصورة صحيحة',
+  cold_chain_proper: 'اللقاحات محفوظة بطريقة سليمة',
+  // ح — الإمدادات والمعدات
+  family_planning_available: 'تتوفر وسائل تنظيم الأسرة',
+  folic_iron_stock: 'لدى الفريق إمداد كافي من حمض الفوليك والحديد',
+  fetal_stethoscope: 'توجد لدى الفريق سماعة جنين',
+  bp_device: 'يتوفر سماعة فحص وجهاز ضغط الدم',
+  muac_tape: 'لدى الفريق أشرطة قياس محيط الذراع',
+  height_board: 'لدى الفريق أشرطة قياس الطول',
+  thermometer: 'لدى الفريق ترمومتر',
+  scale: 'يوجد مع الفريق ميزان',
+  daily_supply_tracking: 'يقوم الفريق بتدوين حركة الإمداد يومياً',
+  // ط — سياسة الالتحاق بالركب
+  has_vaccine_carrier: 'لدى المطعم حافظة لقاح مع قوالب ثلج',
+  vaccines_sufficient: 'اللقاحات والمستلزمات متوفرة وكافية',
+  correct_vaccine_site: 'يتم إعطاء اللقاح في الموضع المناسب',
+  catch_up_knowledge: 'لدى العاملين معرفة بسياسة الالتحاق بالركب',
+  catch_up_training: 'تلقى العاملين التدريب الكافي',
+  catch_up_2to5_registration: 'يقوم المطعم بالتطعيم للأطفال 2-5 سنوات',
+  team_target_knowledge: 'لدى الفريق معرفة بالمستهدف',
+  // ي — تتبع المتخلفين
+  has_defaulter_mechanism: 'يوجد آلية لتتبع المتخلفين',
+  has_previous_vaccination_records: 'يوجد سجل التطعيم للجولات السابقة',
+  // ك — الآثار الجانبية
+  aefi_knowledge: 'لدى العامل معرفة بالآثار الجانبية',
+  aefi_mothers_info: 'يقدم المطعم معلومات للأمهات حول الآثار',
 }
 
 // ─── Helpers ─────────────────────────────────────────────────

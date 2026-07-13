@@ -104,6 +104,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
       // ═══ AUTO-FILL: populate fields from user profile ═══
       _autoFillFromProfile();
+      // ⚠️ FIX: بعد التعبئة التلقائية، لا تعتبرها "تغييرات غير محفوظة"
+      // المستخدم لم يغير شيئاً بنفسه بعد
+      _hasUnsavedChanges = false;
 
       await _loadDraft();
     } on TimeoutException {
@@ -321,7 +324,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     for (final entry in _textControllers.entries) {
       final key = entry.key;
       // ابحث عن نوع الحقل
-      final field = _allFields.where((f) => f['key'] == key).firstOrNull;
+      Map<String, dynamic>? field;
+      for (final f in _allFields) {
+        if (f['key'] == key) { field = f; break; }
+      }
       final type = field?['type'] as String? ?? 'text';
 
       if (textFieldTypes.contains(type)) {

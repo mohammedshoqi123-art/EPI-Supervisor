@@ -351,14 +351,14 @@ export async function cloudflareChat(messages: any[], key: string): Promise<stri
 
 // ═══ Tier 5: NVIDIA NIM — keyless (NEW) ═══
 export async function nvidiaChat(messages: any[], key?: string): Promise<string | null> {
-  // NVIDIA NIM - 18 models, ~40 RPM keyless (or with key for higher limits)
-  // If no key, uses the public endpoint with rate limits
+  // NVIDIA NIM - موديلات سريعة أولاً (llama-3.1-8b = 340ms)
+  // الموديلات الكبيرة (70b/405b) تسبب timeout من Supabase Edge Function
   const models = [
+    'meta/llama-3.1-8b-instruct',        // ⚡ أسرع موديل (340ms مثبت)
+    'meta/llama-3.1-70b-instruct',       // أبطأ لكن أقوى
     'meta/llama-3.3-70b-instruct',
-    'meta/llama-3.1-405b-instruct',
-    'mistralai/mistral-large-2',
-    'qwen/qwen2.5-72b-instruct',
-    'deepseek-ai/deepseek-r1',
+    'qwen/qwen2.5-7b-instruct',          // ⚡ سريع
+    'mistralai/mistral-nemotron-mini-8b-instruct',  // ⚡ سريع
     'nvidia/llama-3.1-nemotron-70b-instruct-hf',
   ]
 
@@ -371,16 +371,18 @@ export async function nvidiaChat(messages: any[], key?: string): Promise<string 
         method: 'POST',
         headers,
         body: JSON.stringify({ model, messages, max_tokens: 800, temperature: 0.4 }),
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(10_000),  // ⚠️ 10s per model (الموديلات الكبيرة تتجاوز هذا)
       })
       if (!resp.ok) {
+        console.warn(`[NVIDIA_FAIL] model=${model} status=${resp.status}`)
         if (resp.status === 401) return null  // key required, don't try more models
         continue
       }
       const json = await resp.json()
       const content = json.choices?.[0]?.message?.content
       if (content?.trim()) return content
-    } catch {
+    } catch (e: any) {
+      console.warn(`[NVIDIA_ERROR] model=${model}: ${String(e).slice(0, 80)}`)
       continue
     }
   }

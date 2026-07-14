@@ -70,18 +70,26 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = authAsync.valueOrNull;
       final isAuthenticated = authState?.isAuthenticated ?? false;
 
-      // ═══ FIX: When offline, don't redirect to login if auth state is unknown ═══
-      // The auth stream may not have emitted yet when offline.
-      // Allow navigation to proceed — pages handle their own offline state.
-      final isOffline = !ConnectivityUtils.isOnline;
-      if (isOffline && authState == null && !isLoginRoute) {
-        return null; // Let the user through — don't block on missing auth when offline
+      // ═══ FIX: Try to read session directly from Supabase — works even when
+      // the auth stream hasn't emitted yet (offline case) ═══
+      bool hasStoredSession = false;
+      try {
+        final client = Supabase.instance.client;
+        hasStoredSession = client.auth.currentSession != null;
+      } catch (_) {
+        // Supabase not initialized yet — proceed
       }
 
-      // Not authenticated and not on login page -> redirect to login
-      if (!isAuthenticated && !isLoginRoute) return '/login';
-      // Authenticated and on login page -> redirect to dashboard
-      if (isAuthenticated && isLoginRoute) return '/dashboard';
+      // ═══ Decision matrix ═══
+      // 1. Authenticated (stream) OR has stored session → allow access
+      //    - But if on /login, redirect to /dashboard
+      // 2. Not authenticated AND no stored session
+      //    - If on /login, allow
+      //    - Otherwise, redirect to /login
+      final effectiveAuth = isAuthenticated || hasStoredSession;
+
+      if (effectiveAuth && isLoginRoute) return '/dashboard';
+      if (!effectiveAuth && !isLoginRoute) return '/login';
 
       // Role-based route guards
       if (isAuthenticated) {
@@ -301,7 +309,26 @@ class _MainShellState extends ConsumerState<MainShell> {
         children: [
           // Offline/Online status banner
           if (!isOnline || pendingCount > 0)
-            ConnectivityBanner(isOnline: isOnline, pendingCount: pendingCount),
+            GestureDetector(
+              onTap: () async {
+                // ═══ FIX: اسمح للمستخدم بإعادة فحص الاتصال يدوياً ═══
+                HapticFeedback.lightImpact();
+                final online = await ConnectivityUtils.recheckNow();
+                if (mounted && online) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('عاد الاتصال بالإنترنت ✅',
+                          style: TextStyle(fontFamily: 'Tajawal')),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: ConnectivityBanner(
+                  isOnline: isOnline, pendingCount: pendingCount),
+            ),
           Expanded(child: widget.child),
         ],
       ),
@@ -408,8 +435,29 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       ref.invalidate(formsProvider);
 
       // 3. رفع الإرساليات المحفوظة محلياً
-      final syncService = await ref.read(syncServiceProvider.future);
-      final result = await syncService.sync();
+      // ═══ FIX: مهلة على syncService — لا نحظر UI ═══
+      final syncService = await ref.read(syncServiceProvider.future).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => null,
+      );
+      if (syncService == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'المزامنة تستغرق وقتاً طويلاً — حاول مرة أخرى',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      final result = await syncService.sync().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => SyncCycleResult.empty(),
+      );
 
       if (mounted) {
         final msg = result.synced > 0

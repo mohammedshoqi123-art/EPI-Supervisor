@@ -90,6 +90,13 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
       return const FullSyncResult();
     }
 
+    // ═══ FIX: فحص isOnline أول شيء — لا نضيع وقت بالاوفلاين ═══
+    if (!ConnectivityUtils.isOnline) {
+      return const FullSyncResult(
+        error: 'لا يمكن المزامنة بدون إنترنت',
+      );
+    }
+
     state = FullSyncState.syncing;
     int forms = 0, submissions = 0, govs = 0, dists = 0, refs = 0, facs = 0;
     final steps = <SyncStepResult>[];

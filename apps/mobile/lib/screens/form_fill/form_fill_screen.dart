@@ -72,9 +72,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     Map<String, dynamic>? form;
 
     try {
+      // ═══ FIX: مهلة قصيرة على cache — لا نحظر UI لـ 5s ═══
       final cache = await ref.read(offlineDataCacheProvider.future).timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => throw Exception('timeout'),
+            const Duration(seconds: 3),
+            onTimeout: () => throw Exception('cache_init_timeout'),
           );
       // Fix: try multiple cache keys since formsProvider uses campaign-specific key
       // First try the specific form cache, then try campaign-specific list
@@ -103,14 +104,20 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                 content: Text('لا يمكن تحميل النموذج بدون إنترنت — لم يتم تخزينه مسبقاً', style: TextStyle(fontFamily: 'Tajawal')),
                 behavior: SnackBarBehavior.floating,
                 backgroundColor: Colors.orange,
+                duration: Duration(seconds: 3),
               ),
             );
+            // العودة للصفحة السابقة بعد عرض الرسالة
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) Navigator.of(context).pop();
+            });
           }
           return;
         }
         final db = ref.read(databaseServiceProvider);
+        // ═══ FIX: مهلة 10s بدل 15s — لا نحظر UI ═══
         form = await db.getForm(widget.formId).timeout(
-              const Duration(seconds: 15),
+              const Duration(seconds: 10),
               onTimeout: () => throw TimeoutException('Network timeout'),
             );
         await cache.cacheFormData(widget.formId, form);
@@ -142,7 +149,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     } catch (e) {
       debugPrint('[FormFillScreen] Load form error: $e');
       setState(() => _isLoading = false);
-      if (mounted) context.showError('فشل تحميل النموذج: ${e.toString()}');
+      if (mounted) {
+        // ═══ FIX: رسالة واضحة إذا فشل cache init ═══
+        if (e.toString().contains('cache_init_timeout')) {
+          context.showError('التخزين المحلي غير جاهز. حاول إعادة فتح التطبيق.');
+        } else {
+          context.showError('فشل تحميل النموذج: ${e.toString()}');
+        }
+      }
     }
   }
 
@@ -732,7 +746,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   void _markChanged() {
-    _hasUnsavedChanges = true;
+    // ═══ FIX: setState ضروري لتحديث canPop في PopScope ═══
+    // السابق: _hasUnsavedChanges = true بدون setState → canPop ما يتحدث
+    // → PopScope ما يمنع الخروج → الرسالة التحذيرية ما تظهر
+    if (!_hasUnsavedChanges) {
+      setState(() {
+        _hasUnsavedChanges = true;
+      });
+    }
   }
 
   /// Build review sections for the review bottom sheet

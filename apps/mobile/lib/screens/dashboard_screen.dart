@@ -55,13 +55,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // ═══ PERFORMANCE: Background sync — don't block UI ═══
+      // ═══ FIX: فقط إذا كان الـ pendingCount > 0 و isOnline ═══
       Future.microtask(() async {
         try {
-          // ⚠️ OFFLINE FIX: لا تحاول المزامنة بدون إنترنت
+          // ⚠️ OFFLINE FIX: فحص مزدوج — isOnline و isConfigured
           if (!ConnectivityUtils.isOnline) return;
-          final service = await ref.read(syncServiceProvider.future);
+          if (!SupabaseConfig.isConfigured) return;
+          final service = await ref.read(syncServiceProvider.future).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
+          if (service == null) return;
           if (service.currentState.pendingCount > 0) {
-            await service.sync();
+            await service.sync().timeout(
+              const Duration(seconds: 30),
+              onTimeout: () => SyncCycleResult.empty(),
+            );
           }
         } catch (e) {
           debugPrint('[Dashboard] Background sync failed: $e');
@@ -102,7 +111,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         color: AppTheme.primaryColor,
         onRefresh: () async {
           HapticFeedback.mediumImpact();
-          if (!ConnectivityUtils.isOnline) return;
+          // ═══ FIX: فحص isOnline قبل أي محاولة شبكة ═══
+          if (!ConnectivityUtils.isOnline) {
+            // اعرض رسالة بدل ما تعلق
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('لا يمكن التحديث بدون إنترنت',
+                      style: TextStyle(fontFamily: 'Tajawal')),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+            return;
+          }
           await ref.read(forceRefreshProvider)('dashboard_analytics');
           ref.invalidate(
             dashboardAnalyticsProvider(
@@ -123,7 +147,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 onRoundTap: () => _showRoundSelector(),
                 onRefresh: () {
                   HapticFeedback.mediumImpact();
-                  if (!ConnectivityUtils.isOnline) return;
+                  // ═══ FIX: فحص isOnline + رسالة واضحة ═══
+                  if (!ConnectivityUtils.isOnline) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('لا يمكن التحديث بدون إنترنت',
+                            style: TextStyle(fontFamily: 'Tajawal')),
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
                   ref.read(forceRefreshProvider)('dashboard_analytics');
                   ref.invalidate(
                     dashboardAnalyticsProvider(
@@ -155,9 +191,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 isSyncing: false,
                 onSync: () async {
                   HapticFeedback.mediumImpact();
+                  // ═══ FIX: فحص isOnline + رسالة واضحة ═══
+                  if (!ConnectivityUtils.isOnline) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('لا يمكن المزامنة بدون إنترنت',
+                            style: TextStyle(fontFamily: 'Tajawal')),
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
                   try {
-                    final service = await ref.read(syncServiceProvider.future);
-                    await service.sync();
+                    final service = await ref.read(syncServiceProvider.future).timeout(
+                      const Duration(seconds: 5),
+                      onTimeout: () => null,
+                    );
+                    if (service == null) return;
+                    await service.sync().timeout(
+                      const Duration(seconds: 30),
+                      onTimeout: () => SyncCycleResult.empty(),
+                    );
                   } catch (e) {
                     debugPrint('[Dashboard] Manual sync failed: $e');
                   }

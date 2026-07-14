@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 
+import '../main.dart' show supabaseInitialized;
 import '../providers/app_providers.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -18,26 +19,73 @@ class SplashScreen extends ConsumerStatefulWidget {
 class _SplashScreenState extends ConsumerState<SplashScreen> {
   bool _hasNavigated = false;
   String _status = 'جاري التحميل...';
+  Timer? _waitTimer;
+  int _waitSeconds = 0;
 
   @override
   void initState() {
     super.initState();
     _navigate();
+    // ═══ FIX: مؤقت تحديث الحالة كل ثانية — يحافظ على استجابة UI ═══
+    _waitTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _hasNavigated) return;
+      _waitSeconds++;
+      setState(() {
+        if (_waitSeconds < 3) {
+          _status = 'جاري التحميل...';
+        } else if (_waitSeconds < 8) {
+          _status = 'جاري الاتصال بالخادم...';
+        } else if (_waitSeconds < 15) {
+          _status = 'الاتصال بطيء — لا يزال يحاول...';
+        } else {
+          _status = 'الاتصال يأخذ وقتاً طويلاً — تحقق من الإنترنت';
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _waitTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _navigate() async {
-    // Fix: reduced artificial delays — 500ms was too long for logo display
-    // 200ms is enough for a smooth visual transition
+    // Fix: short visual delay
     await Future.delayed(const Duration(milliseconds: 200));
     if (!mounted || _hasNavigated) return;
 
     // ═══ إذا Supabase مو مُعدّ — روح للّوجن ═══
     if (!SupabaseConfig.isConfigured) {
       setState(() => _status = 'Supabase غير مُعدّ — الانتقال لتسجيل الدخول');
-      // Fix: removed extra 500ms delay — go immediately
       if (!mounted || _hasNavigated) return;
       _hasNavigated = true;
+      _waitTimer?.cancel();
       context.go('/login');
+      return;
+    }
+
+    // ═══ FIX: انتظر Supabase.initialize ينتهي (في الخلفية) ═══
+    // main.dart يبدأ Supabase في الخلفية، نحن ننتظره هنا
+    bool supabaseReady = false;
+    for (int i = 0; i < 15; i++) {
+      if (supabaseInitialized) {
+        supabaseReady = true;
+        break;
+      }
+      // انتظر ثانية وحاول مرة أخرى
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted || _hasNavigated) return;
+    }
+
+    if (!supabaseReady) {
+      // ═══ FIX: Supabase لم يتهيأ بعد (اوفلاين مثلاً) — حاول المتابعة ═══
+      // إذا في session محفوظ، روح للداشبورد. خلاف ذلك، روح للّوجن.
+      debugPrint('[Splash] Supabase not ready after 15s — proceeding');
+      _hasNavigated = true;
+      _waitTimer?.cancel();
+      // الروتينج سيتعامل مع الـ auth state، إذهب لـ /dashboard واترك الـ redirect يشتغل
+      context.go('/dashboard');
       return;
     }
 
@@ -49,39 +97,38 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       if (session != null) {
         setState(() => _status = 'تم العثور على جلسة — جاري التحميل...');
 
-        // ═══ FIX: timeout أطول (20 ثانية) بدلاً من 10 ═══
+        // ═══ FIX: مهلة 10s فقط (بدل 20s) — لا نحظر التطبيق ═══
         try {
           await ref.read(authStateProvider.future).timeout(
-            const Duration(seconds: 20),
+            const Duration(seconds: 10),
             onTimeout: () {
-              debugPrint(
-                  '[Splash] Profile load timed out — going to dashboard anyway');
+              debugPrint('[Splash] Profile load timed out — going to dashboard anyway');
               throw TimeoutException('Profile load timed out');
             },
           );
         } catch (e) {
-          // ═══ القاعدة الذهبية: فشل Profile ≠ فشل دخول ═══
           // المستخدم مصادق → روح للداشبورد
           debugPrint('[Splash] Profile failed ($e) but user is authenticated — proceeding');
         }
 
         if (!mounted || _hasNavigated) return;
         _hasNavigated = true;
+        _waitTimer?.cancel();
         context.go('/dashboard');
       } else {
         setState(() => _status = 'الانتقال لتسجيل الدخول...');
-        // Fix: removed 300ms delay — navigate immediately
         if (!mounted || _hasNavigated) return;
         _hasNavigated = true;
+        _waitTimer?.cancel();
         context.go('/login');
       }
     } catch (e) {
       // ═══ Supabase init فشل — روح للّوجن (مو crash) ═══
       debugPrint('[Splash] Supabase access failed: $e');
       setState(() => _status = 'الانتقال لتسجيل الدخول...');
-      await Future.delayed(const Duration(milliseconds: 300));
       if (!mounted || _hasNavigated) return;
       _hasNavigated = true;
+      _waitTimer?.cancel();
       context.go('/login');
     }
   }

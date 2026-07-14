@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -601,6 +602,16 @@ class _SubmissionsByLevelChartState
       _loading = true;
       _error = null;
     });
+    // ═══ FIX: فحص isOnline — لا نحظر التطبيق بالاوفلاين ═══
+    if (!ConnectivityUtils.isOnline) {
+      if (mounted) {
+        setState(() {
+          _error = 'لا توجد بيانات — غير متصل بالإنترنت';
+          _loading = false;
+        });
+      }
+      return;
+    }
     try {
       final db = ref.read(databaseServiceProvider);
       final data = await db.getSubmissions(
@@ -608,6 +619,9 @@ class _SubmissionsByLevelChartState
         campaignRound: widget.campaignRound,
         status: 'submitted',
         limit: 10000,
+      ).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw TimeoutException('Network timeout'),
       );
       if (mounted) {
         setState(() {

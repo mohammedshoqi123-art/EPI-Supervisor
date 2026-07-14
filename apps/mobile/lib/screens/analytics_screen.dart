@@ -413,6 +413,20 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
 
   /// Main report generation entry point — called from ReportsTab.onGenerate
   Future<void> _generateReport(String type, String format, String period) async {
+    // ═══ FIX: فحص isOnline — لا نحظر التطبيق بالاوفلاين ═══
+    if (!ConnectivityUtils.isOnline) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('لا يمكن إنشاء التقارير بدون إنترنت',
+                style: TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
     // ═══ Route specialized reports ═══
     if (type == 'supervisor_leaderboard') {
       await _generateSupervisorLeaderboard();

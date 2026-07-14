@@ -35,11 +35,12 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
 
   // On mobile, initialize Hive with timeout
   try {
-    // ═══ PERFORMANCE FIX: Shorter timeout (15s) — fail fast, app still works ═══
+    // ═══ FIX: Shorter timeout (20s) — account for PBKDF2 in isolate (~2-5s)
+    // but still fail fast enough to not block UI indefinitely ═══
     await manager.init().timeout(
-      const Duration(seconds: 15),
+      const Duration(seconds: 25),
       onTimeout: () {
-        debugPrint('[offlineManagerProvider] Hive init timed out after 15s');
+        debugPrint('[offlineManagerProvider] Hive init timed out after 25s');
         throw TimeoutException('Offline storage initialization timed out');
       },
     );
@@ -112,10 +113,16 @@ final manualSyncProvider = Provider<Future<SyncCycleResult> Function()>((ref) {
 
 /// ═══ Force-refresh helper: clears specific cache key then invalidates provider ═══
 /// Use for pull-to-refresh to ensure fresh data from server.
+/// ═══ FIX: عند الاوفلاين، لا نحذف الكاش — سيؤدي إلى عدم توفر البيانات ═══
 final forceRefreshProvider = Provider<Future<void> Function(String cacheKey)>((
   ref,
 ) {
   return (String cacheKey) async {
+    // ⚠️ OFFLINE FIX: لا نمسح الكاش بالاوفلاين — البيانات تضيع
+    if (!ConnectivityUtils.isOnline) {
+      debugPrint('[forceRefreshProvider] Offline — preserving cache for $cacheKey');
+      return;
+    }
     try {
       final cache = await ref.read(offlineDataCacheProvider.future);
       await cache.forceInvalidate(cacheKey);

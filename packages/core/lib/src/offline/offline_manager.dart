@@ -94,10 +94,11 @@ class OfflineManager {
     }
 
     // ═══ PROPOSAL 1: Initialize EncryptionService with stable salt ═══
-    // PBKDF2 (600k iterations) runs ONCE here, then all encrypt/decrypt
-    // use the pinned key = <1ms per operation.
+    // PBKDF2 (600k iterations) runs ONCE here, in a BACKGROUND ISOLATE
+    // so the UI thread is not blocked. Then all encrypt/decrypt use the
+    // pinned key = <1ms per operation.
     if (!EncryptionService.isInitialized) {
-      EncryptionService.initialize(
+      await EncryptionService.initialize(
         encryptionKey: const String.fromEnvironment('ENCRYPTION_KEY', defaultValue: ''),
         saltSource: () {
           final saltStr = _box?.get(EncryptionService.saltStorageKey);
@@ -106,6 +107,11 @@ class OfflineManager {
         },
         onSaltCreated: (salt) {
           _box?.put(EncryptionService.saltStorageKey, base64Encode(salt));
+        },
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          debugPrint('[OfflineManager] Encryption init timed out — continuing without');
         },
       );
     }
@@ -626,15 +632,12 @@ class OfflineManager {
       try {
         return Map<String, dynamic>.from(jsonDecode(data));
       } catch (_) {
-        // 3. Both failed — data is corrupted or key changed.
+        // 3. Both failed — data is corrupted, key changed, OR old encryption format
+        //    (old format triggers PBKDF2 per-decrypt which we now skip).
         //    Clear it so we start fresh, but LOG the issue.
         if (kDebugMode) {
           debugPrint(
-            '[OfflineManager] ⚠️ Cache corrupted or encryption key changed!',
-          );
-          debugPrint('[OfflineManager]    Decrypt error: $decryptError');
-          debugPrint(
-            '[OfflineManager]    Clearing cache — will re-fetch on next request.',
+            '[OfflineManager] ⚠️ Cache corrupted or old format — clearing',
           );
         }
         // Clear the corrupted data so next cacheData() writes clean

@@ -93,7 +93,11 @@ class OfflineDataCache {
     }
 
     try {
-      final data = await fetchFn();
+      // ═══ FIX: مهلة 15s على fetchFn — لا نحظر UI لمدة طويلة ═══
+      final data = await fetchFn().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Network timeout for $cacheKey'),
+      );
       await _saveToCache(cacheKey, data);
       return data;
     } catch (e) {
@@ -162,7 +166,11 @@ class OfflineDataCache {
     }
 
     try {
-      final data = await fetchFn();
+      // ═══ FIX: مهلة 15s على fetchFn — لا نحظر UI لمدة طويلة ═══
+      final data = await fetchFn().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Network timeout for $cacheKey'),
+      );
       await _saveToCache(cacheKey, data);
       return data;
     } catch (e) {

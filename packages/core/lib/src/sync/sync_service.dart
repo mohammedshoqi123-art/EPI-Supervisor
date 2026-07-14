@@ -34,7 +34,13 @@ class SyncService {
   SyncService(this._api, this._offline) {
     _offline.connectivityStream.listen((isOnline) {
       if (isOnline && _offline.pendingCount > 0) {
-        _attemptSync('reconnect');
+        // ═══ FIX: نأخر قليلاً قبل المزامنة بعد عودة الإنترنت ═══
+        // هذا يمنع تصادم مع إعادة تهيئة Supabase
+        Timer(const Duration(seconds: 3), () {
+          if (_offline.isOnline && _offline.pendingCount > 0) {
+            _attemptSync('reconnect');
+          }
+        });
       }
     });
   }
@@ -67,14 +73,14 @@ class SyncService {
   /// بدء المزامنة التلقائية
   void startAutoSync() {
     _syncTimer?.cancel();
-    // ═══ FIX: فترة أطول (3 دقائق) بدل 2 — تقليل الضغط على السيرفر ═══
+    // ═══ FIX: فترة أطول (5 دقائق) — تقليل الضغط على السيرفر والبطارية ═══
     _syncTimer = Timer.periodic(
-      const Duration(minutes: 3),
+      const Duration(minutes: 5),
       (_) => _attemptSync('timer'),
     );
-    // محاولة أولى بعد 5 ثوانٍ
-    Timer(const Duration(seconds: 5), () => _attemptSync('initial'));
-    if (kDebugMode) print('[SyncService] Auto-sync started (every 3 min)');
+    // ═══ FIX: لا تبدأ محاولة أولى فوراً — انتظر 15s حتى لا تتصادم مع init ═══
+    Timer(const Duration(seconds: 15), () => _attemptSync('initial'));
+    if (kDebugMode) print('[SyncService] Auto-sync started (every 5 min)');
   }
 
   void stopAutoSync() {
@@ -84,6 +90,13 @@ class SyncService {
 
   /// محاولة مزامنة مع debouncing
   Future<void> _attemptSync(String trigger) async {
+    // ═══ FIX: فحص isOnline أول شيء — لا تضيع وقت بالاوفلاين ═══
+    if (!_offline.isOnline) {
+      if (kDebugMode && trigger != 'timer')
+        debugPrint('[SyncService] Offline — skipping sync ($trigger)');
+      return;
+    }
+
     // ═══ FIX: Debounce — تجاهل المحاولات المتكررة خلال 10 ثوانٍ ═══
     final now = DateTime.now();
     if (_lastSyncAttempt != null &&
@@ -224,7 +237,7 @@ class SyncService {
 
           final response = await _api.callFunction(
               SupabaseConfig.fnSyncOffline, {'items': items}).timeout(
-            const Duration(seconds: 90), // ═══ مهلة أطول ═══
+            const Duration(seconds: 45), // ═══ FIX: 45s بدل 90s — لا نحظر UI ═══
             onTimeout: () {
               if (kDebugMode) print('[SyncService] Timeout');
               throw TimeoutException('Batch sync timed out');

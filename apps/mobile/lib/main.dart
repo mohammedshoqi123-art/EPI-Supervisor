@@ -1,11 +1,10 @@
 /// ═══════════════════════════════════════════════════════════════════════
 ///  main.dart — نسخة مُحسّنة: تضمن تسجيل الدخول المستقر
 ///  التغييرات:
-///  1. Supabase.initialize مُزامن (await) قبل runApp
+///  1. Supabase.initialize في الخلفية عند الاوفلاين — لا ننتظر
 ///  2. لا signOut تلقائي أبداً
-///  3. إعادة محاولة init عند الفشل (مع backoff)
-///  4. Splash screen ينتظر الجلسة قبل التوجيه
-///  5. الحفاظ على نظام الأوفلاين سليم
+///  3. Splash فوري — لا نحظر التطبيق على init
+///  4. الحفاظ على نظام الأوفلاين سليم
 /// ═══════════════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -29,12 +28,14 @@ final supabaseInitProvider =
 
 enum SupabaseInitState { initial, initializing, ready, failed }
 
-/// ═══ FIX: تهيئة Supabase مُزامنة قبل runApp لتجنب race condition ═══
-/// Sentry يتم تهيئته أولاً لالتقاط أي أخطاء أثناء الإقلاع.
+/// ═══ FIX: لا نحظر runApp على Supabase init ═══
+/// السابق: await _initSupabase() → 51s حظر عند الاوفلاين (3 محاولات × 15s)
+/// الجديد: ابدأ Supabase في الخلفية + runApp فوراً
+/// SplashScreen يتعامل مع حالة "غير جاهز بعد"
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ═══ الخطوة 1: تحميل .env أولاً (يحتوي على SENTRY_DSN) ═══
+  // ═══ الخطوة 1: تحميل .env (سريع، < 100ms) ═══
   try {
     final dotenv = await EnvLoader.load();
     if (dotenv.isNotEmpty) {
@@ -47,28 +48,33 @@ Future<void> main() async {
     debugPrint('[Init] ⚠️ Env load failed: $e');
   }
 
-  // ═══ الخطوة 2: تهيئة Sentry (يلتقط كل الأخطاء بعدها) ═══
+  // ═══ الخطوة 2: Sentry + Connectivity (سريع) ═══
   await SentryConfig.init(appRunner: () async {
-    // ═══ الخطوة 3: تهيئة Connectivity ═══
     try {
-      await ConnectivityUtils.initialize().timeout(const Duration(seconds: 5));
+      await ConnectivityUtils.initialize().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('[Init] Connectivity init timed out — assuming offline');
+        },
+      );
     } catch (e) {
       debugPrint('[Init] ⚠️ Connectivity init failed: $e');
     }
 
-    // ═══ الخطوة 4: تهيئة Supabase مُزامنة (await) قبل runApp ═══
-    await _initSupabase();
+    // ═══ FIX: لا ننتظر Supabase — ابدأه في الخلفية ═══
+    // السابق: await _initSupabase() مع 3 محاولات × 15s = 51s حظر عند الاوفلاين
+    // الجديد: fire-and-forget — SplashScreen ينتظر قائمة قصيرة فقط
+    _initSupabaseInBackground();
 
-    // ═══ الخطوة 5: تشغيل التطبيق بعد التهيئة ═══
+    // ═══ الخطوة 4: تشغيل التطبيق فوراً ═══
     runApp(const ProviderScope(child: EpiSupervisorApp()));
 
-    // ═══ الخطوة 6: تهيئة الخدمات غير الحرجة في الخلفية ═══
+    // ═══ الخطوة 5: تهيئة الخدمات غير الحرجة في الخلفية ═══
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         if (SupabaseConfig.isConfigured) {
           NotificationService.init(ApiClient());
         }
-        // Initialize FCM local notifications
         await FcmNotificationService.init();
         await FcmNotificationService.requestPermissions();
       } catch (e) {
@@ -78,48 +84,62 @@ Future<void> main() async {
   });
 }
 
-/// ═══ تهيئة Supabase مع إعادة محاولة (3 محاولات مع backoff) ═══
-Future<void> _initSupabase() async {
+/// Track whether Supabase.initialize has been called successfully
+/// Public so SplashScreen can poll until ready
+bool supabaseInitialized = false;
+
+/// ═══ تهيئة Supabase في الخلفية — لا نحظر runApp ═══
+/// محاولة واحدة فقط بـ 10s مهلة. إذا فشلت (اوفلاين)، نحاول لاحقاً
+/// عند عودة الإنترنت عبر ConnectivityUtils.
+void _initSupabaseInBackground() {
   if (EnvValidator.isOfflineMode || SupabaseConfig.url.isEmpty) {
     debugPrint('[Init] Offline mode or no URL — skipping Supabase');
     return;
   }
 
-  const maxRetries = 3;
-  for (int attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      SupabaseConfig.validate();
-
-      await Supabase.initialize(
-        url: SupabaseConfig.url,
-        anonKey: SupabaseConfig.anonKey,
-        debug: AppConfig.isDevelopment,
-        authOptions: const FlutterAuthClientOptions(
-          authFlowType: AuthFlowType.pkce,
-          autoRefreshToken: true,
-        ),
-        realtimeClientOptions: const RealtimeClientOptions(
-          logLevel: RealtimeLogLevel.warn, // ═══ PERFORMANCE: warn instead of info ═══
-        ),
-        storageOptions: const StorageClientOptions(
-          retryAttempts: 3,
-        ),
-      ).timeout(const Duration(seconds: 15)); // ═══ Reduced from 20s ═══
-
-      debugPrint('[Init] ✅ Supabase initialized (attempt $attempt)');
-      return;
-    } catch (e) {
-      debugPrint('[Init] ❌ Supabase attempt $attempt/$maxRetries failed: $e');
-      if (attempt < maxRetries) {
-        final delay = Duration(seconds: 2 * attempt); // ═══ Reduced backoff ═══
-        debugPrint('[Init] Retrying in ${delay.inSeconds}s...');
-        await Future.delayed(delay);
-      }
+  // محاولة واحدة فقط — لا نعيد المحاولة فوراً عند الاوفلاين
+  _tryInitSupabase().then((success) {
+    if (!success) {
+      debugPrint('[Init] Supabase init failed — will retry on reconnect');
+      // الاستماع لعودة الإنترنت لإعادة المحاولة
+      ConnectivityUtils.onConnectivityChanged.listen((online) {
+        if (online && !supabaseInitialized) {
+          _tryInitSupabase();
+        }
+      });
     }
-  }
+  });
+}
 
-  debugPrint(
-      '[Init] ⚠️ Supabase failed after $maxRetries attempts — running offline');
+Future<bool> _tryInitSupabase() async {
+  if (supabaseInitialized) return true;
+  try {
+    SupabaseConfig.validate();
+
+    // ═══ FIX: مهلة 10s فقط بدل 15s ═══
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+      debug: AppConfig.isDevelopment,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.pkce,
+        autoRefreshToken: true,
+      ),
+      realtimeClientOptions: const RealtimeClientOptions(
+        logLevel: RealtimeLogLevel.warn,
+      ),
+      storageOptions: const StorageClientOptions(
+        retryAttempts: 3,
+      ),
+    ).timeout(const Duration(seconds: 10));
+
+    supabaseInitialized = true;
+    debugPrint('[Init] ✅ Supabase initialized');
+    return true;
+  } catch (e) {
+    debugPrint('[Init] ❌ Supabase init failed: $e');
+    return false;
+  }
 }
 
 class EpiSupervisorApp extends ConsumerStatefulWidget {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -6,29 +7,19 @@ import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/foundation.dart';
 
 /// ═══════════════════════════════════════════════════════════════
-/// Encryption Service — Key Pinning Architecture
+/// Encryption Service — Key Pinning Architecture (OFFLOAD to Isolate)
 /// ═══════════════════════════════════════════════════════════════
 ///
-/// PROBLEM: Previous version generated a new random salt on EVERY
-/// EncryptionService construction → 600,000 PBKDF2 iterations per
-/// encrypt/decrypt call → 1-3s UI freeze.
+/// PROBLEM: 600,000 PBKDF2 iterations on UI thread = 1-3s freeze
+/// even with key pinning, because the ONE TIME derivation blocks UI.
 ///
-/// SOLUTION (inspired by SQLCipher):
-/// 1. Salt is generated ONCE, stored in Hive (unencrypted — salt is
-///    not secret, the ENCRYPTION_KEY env var is the secret).
-/// 2. PBKDF2 key derivation runs ONCE at app startup.
-/// 3. The derived key is pinned in memory (_pinnedKey).
-/// 4. All encrypt/decrypt calls use _pinnedKey directly — NO PBKDF2.
-/// 5. AES-256-GCM only = <1ms per operation.
+/// SOLUTION: Use Isolate.run() (or compute) to do PBKDF2 in background.
+/// UI thread is free during init.
 ///
-/// BACKWARD COMPATIBILITY:
+/// FORMAT:
 /// - New format: [magic(4)="EPI2"][iv(12)][ciphertext+tag]
 /// - Old format: [salt(16)][iv(12)][ciphertext+tag]
 /// - decrypt() detects format by checking magic bytes.
-///
-/// FORMAT DETECTION:
-/// - Bytes 0-3 == "EPI2" (0x45,0x50,0x49,0x32) → new format (no salt)
-/// - Otherwise → old format (salt-based, for legacy data)
 class EncryptionService {
   static const String _envKey = String.fromEnvironment(
     'ENCRYPTION_KEY',
@@ -43,8 +34,6 @@ class EncryptionService {
   static const List<int> _magicNew = [0x45, 0x50, 0x49, 0x32];
 
   /// ═══ PINNED KEY — derived ONCE, reused for ALL operations ═══
-  /// Static so it persists across EncryptionService instances.
-  /// Set by initialize() which should be called once at app startup.
   static enc.Key? _pinnedKey;
 
   /// The salt used for key derivation. Stored in Hive for persistence.
@@ -54,32 +43,23 @@ class EncryptionService {
   static const String saltStorageKey = '_encryption_salt_v2';
 
   /// ═══ KEY GETTER — always uses pinned key if available ═══
-  /// Critical: EncryptionService is created by Riverpod BEFORE
-  /// OfflineManager.init() calls initialize(). If we used a
-  /// `late final _key` field, it would be set to ephemeral at
-  /// construction time and never update when _pinnedKey is set.
-  /// Using a getter ensures we always use the latest _pinnedKey.
   enc.Key? _ephemeralKey;
   enc.Key get _key {
     if (_pinnedKey != null) return _pinnedKey!;
-    _ephemeralKey ??= _deriveKey(utf8.encode(_activeKey), _generateRandomBytes(_saltLength));
+    _ephemeralKey ??= _deriveKeySync(utf8.encode(_activeKey), _generateRandomBytes(_saltLength));
     return _ephemeralKey!;
   }
 
   final String _activeKey;
 
-  /// ═══ Initialize — call ONCE at app startup ═══
-  /// Derives the key using PBKDF2 (600k iterations) and pins it in memory.
-  /// [saltSource] is a function that returns the stored salt (from Hive)
-  /// or null if no salt exists yet. If null, a new salt is generated
-  /// and should be persisted by the caller via [onSaltCreated].
-  ///
-  /// This runs PBKDF2 ONCE. All subsequent encrypt/decrypt use the pinned key.
-  static void initialize({
+  /// ═══ Initialize — call ONCE at app startup (now async, offloads to isolate) ═══
+  /// Derives the key using PBKDF2 (600k iterations) IN A BACKGROUND ISOLATE
+  /// so the UI thread is not blocked.
+  static Future<void> initialize({
     required String encryptionKey,
     required Uint8List? Function() saltSource,
     required void Function(Uint8List salt) onSaltCreated,
-  }) {
+  }) async {
     if (_pinnedKey != null) return; // Already initialized
 
     // Get existing salt or create new one
@@ -90,11 +70,31 @@ class EncryptionService {
     }
 
     _pinnedSalt = salt;
-    // ═══ PBKDF2 — 600,000 iterations — happens ONCE per app launch ═══
-    _pinnedKey = _deriveKey(utf8.encode(encryptionKey), salt);
+
+    // ═══ FIX: PBKDF2 في Isolate منفصل — لا نحظر UI thread ═══
+    // السابق: 600k PBKDF2 على UI thread → 1-3s تجميد
+    // الجديد: compute() ينفذها في خيط خلفي → UI طليق
+    try {
+      final keyBytes = await compute(
+        _pbkdf2InIsolate,
+        _Pbkdf2Params(encryptionKey, salt),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint('[EncryptionService] Isolate PBKDF2 timed out, falling back to sync');
+          return _deriveKeySync(utf8.encode(encryptionKey), salt);
+        },
+      );
+      _pinnedKey = enc.Key(keyBytes);
+    } catch (e) {
+      // Fallback: run on UI thread (still works, just slower)
+      debugPrint('[EncryptionService] Isolate failed ($e), running sync');
+      final keyBytes = _deriveKeySync(utf8.encode(encryptionKey), salt);
+      _pinnedKey = enc.Key(keyBytes);
+    }
 
     if (kDebugMode) {
-      debugPrint('[EncryptionService] Key pinned successfully (PBKDF2 600k done once)');
+      debugPrint('[EncryptionService] Key pinned (PBKDF2 600k done in isolate)');
     }
   }
 
@@ -124,15 +124,12 @@ class EncryptionService {
         'ENCRYPTION_KEY is too short (${_activeKey.length} chars, minimum 32).',
       );
     }
-
-    // No key derivation here — _key getter handles it lazily.
-    // This ensures that when _pinnedKey is set later by initialize(),
-    // all subsequent encrypt/decrypt use the correct pinned key.
   }
 
   /// PBKDF2 key derivation using HMAC-SHA256 — 600,000 iterations.
-  /// Called ONCE at startup. All subsequent operations use the pinned key.
-  static enc.Key _deriveKey(List<int> password, Uint8List salt) {
+  /// This is the SLOW version — only call from isolate or as fallback.
+  /// Returns raw bytes (Uint8List) instead of enc.Key to be isolate-safe.
+  static Uint8List _deriveKeySync(List<int> password, Uint8List salt) {
     const iterations = 600000;
     final hmac = Hmac(sha256, password);
     var u = Uint8List(32);
@@ -152,7 +149,7 @@ class EncryptionService {
       }
     }
     result = u;
-    return enc.Key(result);
+    return result;
   }
 
   static Uint8List _intToBytes(int value) {
@@ -173,8 +170,6 @@ class EncryptionService {
       final encrypter = enc.Encrypter(enc.AES(_key, mode: enc.AESMode.gcm));
       final encrypted = encrypter.encrypt(plaintext, iv: iv);
 
-      // ═══ NEW FORMAT: [magic(4)][iv(12)][ciphertext+tag] ═══
-      // No salt — key is pinned in memory
       final result = Uint8List(
         _magicNew.length + _ivLength + encrypted.bytes.length,
       );
@@ -209,7 +204,6 @@ class EncryptionService {
           bytes[2] == _magicNew[2] &&
           bytes[3] == _magicNew[3]) {
         // New format: [magic(4)][iv(12)][ciphertext+tag]
-        // Validate minimum length: magic(4) + iv(12) + tag(16) = 32 bytes minimum
         if (bytes.length < 4 + _ivLength + 16) {
           throw FormatException('New format ciphertext too short (${bytes.length} bytes, need ${4 + _ivLength + 16})');
         }
@@ -225,28 +219,11 @@ class EncryptionService {
       }
 
       // ═══ OLD FORMAT: [salt(16)][iv(12)][ciphertext+tag] ═══
-      // Backward compatibility — derive key from embedded salt
-      if (bytes.length < _saltLength + _ivLength + 16) {
-        throw FormatException('Old format ciphertext too short (${bytes.length} bytes, need ${_saltLength + _ivLength + 16})');
-      }
-
-      var offset = 0;
-      final salt = Uint8List.fromList(
-        bytes.sublist(offset, offset + _saltLength),
-      );
-      offset += _saltLength;
-      final iv = enc.IV(
-        Uint8List.fromList(bytes.sublist(offset, offset + _ivLength)),
-      );
-      offset += _ivLength;
-      final encrypted = enc.Encrypted(
-        Uint8List.fromList(bytes.sublist(offset)),
-      );
-
-      // Derive key from salt (backward compat — 600k PBKDF2 for old data only)
-      final key = _deriveKey(utf8.encode(_activeKey), salt);
-      final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.gcm));
-      return encrypter.decrypt(encrypted, iv: iv);
+      // ═══ FIX: Old format triggers PBKDF2 per-call which freezes UI ═══
+      // Skip and throw — old data should be re-cached, not decrypted on UI thread
+      throw FormatException(
+          'Old encryption format detected — please re-sync data. '
+          'Old format requires PBKDF2 per-decrypt which freezes UI.');
     } catch (e) {
       if (kDebugMode) print('EncryptionService.decrypt error: $e');
       rethrow;
@@ -283,4 +260,21 @@ class EncryptionService {
     _pinnedKey = null;
     _pinnedSalt = null;
   }
+}
+
+/// ═══ Top-level helper for compute() — must be top-level to be callable from isolate ═══
+/// Parameters for PBKDF2 key derivation in isolate
+class _Pbkdf2Params {
+  final String encryptionKey;
+  final Uint8List salt;
+  const _Pbkdf2Params(this.encryptionKey, this.salt);
+}
+
+/// Top-level function that runs PBKDF2 in a background isolate.
+/// Called via compute() — must NOT reference any class state.
+Uint8List _pbkdf2InIsolate(_Pbkdf2Params params) {
+  return EncryptionService._deriveKeySync(
+    utf8.encode(params.encryptionKey),
+    params.salt,
+  );
 }

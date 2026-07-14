@@ -61,10 +61,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           // ⚠️ OFFLINE FIX: فحص مزدوج — isOnline و isConfigured
           if (!ConnectivityUtils.isOnline) return;
           if (!SupabaseConfig.isConfigured) return;
-          final service = await ref.read(syncServiceProvider.future).timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => null,
-          );
+          SyncService? service;
+          try {
+            service = await ref.read(syncServiceProvider.future).timeout(
+              const Duration(seconds: 5),
+            );
+          } on TimeoutException {
+            service = null;
+          }
           if (service == null) return;
           if (service.currentState.pendingCount > 0) {
             await service.sync().timeout(
@@ -205,10 +209,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     return;
                   }
                   try {
-                    final service = await ref.read(syncServiceProvider.future).timeout(
-                      const Duration(seconds: 5),
-                      onTimeout: () => null,
-                    );
+                    SyncService? service;
+                    try {
+                      service = await ref.read(syncServiceProvider.future).timeout(
+                        const Duration(seconds: 5),
+                      );
+                    } on TimeoutException {
+                      service = null;
+                    }
                     if (service == null) return;
                     await service.sync().timeout(
                       const Duration(seconds: 30),

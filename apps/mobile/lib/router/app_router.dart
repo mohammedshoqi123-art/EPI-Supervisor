@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 
@@ -436,10 +437,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
       // 3. رفع الإرساليات المحفوظة محلياً
       // ═══ FIX: مهلة على syncService — لا نحظر UI ═══
-      final syncService = await ref.read(syncServiceProvider.future).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => null,
-      );
+      SyncService? syncService;
+      try {
+        syncService = await ref.read(syncServiceProvider.future).timeout(
+          const Duration(seconds: 5),
+        );
+      } on TimeoutException {
+        syncService = null;
+      }
       if (syncService == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

@@ -46,7 +46,9 @@ class EncryptionService {
   enc.Key? _ephemeralKey;
   enc.Key get _key {
     if (_pinnedKey != null) return _pinnedKey!;
-    _ephemeralKey ??= _deriveKeySync(utf8.encode(_activeKey), _generateRandomBytes(_saltLength));
+    _ephemeralKey ??= enc.Key(
+      _deriveKeySync(utf8.encode(_activeKey), _generateRandomBytes(_saltLength)),
+    );
     return _ephemeralKey!;
   }
 
@@ -63,10 +65,13 @@ class EncryptionService {
     if (_pinnedKey != null) return; // Already initialized
 
     // Get existing salt or create new one
-    var salt = saltSource();
-    if (salt == null) {
+    final existingSalt = saltSource();
+    final Uint8List salt;
+    if (existingSalt == null) {
       salt = _generateRandomBytes(_saltLength);
       onSaltCreated(salt);
+    } else {
+      salt = existingSalt;
     }
 
     _pinnedSalt = salt;

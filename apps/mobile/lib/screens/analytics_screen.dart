@@ -725,9 +725,18 @@ class _ReadinessTab extends ConsumerWidget {
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrRetry(
-          msg: 'فشل تحميل بيانات الجاهزية',
-          onRetry: () => ref.invalidate(_readinessSubsProvider(_getAnalyticsParams(ref)))),
+      error: (e, _) {
+        // ═══ OFFLINE FIX: Show helpful message instead of generic error ═══
+        final isOffline = !ConnectivityUtils.isOnline;
+        return _ErrRetry(
+          msg: isOffline
+              ? 'لا توجد بيانات مخزنة للجاهزية — قم بالمزامنة أولاً'
+              : 'فشل تحميل بيانات الجاهزية',
+          onRetry: isOffline
+              ? null // Disable retry when offline
+              : () => ref.invalidate(_readinessSubsProvider(_getAnalyticsParams(ref))),
+        );
+      },
       data: (subs) {
         final govNames = <String, String>{};
         for (final g in (govAsync.valueOrNull ?? [])) {
@@ -926,9 +935,17 @@ class _ComplianceTab extends ConsumerWidget {
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrRetry(
-          msg: 'فشل تحميل بيانات الإشراف',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)))),
+      error: (e, _) {
+        final isOffline = !ConnectivityUtils.isOnline;
+        return _ErrRetry(
+          msg: isOffline
+              ? 'لا توجد بيانات مخزنة للإشراف — قم بالمزامنة أولاً'
+              : 'فشل تحميل بيانات الإشراف',
+          onRetry: isOffline
+              ? null
+              : () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref))),
+        );
+      },
       data: (subs) {
         final realSubs = subs.where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
@@ -1026,9 +1043,17 @@ class _NumbersTab extends ConsumerWidget {
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrRetry(
-          msg: 'فشل تحميل البيانات',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)))),
+      error: (e, _) {
+        final isOffline = !ConnectivityUtils.isOnline;
+        return _ErrRetry(
+          msg: isOffline
+              ? 'لا توجد بيانات مخزنة — قم بالمزامنة أولاً'
+              : 'فشل تحميل البيانات',
+          onRetry: isOffline
+              ? null
+              : () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref))),
+        );
+      },
       data: (subs) {
         // ═══ FIX: Accept all supervision subs — check both data-level and top-level fields ═══
         final realSubs = subs.where((s) {
@@ -1173,9 +1198,17 @@ class _ChallengesTab extends ConsumerWidget {
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrRetry(
-          msg: 'فشل تحميل البيانات',
-          onRetry: () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref)))),
+      error: (e, _) {
+        final isOffline = !ConnectivityUtils.isOnline;
+        return _ErrRetry(
+          msg: isOffline
+              ? 'لا توجد بيانات مخزنة — قم بالمزامنة أولاً'
+              : 'فشل تحميل البيانات',
+          onRetry: isOffline
+              ? null
+              : () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref))),
+        );
+      },
       data: (subs) {
         final realSubs = subs.where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
@@ -2133,24 +2166,30 @@ class _TextBlock extends StatelessWidget {
 
 class _ErrRetry extends StatelessWidget {
   final String msg;
-  final VoidCallback onRetry;
-  const _ErrRetry({required this.msg, required this.onRetry});
+  final VoidCallback? onRetry; // ═══ Nullable for offline case ═══
+  const _ErrRetry({required this.msg, this.onRetry});
   @override
   Widget build(BuildContext context) => Center(
       child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            Icon(
+              onRetry == null ? Icons.wifi_off_rounded : Icons.error_outline,
+              size: 48,
+              color: onRetry == null ? Colors.orange : Colors.red,
+            ),
             const SizedBox(height: 12),
             Text(msg,
                 style: const TextStyle(fontFamily: 'Tajawal'),
                 textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('إعادة المحاولة',
-                    style: TextStyle(fontFamily: 'Tajawal'))),
+            if (onRetry != null) ...[
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('إعادة المحاولة',
+                      style: TextStyle(fontFamily: 'Tajawal'))),
+            ],
           ])));
 }
 

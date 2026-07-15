@@ -423,7 +423,16 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   );
   // ═══ FIX: Filter out inactive forms client-side as extra safety ═══
   // RLS should handle this, but cache might have stale data
-  return allForms.where((f) => f['is_active'] == true).toList();
+  // ═══ OFFLINE FIX: When offline, include ALL cached forms (even inactive) ═══
+  // Previously: filtered out is_active != true → forms disappeared offline
+  // Now: only filter when online (server data is authoritative)
+  if (ConnectivityUtils.isOnline) {
+    return allForms.where((f) => f['is_active'] == true).toList();
+  } else {
+    // Offline: return ALL forms from cache — don't filter
+    // The user needs access to all forms they previously had
+    return allForms;
+  }
 });
 
 /// ═══ PERFORMANCE: AutoDispose family — cleans up unused filter instances ═══

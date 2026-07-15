@@ -2380,15 +2380,18 @@ class _HealthFacilityAssessmentTab extends ConsumerWidget {
 final _assessmentSubsProvider = FutureProvider.family
     .autoDispose<List<Map<String, dynamic>>, ({String? campaignType, int? campaignRound})>(
   (ref, params) async {
-    final cache = await ref.read(offlineDataCacheProvider.future);
-    return cache.getCachedDataList('form_submissions')?.where((s) {
-      if (s['form_id'] != _assessmentFormId) return false;
-      if (s['deleted_at'] != null) return false;
-      if (params.campaignRound != null && params.campaignRound! > 0) {
-        if (s['campaign_round'] != params.campaignRound) return false;
-      }
-      return true;
-    }).toList() ?? [];
+    final cache = await ref.watch(offlineDataCacheProvider.future);
+    final cacheKey = 'assessment_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
+    return cache.getList(
+      cacheKey,
+      () => ref.read(databaseServiceProvider).getSubmissions(
+            formId: _assessmentFormId,
+            campaignType: params.campaignType,
+            campaignRound: params.campaignRound,
+            limit: 5000,
+          ),
+      maxAge: const Duration(hours: 2),
+    );
   },
 );
 

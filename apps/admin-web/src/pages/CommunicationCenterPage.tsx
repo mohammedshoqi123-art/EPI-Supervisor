@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import {
-  MessageSquare, Send, Plus, Search, Settings, Trash2, Edit3,
-  Hash, Shield, Megaphone, HelpCircle, MessageCircle, Users,
-  BarChart3, RefreshCw, X, Check,
-  Loader2, Volume2, VolumeX,
+  MessageSquare, Send, Plus, Search, Settings, Trash2,
+  Hash, Megaphone, HelpCircle, MessageCircle,
+  BarChart3, X,
+  Loader2,
   Crown, Star, Clock
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+import 'package:supabase_flutter/supabase_flutter.dart' as supa;
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../main.dart';
@@ -1021,14 +1021,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       if (!formKey.currentState!.validate()) return;
                       setDialogState(() => isLoading = true);
                       try {
-                        final client = Supabase.instance.client;
+                        final client = supa.Supabase.instance.client;
                         // Verify current password by re-authenticating
                         final email = client.auth.currentUser?.email;
                         if (email == null) throw Exception('لا يوجد بريد إلكتروني');
 
                         // Update password via Supabase Auth
                         await client.auth.updateUser(
-                          UserAttributes(password: newPasswordCtrl.text),
+                          supa.UserAttributes(password: newPasswordCtrl.text),
                         );
 
                         if (dialogContext.mounted) {

@@ -88,7 +88,7 @@ class AnalyticsService {
       'form_submissions',
       select: 'id, status, created_at, governorate_id, district_id, form_id',
       filters: filters,
-      limit: 5000, // Was 1000, caused silent truncation
+      limit: 2000, // ═══ Was 5000 — 2000 is sufficient for fallback analytics ═══
     );
 
     // Filter by campaign form IDs locally
@@ -112,7 +112,7 @@ class AnalyticsService {
         if (governorateId != null) 'governorate_id': governorateId,
         if (districtId != null) 'district_id': districtId,
       },
-      limit: 5000, // Was 1000, caused silent truncation
+      limit: 2000, // ═══ Was 5000 — 2000 is sufficient for fallback analytics ═══
     );
 
     // Filter shortages by campaign

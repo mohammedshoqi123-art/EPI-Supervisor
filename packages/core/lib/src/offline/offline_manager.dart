@@ -610,7 +610,7 @@ class OfflineManager {
   /// Previously: every getCachedData() call → decrypt entire blob (hundreds of KB) → 10-50ms
   /// Now: decrypt once, cache in memory, only re-decrypt when data changes
   Map<String, dynamic>? _cacheMemory;
-  String? _cacheRawSignature; // MD5 of raw Hive data to detect changes
+  static const int _maxCacheMemoryEntries = 50; // LRU limit
 
   Future<void> cacheData(String key, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
@@ -664,7 +664,6 @@ class OfflineManager {
   /// Invalidate memory cache — call when Hive data changes externally
   void _invalidateCacheMemory() {
     _cacheMemory = null;
-    _cacheRawSignature = null;
   }
 
   /// Get cached data by key.

@@ -7,8 +7,8 @@ class AppConfig {
   // ─── App Metadata ────────────────────────────────────────────────────────
   static const String appName = "EPI Supervisor's";
   static const String appNameAr = "EPI Supervisor's";
-  static const String appVersion = '2.2.0';
-  static const int buildNumber = 22;
+  static const String appVersion = '3.13.2';
+  static const int buildNumber = 59;
 
   // ─── Pagination ──────────────────────────────────────────────────────────
   static const int defaultPageSize = 20;
@@ -31,7 +31,7 @@ class AppConfig {
   static const int maxQueueSize = 1000; // Larger queue for offline-heavy usage
 
   // ─── File Upload ─────────────────────────────────────────────────────────
-  static const int maxPhotoSizeMb = 5;
+  static const int maxPhotoSizeMb = 2; // Was 5MB — 2MB better for slow networks
   static const int maxPhotosPerSubmission = 1;
   static const List<String> allowedImageExtensions = [
     'jpg',
@@ -45,7 +45,7 @@ class AppConfig {
   static const Duration gpsTimeout = Duration(seconds: 30);
 
   // ─── Security ────────────────────────────────────────────────────────────
-  static const int sessionTimeoutMinutes = 480; // 8 hours
+  static const int sessionTimeoutMinutes = 240; // 4 hours (was 8h — security improvement)
   static const int maxLoginAttempts = 5;
   static const Duration lockoutDuration = Duration(minutes: 15);
 

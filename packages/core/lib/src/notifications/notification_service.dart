@@ -169,23 +169,28 @@ class NotificationService {
   }
 
   /// Mark all as read (local + DB)
+  /// ═══ PERFORMANCE: Batch update — single query instead of N individual updates ═══
   static Future<void> markAllAsRead() async {
+    final unreadIds = _notifications
+        .where((n) => !n.read)
+        .map((n) => n.id)
+        .toList();
+
+    // Update local state
     for (var i = 0; i < _notifications.length; i++) {
       if (!_notifications[i].read) {
         _notifications[i] = _notifications[i].markAsRead();
       }
     }
 
-    if (_api != null) {
+    // Batch update DB — single query with IN filter
+    if (_api != null && unreadIds.isNotEmpty) {
       try {
-        // Batch update via Edge Function or individual updates
-        for (final n in _notifications.where((n) => n.read)) {
-          await _api!.update(
-            'notifications',
-            {'is_read': true, 'read_at': DateTime.now().toIso8601String()},
-            filters: {'id': n.id},
-          );
-        }
+        await _api!.update(
+          'notifications',
+          {'is_read': true, 'read_at': DateTime.now().toIso8601String()},
+          filters: {'id': _api!.inList(unreadIds)},
+        );
       } catch (e) {
         if (kDebugMode) print('Failed to mark all as read in DB: $e');
       }

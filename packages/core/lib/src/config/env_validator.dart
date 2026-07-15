@@ -47,19 +47,27 @@ class EnvValidator {
     const sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
     const encKey = String.fromEnvironment('ENCRYPTION_KEY', defaultValue: '');
 
+    // ═══ ENCRYPTION_KEY: مطلوب في الإنتاج — بدونه التطبيق ي crash ═══
+    if (encKey.isEmpty || _isPlaceholder(encKey)) {
+      if (kDebugMode) {
+        debugPrint(
+          '🚨 CRITICAL: ENCRYPTION_KEY is not configured. '
+          'Local storage encryption will FAIL at runtime — '
+          'pass --dart-define=ENCRYPTION_KEY=<32+ chars> when building.',
+        );
+      }
+      // In production, this is a fatal error
+      if (!kDebugMode) {
+        errors.add('ENCRYPTION_KEY is not configured (required for offline storage)');
+      }
+    }
+
     if (kDebugMode) {
       if (geminiKey.isEmpty || _isPlaceholder(geminiKey)) {
         debugPrint('⚠️ Optional: GEMINI_API_KEY not configured');
       }
       if (sentryDsn.isEmpty || _isPlaceholder(sentryDsn)) {
         debugPrint('⚠️ Optional: SENTRY_DSN not configured');
-      }
-      if (encKey.isEmpty || _isPlaceholder(encKey)) {
-        debugPrint(
-          '🚨 CRITICAL: ENCRYPTION_KEY is not configured. '
-          'Local storage encryption will FAIL at runtime — '
-          'pass --dart-define=ENCRYPTION_KEY=<32+ chars> when building.',
-        );
       }
     }
 

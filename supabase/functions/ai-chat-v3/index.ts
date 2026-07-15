@@ -374,12 +374,14 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
       }
 
       case 'get_analytics': {
+        let subQuery = supa.from('form_submissions').select('id', { count: 'exact' }).is('deleted_at', null)
+        if (context?.campaignRound && context.campaignRound > 0) subQuery = subQuery.eq('campaign_round', context.campaignRound)
         const [s, sh, u] = await Promise.all([
-          withTimeout(supa.from('form_submissions').select('id', { count: 'exact' }).is('deleted_at', null), 8_000),
+          withTimeout(subQuery, 8_000),
           withTimeout(supa.from('supply_shortages').select('id', { count: 'exact' }).is('deleted_at', null).eq('is_resolved', false), 8_000),
           withTimeout(supa.from('profiles').select('id', { count: 'exact' }).eq('is_active', true), 8_000),
         ])
-        return { total_submissions: s?.count || 0, active_shortages: sh?.count || 0, active_users: u?.count || 0 }
+        return { total_submissions: s?.count || 0, active_shortages: sh?.count || 0, active_users: u?.count || 0, campaign_round: context?.campaignRound || 'all' }
       }
 
       case 'get_system_health': return await getSystemHealthScore(supa)

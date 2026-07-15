@@ -153,9 +153,11 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
     HapticFeedback.mediumImpact();
     if (!ConnectivityUtils.isOnline) return;
     final campaign = ref.read(campaignProvider);
+    final round = ref.read(campaignRoundProvider);
     final filter = SubmissionsFilter(
       status: _statusFilter,
       campaignType: campaign.value,
+      campaignRound: campaign.value == 'integrated_activity' ? round : null,
     );
     await ref.read(forceRefreshProvider)(filter.cacheKey);
     ref.invalidate(submissionsProvider(filter));

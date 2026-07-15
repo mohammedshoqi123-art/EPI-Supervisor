@@ -447,15 +447,22 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
 
     try {
       final db = ref.read(databaseServiceProvider);
+      final round = ref.read(campaignRoundProvider);
 
-      final readinessSubs =
-          await db.getSubmissions(formId: _readinessFormId, limit: 5000);
+      final readinessSubs = await db.getSubmissions(
+        formId: _readinessFormId,
+        campaignRound: round,
+        limit: 5000,
+      );
       if (readinessSubs.isNotEmpty) {
         readinessData = _processReadinessData(readinessSubs);
       }
 
-      final supervisionSubs =
-          await db.getSubmissions(formId: _supervisionFormId, limit: 5000);
+      final supervisionSubs = await db.getSubmissions(
+        formId: _supervisionFormId,
+        campaignRound: round,
+        limit: 5000,
+      );
       if (supervisionSubs.isNotEmpty) {
         complianceData = _processComplianceData(supervisionSubs);
         serviceNumbersData = _processServiceNumbersData(supervisionSubs);
@@ -482,7 +489,9 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           .valueOrNull,
       fetchGovRanking: () async {
         try {
-          return await ref.read(analyticsServiceProvider).getGovernorateRanking();
+          return await ref.read(analyticsServiceProvider).getGovernorateRanking(
+            campaignRound: ref.read(campaignRoundProvider),
+          );
         } catch (_) {
           return null;
         }

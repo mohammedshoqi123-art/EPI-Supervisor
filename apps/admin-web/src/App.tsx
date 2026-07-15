@@ -22,6 +22,7 @@ const MapPage = lazy(() => import('@/pages/MapPage'))
 const PagesManagementPage = lazy(() => import('@/pages/PagesManagementPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const ChatPage = lazy(() => import('@/pages/ChatPage'))
+const CommunicationCenterPage = lazy(() => import('@/pages/CommunicationCenterPage'))
 const BotChatPage = lazy(() => import('@/pages/BotChatPage'))
 const EpiStudioPage = lazy(() => import('@/pages/EpiStudioPage'))
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="forms" element={<Suspense fallback={<PageLoader />}><FormsPage /></Suspense>} />
             <Route path="map" element={<Suspense fallback={<PageLoader />}><MapPage /></Suspense>} />
             <Route path="chat" element={<Suspense fallback={<PageLoader />}><ChatPage /></Suspense>} />
+            <Route path="communication" element={<Suspense fallback={<PageLoader />}><CommunicationCenterPage /></Suspense>} />
             <Route path="memos" element={<Suspense fallback={<PageLoader />}><MemosPage /></Suspense>} />
             <Route path="feedback" element={<Suspense fallback={<PageLoader />}><FeedbackPage /></Suspense>} />
             <Route path="bot-knowledge" element={<Suspense fallback={<PageLoader />}><BotKnowledgePage /></Suspense>} />

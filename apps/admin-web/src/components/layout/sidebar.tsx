@@ -86,6 +86,7 @@ const navSections: NavSection[] = [
     icon: MessageSquare,
     items: [
       { icon: ScrollTextIcon, label: 'التعاميم الرسمية', href: '/memos', roles: ['admin', 'central', 'governorate', 'district', 'data_entry'] },
+      { icon: MessageSquare, label: 'مركز الاتصال', href: '/communication', roles: ['admin', 'central'] },
       { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
       { icon: MessageCircle, label: 'التغذية الراجعة', href: '/feedback', roles: ['admin', 'central', 'governorate', 'district', 'data_entry'] },
       { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },

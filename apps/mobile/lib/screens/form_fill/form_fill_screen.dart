@@ -856,14 +856,16 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
     List<int> currentPage = [];
     int currentFieldCount = 0;
-    const maxFieldsPerPage = 8; // عدد الحقول الأقصى في كل صفحة
+    // ═══ زيادة الحد الأقصى لتقليل عدد الصفحات ═══
+    // الهدف: 12 قسم → 6 صفحات
+    const maxFieldsPerPage = 15;
 
     for (int i = 0; i < _sections.length; i++) {
       final section = _sections[i] as Map<String, dynamic>;
       final fields = (section['fields'] as List?) ?? [];
       final fieldCount = fields.length;
 
-      // إذا كان القسم يحتوي على حقول كثيرة، اجعله صفحة مستقلة
+      // إذا كان القسم يحتوي على حقول كثيرة جداً، اجعله صفحة مستقلة
       if (fieldCount >= maxFieldsPerPage) {
         if (currentPage.isNotEmpty) {
           _sectionPages.add(List.from(currentPage));

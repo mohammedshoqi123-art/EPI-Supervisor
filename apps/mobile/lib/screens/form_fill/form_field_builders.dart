@@ -36,18 +36,33 @@ List<Widget> buildFormSections({
     final fields =
         (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-    // ═══ تجميع الحقول المتشابهة في مجموعات ═══
+    // ═══ تجميع الحقول المتشابهة في مجموعات مع دعم showIf ═══
     // المجموعة 1: yesno fields → CompactYesNoTable
     // المجموعة 2: number fields → CompactNumbersGrid
     // المجموعة 3: باقي الحقول → عرض فردي
 
-    // فصل الحقول إلى مجموعات
+    // فصل الحقول إلى مجموعات مع تطبيق showIf
     final yesNoFields = <Map<String, dynamic>>[];
     final numberFields = <Map<String, dynamic>>[];
     final otherFields = <Map<String, dynamic>>[];
 
     for (final field in fields) {
       final type = field['type'] as String? ?? 'text';
+
+      // ═══ دعم الإظهار الشرطي (showIf) ═══
+      final showIf = field['showIf'] as Map<String, dynamic>?;
+      if (showIf != null) {
+        final condField = showIf['field'] as String?;
+        final condValue = showIf['value'];
+        if (condField != null) {
+          final currentValue = formData[condField];
+          // إذا القيمة لا تطابق الشرط، لا نضمّن الحقل
+          if (currentValue != condValue) {
+            continue;
+          }
+        }
+      }
+
       if (type == 'yesno') {
         yesNoFields.add(field);
       } else if (type == 'number') {
@@ -137,8 +152,22 @@ List<Widget> buildFormSections({
       ));
     }
 
-    // عرض باقي الحقول فردياً
+    // عرض باقي الحقول فردياً مع دعم showIf
     for (final field in otherFields) {
+      // ═══ دعم الإظهار الشرطي (showIf) ═══
+      final showIf = field['showIf'] as Map<String, dynamic>?;
+      if (showIf != null) {
+        final condField = showIf['field'] as String?;
+        final condValue = showIf['value'];
+        if (condField != null) {
+          final currentValue = formData[condField];
+          // إذا القيمة لا تطابق الشرط، لا تعرض الحقل
+          if (currentValue != condValue) {
+            continue; // تخطي هذا الحقل
+          }
+        }
+      }
+
       widgets.add(
         buildFormField(
           field: field,

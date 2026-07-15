@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+
 import { Switch } from '@/components/ui/switch'
 import { Header } from '@/components/layout/header'
 import {
@@ -503,7 +503,7 @@ function ChatArea({ channel, onEdit }: { channel: ChatChannel; onEdit: () => voi
       {/* Input */}
       <div className="border-t p-4">
         <div className="flex gap-2 items-end">
-          <Textarea
+          <Input
             ref={inputRef}
             placeholder={`اكتب رسالتك في ${channel.name}...`}
             value={message}
@@ -662,7 +662,7 @@ function CreateChannelDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           </div>
           <div className="space-y-2">
             <Label>الوصف</Label>
-            <Textarea
+            <Input
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="وصف القناة..."
@@ -802,7 +802,7 @@ function EditChannelDialog({ open, onOpenChange, channel }: {
           </div>
           <div className="space-y-2">
             <Label>الوصف</Label>
-            <Textarea
+            <Input
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               rows={2}

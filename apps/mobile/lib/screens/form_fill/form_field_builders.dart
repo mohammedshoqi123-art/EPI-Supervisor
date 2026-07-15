@@ -56,10 +56,18 @@ List<Widget> buildFormSections({
         final condValue = showIf['value'];
         if (condField != null) {
           final currentValue = formData[condField];
-          // إذا القيمة لا تطابق الشرط، لا نضمّن الحقل
-          if (currentValue != condValue) {
-            continue;
+          // ═══ FIX: yesno fields store bool (true/false) but showIf uses "yes"/"no" ═══
+          // Normalize both sides for comparison
+          bool matches = currentValue == condValue;
+          if (!matches && currentValue is bool && condValue is String) {
+            matches = (currentValue && condValue == 'yes') ||
+                      (!currentValue && condValue == 'no');
           }
+          if (!matches && currentValue is String && condValue is bool) {
+            matches = (currentValue == 'yes' && condValue) ||
+                      (currentValue == 'no' && !condValue);
+          }
+          if (!matches) continue;
         }
       }
 

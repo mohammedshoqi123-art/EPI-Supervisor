@@ -892,7 +892,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         if (showIf != null) {
           final condField = showIf['field'] as String?;
           final condValue = showIf['value'];
-          if (condField != null && _formData[condField] != condValue) continue;
+          if (condField != null) {
+            final current = _formData[condField];
+            bool matches = current == condValue;
+            if (!matches && current is bool && condValue is String) {
+              matches = (current && condValue == 'yes') || (!current && condValue == 'no');
+            }
+            if (!matches) continue;
+          }
         }
 
         fieldCount++;
@@ -1036,7 +1043,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           if (showIf != null) {
             final condField = showIf['field'] as String?;
             final condValue = showIf['value'];
-            if (condField != null && _formData[condField] != condValue) continue;
+            if (condField != null) {
+              final current = _formData[condField];
+              bool matches = current == condValue;
+              if (!matches && current is bool && condValue is String) {
+                matches = (current && condValue == 'yes') || (!current && condValue == 'no');
+              }
+              if (!matches) continue;
+            }
           }
 
           totalFields++;

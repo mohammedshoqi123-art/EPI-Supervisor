@@ -297,6 +297,12 @@ class ReportGenerator {
       _addChallengesPages(pdf, challengesData, title, dateStr);
     }
 
+    // ═══ Section: Assessment Metrics ═══
+    final assessmentMetrics = analyticsData['assessment_metrics'] as Map<String, dynamic>?;
+    if (assessmentMetrics != null && assessmentMetrics.isNotEmpty) {
+      _addAssessmentPages(pdf, assessmentMetrics, title, dateStr);
+    }
+
     // ═══ Governorate Performance ═══
     if (governorateData != null && governorateData.isNotEmpty) {
       pdf.addPage(
@@ -824,6 +830,147 @@ class ReportGenerator {
         ],
       ),
     );
+  }
+
+  // ═══ Assessment Metrics Pages ═══
+  static void _addAssessmentPages(
+    pw.Document pdf,
+    Map<String, dynamic> metrics,
+    String title,
+    String dateStr,
+  ) {
+    final total = metrics['total'] as int? ?? 0;
+    final metricsMap = metrics['metrics'] as Map<String, dynamic>? ?? {};
+
+    if (metricsMap.isEmpty) return;
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        theme: pw.ThemeData.withFont(base: _font!, bold: _boldFont!),
+        header: (ctx) => _buildHeader(title, dateStr),
+        footer: (ctx) => _buildFooter(ctx),
+        build: (ctx) => [
+          pw.Directionality(
+            textDirection: pw.TextDirection.rtl,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _sectionHeader('تقييم جودة الأداء للمرافق الصحية'),
+                pw.SizedBox(height: 12),
+                pw.Text(
+                  'إجمالي التقييمات: $total',
+                  style: pw.TextStyle(font: _font, fontSize: 11, color: _textMuted),
+                ),
+                pw.SizedBox(height: 16),
+                ...metricsMap.entries.map((entry) {
+                  final name = entry.key;
+                  final data = entry.value as Map<String, dynamic>;
+                  final yes = data['yes'] as int? ?? 0;
+                  final t = data['total'] as int? ?? 0;
+                  final pct = t > 0 ? (yes / t * 100).round() : 0;
+                  return _buildAssessmentMetricRow(name, yes, t, pct);
+                }),
+                pw.SizedBox(height: 20),
+                // Summary
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(16),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColor.fromInt(0xFFF5F7FA),
+                    borderRadius: pw.BorderRadius.circular(12),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'ملخص الامتثال',
+                        style: pw.TextStyle(font: _boldFont, fontSize: 14, color: _primaryColor),
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Text(
+                        'معدل الامتثال العام: ${_calcOverallCompliance(metricsMap)}%',
+                        style: pw.TextStyle(font: _font, fontSize: 12, color: _textDark),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildAssessmentMetricRow(String name, int yes, int total, int pct) {
+    final color = pct >= 80
+        ? PdfColor.fromInt(0xFF4CAF50)
+        : pct >= 50
+            ? PdfColor.fromInt(0xFFFF9800)
+            : PdfColor.fromInt(0xFFE53935);
+
+    return pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(bottom: 10),
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(8),
+        border: pw.Border.all(color: PdfColor.fromInt(0xFFE0E0E0)),
+      ),
+      child: pw.Row(
+        children: [
+          pw.Expanded(
+            child: pw.Text(
+              name,
+              style: pw.TextStyle(font: _font, fontSize: 11, color: _textDark),
+            ),
+          ),
+          pw.Text(
+            '$yes/$total',
+            style: pw.TextStyle(font: _boldFont, fontSize: 11, color: _textDark),
+          ),
+          pw.SizedBox(width: 12),
+          pw.Container(
+            width: 50,
+            height: 8,
+            decoration: pw.BoxDecoration(
+              color: PdfColor.fromInt(0xFFE0E0E0),
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            child: pw.Align(
+              alignment: pw.Alignment.centerLeft,
+              child: pw.Container(
+                width: 50.0 * pct / 100,
+                height: 8,
+                decoration: pw.BoxDecoration(
+                  color: color,
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Text(
+            '$pct%',
+            style: pw.TextStyle(font: _boldFont, fontSize: 11, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _calcOverallCompliance(Map<String, dynamic> metrics) {
+    int totalYes = 0;
+    int totalAll = 0;
+    for (final entry in metrics.entries) {
+      final data = entry.value as Map<String, dynamic>;
+      totalYes += (data['yes'] as int? ?? 0);
+      totalAll += (data['total'] as int? ?? 0);
+    }
+    return totalAll > 0 ? (totalYes / totalAll * 100).round().toString() : '0';
   }
 
   // ═══════════════════════════════════════════════════════════════════════

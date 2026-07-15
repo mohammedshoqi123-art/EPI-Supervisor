@@ -14,7 +14,7 @@ import '../../providers/app_providers.dart';
 import 'form_field_builders.dart';
 import 'form_review_sheet.dart';
 import 'section_navigation_bar.dart';
-import 'form_progress_dashboard.dart';
+import 'compact_progress_bar.dart';
 
 // ⚠️ ConnectivityUtils for offline checks
 import 'package:epi_core/src/utils/connectivity_utils.dart';
@@ -52,6 +52,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   // ═══ Section Navigation ═══
   late PageController _pageController;
   int _currentSectionIndex = 0;
+
+  // ═══ Section Grouping: merge small sections into pages ═══
+  // Each page can contain multiple sections
+  List<List<int>> _sectionPages = []; // _sectionPages[pageIndex] = [sectionIndices]
 
   // ⚠️ PERF: Cache _allFields instead of recomputing on every build
   List<Map<String, dynamic>> _allFieldsCache = [];
@@ -141,6 +145,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
       // ⚠️ PERF: Build cache ONCE after form loads
       _buildFieldsCache();
+      // بناء صفحات الأقسام المجمعة
+      _buildSectionPages();
 
       // ═══ AUTO-FILL: populate fields from user profile ═══
       _autoFillFromProfile();
@@ -843,8 +849,50 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   // ═══ Section Navigation Methods ═══
 
+  /// تجميع الأقسام في صفحات — كل صفحة تحتوي عدة أقسام صغيرة
+  void _buildSectionPages() {
+    _sectionPages = [];
+    if (_sections.isEmpty) return;
+
+    List<int> currentPage = [];
+    int currentFieldCount = 0;
+    const maxFieldsPerPage = 8; // عدد الحقول الأقصى في كل صفحة
+
+    for (int i = 0; i < _sections.length; i++) {
+      final section = _sections[i] as Map<String, dynamic>;
+      final fields = (section['fields'] as List?) ?? [];
+      final fieldCount = fields.length;
+
+      // إذا كان القسم يحتوي على حقول كثيرة، اجعله صفحة مستقلة
+      if (fieldCount >= maxFieldsPerPage) {
+        if (currentPage.isNotEmpty) {
+          _sectionPages.add(List.from(currentPage));
+          currentPage = [];
+          currentFieldCount = 0;
+        }
+        _sectionPages.add([i]);
+        continue;
+      }
+
+      // إذا إضافة هذا القسم ستتجاوز الحد، ابدأ صفحة جديدة
+      if (currentFieldCount + fieldCount > maxFieldsPerPage && currentPage.isNotEmpty) {
+        _sectionPages.add(List.from(currentPage));
+        currentPage = [];
+        currentFieldCount = 0;
+      }
+
+      currentPage.add(i);
+      currentFieldCount += fieldCount;
+    }
+
+    // أضف الصفحة الأخيرة
+    if (currentPage.isNotEmpty) {
+      _sectionPages.add(currentPage);
+    }
+  }
+
   void _goToSection(int index) {
-    if (index < 0 || index >= _sections.length) return;
+    if (index < 0 || index >= _sectionPages.length) return;
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 350),
@@ -853,7 +901,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   void _nextSection() {
-    if (_currentSectionIndex < _sections.length - 1) {
+    if (_currentSectionIndex < _sectionPages.length - 1) {
       _goToSection(_currentSectionIndex + 1);
     }
   }
@@ -864,57 +912,75 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     }
   }
 
-  /// بناء بيانات التنقل للأقسام
+  /// بناء بيانات التنقل للصفحات
   List<SectionNavItem> _buildSectionNavItems() {
-    if (_sections.isEmpty) return [];
+    if (_sections.isEmpty || _sectionPages.isEmpty) return [];
 
-    return _sections.asMap().entries.map((entry) {
-      final section = entry.value as Map<String, dynamic>;
-      final title = section['title_ar'] as String? ?? '';
-      final fields = (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    return _sectionPages.asMap().entries.map((entry) {
+      final pageIndex = entry.key;
+      final sectionIndices = entry.value;
 
       int totalFields = 0, filledFields = 0;
       int requiredFields = 0, filledRequiredFields = 0;
       int yesNoFields = 0, yesCount = 0;
+      String title = '';
 
-      for (final field in fields) {
-        final key = field['key'] as String? ?? '';
-        final type = field['type'] as String? ?? 'text';
-        final isRequired = field['required'] == true;
+      for (final sectionIdx in sectionIndices) {
+        final section = _sections[sectionIdx] as Map<String, dynamic>;
+        final sectionTitle = section['title_ar'] as String? ?? '';
+        final fields = (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-        // تحقق من شرط الإظهار
-        final showIf = field['showIf'];
-        if (showIf != null) {
-          final condField = showIf['field'] as String?;
-          final condValue = showIf['value'];
-          if (condField != null && _formData[condField] != condValue) continue;
+        // عنوان الصفحة: الأقسام المجمعة
+        if (title.isEmpty) {
+          title = sectionTitle;
+        } else if (sectionIndices.length <= 3) {
+          title = '$title، $sectionTitle';
         }
 
-        totalFields++;
-        if (isRequired) requiredFields++;
+        for (final field in fields) {
+          final key = field['key'] as String? ?? '';
+          final type = field['type'] as String? ?? 'text';
+          final isRequired = field['required'] == true;
 
-        final val = _formData[key];
-        bool isFilled = false;
-        if (val != null) {
-          if (val is String && val.isNotEmpty) isFilled = true;
-          else if (val is bool) isFilled = true;
-          else if (val is num && val != 0) isFilled = true;
-          else if (val is List && val.isNotEmpty) isFilled = true;
-        }
+          // تحقق من شرط الإظهار
+          final showIf = field['showIf'];
+          if (showIf != null) {
+            final condField = showIf['field'] as String?;
+            final condValue = showIf['value'];
+            if (condField != null && _formData[condField] != condValue) continue;
+          }
 
-        if (isFilled) {
-          filledFields++;
-          if (isRequired) filledRequiredFields++;
-        }
+          totalFields++;
+          if (isRequired) requiredFields++;
 
-        if (type == 'yesno') {
-          yesNoFields++;
-          if (val == true) yesCount++;
+          final val = _formData[key];
+          bool isFilled = false;
+          if (val != null) {
+            if (val is String && val.isNotEmpty) isFilled = true;
+            else if (val is bool) isFilled = true;
+            else if (val is num && val != 0) isFilled = true;
+            else if (val is List && val.isNotEmpty) isFilled = true;
+          }
+
+          if (isFilled) {
+            filledFields++;
+            if (isRequired) filledRequiredFields++;
+          }
+
+          if (type == 'yesno') {
+            yesNoFields++;
+            if (val == true) yesCount++;
+          }
         }
       }
 
+      // عنوان مختصر للصفحة
+      if (title.length > 20) {
+        title = 'صفحة ${pageIndex + 1}';
+      }
+
       return SectionNavItem(
-        key: 'section_$entry.key',
+        key: 'page_$pageIndex',
         title: title,
         totalFields: totalFields,
         filledFields: filledFields,
@@ -1058,24 +1124,20 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                   key: _formKey,
                   child: Column(
                     children: [
-                      // ═══ Dashboard التقدم الحي ═══
+                      // ═══ شريط التقدم المدمج ═══
                       if (_sections.isNotEmpty) ...[
                         Builder(builder: (context) {
                           final stats = _globalStats;
-                          return FormProgressDashboard(
-                            totalFields: stats.totalFields,
+                          return CompactProgressBar(
                             filledFields: stats.filledFields,
-                            requiredFields: stats.requiredFields,
-                            filledRequiredFields: stats.filledRequired,
-                            totalYesNo: stats.totalYesNo,
-                            yesCount: stats.yesCount,
-                            photosCount: stats.photosCount,
-                            hasGps: _gpsLat != null,
+                            totalFields: stats.totalFields,
+                            filledRequired: stats.filledRequired,
+                            totalRequired: stats.requiredFields,
                             currentSection: _currentSectionIndex,
-                            totalSections: _sections.length,
+                            totalSections: _sectionPages.length,
                           );
                         }),
-                        // ═══ شريط التنقل بين الأقسام ═══
+                        // ═══ شريط التنقل بين الصفحات ═══
                         SectionNavigationBar(
                           sections: _buildSectionNavItems(),
                           currentIndex: _currentSectionIndex,
@@ -1089,12 +1151,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                         child: _sections.isNotEmpty
                             ? PageView.builder(
                                 controller: _pageController,
-                                itemCount: _sections.length,
+                                itemCount: _sectionPages.length,
                                 onPageChanged: (index) {
                                   setState(() => _currentSectionIndex = index);
                                 },
-                                itemBuilder: (context, sectionIndex) {
-                                  return _buildSectionPage(sectionIndex);
+                                itemBuilder: (context, pageIndex) {
+                                  return _buildPageView(pageIndex);
                                 },
                               )
                             : _buildFlatFieldsList(),
@@ -1108,15 +1170,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     );
   }
 
-  /// بناء صفحة القسم الواحد
-  Widget _buildSectionPage(int sectionIndex) {
-    final section = _sections[sectionIndex] as Map<String, dynamic>;
-    final title = section['title_ar'] as String? ?? '';
-    final fields = (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+  /// بناء صفحة تحتوي عدة أقسام
+  Widget _buildPageView(int pageIndex) {
+    final sectionIndices = _sectionPages[pageIndex];
+    final sectionsToShow = sectionIndices.map((i) => _sections[i]).toList();
 
-    // بناء widgets القسم باستخدام الدالة الموجودة
-    final sectionWidgets = buildFormSections(
-      sections: [_sections[sectionIndex]],
+    // بناء widgets لجميع الأقسام في الصفحة
+    final allWidgets = buildFormSections(
+      sections: sectionsToShow,
       formData: _formData,
       textControllers: _textControllers,
       isGettingLocation: _isGettingLocation,
@@ -1131,53 +1192,54 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     );
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        // مؤشر الحمل (فقط للقسم المتكامل)
-        Builder(builder: (context) {
-          final campaign = ref.watch(campaignProvider);
-          final round = ref.watch(campaignRoundProvider);
-          if (campaign.value != 'integrated_activity' || sectionIndex != 0) {
-            return const SizedBox.shrink();
-          }
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.25)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.refresh_rounded, size: 18, color: AppTheme.primaryColor),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('يتم التعبئة في:', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: AppTheme.textSecondary)),
-                      Text(campaignRoundLabel(round), style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
-                    ],
+        // مؤشر الحمل (فقط للصفحة الأولى)
+        if (pageIndex == 0) ...[
+          Builder(builder: (context) {
+            final campaign = ref.watch(campaignProvider);
+            final round = ref.watch(campaignRoundProvider);
+            if (campaign.value != 'integrated_activity') {
+              return const SizedBox.shrink();
+            }
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.refresh_rounded, size: 16, color: AppTheme.primaryColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('يتم التعبئة في:', style: TextStyle(fontFamily: 'Tajawal', fontSize: 10, color: AppTheme.textSecondary)),
+                        Text(campaignRoundLabel(round), style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            );
+          }),
+          // وصف النموذج
+          if (_formSchema?['description_ar'] != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                _formSchema!['description_ar'],
+                style: const TextStyle(fontFamily: 'Tajawal', color: AppTheme.textSecondary, fontSize: 13),
+              ),
             ),
-          );
-        }),
-        // وصف النموذج (فقط في القسم الأول)
-        if (sectionIndex == 0 && _formSchema?['description_ar'] != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Text(
-              _formSchema!['description_ar'],
-              style: const TextStyle(fontFamily: 'Tajawal', color: AppTheme.textSecondary),
-            ),
-          ),
-        // حقول القسم
-        ...sectionWidgets,
-        // مساحة فارغة في الأسفل
+        ],
+        // حقول الأقسام
+        ...allWidgets,
         const SizedBox(height: 16),
       ],
     );

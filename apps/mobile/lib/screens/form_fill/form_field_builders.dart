@@ -36,35 +36,28 @@ List<Widget> buildFormSections({
     final fields =
         (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-    // Check if ALL fields are yesno → compact table (big perf win)
-    final allYesNo = fields.isNotEmpty && fields.every((f) => f['type'] == 'yesno');
-    final allNumbers = fields.isNotEmpty && fields.every((f) => f['type'] == 'number');
+    // ═══ تجميع الحقول المتشابهة في مجموعات ═══
+    // المجموعة 1: yesno fields → CompactYesNoTable
+    // المجموعة 2: number fields → CompactNumbersGrid
+    // المجموعة 3: باقي الحقول → عرض فردي
 
-    if (allYesNo && fields.length >= 2) {
-      widgets.add(CompactYesNoTable(
-        sectionTitle: title,
-        sectionNumber: secIdx + 1,
-        items: fields.map((f) => YesNoItem(key: f['key'] as String, label: f['label_ar'] as String? ?? '', required: f['required'] as bool? ?? false)).toList(),
-        formData: formData,
-        onChanged: (key, value) { formData[key] = value; },
-        markChanged: markChanged,
-      ));
-      continue;
+    // فصل الحقول إلى مجموعات
+    final yesNoFields = <Map<String, dynamic>>[];
+    final numberFields = <Map<String, dynamic>>[];
+    final otherFields = <Map<String, dynamic>>[];
+
+    for (final field in fields) {
+      final type = field['type'] as String? ?? 'text';
+      if (type == 'yesno') {
+        yesNoFields.add(field);
+      } else if (type == 'number') {
+        numberFields.add(field);
+      } else {
+        otherFields.add(field);
+      }
     }
 
-    if (allNumbers && fields.length >= 2) {
-      widgets.add(CompactNumbersGrid(
-        sectionTitle: title,
-        sectionNumber: secIdx + 1,
-        items: fields.map((f) => NumberItem(key: f['key'] as String, label: f['label_ar'] as String? ?? '', required: f['required'] as bool? ?? false)).toList(),
-        formData: formData,
-        textControllers: textControllers,
-        onChanged: (key, value) { formData[key] = value; },
-        markChanged: markChanged,
-      ));
-      continue;
-    }
-
+    // عرض عنوان القسم
     widgets.add(
       Container(
         margin: const EdgeInsets.only(bottom: 12, top: 8),
@@ -103,7 +96,49 @@ List<Widget> buildFormSections({
       ),
     );
 
-    for (final field in fields) {
+    // عرض حقول نعم/لا كجدول مدمج
+    if (yesNoFields.isNotEmpty) {
+      widgets.add(CompactYesNoTable(
+        sectionTitle: title,
+        sectionNumber: secIdx + 1,
+        items: yesNoFields
+            .map((f) => YesNoItem(
+                  key: f['key'] as String,
+                  label: f['label_ar'] as String? ?? '',
+                  required: f['required'] as bool? ?? false,
+                ))
+            .toList(),
+        formData: formData,
+        onChanged: (key, value) {
+          formData[key] = value;
+        },
+        markChanged: markChanged,
+      ));
+    }
+
+    // عرض حقول الأعداد كشبكة مدمجة
+    if (numberFields.isNotEmpty) {
+      widgets.add(CompactNumbersGrid(
+        sectionTitle: title,
+        sectionNumber: secIdx + 1,
+        items: numberFields
+            .map((f) => NumberItem(
+                  key: f['key'] as String,
+                  label: f['label_ar'] as String? ?? '',
+                  required: f['required'] as bool? ?? false,
+                ))
+            .toList(),
+        formData: formData,
+        textControllers: textControllers,
+        onChanged: (key, value) {
+          formData[key] = value;
+        },
+        markChanged: markChanged,
+      ));
+    }
+
+    // عرض باقي الحقول فردياً
+    for (final field in otherFields) {
       widgets.add(
         buildFormField(
           field: field,

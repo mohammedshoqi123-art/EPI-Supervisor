@@ -189,7 +189,7 @@ class NotificationService {
         await _api!.update(
           'notifications',
           {'is_read': true, 'read_at': DateTime.now().toIso8601String()},
-          filters: {'id': _api!.inList(unreadIds)},
+          filters: {'id': ApiClient.inList(unreadIds)},
         );
       } catch (e) {
         if (kDebugMode) print('Failed to mark all as read in DB: $e');

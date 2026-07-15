@@ -610,6 +610,7 @@ class OfflineManager {
   /// Previously: every getCachedData() call → decrypt entire blob (hundreds of KB) → 10-50ms
   /// Now: decrypt once, cache in memory, only re-decrypt when data changes
   Map<String, dynamic>? _cacheMemory;
+  String? _cacheRawSignature;
   static const int _maxCacheMemoryEntries = 50; // LRU limit
 
   Future<void> cacheData(String key, Map<String, dynamic> data) async {

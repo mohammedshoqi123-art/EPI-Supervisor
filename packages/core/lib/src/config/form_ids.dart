@@ -19,8 +19,11 @@ class FormIds {
   /// استمارة الجاهزية للنشاط الإيصالي التكاملي
   static const String readiness = '8aa0f3d5-7ab0-430f-85fd-4488c0c129bb';
 
+  /// استمارة تقييم جودة الأداء للمرافق الصحية
+  static const String healthFacilityAssessment = '606b5093-9a8f-47d6-a6c9-b0429ce4a9f6';
+
   /// كل المعرفات
-  static const List<String> all = [supervision, readiness];
+  static const List<String> all = [supervision, readiness, healthFacilityAssessment];
 
   /// التحقق إذا كان المعرف ينتمي لنموذج معروف
   static bool isKnown(String id) => all.contains(id);
@@ -29,6 +32,7 @@ class FormIds {
   static String? getName(String id) {
     if (id == supervision) return 'استمارة الإشراف للنشاط الإيصالي التكاملي';
     if (id == readiness) return 'استمارة الجاهزية للنشاط الإيصالي التكاملي';
+    if (id == healthFacilityAssessment) return 'استمارة تقييم جودة الأداء للمرافق الصحية';
     return null;
   }
 }

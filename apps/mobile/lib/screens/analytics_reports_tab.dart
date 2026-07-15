@@ -92,6 +92,16 @@ class _ReportsTabState extends State<ReportsTab> {
           ]),
           const SizedBox(height: 20),
 
+          // Per-form reports
+          _sectionLabel('تقارير النماذج'),
+          const SizedBox(height: 10),
+          _reportGrid([
+            _ReportItem('readiness_report', 'تقرير الجاهزية', Icons.fact_check_rounded, const Color(0xFF4CAF50)),
+            _ReportItem('supervision_report', 'تقرير الإشراف', Icons.supervisor_account_rounded, const Color(0xFF2196F3)),
+            _ReportItem('assessment_report', 'تقييم المرافق', Icons.local_hospital_rounded, const Color(0xFF9C27B0)),
+          ]),
+          const SizedBox(height: 20),
+
           // Format selector
           _sectionLabel('تنسيق التصدير'),
           const SizedBox(height: 10),

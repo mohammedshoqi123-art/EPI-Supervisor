@@ -11,8 +11,8 @@ import 'dashboard_report.dart';
 // ═══════════════════════════════════════════════════════════════════════════
 //  FORM IDs
 // ═══════════════════════════════════════════════════════════════════════════
-const _readinessFormId = '8aa0f3d5-7ab0-430f-85fd-4488c0c129bb';
-const _supervisionFormId = '97a4f2b3-c573-4812-b58c-5b0acf814e24';
+const _readinessFormId = FormIds.readiness;
+const _supervisionFormId = FormIds.supervision;
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  FIELD DEFINITIONS
@@ -438,6 +438,18 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       await _generateRoundComparison();
       return;
     }
+    if (type == 'readiness_report') {
+      await _generateFormReport('readiness', 'استمارة الجاهزية');
+      return;
+    }
+    if (type == 'supervision_report') {
+      await _generateFormReport('supervision', 'استمارة الإشراف');
+      return;
+    }
+    if (type == 'assessment_report') {
+      await _generateFormReport('assessment', 'استمارة تقييم المرافق');
+      return;
+    }
 
     // ═══ Standard reports: fetch analytics data then generate ═══
     List<ReadinessGovData>? readinessData;
@@ -551,6 +563,157 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         );
       }
     }
+  }
+
+  /// ═══ Per-Form PDF Report ═══
+  Future<void> _generateFormReport(String formType, String formName) async {
+    if (!mounted) return;
+    try {
+      final db = ref.read(databaseServiceProvider);
+      final round = ref.read(campaignRoundProvider);
+      final campaign = ref.read(campaignProvider).value;
+
+      // Get form ID
+      String formId;
+      switch (formType) {
+        case 'readiness':
+          formId = _readinessFormId;
+          break;
+        case 'supervision':
+          formId = _supervisionFormId;
+          break;
+        case 'assessment':
+          formId = _assessmentFormId;
+          break;
+        default:
+          return;
+      }
+
+      // Fetch submissions
+      final subs = await db.getSubmissions(
+        formId: formId,
+        campaignType: campaign,
+        campaignRound: round,
+        limit: 5000,
+      );
+
+      if (subs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('لا توجد بيانات ل$formName'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Process data based on form type
+      List<ReadinessGovData>? readinessData;
+      List<ComplianceSectionData>? complianceData;
+      List<ServiceNumberData>? serviceNumbersData;
+      List<ChallengeData>? challengesData;
+
+      if (formType == 'readiness') {
+        readinessData = _processReadinessData(subs);
+      } else if (formType == 'supervision') {
+        complianceData = _processComplianceData(subs);
+        serviceNumbersData = _processServiceNumbersData(subs);
+        challengesData = _processChallengesData(subs);
+      }
+
+      // Build analytics data
+      final analyticsData = <String, dynamic>{
+        'submissions': {
+          'total': subs.length,
+          'byStatus': _countByStatus(subs),
+        },
+      };
+
+      // Add form-specific metrics
+      if (formType == 'assessment') {
+        analyticsData['assessment_metrics'] = _processAssessmentMetrics(subs);
+      }
+
+      if (!mounted) return;
+
+      // Generate PDF
+      await DashboardReportExporter.generateAndShare(
+        context: context,
+        type: 'full',
+        analyticsData: analyticsData,
+        fetchGovRanking: () async {
+          try {
+            return await ref.read(analyticsServiceProvider).getGovernorateRanking(
+              campaignRound: round,
+            );
+          } catch (_) {
+            return null;
+          }
+        },
+        readinessData: readinessData,
+        complianceData: complianceData,
+        serviceNumbersData: serviceNumbersData,
+        challengesData: challengesData,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Map<String, int> _countByStatus(List<Map<String, dynamic>> subs) {
+    final counts = <String, int>{};
+    for (final s in subs) {
+      final status = s['status'] as String? ?? 'unknown';
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Map<String, dynamic> _processAssessmentMetrics(List<Map<String, dynamic>> subs) {
+    int defaulterListYes = 0;
+    int villageListYes = 0;
+    int updatedPlanYes = 0;
+    int populationDataYes = 0;
+    int coveragePlanYes = 0;
+    int planReviewedYes = 0;
+    int reverseCoverageYes = 0;
+    int higherVisitYes = 0;
+    int routineCoverage85Yes = 0;
+
+    for (final sub in subs) {
+      final data = sub['data'] as Map<String, dynamic>? ?? {};
+      if (data['has_defaulter_list'] == true || data['has_defaulter_list'] == 'yes') defaulterListYes++;
+      if (data['has_village_list'] == true || data['has_village_list'] == 'yes') villageListYes++;
+      if (data['has_updated_plan'] == true || data['has_updated_plan'] == 'yes') updatedPlanYes++;
+      if (data['has_population_data'] == true || data['has_population_data'] == 'yes') populationDataYes++;
+      if (data['has_coverage_plan'] == true || data['has_coverage_plan'] == 'yes') coveragePlanYes++;
+      if (data['plan_reviewed_by_higher_level'] == true || data['plan_reviewed_by_higher_level'] == 'yes') planReviewedYes++;
+      if (data['has_reverse_coverage'] == true || data['has_reverse_coverage'] == 'yes') reverseCoverageYes++;
+      if (data['has_higher_level_visit'] == true || data['has_higher_level_visit'] == 'yes') higherVisitYes++;
+      if (data['routine_coverage_above_85'] == true || data['routine_coverage_above_85'] == 'yes') routineCoverage85Yes++;
+    }
+
+    final total = subs.length;
+    return {
+      'total': total,
+      'metrics': {
+        'قائمة المتخلفين': {'yes': defaulterListYes, 'total': total},
+        'قائمة القرى': {'yes': villageListYes, 'total': total},
+        'خطة محدّثة': {'yes': updatedPlanYes, 'total': total},
+        'بيانات سكانية': {'yes': populationDataYes, 'total': total},
+        'خطة التغطية': {'yes': coveragePlanYes, 'total': total},
+        'مراجعة الخطة': {'yes': planReviewedYes, 'total': total},
+        'تغطية راجعة': {'yes': reverseCoverageYes, 'total': total},
+        'زيارة المستوى الأعلى': {'yes': higherVisitYes, 'total': total},
+        'تغطية >85%': {'yes': routineCoverage85Yes, 'total': total},
+      },
+    };
   }
 
   /// ═══ Round Comparison Report ═══
@@ -2235,7 +2398,7 @@ class _Empty extends StatelessWidget {
 }
 
 // ═══ Health Facility Assessment Tab ═══
-const _assessmentFormId = '606b5093-9a8f-47d6-a6c9-b0429ce4a9f6';
+const _assessmentFormId = FormIds.healthFacilityAssessment;
 
 class _HealthFacilityAssessmentTab extends ConsumerWidget {
   const _HealthFacilityAssessmentTab();

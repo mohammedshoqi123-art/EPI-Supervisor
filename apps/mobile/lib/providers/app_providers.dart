@@ -35,10 +35,10 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
 
   // On mobile, initialize Hive with timeout
   try {
-    // ═══ FIX: Shorter timeout (20s) — account for PBKDF2 in isolate (~2-5s)
+    // ═══ FIX: Shorter timeout (15s) — account for PBKDF2 in isolate (~2-5s)
     // but still fail fast enough to not block UI indefinitely ═══
     await manager.init().timeout(
-      const Duration(seconds: 25),
+      const Duration(seconds: 15),
       onTimeout: () {
         debugPrint('[offlineManagerProvider] Hive init timed out after 25s');
         throw TimeoutException('Offline storage initialization timed out');

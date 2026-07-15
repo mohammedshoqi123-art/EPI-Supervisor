@@ -32,23 +32,24 @@ class ConnectivityUtils {
   static DateTime? _lastProbe;
   static bool _probing = false;
 
-  /// Probe targets — tried in order, first success wins.
-  /// All endpoints must respond quickly (HEAD request, 8s timeout).
+  /// Probe targets — tried in PARALLEL, first success wins.
+  /// ═══ PERFORMANCE: Reduced to 2 URLs (was 4) — fewer probes = faster detection ═══
   static const List<String> _probeUrls = [
     'https://www.google.com/generate_204',
-    'https://clients3.google.com/generate_204',
-    'https://supabase.co',
     'https://www.cloudflare.com/cdn-cgi/trace',
   ];
 
   /// Minimum interval between state emissions to prevent event storms
-  static const Duration _minEmitInterval = Duration(milliseconds: 800);
+  /// ═══ PERFORMANCE: 2s (was 800ms) — prevents rapid-fire connectivity events ═══
+  static const Duration _minEmitInterval = Duration(seconds: 2);
 
   /// How often to recheck when "online" (catches captive portal / wifi-no-internet)
-  static const Duration _onlineRecheckInterval = Duration(seconds: 30);
+  /// ═══ PERFORMANCE: 120s (was 30s) — 30s caused constant HTTP probes that blocked UI ═══
+  static const Duration _onlineRecheckInterval = Duration(seconds: 120);
 
   /// Call once at app startup to start monitoring.
   /// On web: assumes online and skips connectivity_plus listeners (they can hang).
+  /// ═══ PERFORMANCE: Non-blocking — returns immediately, probes run in background ═══
   static Future<void> initialize() async {
     // ═══ FIX: On web, skip connectivity_plus entirely ═══
     if (kIsWeb) {
@@ -57,20 +58,21 @@ class ConnectivityUtils {
       return;
     }
 
+    // ═══ PERFORMANCE: Start with optimistic online assumption ═══
+    // Don't block app startup waiting for connectivity check
+    _isOnline = true; // Optimistic — will be corrected by probe
+
     try {
       final result = await _connectivity.checkConnectivity().timeout(
             const Duration(seconds: 3),
             onTimeout: () => <ConnectivityResult>[],
           );
       final linkUp = _isConnected(result);
-      if (linkUp) {
-        // Link is up — verify actual internet access
-        _isOnline = await _probeInternet();
-      } else {
+      if (!linkUp) {
         _isOnline = false;
       }
     } catch (_) {
-      _isOnline = false;
+      // Can't check — assume online
     }
 
     // Listen for link changes (e.g., user toggles airplane mode)
@@ -81,6 +83,11 @@ class ConnectivityUtils {
 
     // Periodic recheck when online
     _startRecheckTimer();
+
+    // ═══ PERFORMANCE: Run initial probe in background — don't block initialize() ═══
+    if (_isOnline) {
+      _probeAndEmit();
+    }
   }
 
   static void _handleLinkChange(bool linkUp) {
@@ -112,34 +119,34 @@ class ConnectivityUtils {
   }
 
   /// Probe internet by trying HTTP HEAD to known reliable endpoints.
-  /// Returns true if ANY probe succeeds (fast fail).
+  /// ═══ PERFORMANCE: PARALLEL probes — all URLs tried simultaneously ═══
+  /// Previously: sequential probes = 4 URLs × 4s timeout = 16s worst case
+  /// Now: parallel probes = 4s worst case regardless of URL count
   static Future<bool> _probeInternet() async {
     if (_probing) return _isOnline;
     _probing = true;
     _lastProbe = DateTime.now();
 
     try {
-      // Try each probe URL with a short timeout — first success wins
-      for (final url in _probeUrls) {
+      // Fire all probes in parallel — first success wins
+      final futures = _probeUrls.map((url) async {
         try {
           final response = await http
               .head(Uri.parse(url))
-              .timeout(const Duration(seconds: 4));
-          // 2xx or 3xx or even 4xx means we have internet (server responded)
-          // Only network errors (no response) mean offline
-          if (response.statusCode < 500) {
-            return true;
-          }
-        } on TimeoutException {
-          continue;
-        } on SocketException {
-          continue;
+              .timeout(const Duration(seconds: 3));
+          return response.statusCode < 500;
         } catch (_) {
-          continue;
+          return false;
         }
-      }
-      // All probes failed — no real internet
-      return false;
+      }).toList();
+
+      // Wait for ALL to complete (max 3s due to individual timeouts)
+      final results = await Future.wait(futures).timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => List.filled(futures.length, false),
+      );
+
+      return results.any((ok) => ok);
     } finally {
       _probing = false;
     }

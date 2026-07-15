@@ -367,7 +367,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
+  /// ═══ PERFORMANCE FIX: Cache the future to prevent re-fetching on every build ═══
+  /// Previously: FutureBuilder called _getGovernorateRanking() on every rebuild,
+  /// creating a NEW future each time → constant network calls + spinner flicker.
+  /// Now: future is created once and reused until campaign/round changes.
+  Future<List<Map<String, dynamic>>>? _govRankingFuture;
+  String? _govRankingCacheKey;
+
   Future<List<Map<String, dynamic>>> _getGovernorateRanking() async {
+    // Return cached future if campaign/round hasn't changed
+    final currentKey = '${ref.read(campaignProvider).value}_${ref.read(campaignRoundProvider)}';
+    if (_govRankingFuture != null && _govRankingCacheKey == currentKey) {
+      return _govRankingFuture!;
+    }
+    _govRankingCacheKey = currentKey;
+    _govRankingFuture = _fetchGovernorateRanking();
+    return _govRankingFuture!;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchGovernorateRanking() async {
     try {
       final analyticsService = ref.read(analyticsServiceProvider);
       final round = ref.read(campaignRoundProvider);

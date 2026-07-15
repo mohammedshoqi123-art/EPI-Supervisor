@@ -51,12 +51,10 @@ Future<void> main() async {
   // ═══ الخطوة 2: Sentry + Connectivity (سريع) ═══
   await SentryConfig.init(appRunner: () async {
     try {
-      await ConnectivityUtils.initialize().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          debugPrint('[Init] Connectivity init timed out — assuming offline');
-        },
-      );
+      // ═══ PERFORMANCE: Non-blocking — returns immediately, probes run in background ═══
+      ConnectivityUtils.initialize().catchError((e) {
+        debugPrint('[Init] ⚠️ Connectivity init failed: $e');
+      });
     } catch (e) {
       debugPrint('[Init] ⚠️ Connectivity init failed: $e');
     }

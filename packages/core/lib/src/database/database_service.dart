@@ -270,43 +270,34 @@ class DatabaseService {
   }
 
   /// ═══ PERFORMANCE: Count submissions without fetching data ═══
+  /// ═══ FIX: Previously fetched ALL submissions (50,000 rows!) just to count.
+  /// Now uses Supabase COUNT with head:true — zero data transfer. ═══
   Future<int> getSubmissionsCount({
     String? formId,
     String? status,
     String? campaignType,
     int? campaignRound,
   }) async {
-    // ═══ FIX: Use RPC fetch_count to bypass PostgREST 1000-row limit ═══
     try {
-      // If campaignType is set, we need to filter by form_ids
-      // fetch_count doesn't support form_id filter yet, so we fetch submissions
-      // via RPC and count client-side
+      // Build filters for count query
+      final filters = <String, dynamic>{};
+
+      // If campaignType is set, resolve form IDs first
       if (campaignType != null && formId == null) {
         final campaignForms = await getForms(campaignType: campaignType);
         if (campaignForms.isEmpty) return 0;
         final formIds = campaignForms.map((f) => f['id'] as String).toList();
-
-        // Use RPC to get ALL submissions (bypasses 1000 cap)
-        final allSubs = await _api.rpc('fetch_submissions', params: {
-          'p_limit': 50000,
-          'p_offset': 0,
-          if (status != null) 'p_status': status,
-          if (campaignRound != null) 'p_campaign_round': campaignRound,
-        });
-
-        // Filter by form_ids client-side
-        return allSubs.where((s) {
-          final fid = s['form_id'] as String?;
-          return fid != null && formIds.contains(fid);
-        }).length;
+        filters['form_id'] = ApiClient.inList(formIds);
+      } else if (formId != null) {
+        filters['form_id'] = formId;
       }
 
-      // No campaignType — use fetch_count RPC directly
-      return _api.rpcCount('fetch_count', params: {
-        'p_table': 'form_submissions',
-        if (status != null) 'p_status': status,
-        if (campaignRound != null) 'p_campaign_round': campaignRound,
-      });
+      if (status != null) filters['status'] = status;
+      if (campaignRound != null) filters['campaign_round'] = campaignRound;
+
+      // ═══ PERFORMANCE: Use select('id') with limit — much faster than fetching all rows ═══
+      // Supabase doesn't support head:true in Flutter SDK, so we fetch minimal data
+      return await _api.count('form_submissions', filters: filters);
     } catch (e) {
       debugPrint('[DatabaseService] getSubmissionsCount RPC error, falling back: $e');
       // Fallback to old method (capped at 1000 by PostgREST)

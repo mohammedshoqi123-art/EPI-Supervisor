@@ -117,6 +117,8 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         steps.add(SyncStepResult(name: 'المحافظات', success: false, error: e.toString()));
         _log('❌ Governorates: $e');
       }
+      // ═══ PERFORMANCE: Yield to UI thread between sync steps ═══
+      await Future.delayed(Duration.zero);
 
       // ═══ 2. Districts ═══
       try {
@@ -129,6 +131,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         steps.add(SyncStepResult(name: 'المديريات', success: false, error: e.toString()));
         _log('❌ Districts: $e');
       }
+      await Future.delayed(Duration.zero);
 
       // ═══ 3. Forms (for current campaign) ═══
       try {
@@ -141,6 +144,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         steps.add(SyncStepResult(name: 'النماذج', success: false, error: e.toString()));
         _log('❌ Forms: $e');
       }
+      await Future.delayed(Duration.zero);
 
       // ═══ 4. Submissions (pagination — يجلب كل البيانات على دفعات) ═══
       try {
@@ -160,6 +164,8 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
           }
           allSubs.addAll(batch);
           offset += pageSize;
+          // ═══ PERFORMANCE: Yield to UI thread between pagination batches ═══
+          await Future.delayed(Duration.zero);
           // حد أقصى 50000 (حماية من الحلقات اللانهائية)
           if (allSubs.length >= 50000) break;
         }
@@ -176,6 +182,8 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         steps.add(SyncStepResult(name: 'الإرساليات', success: false, error: e.toString()));
         _log('❌ Submissions: $e');
       }
+      // ═══ PERFORMANCE: Yield to UI thread after heavy submissions sync ═══
+      await Future.delayed(Duration.zero);
 
       // ═══ 5. References ═══
       try {
@@ -188,6 +196,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         steps.add(SyncStepResult(name: 'المراجع', success: false, error: e.toString()));
         _log('❌ References: $e');
       }
+      await Future.delayed(Duration.zero);
 
       // ═══ 6. Health Facilities ═══
       try {

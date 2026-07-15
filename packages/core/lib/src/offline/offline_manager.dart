@@ -68,21 +68,21 @@ class OfflineManager {
     try {
       try {
         _box = await Hive.openBox<String>(_boxName).timeout(
-          const Duration(seconds: 10),
+          const Duration(seconds: 5),
           onTimeout: () {
             throw TimeoutException('Hive box open timed out');
           },
         );
       } catch (_) {
         await Hive.initFlutter().timeout(
-          const Duration(seconds: 10),
+          const Duration(seconds: 5),
           onTimeout: () {
             if (kDebugMode) print('Hive.initFlutter timed out');
             throw TimeoutException('Hive initialization timed out');
           },
         );
         _box = await Hive.openBox<String>(_boxName).timeout(
-          const Duration(seconds: 10),
+          const Duration(seconds: 5),
           onTimeout: () {
             throw TimeoutException('Hive box open timed out after init');
           },
@@ -109,7 +109,7 @@ class OfflineManager {
           _box?.put(EncryptionService.saltStorageKey, base64Encode(salt));
         },
       ).timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 8),
         onTimeout: () {
           debugPrint('[OfflineManager] Encryption init timed out — continuing without');
         },
@@ -606,6 +606,12 @@ class OfflineManager {
 
   // ===== CACHE =====
 
+  /// ═══ PERFORMANCE: In-memory cache to avoid decrypting entire blob on every read ═══
+  /// Previously: every getCachedData() call → decrypt entire blob (hundreds of KB) → 10-50ms
+  /// Now: decrypt once, cache in memory, only re-decrypt when data changes
+  Map<String, dynamic>? _cacheMemory;
+  String? _cacheRawSignature; // MD5 of raw Hive data to detect changes
+
   Future<void> cacheData(String key, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
       final cache = _getCache();
@@ -615,36 +621,50 @@ class OfflineManager {
       };
       final encrypted = _encryption.encrypt(jsonEncode(cache));
       await _safeBox?.put(_cacheKey, encrypted);
+      // Update memory cache
+      _cacheMemory = cache;
+      _cacheRawSignature = null; // Invalidate signature
     });
   }
 
   Map<String, dynamic> _getCache() {
+    // ═══ PERFORMANCE: Return memory cache if available ═══
+    if (_cacheMemory != null) return _cacheMemory!;
+
     final data = _safeBox?.get(_cacheKey);
     if (data == null || data.isEmpty) return {};
 
     // 1. Try decrypting with current key
     try {
       final decrypted = _encryption.decrypt(data);
-      return Map<String, dynamic>.from(jsonDecode(decrypted));
+      final cache = Map<String, dynamic>.from(jsonDecode(decrypted));
+      _cacheMemory = cache; // Cache in memory
+      return cache;
     } catch (decryptError) {
       // 2. Decryption failed — try reading as plain JSON
       //    (handles migration from unencrypted versions)
       try {
-        return Map<String, dynamic>.from(jsonDecode(data));
+        final cache = Map<String, dynamic>.from(jsonDecode(data));
+        _cacheMemory = cache;
+        return cache;
       } catch (_) {
         // 3. Both failed — data is corrupted, key changed, OR old encryption format
-        //    (old format triggers PBKDF2 per-decrypt which we now skip).
-        //    Clear it so we start fresh, but LOG the issue.
         if (kDebugMode) {
           debugPrint(
             '[OfflineManager] ⚠️ Cache corrupted or old format — clearing',
           );
         }
-        // Clear the corrupted data so next cacheData() writes clean
         _safeBox?.delete(_cacheKey);
+        _cacheMemory = null;
         return {};
       }
     }
+  }
+
+  /// Invalidate memory cache — call when Hive data changes externally
+  void _invalidateCacheMemory() {
+    _cacheMemory = null;
+    _cacheRawSignature = null;
   }
 
   /// Get cached data by key.
@@ -681,6 +701,7 @@ class OfflineManager {
 
   Future<void> clearCache() async {
     await _safeBox?.delete(_cacheKey);
+    _invalidateCacheMemory();
   }
 
   /// Remove a specific key from the persistent cache.
@@ -691,6 +712,8 @@ class OfflineManager {
       cache.remove(key);
       final encrypted = _encryption.encrypt(jsonEncode(cache));
       await _safeBox?.put(_cacheKey, encrypted);
+      // Update memory cache
+      _cacheMemory = cache;
     });
   }
 

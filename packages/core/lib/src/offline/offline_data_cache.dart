@@ -24,7 +24,8 @@ class OfflineDataCache {
 
   // In-memory cache for fastest access (LRU-style)
   final Map<String, _CacheEntry> _memoryCache = {};
-  static const int _maxMemoryEntries = 100;
+  /// ═══ PERFORMANCE: 200 entries (was 100) — reduces Hive reads for frequently accessed data ═══
+  static const int _maxMemoryEntries = 200;
 
   // ═══ PERFORMANCE: Track in-flight background refreshes to prevent duplicates ═══
   final Set<String> _refreshingKeys = {};
@@ -94,6 +95,8 @@ class OfflineDataCache {
 
     try {
       // ═══ FIX: مهلة 15s على fetchFn — لا نحظر UI لمدة طويلة ═══
+      // ═══ PERFORMANCE: Yield to UI thread before heavy network call ═══
+      await Future.delayed(Duration.zero);
       final data = await fetchFn().timeout(
         const Duration(seconds: 15),
         onTimeout: () => throw TimeoutException('Network timeout for $cacheKey'),
@@ -167,6 +170,8 @@ class OfflineDataCache {
 
     try {
       // ═══ FIX: مهلة 15s على fetchFn — لا نحظر UI لمدة طويلة ═══
+      // ═══ PERFORMANCE: Yield to UI thread before heavy network call ═══
+      await Future.delayed(Duration.zero);
       final data = await fetchFn().timeout(
         const Duration(seconds: 15),
         onTimeout: () => throw TimeoutException('Network timeout for $cacheKey'),

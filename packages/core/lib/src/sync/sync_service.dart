@@ -15,7 +15,8 @@ class SyncService {
   Timer? _syncTimer;
   DateTime? _syncLockTime;
   bool _isSyncing = false;
-  static const int _maxBatchSize = 50;
+  /// ═══ PERFORMANCE: 20 items per batch (was 50) — smaller batches = less UI blocking ═══
+  static const int _maxBatchSize = 20;
   static const int _maxRetries = 5;
   static const int _staleLockSeconds = 180; // 3 دقائق قبل إعادة ضبط القفل
 
@@ -327,6 +328,10 @@ class SyncService {
           if (kDebugMode) print('[SyncService] Batch error: $e');
           _applyBackoffToBatch(toRetry, result, e.toString());
         }
+
+        // ═══ PERFORMANCE: Yield to UI thread between sync batches ═══
+        // Prevents UI freeze when syncing many items
+        await Future.delayed(Duration.zero);
       }
 
       // ═══ FIX: Invalidate submissions + analytics caches after successful sync ═══

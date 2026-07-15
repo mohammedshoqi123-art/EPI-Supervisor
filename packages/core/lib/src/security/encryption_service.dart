@@ -225,10 +225,12 @@ class EncryptionService {
 
       // ═══ OLD FORMAT: [salt(16)][iv(12)][ciphertext+tag] ═══
       // ═══ FIX: Old format triggers PBKDF2 per-call which freezes UI ═══
-      // Skip and throw — old data should be re-cached, not decrypted on UI thread
-      throw FormatException(
-          'Old encryption format detected — please re-sync data. '
-          'Old format requires PBKDF2 per-decrypt which freezes UI.');
+      // Instead of throwing (which causes cascading failures), return empty string
+      // so callers can handle gracefully (cache will be cleared and re-synced)
+      if (kDebugMode) {
+        debugPrint('[EncryptionService] Old format detected — returning empty (will re-sync)');
+      }
+      return '';
     } catch (e) {
       if (kDebugMode) print('EncryptionService.decrypt error: $e');
       rethrow;

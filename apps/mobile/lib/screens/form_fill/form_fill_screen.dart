@@ -1107,7 +1107,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       ),
     );
   }
-}
 
   /// بناء صفحة القسم الواحد
   Widget _buildSectionPage(int sectionIndex) {
@@ -1264,6 +1263,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       ),
     );
   }
+}
 
 /// Top-level function for compute() — encodes photos to base64 in a background isolate.
 /// Must be top-level (not a class method) to be callable from compute().

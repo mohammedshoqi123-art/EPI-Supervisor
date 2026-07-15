@@ -4,7 +4,7 @@ import {
   Hash, Shield, Megaphone, HelpCircle, MessageCircle, Users,
   BarChart3, RefreshCw, X, Check,
   Loader2, Volume2, VolumeX,
-  Crown, Star, Clock, Hash
+  Crown, Star, Clock
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Header } from '@/components/layout/header'
 import {
+  useChannels, useChannelMessages, useSendMessage,
   useCreateChannel, useUpdateChannel, useDeleteChannel, useDeleteMessage,
   useChannelStats,
   type ChatChannel, type ChatMessage

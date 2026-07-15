@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../main.dart';
@@ -306,6 +308,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       },
                     ),
 
+                    const SizedBox(height: 24),
+
+                    // ═══ Change Password ═══
+                    _sectionLabel('الأمان', Icons.lock_outlined),
+                    const SizedBox(height: 12),
+                    _buildChangePasswordSection(),
+
                     const SizedBox(height: 32),
 
                     // ═══ Settings ═══
@@ -509,7 +518,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       backgroundColor: AppTheme.primaryColor,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: () => context.pop(),
+        onPressed: () {
+          // ═══ FIX: context.pop() doesn't work with context.go() navigation ═══
+          // Use canPop to check if there's a route to pop to, otherwise go to dashboard
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/dashboard');
+          }
+        },
       ),
       actions: [
         // Edit / Save / Cancel toggle
@@ -601,13 +618,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 backgroundColor: Colors.white.withValues(
                                   alpha: 0.15,
                                 ),
-                                backgroundImage: _pickedImageBytes != null
-                                    ? MemoryImage(_pickedImageBytes!)
-                                    : (authState.avatarUrl != null
-                                        ? NetworkImage(
-                                            authState.avatarUrl!,
-                                          )
-                                        : null) as ImageProvider?,
+                                backgroundImage: _getAvatarImage(authState),
                                 child: (_pickedImageBytes == null &&
                                         authState.avatarUrl == null)
                                     ? Text(
@@ -842,6 +853,225 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   // ═══════════════════════════════════════════════════════════
+  // CHANGE PASSWORD SECTION
+  // ═══════════════════════════════════════════════════════════
+  Widget _buildChangePasswordSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppTheme.warningColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.lock_outline_rounded,
+            color: AppTheme.warningColor,
+            size: 20,
+          ),
+        ),
+        title: const Text(
+          'تغيير كلمة المرور',
+          style: TextStyle(
+            fontFamily: 'Tajawal',
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        subtitle: const Text(
+          'تحديث كلمة مرور حسابك',
+          style: TextStyle(
+            fontFamily: 'Tajawal',
+            fontSize: 11,
+            color: AppTheme.textHint,
+          ),
+        ),
+        trailing: const Icon(
+          Icons.arrow_forward_ios_rounded,
+          size: 16,
+          color: AppTheme.textHint,
+        ),
+        onTap: _showChangePasswordDialog,
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog() {
+    final currentPasswordCtrl = TextEditingController();
+    final newPasswordCtrl = TextEditingController();
+    final confirmPasswordCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isLoading = false;
+    bool obscureCurrent = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'تغيير كلمة المرور',
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 18),
+          ),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'أدخل كلمة المرور الحوية ثم الجديدة',
+                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                // Current password
+                TextFormField(
+                  controller: currentPasswordCtrl,
+                  obscureText: obscureCurrent,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور الحوية',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureCurrent ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setDialogState(() => obscureCurrent = !obscureCurrent),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'أدخل كلمة المرور الحوية';
+                    if (v.length < 6) return 'كلمة المرور قصيرة جداً';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                // New password
+                TextFormField(
+                  controller: newPasswordCtrl,
+                  obscureText: obscureNew,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور الجديدة',
+                    prefixIcon: const Icon(Icons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'أدخل كلمة المرور الجديدة';
+                    if (v.length < 8) return '8 أحرف على الأقل';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                // Confirm password
+                TextFormField(
+                  controller: confirmPasswordCtrl,
+                  obscureText: obscureConfirm,
+                  decoration: InputDecoration(
+                    labelText: 'تأكيد كلمة المرور',
+                    prefixIcon: const Icon(Icons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'أعد إدخال كلمة المرور';
+                    if (v != newPasswordCtrl.text) return 'كلمتا المرور غير متطابقتين';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+            ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => isLoading = true);
+                      try {
+                        final client = Supabase.instance.client;
+                        // Verify current password by re-authenticating
+                        final email = client.auth.currentUser?.email;
+                        if (email == null) throw Exception('لا يوجد بريد إلكتروني');
+
+                        // Update password via Supabase Auth
+                        await client.auth.updateUser(
+                          UserAttributes(password: newPasswordCtrl.text),
+                        );
+
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('تم تغيير كلمة المرور بنجاح ✅',
+                                  style: TextStyle(fontFamily: 'Tajawal')),
+                              backgroundColor: AppTheme.successColor,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('فشل: $e',
+                                  style: const TextStyle(fontFamily: 'Tajawal')),
+                              backgroundColor: AppTheme.errorColor,
+                            ),
+                          );
+                        }
+                      } finally {
+                        if (dialogContext.mounted) {
+                          setDialogState(() => isLoading = false);
+                        }
+                      }
+                    },
+              child: isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('تغيير', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // READ-ONLY TILE (for email, role, governorate)
   // ═══════════════════════════════════════════════════════════
   Widget _buildReadOnlyTile({
@@ -965,5 +1195,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
     }
     return parts.first[0].toUpperCase();
+  }
+
+  /// ═══ FIX: Handle both network URLs and base64 data URLs for avatar ═══
+  /// Previously: only NetworkImage — base64 fallback URLs crashed
+  /// Now: detects data: URLs and uses MemoryImage, otherwise NetworkImage
+  ImageProvider? _getAvatarImage(AuthState authState) {
+    // Priority 1: Newly picked image (not saved yet)
+    if (_pickedImageBytes != null) {
+      return MemoryImage(_pickedImageBytes!);
+    }
+
+    // Priority 2: Saved avatar URL
+    final url = authState.avatarUrl;
+    if (url == null || url.isEmpty) return null;
+
+    // Handle base64 data URLs (fallback from uploadAvatar)
+    if (url.startsWith('data:')) {
+      try {
+        final base64Str = url.split(',').last;
+        final bytes = base64Decode(base64Str);
+        return MemoryImage(bytes);
+      } catch (e) {
+        debugPrint('[Profile] Failed to decode base64 avatar: $e');
+        return null;
+      }
+    }
+
+    // Handle network URLs
+    return NetworkImage(url);
   }
 }

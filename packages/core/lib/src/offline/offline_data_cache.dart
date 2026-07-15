@@ -93,10 +93,12 @@ class OfflineDataCache {
       // When exact key not found (e.g., 'submissions_camp_polio_campaign_round_1'),
       // try broader keys (e.g., 'submissions_camp_polio_campaign') or any submissions_* key.
       // This prevents empty screens when the user changes filters offline.
-      final relatedData = _findRelatedCache<List>(cacheKey);
+      final relatedData = _findRelatedCache(cacheKey);
       if (relatedData != null) {
         _putToMemory(cacheKey, relatedData);
-        return List<Map<String, dynamic>>.from(relatedData);
+        if (relatedData is List) {
+          return List<Map<String, dynamic>>.from(relatedData);
+        }
       }
 
       // Nothing cached + offline → throw friendly error
@@ -176,10 +178,12 @@ class OfflineDataCache {
       }
 
       // ═══ OFFLINE FALLBACK: Try to find related cached data ═══
-      final relatedData = _findRelatedCache<Map>(cacheKey);
+      final relatedData = _findRelatedCache(cacheKey);
       if (relatedData != null) {
         _putToMemory(cacheKey, relatedData);
-        return Map<String, dynamic>.from(relatedData);
+        if (relatedData is Map) {
+          return Map<String, dynamic>.from(relatedData);
+        }
       }
 
       throw Exception('لا توجد بيانات مخزنة ولا يوجد اتصال بالإنترنت');
@@ -288,15 +292,16 @@ class OfflineDataCache {
   /// When exact key not found, try to find a broader key with the same prefix.
   /// Example: 'submissions_camp_polio_campaign_round_1' → try 'submissions_camp_polio_campaign'
   /// or any 'submissions_*' key.
-  T? _findRelatedCache<T>(String cacheKey) {
+  dynamic _findRelatedCache(String cacheKey) {
     // Extract prefix (first part before campaign/round filters)
     final parts = cacheKey.split('_');
     if (parts.length < 2) return null;
+    final prefix = parts.first;
 
     // Try to find in memory cache with same prefix
     for (final entry in _memoryCache.entries) {
-      if (entry.key.startsWith(parts.first) && entry.value.data is T) {
-        return entry.value.data as T;
+      if (entry.key.startsWith(prefix)) {
+        return entry.value.data;
       }
     }
 
@@ -304,14 +309,14 @@ class OfflineDataCache {
     try {
       final allKeys = _offline.getCacheKeys();
       for (final key in allKeys) {
-        if (key.startsWith(parts.first)) {
+        if (key.startsWith(prefix)) {
           final cached = _offline.getCachedData(key);
           if (cached != null) {
-            if (T == List && cached['_type'] == 'list') {
-              return cached['_list'] as T?;
-            } else if (T == Map) {
-              return cached as T?;
+            // Handle list wrapper format
+            if (cached is Map && cached['_type'] == 'list') {
+              return cached['_list'];
             }
+            return cached;
           }
         }
       }

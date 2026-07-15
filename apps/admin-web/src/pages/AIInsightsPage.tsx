@@ -3,7 +3,7 @@ import {
   Sparkles, Brain, TrendingUp, TrendingDown, AlertTriangle, Target, Lightbulb,
   BarChart3, Shield, Zap, RefreshCw, ChevronRight, Star, Activity,
   FileText, MapPin, Clock, Users, CheckCircle2, ArrowUpRight, ArrowDownRight,
-  Loader2, Syringe, CircleDot, Gauge, Award, Calendar
+  Loader2, Syringe, CircleDot, Gauge, Award, Calendar, Building2
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ import { useCampaign } from '@/lib/campaign-context'
 import { cn, formatNumber } from '@/lib/utils'
 import { generateAIInsights } from '@/lib/ai-providers'
 import { PredictiveEngine } from '@/lib/epi-bot-engine'
+import { HealthFacilityAssessmentAnalytics } from '@/components/analytics/HealthFacilityAssessmentAnalytics'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -573,6 +574,12 @@ export default function AIInsightsPage() {
             <TabsTrigger value="performance" className="text-xs gap-1.5">
               <Users className="w-3.5 h-3.5" /> أداء المشرفين
             </TabsTrigger>
+            <TabsTrigger value="readiness" className="text-xs gap-1.5">
+              <Building2 className="w-3.5 h-3.5" /> الجاهزية
+            </TabsTrigger>
+            <TabsTrigger value="health-facility" className="text-xs gap-1.5">
+              <Building2 className="w-3.5 h-3.5" /> تقييم المرافق
+            </TabsTrigger>
             <TabsTrigger value="recommendations" className="text-xs gap-1.5">
               <Lightbulb className="w-3.5 h-3.5" /> التوصيات
             </TabsTrigger>
@@ -830,6 +837,41 @@ export default function AIInsightsPage() {
                     </table>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ─── Readiness Tab ─── */}
+          <TabsContent value="readiness" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-heading flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-primary" />
+                  تحليل الجاهزية
+                </CardTitle>
+                <CardDescription>تحليل بيانات نماذج الجاهزية للنشاط الايصالي التكاملي</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <Building2 className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">سيتم إضافة تحليلات الجاهزية هنا</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ─── Health Facility Assessment Tab ─── */}
+          <TabsContent value="health-facility" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-heading flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-primary" />
+                  تقييم جودة أداء المرافق الصحية
+                </CardTitle>
+                <CardDescription>تحليل بيانات استمارة تقييم المرافق الصحية للبدء بتنفيذ النشاط الايصالي التكاملي</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <HealthFacilityAssessmentAnalytics />
               </CardContent>
             </Card>
           </TabsContent>

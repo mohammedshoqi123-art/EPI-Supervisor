@@ -6,7 +6,7 @@ import {
   PackageX, Shield, ArrowUpRight,
   CheckCircle2, PieChart as PieChartIcon, Target,
   Sparkles, Gauge, FileDown, Info, ScrollText, History, ArrowLeftRight,
-  Search, X, FileSearch, Star, Palette
+  Search, X, FileSearch, Star, Palette, Building2
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -96,6 +96,10 @@ export default function ReportsPage() {
     }
     if (canExportGovernorate(h.userRole)) {
       cards.push({ icon: PackageX, title: 'تقرير النواقص', subtitle: 'نواقص اللقاحات والمعدات — الخطورة، المحافظة، حالة الحل', color: 'text-orange-600', gradient: 'bg-gradient-to-r from-orange-500 to-orange-600', onClick: h.handleExportShortages, loading: h.exportingReport === 'shortages', format: 'excel' })
+    }
+    // Health Facility Assessment Report
+    if (canExportGovernorate(h.userRole)) {
+      cards.push({ icon: Building2, title: 'تقييم المرافق الصحية', subtitle: 'تقرير تقييم جودة أداء المرافق الصحية — الجاهزية، الخطط، التغطية', color: 'text-teal-600', gradient: 'bg-gradient-to-r from-teal-500 to-teal-600', onClick: h.handleExportHealthFacilityAssessment, loading: h.exportingReport === 'health-facility-assessment', badge: 'تقييم', format: 'excel' })
     }
     if (canExportAll(h.userRole)) {
       cards.push({ icon: ScrollText, title: 'سجل التدقيق', subtitle: 'جميع العمليات: إنشاء، تعديل، حذف، تسجيل دخول — مع IP والمستخدم', color: 'text-slate-600', gradient: 'bg-gradient-to-r from-slate-500 to-slate-600', onClick: h.handleExportAudit, loading: h.exportingReport === 'audit', badge: 'audit', format: 'excel' })

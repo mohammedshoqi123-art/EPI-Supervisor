@@ -234,6 +234,74 @@ export function useReportHandlers() {
     })
   })
 
+  // ═══ Health Facility Assessment Export ═══
+  const handleExportHealthFacilityAssessment = () => exportReport('health-facility-assessment', async () => {
+    exportProgress.startFetch()
+    const { data: submissions, error } = await supabase
+      .from('form_submissions')
+      .select(`
+        id, status, data, created_at,
+        profiles:submitted_by(full_name, email),
+        governorates(name_ar),
+        districts(name_ar)
+      `)
+      .eq('form_id', '606b5093-9a8f-47d6-a6c9-b0429ce4a9f6')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(5000)
+
+    if (error) throw error
+    exportProgress.updateFetchProgress(submissions?.length || 0, submissions?.length || 0)
+    exportProgress.startGenerate()
+
+    const yesNo = (v: any) => v === true || v === 'yes' ? 'نعم' : 'لا'
+    const rows = (submissions || []).map((s: any, i: number) => ({
+      index: i + 1,
+      status: s.status === 'submitted' ? 'مرسلة' : 'مسودة',
+      supervisor: s.profiles?.full_name || '',
+      governorate: s.governorates?.name_ar || '',
+      district: s.districts?.name_ar || '',
+      date: new Date(s.created_at).toLocaleDateString('ar-SA'),
+      defaulter_list: yesNo(s.data?.has_defaulter_list),
+      village_list: yesNo(s.data?.has_village_list),
+      updated_plan: yesNo(s.data?.has_updated_plan),
+      population_data: yesNo(s.data?.has_population_data),
+      coverage_plan: yesNo(s.data?.has_coverage_plan),
+      plan_reviewed: yesNo(s.data?.plan_reviewed_by_higher_level),
+      reverse_coverage: yesNo(s.data?.has_reverse_coverage),
+      higher_visit: yesNo(s.data?.has_higher_level_visit),
+      routine_coverage_85: yesNo(s.data?.routine_coverage_above_85),
+    }))
+
+    const columns: ExportColumn[] = [
+      { header: '#', key: 'index', width: 5 },
+      { header: 'الحالة', key: 'status', width: 10 },
+      { header: 'المشرف', key: 'supervisor', width: 20 },
+      { header: 'المحافظة', key: 'governorate', width: 15 },
+      { header: 'المديرية', key: 'district', width: 15 },
+      { header: 'التاريخ', key: 'date', width: 12 },
+      { header: 'قائمة المتخلفين', key: 'defaulter_list', width: 12 },
+      { header: 'قائمة القرى', key: 'village_list', width: 10 },
+      { header: 'خطة محدّثة', key: 'updated_plan', width: 10 },
+      { header: 'بيانات سكانية', key: 'population_data', width: 10 },
+      { header: 'خطة التغطية', key: 'coverage_plan', width: 10 },
+      { header: 'مراجعة الخطة', key: 'plan_reviewed', width: 10 },
+      { header: 'تغطية راجعة', key: 'reverse_coverage', width: 10 },
+      { header: 'زيارة المستوى الأعلى', key: 'higher_visit', width: 12 },
+      { header: 'تغطية >85%', key: 'routine_coverage_85', width: 10 },
+    ]
+
+    exportToExcel({
+      sheetName: 'تقييم المرافق الصحية',
+      title: 'تقرير تقييم جودة أداء المرافق الصحية',
+      subtitle: `${rows.length} تقييم`,
+      columns,
+      data: rows,
+      fileName: `health_facility_assessment_${new Date().toISOString().split('T')[0]}`,
+    })
+    exportProgress.done(`تم تصدير ${rows.length} تقييم`)
+  })
+
   // ═══ PDF Export Handlers ═══
   const handleExportPDF = () => exportReport('pdf', async () => {
     const { data: govData } = await supabase.from('governorates').select('name_ar').eq('is_active', true).is('deleted_at', null).order('name_ar')
@@ -480,6 +548,7 @@ export function useReportHandlers() {
     handleGeneralSupervisorsEvaluation,
     handleYesNoAnalysis,
     handleMapReport,
+    handleExportHealthFacilityAssessment,
     // Charts
     govChartData, statusPieData,
     // PPTX handlers

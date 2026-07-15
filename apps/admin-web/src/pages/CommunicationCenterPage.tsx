@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import {
   MessageSquare, Send, Plus, Search, Settings, Trash2, Edit3,
   Hash, Shield, Megaphone, HelpCircle, MessageCircle, Users,
-  BarChart3, RefreshCw, Eye, EyeOff, MoreVertical, X, Check,
-  AlertCircle, Loader2, ArrowDown, Pin, Volume2, VolumeX,
-  Crown, Star, Clock, Hash as HashIcon
+  BarChart3, RefreshCw, X, Check,
+  Loader2, Volume2, VolumeX,
+  Crown, Star, Clock, Hash
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,17 +12,16 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 
 import { Switch } from '@/components/ui/switch'
 import { Header } from '@/components/layout/header'
 import {
-  useChannels, useAllChannels, useChannelMessages, useSendMessage,
   useCreateChannel, useUpdateChannel, useDeleteChannel, useDeleteMessage,
   useChannelStats,
   type ChatChannel, type ChatMessage
@@ -73,7 +72,6 @@ export default function CommunicationCenterPage() {
   const [showStats, setShowStats] = useState(false)
 
   const { data: channels, isLoading: channelsLoading } = useChannels()
-  const { data: allChannels } = useAllChannels()
   const { data: stats } = useChannelStats()
 
   // Filter channels by search
@@ -104,14 +102,6 @@ export default function CommunicationCenterPage() {
     }
   }
 
-  const getChannelTypeLabel = (type: string) => {
-    switch (type) {
-      case 'announcement': return 'إعلان رسمي'
-      case 'feedback': return 'تغذية راجعة'
-      case 'inquiry': return 'استفسارات'
-      default: return 'نقاش مفتوح'
-    }
-  }
 
   return (
     <div className="page-enter space-y-6">
@@ -385,14 +375,6 @@ function ChatArea({ channel, onEdit }: { channel: ChatChannel; onEdit: () => voi
     }, {})
   }, [filteredMessages])
 
-  const getChannelTypeColor = (type: string) => {
-    switch (type) {
-      case 'announcement': return '#D32F2F'
-      case 'feedback': return '#7B1FA2'
-      case 'inquiry': return '#F57C00'
-      default: return '#607D8B'
-    }
-  }
 
   return (
     <div className="flex flex-col h-full">
@@ -510,7 +492,7 @@ function ChatArea({ channel, onEdit }: { channel: ChatChannel; onEdit: () => voi
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             className="min-h-[40px] max-h-[120px] resize-none"
-            rows={1}
+            
             disabled={sendMessage.isPending}
           />
           <Button
@@ -666,7 +648,7 @@ function CreateChannelDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="وصف القناة..."
-              rows={2}
+              
             />
           </div>
           <div className="space-y-2">
@@ -805,7 +787,7 @@ function EditChannelDialog({ open, onOpenChange, channel }: {
             <Input
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={2}
+              
             />
           </div>
           <div className="space-y-2">

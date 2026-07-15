@@ -132,7 +132,7 @@ serve(async (req) => {
 
 
       case 'update_profile': {
-        const { user_id, full_name, email, phone } = body
+        const { user_id, full_name, email, phone, position } = body
         if (!user_id) {
           return jsonResponse({ error: 'user_id is required' }, 400, origin)
         }
@@ -143,6 +143,7 @@ serve(async (req) => {
         if (full_name !== undefined) profileUpdates.full_name = full_name
         if (email !== undefined) profileUpdates.email = email
         if (phone !== undefined) profileUpdates.phone = phone
+        if (position !== undefined) profileUpdates.position = position
 
         const { error: profileError } = await supabaseAdmin
           .from('profiles')

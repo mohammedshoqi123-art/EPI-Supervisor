@@ -224,6 +224,7 @@ class AuthRepository {
           phone: response['phone'],
           avatarUrl: response['avatar_url'],
           nationalId: response['national_id'],
+          position: response['position'],
         );
       } else {
         // Profile غير موجود — أنشئ واحد
@@ -256,6 +257,7 @@ class AuthRepository {
               phone: newResponse['phone'],
               avatarUrl: newResponse['avatar_url'],
               nationalId: newResponse['national_id'],
+              position: newResponse['position'],
             );
           }
         } catch (createErr) {

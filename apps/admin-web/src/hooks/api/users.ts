@@ -118,11 +118,11 @@ export function useDeleteUser() {
 export function useUpdateUserProfile() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ userId, full_name, email, phone }: {
-      userId: string; full_name: string; email: string; phone?: string
+    mutationFn: async ({ userId, full_name, email, phone, position }: {
+      userId: string; full_name: string; email: string; phone?: string; position?: string
     }) => {
       const { data, error } = await supabase.functions.invoke('admin-actions', {
-        body: { action: 'update_profile', user_id: userId, full_name, email, phone },
+        body: { action: 'update_profile', user_id: userId, full_name, email, phone, position },
       })
       if (error) throw error
       return data

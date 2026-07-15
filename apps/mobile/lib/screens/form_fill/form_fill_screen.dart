@@ -237,9 +237,46 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     for (final field in _allFields) {
       final key = field['key'] as String? ?? '';
       final type = field['type'] as String? ?? '';
+      final autoFill = field['auto_fill'] as String? ?? '';
 
       // Skip if already has a value (e.g., from draft)
       if (_formData.containsKey(key) && _formData[key] != null) continue;
+
+      // ═══ Handle auto_fill from schema ═══
+      if (autoFill.isNotEmpty) {
+        switch (autoFill) {
+          case 'profile.full_name':
+            _formData[key] = authState.fullName ?? '';
+            continue;
+          case 'profile.phone':
+            _formData[key] = authState.phone ?? '';
+            continue;
+          case 'profile.email':
+            _formData[key] = authState.email ?? '';
+            continue;
+          case 'profile.position':
+            _formData[key] = authState.position ?? '';
+            continue;
+          case 'profile.governorate_id':
+            if (authState.governorateId != null) {
+              _formData[key] = authState.governorateId;
+            }
+            continue;
+          case 'profile.district_id':
+            if (authState.districtId != null) {
+              _formData[key] = authState.districtId;
+            }
+            continue;
+          case 'current_time':
+            final now = TimeOfDay.now();
+            _formData[key] = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+            continue;
+          case 'campaign_round_name':
+            // Will be filled by campaign round context
+            _formData[key] = _getCampaignRoundName();
+            continue;
+        }
+      }
 
       switch (key) {
         // Submission ID — always generate fresh UUID
@@ -271,7 +308,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         case 'role':
         case 'الصفة':
         case 'supervisor_role':
-          _formData[key] = authState.role?.nameAr ?? '';
+          _formData[key] = authState.position ?? authState.role?.nameAr ?? '';
           break;
 
         // Email — from profile
@@ -292,6 +329,58 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         _formData[key] = authState.districtId;
         _formData['district_id'] = authState.districtId;
       }
+
+      // GPS — auto-detect current location
+      if (type == 'gps' && (field['auto_detect'] == true || autoFill == 'current_location')) {
+        _getCurrentLocationForField(key);
+      }
+
+      // Time — auto-fill with current time
+      if (type == 'time' && autoFill == 'current_time') {
+        final now = TimeOfDay.now();
+        _formData[key] = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      }
+    }
+  }
+
+  String _getCampaignRoundName() {
+    // Get campaign round from context or default to 1
+    final round = ref.read(campaignRoundProvider);
+    final campaign = ref.read(campaignProvider);
+    final roundLabel = campaignRoundLabel(round);
+    
+    // Build activity name based on campaign type and round
+    if (campaign == CampaignType.integratedActivity) {
+      return '$roundLabel من النشاط الايصالي التكاملي';
+    } else if (campaign == CampaignType.polioCampaign) {
+      return '$roundLabel من حملة شلل الأطفال';
+    }
+    return roundLabel;
+  }
+
+  Future<void> _getCurrentLocationForField(String fieldKey) async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      setState(() {
+        _formData[fieldKey] = {
+          'lat': position.latitude,
+          'lng': position.longitude,
+          'accuracy': position.accuracy,
+        };
+        _gpsLat = position.latitude;
+        _gpsLng = position.longitude;
+      });
+    } catch (e) {
+      debugPrint('Error getting location: $e');
     }
   }
 

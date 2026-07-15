@@ -61,6 +61,8 @@ export interface UserProfile {
   governorate_id?: string
   district_id?: string
   avatar_url?: string
+  national_id?: string
+  position?: string
   is_active: boolean
   last_login?: string
   created_at: string

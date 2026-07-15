@@ -337,6 +337,7 @@ function EditUserDialog({ user, open, onOpenChange }: { user: UserProfile; open:
   const [fullName, setFullName] = useState(user.full_name)
   const [email, setEmail] = useState(user.email)
   const [phone, setPhone] = useState(user.phone || '')
+  const [position, setPosition] = useState(user.position || '')
   const [role, setRole] = useState<UserRole>(user.role)
   const [govId, setGovId] = useState(user.governorate_id || '')
   const [districtId, setDistrictId] = useState(user.district_id || '')
@@ -362,7 +363,7 @@ function EditUserDialog({ user, open, onOpenChange }: { user: UserProfile; open:
   const handleSaveProfile = () => {
     if (!fullName.trim()) { toast({ title: 'الاسم مطلوب', variant: 'destructive' }); return }
     updateProfile.mutate(
-      { userId: user.id, full_name: fullName.trim(), email: email.trim(), phone: phone.trim() || undefined },
+      { userId: user.id, full_name: fullName.trim(), email: email.trim(), phone: phone.trim() || undefined, position: position.trim() || undefined },
       {
         onSuccess: () => { toast({ title: 'تم تحديث الملف الشخصي', variant: 'success' }); onOpenChange(false) },
         onError: () => toast({ title: 'فشل التحديث', variant: 'destructive' }),
@@ -426,6 +427,10 @@ function EditUserDialog({ user, open, onOpenChange }: { user: UserProfile; open:
               <div className="space-y-2">
                 <Label>رقم الجوال</Label>
                 <Input dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+967XXXXXXXX" />
+              </div>
+              <div className="space-y-2">
+                <Label>الصفة الوظيفية</Label>
+                <Input value={position} onChange={(e) => setPosition(e.target.value)} placeholder="مثال: مشرف التحصين بالمحافظة" />
               </div>
             </>
           )}

@@ -294,7 +294,20 @@ jobs:
         working-directory: packages/shared
         run: dart run build_runner build --delete-conflicting-outputs
 
+      - name: Check iOS project exists
+        id: check_ios
+        working-directory: apps/mobile
+        run: |
+          if [ -d "ios" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ iOS project found"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ iOS project not found — skipping iOS build (no ios/ directory in repo)"
+          fi
+
       - name: Build iOS (no codesign)
+        if: steps.check_ios.outputs.exists == 'true'
         working-directory: apps/mobile
         run: flutter build ios --no-codesign --release --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" --dart-define=ENCRYPTION_KEY="${{ secrets.ENCRYPTION_KEY }}"
 

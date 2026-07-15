@@ -232,10 +232,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   @override
   void initState() {
     super.initState();
-    // ═══ Clamp initialTab to valid range [0, 4] ═══
-    final initial = widget.initialTab.clamp(0, 4);
+    // ═══ Clamp initialTab to valid range [0, 5] ═══
+    final initial = widget.initialTab.clamp(0, 5);
     _tab = TabController(
-      length: 5,
+      length: 6,
       vsync: this,
       initialIndex: initial,
     );
@@ -323,6 +323,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             Tab(icon: Icon(Icons.groups_3_rounded), text: 'المترددين'),
             Tab(icon: Icon(Icons.report_problem_rounded), text: 'التحديات'),
             Tab(icon: Icon(Icons.assessment_rounded), text: 'التقارير'),
+            Tab(icon: Icon(Icons.local_hospital_rounded), text: 'تقييم المرافق'),
           ],
         ),
       ),
@@ -344,6 +345,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                   onGenerate: (type, format, period) =>
                       _generateReport(type, format, period),
                 ),
+                const _HealthFacilityAssessmentTab(),
               ],
             ),
           ),
@@ -2221,4 +2223,215 @@ class _Empty extends StatelessWidget {
     campaignType: campaign != 'all' ? campaign : null,
     campaignRound: round,
   );
+}
+
+// ═══ Health Facility Assessment Tab ═══
+const _assessmentFormId = '606b5093-9a8f-47d6-a6c9-b0429ce4a9f6';
+
+class _HealthFacilityAssessmentTab extends ConsumerWidget {
+  const _HealthFacilityAssessmentTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final params = _getAnalyticsParams(ref);
+    final subsAsync = ref.watch(_assessmentSubsProvider(params));
+
+    return subsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => _ErrorWidget(
+        msg: 'خطأ: $e',
+        onRetry: () => ref.invalidate(_assessmentSubsProvider),
+      ),
+      data: (subs) {
+        if (subs.isEmpty) {
+          return const _Empty(
+            icon: Icons.local_hospital_outlined,
+            msg: 'لا توجد بيانات تقييم المرافق الصحية',
+          );
+        }
+
+        // Calculate metrics
+        int defaulterListYes = 0;
+        int villageListYes = 0;
+        int updatedPlanYes = 0;
+        int populationDataYes = 0;
+        int coveragePlanYes = 0;
+        int planReviewedYes = 0;
+        int reverseCoverageYes = 0;
+        int higherVisitYes = 0;
+        int routineCoverage85Yes = 0;
+
+        for (final sub in subs) {
+          final data = sub['data'] as Map<String, dynamic>? ?? {};
+          if (data['has_defaulter_list'] == true || data['has_defaulter_list'] == 'yes') defaulterListYes++;
+          if (data['has_village_list'] == true || data['has_village_list'] == 'yes') villageListYes++;
+          if (data['has_updated_plan'] == true || data['has_updated_plan'] == 'yes') updatedPlanYes++;
+          if (data['has_population_data'] == true || data['has_population_data'] == 'yes') populationDataYes++;
+          if (data['has_coverage_plan'] == true || data['has_coverage_plan'] == 'yes') coveragePlanYes++;
+          if (data['plan_reviewed_by_higher_level'] == true || data['plan_reviewed_by_higher_level'] == 'yes') planReviewedYes++;
+          if (data['has_reverse_coverage'] == true || data['has_reverse_coverage'] == 'yes') reverseCoverageYes++;
+          if (data['has_higher_level_visit'] == true || data['has_higher_level_visit'] == 'yes') higherVisitYes++;
+          if (data['routine_coverage_above_85'] == true || data['routine_coverage_above_85'] == 'yes') routineCoverage85Yes++;
+        }
+
+        final total = subs.length;
+        final metrics = [
+          ('قائمة المتخلفين', defaulterListYes, total),
+          ('قائمة القرى', villageListYes, total),
+          ('خطة محدّثة', updatedPlanYes, total),
+          ('بيانات سكانية', populationDataYes, total),
+          ('خطة التغطية', coveragePlanYes, total),
+          ('مراجعة الخطة', planReviewedYes, total),
+          ('تغطية راجعة', reverseCoverageYes, total),
+          ('زيارة المستوى الأعلى', higherVisitYes, total),
+          ('تغطية >85%', routineCoverage85Yes, total),
+        ];
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Summary Cards
+              Row(
+                children: [
+                  _SummaryCard(
+                    icon: Icons.local_hospital_rounded,
+                    label: 'إجمالي التقييمات',
+                    value: '$total',
+                    color: Colors.blue,
+                  ),
+                  const SizedBox(width: 12),
+                  _SummaryCard(
+                    icon: Icons.check_circle_rounded,
+                    label: 'مُرسلة',
+                    value: '${subs.where((s) => s['status'] == 'submitted').length}',
+                    color: Colors.green,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Metrics Progress
+              const Text(
+                'مؤشرات الجاهزية الرئيسية',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...metrics.map((m) {
+                final (name, count, t) = m;
+                final pct = t > 0 ? (count / t * 100) : 0.0;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(name, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+                          Text(
+                            '${pct.toStringAsFixed(0)}% ($count/$t)',
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: pct >= 80 ? Colors.green : pct >= 50 ? Colors.orange : Colors.red,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(
+                        value: pct / 100,
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          pct >= 80 ? Colors.green : pct >= 50 ? Colors.orange : Colors.red,
+                        ),
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Provider for health facility assessment submissions
+final _assessmentSubsProvider = FutureProvider.family
+    .autoDispose<List<Map<String, dynamic>>, ({String? campaignType, int? campaignRound})>(
+  (ref, params) async {
+    final cache = await ref.watch(offlineDataCacheProvider.future);
+    return cache.getCachedDataList('form_submissions')?.where((s) {
+      if (s['form_id'] != _assessmentFormId) return false;
+      if (s['deleted_at'] != null) return false;
+      if (params.campaignRound != null && params.campaignRound! > 0) {
+        if (s['campaign_round'] != params.campaignRound) return false;
+      }
+      return true;
+    }).toList() ?? [];
+  },
+);
+
+class _SummaryCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _SummaryCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w700,
+                fontSize: 24,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 12,
+                color: color.withValues(alpha: 0.8),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

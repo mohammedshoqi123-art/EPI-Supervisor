@@ -2238,7 +2238,7 @@ class _HealthFacilityAssessmentTab extends ConsumerWidget {
 
     return subsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrorWidget(
+      error: (e, _) => _ErrRetry(
         msg: 'خطأ: $e',
         onRetry: () => ref.invalidate(_assessmentSubsProvider),
       ),

@@ -861,14 +861,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   void _markChanged() {
-    // ═══ FIX: setState ضروري لتحديث canPop في PopScope ═══
-    // السابق: _hasUnsavedChanges = true بدون setState → canPop ما يتحدث
-    // → PopScope ما يمنع الخروج → الرسالة التحذيرية ما تظهر
-    if (!_hasUnsavedChanges) {
-      setState(() {
-        _hasUnsavedChanges = true;
-      });
-    }
+    // ═══ setState ضروري لإعادة بناء الحقول الشرطية (showIf) ═══
+    // بدون setState: buildFormSections ما تعيد تقييم showIf
+    // → الحقول المشرطية (مثل: هل تمت مراجعتها؟) ما تظهر/تختفي
+    setState(() {
+      _hasUnsavedChanges = true;
+    });
   }
 
   /// Build review sections for the review bottom sheet

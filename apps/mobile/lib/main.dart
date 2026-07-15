@@ -109,7 +109,7 @@ Future<void> main() async {
     FlutterError.onError = (FlutterErrorDetails details) {
       debugPrint('[FlutterError] ${details.exception}');
       // Report to Sentry
-      SentryConfig.captureError(details.exception, details.stack);
+      SentryConfig.captureError(details.exception, details.stack ?? StackTrace.current);
     };
 
     runApp(const ProviderScope(child: EpiSupervisorApp()));

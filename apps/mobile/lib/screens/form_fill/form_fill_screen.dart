@@ -13,6 +13,8 @@ import 'package:epi_shared/epi_shared.dart';
 import '../../providers/app_providers.dart';
 import 'form_field_builders.dart';
 import 'form_review_sheet.dart';
+import 'section_navigation_bar.dart';
+import 'form_progress_dashboard.dart';
 
 // ⚠️ ConnectivityUtils for offline checks
 import 'package:epi_core/src/utils/connectivity_utils.dart';
@@ -47,6 +49,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   // Auto-save timer
   Timer? _autoSaveTimer;
 
+  // ═══ Section Navigation ═══
+  late PageController _pageController;
+  int _currentSectionIndex = 0;
+
   // ⚠️ PERF: Cache _allFields instead of recomputing on every build
   List<Map<String, dynamic>> _allFieldsCache = [];
   // ⚠️ PERF: Cache field type lookup for _syncControllersToFormData
@@ -58,6 +64,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   void initState() {
     super.initState();
     _draftId = widget.draftId ?? const Uuid().v4();
+    _pageController = PageController();
     _loadForm();
     // ⚠️ PERF: 60 ثانية — PBKDF2 encryption مكلف، 30s تسبب تجميد
     _autoSaveTimer = Timer.periodic(const Duration(seconds: 60), (_) {
@@ -285,6 +292,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
+    _pageController.dispose();
     for (final controller in _textControllers.values) {
       controller.dispose();
     }
@@ -833,6 +841,136 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     return (total: total, yes: yes);
   }
 
+  // ═══ Section Navigation Methods ═══
+
+  void _goToSection(int index) {
+    if (index < 0 || index >= _sections.length) return;
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _nextSection() {
+    if (_currentSectionIndex < _sections.length - 1) {
+      _goToSection(_currentSectionIndex + 1);
+    }
+  }
+
+  void _previousSection() {
+    if (_currentSectionIndex > 0) {
+      _goToSection(_currentSectionIndex - 1);
+    }
+  }
+
+  /// بناء بيانات التنقل للأقسام
+  List<SectionNavItem> _buildSectionNavItems() {
+    if (_sections.isEmpty) return [];
+
+    return _sections.asMap().entries.map((entry) {
+      final section = entry.value as Map<String, dynamic>;
+      final title = section['title_ar'] as String? ?? '';
+      final fields = (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+      int totalFields = 0, filledFields = 0;
+      int requiredFields = 0, filledRequiredFields = 0;
+      int yesNoFields = 0, yesCount = 0;
+
+      for (final field in fields) {
+        final key = field['key'] as String? ?? '';
+        final type = field['type'] as String? ?? 'text';
+        final isRequired = field['required'] == true;
+
+        // تحقق من شرط الإظهار
+        final showIf = field['showIf'];
+        if (showIf != null) {
+          final condField = showIf['field'] as String?;
+          final condValue = showIf['value'];
+          if (condField != null && _formData[condField] != condValue) continue;
+        }
+
+        totalFields++;
+        if (isRequired) requiredFields++;
+
+        final val = _formData[key];
+        bool isFilled = false;
+        if (val != null) {
+          if (val is String && val.isNotEmpty) isFilled = true;
+          else if (val is bool) isFilled = true;
+          else if (val is num && val != 0) isFilled = true;
+          else if (val is List && val.isNotEmpty) isFilled = true;
+        }
+
+        if (isFilled) {
+          filledFields++;
+          if (isRequired) filledRequiredFields++;
+        }
+
+        if (type == 'yesno') {
+          yesNoFields++;
+          if (val == true) yesCount++;
+        }
+      }
+
+      return SectionNavItem(
+        key: 'section_$entry.key',
+        title: title,
+        totalFields: totalFields,
+        filledFields: filledFields,
+        requiredFields: requiredFields,
+        filledRequiredFields: filledRequiredFields,
+        yesNoFields: yesNoFields,
+        yesCount: yesCount,
+      );
+    }).toList();
+  }
+
+  /// حساب إحصائيات التقدم الكلية
+  ({int totalFields, int filledFields, int requiredFields, int filledRequired, int totalYesNo, int yesCount, int photosCount}) get _globalStats {
+    int totalFields = 0, filledFields = 0;
+    int requiredFields = 0, filledRequired = 0;
+    int totalYesNo = 0, yesCount = 0;
+
+    for (final field in _allFields) {
+      final key = field['key'] as String? ?? '';
+      final type = field['type'] as String? ?? 'text';
+      final isRequired = field['required'] == true;
+
+      totalFields++;
+      if (isRequired) requiredFields++;
+
+      final val = _formData[key];
+      bool isFilled = false;
+      if (val != null) {
+        if (val is String && val.isNotEmpty) isFilled = true;
+        else if (val is bool) isFilled = true;
+        else if (val is num && val != 0) isFilled = true;
+        else if (val is List && val.isNotEmpty) isFilled = true;
+      }
+
+      if (isFilled) {
+        filledFields++;
+        if (isRequired) filledRequired++;
+      }
+
+      if (type == 'yesno') {
+        totalYesNo++;
+        if (val == true) yesCount++;
+      }
+    }
+
+    return (
+      totalFields: totalFields,
+      filledFields: filledFields,
+      requiredFields: requiredFields,
+      filledRequired: filledRequired,
+      totalYesNo: totalYesNo,
+      yesCount: yesCount,
+      photosCount: _totalPhotosCount,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ═══ FIX: PopScope without infinite loop ═══
@@ -918,152 +1056,51 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                 )
               : Form(
                   key: _formKey,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
+                  child: Column(
                     children: [
-                      // ═══ Simple progress text (no Builder, no iteration) ═══
-                      if (_sections.isNotEmpty && _hasUnsavedChanges)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.edit_rounded, size: 14, color: Colors.orange),
-                              SizedBox(width: 6),
-                              Text('تغييرات غير محفوظة', style: TextStyle(fontSize: 11, fontFamily: 'Tajawal', color: Colors.orange, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      // ═══ Active campaign round indicator (only for integrated_activity) ═══
-                      Builder(builder: (context) {
-                        final campaign = ref.watch(campaignProvider);
-                        final round = ref.watch(campaignRoundProvider);
-                        if (campaign.value != 'integrated_activity') {
-                          return const SizedBox.shrink();
-                        }
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppTheme.primaryColor.withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.refresh_rounded,
-                                size: 18,
-                                color: AppTheme.primaryColor,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'يتم التعبئة في:',
-                                      style: TextStyle(
-                                        fontFamily: 'Tajawal',
-                                        fontSize: 11,
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                    ),
-                                    Text(
-                                      campaignRoundLabel(round),
-                                      style: TextStyle(
-                                        fontFamily: 'Tajawal',
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.primaryColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                      if (_formSchema?['description_ar'] != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            _formSchema!['description_ar'],
-                            style: const TextStyle(
-                              fontFamily: 'Tajawal',
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                      if (_sections.isNotEmpty)
-                        ...buildFormSections(
-                          sections: _sections,
-                          formData: _formData,
-                          textControllers: _textControllers,
-                          isGettingLocation: _isGettingLocation,
-                          gpsLat: _gpsLat,
-                          gpsLng: _gpsLng,
-                          flatFields: _flatFields,
-                          markChanged: _markChanged,
-                          getLocation: _getLocation,
-                          runSetState: (fn) => setState(fn),
-                          formSchema: _formSchema,
-                          photosByField: _photosByField,
-                        )
-                      else
-                        ..._flatFields.map(
-                          (field) => buildFormField(
-                            field: field as Map<String, dynamic>,
-                            formData: _formData,
-                            textControllers: _textControllers,
-                            isGettingLocation: _isGettingLocation,
-                            gpsLat: _gpsLat,
-                            gpsLng: _gpsLng,
-                            markChanged: _markChanged,
-                            getLocation: _getLocation,
-                            runSetState: (fn) => setState(fn),
-                            formSchema: _formSchema,
-                            photosByField: _photosByField,
-                          ),
-                        ),
-                      const SizedBox(height: 24),
-                      EpiButton(
-                        text: 'مراجعة وإرسال',
-                        isLoading: _isLoading,
-                        onPressed: () {
-                          if (!_formKey.currentState!.validate()) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('يرجى تعبئة جميع الحقول المطلوبة', style: TextStyle(fontFamily: 'Tajawal')), behavior: SnackBarBehavior.floating),
-                            );
-                            return;
-                          }
-                          _syncControllersToFormData();
-                          FormReviewSheet.show(
-                            context,
-                            sections: _buildReviewSections(),
-                            gpsLat: _gpsLat,
-                            gpsLng: _gpsLng,
-                            photosCount: _totalPhotosCount,
-                            totalYesNoCount: _yesNoStats.total,
-                            yesCount: _yesNoStats.yes,
-                            onConfirm: () => _submit(),
+                      // ═══ Dashboard التقدم الحي ═══
+                      if (_sections.isNotEmpty) ...[
+                        Builder(builder: (context) {
+                          final stats = _globalStats;
+                          return FormProgressDashboard(
+                            totalFields: stats.totalFields,
+                            filledFields: stats.filledFields,
+                            requiredFields: stats.requiredFields,
+                            filledRequiredFields: stats.filledRequired,
+                            totalYesNo: stats.totalYesNo,
+                            yesCount: stats.yesCount,
+                            photosCount: stats.photosCount,
+                            hasGps: _gpsLat != null,
+                            currentSection: _currentSectionIndex,
+                            totalSections: _sections.length,
                           );
-                        },
-                        width: double.infinity,
-                        icon: Icons.fact_check_rounded,
+                        }),
+                        // ═══ شريط التنقل بين الأقسام ═══
+                        SectionNavigationBar(
+                          sections: _buildSectionNavItems(),
+                          currentIndex: _currentSectionIndex,
+                          onSectionTap: _goToSection,
+                          onNext: _nextSection,
+                          onPrevious: _previousSection,
+                        ),
+                      ],
+                      // ═══ محتوى النموذج ═══
+                      Expanded(
+                        child: _sections.isNotEmpty
+                            ? PageView.builder(
+                                controller: _pageController,
+                                itemCount: _sections.length,
+                                onPageChanged: (index) {
+                                  setState(() => _currentSectionIndex = index);
+                                },
+                                itemBuilder: (context, sectionIndex) {
+                                  return _buildSectionPage(sectionIndex);
+                                },
+                              )
+                            : _buildFlatFieldsList(),
                       ),
+                      // ═══ زر الإرسال ═══
+                      _buildSubmitButton(context),
                     ],
                   ),
                 ),
@@ -1071,6 +1108,162 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     );
   }
 }
+
+  /// بناء صفحة القسم الواحد
+  Widget _buildSectionPage(int sectionIndex) {
+    final section = _sections[sectionIndex] as Map<String, dynamic>;
+    final title = section['title_ar'] as String? ?? '';
+    final fields = (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    // بناء widgets القسم باستخدام الدالة الموجودة
+    final sectionWidgets = buildFormSections(
+      sections: [_sections[sectionIndex]],
+      formData: _formData,
+      textControllers: _textControllers,
+      isGettingLocation: _isGettingLocation,
+      gpsLat: _gpsLat,
+      gpsLng: _gpsLng,
+      flatFields: _flatFields,
+      markChanged: _markChanged,
+      getLocation: _getLocation,
+      runSetState: (fn) => setState(fn),
+      formSchema: _formSchema,
+      photosByField: _photosByField,
+    );
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      children: [
+        // مؤشر الحمل (فقط للقسم المتكامل)
+        Builder(builder: (context) {
+          final campaign = ref.watch(campaignProvider);
+          final round = ref.watch(campaignRoundProvider);
+          if (campaign.value != 'integrated_activity' || sectionIndex != 0) {
+            return const SizedBox.shrink();
+          }
+          return Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.refresh_rounded, size: 18, color: AppTheme.primaryColor),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('يتم التعبئة في:', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: AppTheme.textSecondary)),
+                      Text(campaignRoundLabel(round), style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primaryColor)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        // وصف النموذج (فقط في القسم الأول)
+        if (sectionIndex == 0 && _formSchema?['description_ar'] != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              _formSchema!['description_ar'],
+              style: const TextStyle(fontFamily: 'Tajawal', color: AppTheme.textSecondary),
+            ),
+          ),
+        // حقول القسم
+        ...sectionWidgets,
+        // مساحة فارغة في الأسفل
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  /// بناء قائمة الحقول المسطحة (بدون أقسام)
+  Widget _buildFlatFieldsList() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (_formSchema?['description_ar'] != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              _formSchema!['description_ar'],
+              style: const TextStyle(fontFamily: 'Tajawal', color: AppTheme.textSecondary),
+            ),
+          ),
+        ..._flatFields.map(
+          (field) => buildFormField(
+            field: field as Map<String, dynamic>,
+            formData: _formData,
+            textControllers: _textControllers,
+            isGettingLocation: _isGettingLocation,
+            gpsLat: _gpsLat,
+            gpsLng: _gpsLng,
+            markChanged: _markChanged,
+            getLocation: _getLocation,
+            runSetState: (fn) => setState(fn),
+            formSchema: _formSchema,
+            photosByField: _photosByField,
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  /// بناء زر الإرسال
+  Widget _buildSubmitButton(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: EpiButton(
+          text: 'مراجعة وإرسال',
+          isLoading: _isLoading,
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('يرجى تعبئة جميع الحقول المطلوبة', style: TextStyle(fontFamily: 'Tajawal')),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              return;
+            }
+            _syncControllersToFormData();
+            FormReviewSheet.show(
+              context,
+              sections: _buildReviewSections(),
+              gpsLat: _gpsLat,
+              gpsLng: _gpsLng,
+              photosCount: _totalPhotosCount,
+              totalYesNoCount: _yesNoStats.total,
+              yesCount: _yesNoStats.yes,
+              onConfirm: () => _submit(),
+            );
+          },
+          width: double.infinity,
+          icon: Icons.fact_check_rounded,
+        ),
+      ),
+    );
+  }
 
 /// Top-level function for compute() — encodes photos to base64 in a background isolate.
 /// Must be top-level (not a class method) to be callable from compute().

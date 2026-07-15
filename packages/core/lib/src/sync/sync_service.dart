@@ -414,12 +414,26 @@ class SyncService {
   }
 
   /// ═══ Warm up forms cache for all campaign types ═══
+  /// ═══ PERFORMANCE: Only warm up if cache is empty (first sync after install) ═══
+  /// Previously: 3 network calls after EVERY sync
+  /// Now: only when cache has no forms data
   Future<void> _warmUpFormsCache() async {
     final cache = _dataCache;
     if (cache == null) return;
 
     try {
-      // Cache ALL active forms (for draft title lookups and cross-campaign access)
+      // Check if forms are already cached
+      final hasForms = cache.hasCachedData('forms_all') ||
+          cache.hasCachedData('forms_polio_campaign') ||
+          cache.hasCachedData('forms_integrated_activity');
+
+      if (hasForms) {
+        if (kDebugMode)
+          debugPrint('[SyncService] Forms cache already warm — skipping');
+        return;
+      }
+
+      // First time — warm up cache
       await cache.getList(
         'forms_all',
         () => _api.callFunction(SupabaseConfig.fnGetForms, {}).then(
@@ -428,7 +442,6 @@ class SyncService {
         maxAge: const Duration(hours: 12),
       );
 
-      // Cache per-campaign forms (for filtered listing in the UI)
       const types = ['polio_campaign', 'integrated_activity'];
       for (final type in types) {
         await cache.getList(
@@ -437,7 +450,7 @@ class SyncService {
               SupabaseConfig.fnGetForms, {'campaign_type': type}).then(
             (resp) => List<Map<String, dynamic>>.from(resp['forms'] ?? []),
           ),
-          maxAge: const Duration(hours: 12), // Refresh every 12h if online
+          maxAge: const Duration(hours: 12),
         );
       }
       if (kDebugMode)

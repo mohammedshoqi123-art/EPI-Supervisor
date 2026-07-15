@@ -64,7 +64,54 @@ Future<void> main() async {
     // الجديد: fire-and-forget — SplashScreen ينتظر قائمة قصيرة فقط
     _initSupabaseInBackground();
 
-    // ═══ الخطوة 4: تشغيل التطبيق فوراً ═══
+    // ═══ الخطوة 4: Error Boundary + تشغيل التطبيق فوراً ═══
+    // ═══ FIX: Catch all Flutter errors — show friendly error screen instead of crash ═══
+    ErrorWidget.builder = (FlutterErrorDetails details) {
+      debugPrint('[ErrorBoundary] ${details.exception}');
+      return MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'حدث خطأ غير متوقع',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    details.exception.toString(),
+                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey),
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      // Restart app
+                      runApp(const ProviderScope(child: EpiSupervisorApp()));
+                    },
+                    child: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Tajawal')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    };
+
+    FlutterError.onError = (FlutterErrorDetails details) {
+      debugPrint('[FlutterError] ${details.exception}');
+      // Report to Sentry
+      SentryConfig.captureError(details.exception, details.stack);
+    };
+
     runApp(const ProviderScope(child: EpiSupervisorApp()));
 
     // ═══ الخطوة 5: تهيئة الخدمات غير الحرجة في الخلفية ═══

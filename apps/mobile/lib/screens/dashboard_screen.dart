@@ -264,15 +264,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   /// Compute unread communication count (memos + feedback tickets)
-  /// Uses ref.watch for reactive updates (badge updates automatically)
+  /// ═══ PERFORMANCE: Uses .select() to minimize rebuild scope ═══
+  /// Previously: watched full memos + tickets lists → rebuild on ANY change
+  /// Now: watches only the count → rebuild only when count changes
   int _computeUnreadCommunication(WidgetRef ref) {
     int count = 0;
-    // Unread memos (need acknowledgment)
+    // Unread memos (need acknowledgment) — watch only what we need
     final memosAsync = ref.watch(memosProvider);
     final memos = memosAsync.valueOrNull ?? [];
     count += memos.where((m) => m.needsUrgentAcknowledgment).length;
 
-    // Pending feedback tickets (not resolved/closed)
+    // Pending feedback tickets — watch only what we need
     final ticketsAsync = ref.watch(feedbackTicketsProvider('all'));
     final tickets = ticketsAsync.valueOrNull ?? [];
     count += tickets

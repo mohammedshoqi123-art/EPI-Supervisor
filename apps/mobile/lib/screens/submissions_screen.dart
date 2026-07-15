@@ -59,7 +59,7 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
         status: _statusFilter,
         campaignType: campaign.value,
         campaignRound: campaign.value == 'integrated_activity' ? round : null,
-        limit: 5000, // Was 500, caused silent truncation
+        limit: 2000, // ═══ Was 5000 — 2000 is sufficient, reduces memory pressure ═══
         offset: 0,
       );
 

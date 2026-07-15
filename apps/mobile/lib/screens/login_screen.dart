@@ -53,10 +53,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       );
       if (authenticated) {
         HapticFeedback.mediumImpact();
-        // Biometric success — the stored session will auto-login via GoRouter redirect
-        // If no stored session, show message
-        context.showError(
-            'تم التحقق — سيتم تسجيل الدخول تلقائياً عند وجود جلسة محفوظة');
+        // ═══ FIX: Actually check for stored session and auto-login ═══
+        try {
+          final client = Supabase.instance.client;
+          final session = client.auth.currentSession;
+          if (session != null) {
+            // Session exists — GoRouter redirect will handle navigation
+            if (mounted) {
+              context.showSuccess('تم التحقق — جاري تسجيل الدخول...');
+            }
+          } else {
+            // No stored session — user needs to login first
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('لا توجد جلسة محفوظة — سجّل دخولك أولاً',
+                      style: TextStyle(fontFamily: 'Tajawal')),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          if (mounted) context.showError('خطأ في التحقق: $e');
+        }
       }
     } catch (e) {
       HapticFeedback.heavyImpact();

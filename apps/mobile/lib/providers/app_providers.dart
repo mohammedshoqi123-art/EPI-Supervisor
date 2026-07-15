@@ -176,7 +176,7 @@ class SubmissionsFilter {
     this.districtId,
     this.campaignType,
     this.campaignRound,
-    this.limit = 5000, // ═══ Was 200, caused silent truncation ═══
+    this.limit = 2000, // ═══ Was 5000 — 2000 balances completeness vs memory ═══
     this.offset = 0,
   });
 

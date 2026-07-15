@@ -389,7 +389,19 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     }
   }
 
+  /// ═══ Rate limiting: prevent double-submit ═══
+  DateTime? _lastSubmitTime;
+  static const _submitDebounce = Duration(seconds: 2);
+
   Future<void> _submit() async {
+    // ═══ FIX: Prevent double-submit (debounce) ═══
+    final now = DateTime.now();
+    if (_lastSubmitTime != null && now.difference(_lastSubmitTime!) < _submitDebounce) {
+      debugPrint('[FormFill] Submit debounced — too fast');
+      return;
+    }
+    _lastSubmitTime = now;
+
     _syncControllersToFormData();
 
     final formState = _formKey.currentState;

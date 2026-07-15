@@ -204,34 +204,61 @@ class AnalyticsService {
   }
 
   /// Get top governorates by submission count
+  /// ═══ PERFORMANCE: Fetch only governorate_id + count, resolve names separately ═══
+  /// Previously: fetched 5000 rows with JOIN (heavy) then grouped locally
+  /// Now: lightweight query + separate name lookup (only 18 governorates max)
   Future<List<Map<String, dynamic>>> getGovernorateRanking({
     int? campaignRound,
   }) async {
     final filters = <String, dynamic>{};
     if (campaignRound != null) filters['campaign_round'] = campaignRound;
+
+    // Step 1: Fetch only governorate_id (minimal data)
     final submissions = await _api.select(
       'form_submissions',
-      select: 'governorate_id, governorates(name_ar, name_en)',
+      select: 'governorate_id',
       filters: filters,
       limit: 5000,
     );
 
-    final grouped = <String, Map<String, dynamic>>{};
+    // Step 2: Count locally (fast — just counting strings)
+    final counts = <String, int>{};
     for (final s in submissions) {
       final govId = s['governorate_id'] as String?;
-      if (govId == null) continue;
-      if (!grouped.containsKey(govId)) {
-        grouped[govId] = {
-          'governorate_id': govId,
-          'name_ar': (s['governorates'] as Map?)?['name_ar'] ?? 'غير محدد',
-          'count': 0,
-        };
-      }
-      grouped[govId]!['count'] = (grouped[govId]!['count'] as int) + 1;
+      if (govId == null || govId.isEmpty) continue;
+      counts[govId] = (counts[govId] ?? 0) + 1;
     }
 
-    return grouped.values.toList()
-      ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+    if (counts.isEmpty) return [];
+
+    // Step 3: Resolve governorate names (only for IDs that have submissions)
+    // This is a small query — max 18 governorates
+    try {
+      final govs = await _api.select(
+        'governorates',
+        select: 'id, name_ar, name_en',
+        limit: 100,
+      );
+      final govNames = <String, String>{};
+      for (final g in govs) {
+        govNames[g['id'] as String] = g['name_ar'] as String? ?? 'غير محدد';
+      }
+
+      return counts.entries.map((e) => {
+        'governorate_id': e.key,
+        'name_ar': govNames[e.key] ?? 'غير محدد',
+        'count': e.value,
+      }).toList()
+        ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+    } catch (_) {
+      // Fallback: return without names
+      return counts.entries.map((e) => {
+        'governorate_id': e.key,
+        'name_ar': 'غير محدد',
+        'count': e.value,
+      }).toList()
+        ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+    }
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

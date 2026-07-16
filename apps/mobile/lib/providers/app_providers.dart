@@ -237,7 +237,7 @@ final governoratesProvider = FutureProvider<List<Map<String, dynamic>>>((
     'governorates',
     () => ref.read(databaseServiceProvider).getGovernorates(),
     maxAge:
-        const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
+        const Duration(hours: 24), // ═══ Cache 7 days — sync button refreshes ═══
   );
   // ═══ FIX: Filter out inactive governorates client-side ═══
   return allGovs.where((g) => g['is_active'] != false).toList();
@@ -256,7 +256,7 @@ final districtsProvider =
     () => ref
         .read(databaseServiceProvider)
         .getDistricts(governorateId: governorateId),
-    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
+    maxAge: const Duration(hours: 24), // ═══ Cache 7 days ═══
   );
 });
 
@@ -272,7 +272,7 @@ final healthFacilitiesProvider =
     () => ref
         .read(databaseServiceProvider)
         .getHealthFacilities(districtId: districtId),
-    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
+    maxAge: const Duration(hours: 24), // ═══ Cache 7 days ═══
   );
 });
 
@@ -419,7 +419,7 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
         .read(databaseServiceProvider)
         .getForms(campaignType: campaign.value),
     maxAge:
-        const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
+        const Duration(hours: 24), // ═══ Cache 7 days — sync button refreshes ═══
   );
   // ═══ FIX: Filter out inactive forms client-side as extra safety ═══
   // RLS should handle this, but cache might have stale data
@@ -580,7 +580,7 @@ final dashboardAnalyticsProvider =
           endDate: filter.endDate,
         ),
     maxAge:
-        const Duration(days: 7), // ═══ Cache 7 days — sync button refreshes ═══
+        const Duration(hours: 24), // ═══ Cache 7 days — sync button refreshes ═══
   );
 });
 
@@ -591,7 +591,7 @@ final shortagesProvider = FutureProvider.family
   return cache.getList(
     key,
     () => ref.read(databaseServiceProvider).getShortages(campaignRound: campaignRound),
-    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
+    maxAge: const Duration(hours: 24), // ═══ Cache 7 days ═══
   );
 });
 
@@ -608,7 +608,7 @@ final submissionTrendProvider = FutureProvider.family
           days: params.days,
           campaignRound: params.campaignRound,
         ),
-    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
+    maxAge: const Duration(hours: 24), // ═══ Cache 7 days ═══
   );
 });
 
@@ -621,7 +621,7 @@ final governorateRankingProvider = FutureProvider.family
   return cache.getList(
     key,
     () => ref.read(analyticsServiceProvider).getGovernorateRanking(campaignRound: campaignRound),
-    maxAge: const Duration(days: 7), // ═══ Cache 7 days ═══
+    maxAge: const Duration(hours: 24), // ═══ Cache 7 days ═══
   );
 });
 

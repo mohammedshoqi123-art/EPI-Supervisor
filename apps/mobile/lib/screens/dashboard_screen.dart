@@ -118,7 +118,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           HapticFeedback.mediumImpact();
           // ═══ FIX: فحص isOnline قبل أي محاولة شبكة ═══
           if (!ConnectivityUtils.isOnline) {
-            // اعرض رسالة بدل ما تعلق
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -132,12 +131,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             }
             return;
           }
-          await ref.read(forceRefreshProvider)('dashboard_analytics');
-          ref.invalidate(
-            dashboardAnalyticsProvider(
-              AnalyticsFilter(campaignType: ref.watch(campaignProvider).value, campaignRound: ref.watch(campaignRoundProvider)),
-            ),
+          // ═══ FIX: Clear cache + invalidate + wait for re-fetch ═══
+          final filter = AnalyticsFilter(
+            campaignType: ref.read(campaignProvider).value,
+            campaignRound: ref.read(campaignRoundProvider),
           );
+          await ref.read(forceRefreshProvider)(filter.cacheKey);
+          ref.invalidate(dashboardAnalyticsProvider(filter));
+          // Wait for provider to complete re-fetch
+          try {
+            await ref.read(dashboardAnalyticsProvider(filter).future);
+          } catch (_) {}
         },
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),

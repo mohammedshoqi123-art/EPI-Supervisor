@@ -101,6 +101,18 @@ class RealtimeSyncService {
       );
 
       _channel!.onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'form_submissions',
+        callback: (payload) {
+          debugPrint('[RealtimeSync] New submission: ${payload.newRecord['id']}');
+          _changeController.add('form_submissions');
+          // ═══ FIX: Invalidate ALL submission-related caches ═══
+          _ref.invalidate(formStatsProvider);
+        },
+      );
+
+      _channel!.onPostgresChanges(
         event: PostgresChangeEvent.update,
         schema: 'public',
         table: 'form_submissions',

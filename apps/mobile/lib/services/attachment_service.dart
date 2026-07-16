@@ -203,13 +203,25 @@ class AttachmentService {
     try {
       final client = Supabase.instance.client;
       final userId = client.auth.currentUser?.id;
-      if (userId == null) return null;
+      if (userId == null) {
+        debugPrint('[AttachmentService] uploadFile: user not authenticated');
+        return null;
+      }
 
       final fileName = customName ?? p.basename(file.path);
       final mimeType = lookupMimeType(file.path);
       final fileExt = p.extension(file.path);
       final uniqueName = '${DateTime.now().millisecondsSinceEpoch}$fileExt';
       final storagePath = '$folder/$userId/$uniqueName';
+      final fileSize = await file.length();
+
+      debugPrint('[AttachmentService] uploadFile: path=$storagePath, size=$fileSize, mime=$mimeType');
+
+      // Check file size (10MB limit)
+      if (fileSize > 10 * 1024 * 1024) {
+        debugPrint('[AttachmentService] uploadFile: file too large ($fileSize bytes)');
+        return null;
+      }
 
       // Upload to storage
       await client.storage.from(_bucket).upload(
@@ -221,8 +233,7 @@ class AttachmentService {
             ),
           );
 
-      // Get file size
-      final fileSize = await file.length();
+      debugPrint('[AttachmentService] uploadFile: success');
 
       return Attachment(
         filePath: storagePath,

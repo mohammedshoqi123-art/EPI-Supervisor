@@ -163,8 +163,17 @@ class _AttachmentPickerSheetState extends State<_AttachmentPickerSheet> {
       final attachment =
           await AttachmentService.uploadXFile(xfile: xfile, folder: widget.folder);
 
-      if (mounted) {
+      if (attachment != null && mounted) {
         Navigator.pop(context, attachment);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('فشل رفع الصورة — تأكد من الاتصال وحجم الصورة',
+                style: TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -199,6 +208,22 @@ class _AttachmentPickerSheetState extends State<_AttachmentPickerSheet> {
         return;
       }
 
+      // Check file size before uploading (10MB limit)
+      final fileSize = platformFile.size;
+      if (fileSize > 10 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('الملف كبير جداً (${(fileSize / 1024 / 1024).toStringAsFixed(1)} ميجا). الحد الأقصى 10 ميجا.',
+                  style: const TextStyle(fontFamily: 'Tajawal')),
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+          );
+          Navigator.pop(context);
+        }
+        return;
+      }
+
       setState(() => _statusText = 'جاري رفع الملف...');
       final attachment = await AttachmentService.uploadFile(
         file: File(platformFile.path!),
@@ -206,8 +231,17 @@ class _AttachmentPickerSheetState extends State<_AttachmentPickerSheet> {
         customName: platformFile.name,
       );
 
-      if (mounted) {
+      if (attachment != null && mounted) {
         Navigator.pop(context, attachment);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('فشل رفع الملف — تأكد من الاتصال وحجم الملف (حد أقصى 10 ميجا)',
+                style: TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {

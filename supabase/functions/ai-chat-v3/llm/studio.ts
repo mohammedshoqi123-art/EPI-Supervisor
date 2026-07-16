@@ -473,6 +473,7 @@ export async function generateStudioArtifact(
     topic?: string
     message?: string          // user question to ground on
     campaignRound?: number | null
+    userProfile?: { role?: string; full_name?: string; governorate_name?: string } | null
   },
   env: Record<string, string | undefined>,
 ): Promise<StudioArtifact> {
@@ -548,6 +549,34 @@ export async function generateStudioArtifact(
     case 'faq':            messages = buildFaqPrompt(sources, options.topic); break
     case 'mind_map':       messages = buildMindMapPrompt(sources, options.topic); break
     case 'audio_overview': messages = buildAudioOverviewPrompt(sources, options.topic); break
+  }
+
+  // ═══ Personalize based on user role ═══
+  if (options.userProfile && messages.length > 0) {
+    const role = options.userProfile.role || 'data_entry'
+    const gov = options.userProfile.governorate_name || ''
+    const name = options.userProfile.full_name || ''
+    let roleContext = '\n\n== سياق المستخدم ==\n'
+    roleContext += `الدور: ${role}\n`
+    if (name) roleContext += `الاسم: ${name}\n`
+    if (gov) roleContext += `المحافظة: ${gov}\n`
+    roleContext += '\nخصص المحتوى حسب دور المستخدم:\n'
+    if (role === 'admin' || role === 'central') {
+      roleContext += '- ركز على التحليل الاستراتيجي والتوصيات التنفيذية\n'
+      roleContext += '- اذكر مؤشرات الأداء الرئيسية (KPIs)\n'
+      roleContext += '- قدم توصيات قابلة للتنفيذ على مستوى النظام\n'
+    } else if (role === 'governorate') {
+      roleContext += '- ركز على أداء المحافظة والمقارنات مع المحافظات الأخرى\n'
+      roleContext += '- اذكر الأولويات المحلية والتوصيات العملية\n'
+    } else if (role === 'district') {
+      roleContext += '- ركز على أداء المديرية والتفاصيل الميدانية\n'
+      roleContext += '- اذكر إجراءات عملية يمكن تنفيذها فوراً\n'
+    } else {
+      roleContext += '- ركز على الإرشادات العملية والخطوات الواضحة\n'
+      roleContext += '- استخدم لغة بسيطة ومباشرة\n'
+    }
+    if (gov) roleContext += `- ركز على بيانات محافظة ${gov} عند توفرها\n'
+    messages[0].content = (messages[0].content || '') + roleContext
   }
 
   // ─── Step 3: Call LLM via Hybrid Gateway ───

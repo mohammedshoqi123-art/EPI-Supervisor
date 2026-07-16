@@ -1308,7 +1308,7 @@ serve(async (req) => {
       const artifact = await generateStudioArtifact(
         supabase,
         artifactType,
-        { topic, message: studioMessage, campaignRound: body.campaign_round || null },
+        { topic, message: studioMessage, campaignRound: body.campaign_round || null, userProfile: profile },
         gatewayEnv,
       )
 
@@ -1533,7 +1533,7 @@ serve(async (req) => {
 
     // Determine if this query needs tool calls (data queries)
     // With grounding, we don't need tools — data is already in context
-    const needsTools = false  // grounding replaces tool calling
+    const needsTools = true  // tools provide structured analysis beyond raw grounding data
 
     // Predict best provider (Patent-Pending Predictive Selection)
     const prediction = message ? predictBestProvider(message, needsTools) : null

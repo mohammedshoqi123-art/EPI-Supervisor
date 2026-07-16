@@ -360,27 +360,63 @@ class SmartAlertsEngine {
     final coverage = data['coverage'] as Map<String, dynamic>? ?? {};
     final penta3Rate = coverage['penta3_rate'] as double? ?? 0;
     final mr1Rate = coverage['mr1_rate'] as double? ?? 0;
+    final penta1Rate = coverage['penta1_rate'] as double? ?? 0;
 
-    if (penta3Rate > 0 && penta3Rate < 80) {
+    // Dynamic thresholds based on WHO/UNICEF standards
+    // Critical: < 70%, High: < 80%, Medium: < 90%, Target: >= 95%
+    if (penta3Rate > 0 && penta3Rate < 70) {
+      alerts.add(SmartAlert(
+        type: 'low_coverage',
+        title: 'تغطية Penta3 حرجة',
+        message:
+            'نسبة تغطية Penta3 هي ${penta3Rate.toStringAsFixed(1)}% — حرجة! (المستهدف 95%)',
+        severity: AlertSeverity.critical,
+        action: 'تدخل عاجل: حملات استجابة + فرق متنقلة + تتبع المتسربين.',
+      ));
+    } else if (penta3Rate > 0 && penta3Rate < 85) {
       alerts.add(SmartAlert(
         type: 'low_coverage',
         title: 'تغطية Penta3 منخفضة',
         message:
-            'نسبة تغطية Penta3 هي ${penta3Rate.toStringAsFixed(1)}% (أقل من المستهدف 90%)',
+            'نسبة تغطية Penta3 هي ${penta3Rate.toStringAsFixed(1)}% (أقل من المستهدف 95%)',
         severity: AlertSeverity.high,
         action: 'حدد المناطق ذات التغطية المنخفضة ونفذ تدخلات مستهدفة.',
       ));
     }
 
-    if (mr1Rate > 0 && mr1Rate < 85) {
+    if (mr1Rate > 0 && mr1Rate < 80) {
+      alerts.add(SmartAlert(
+        type: 'outbreak_risk',
+        title: 'خطر تفشي الحصبة',
+        message:
+            'تغطية MR1 ${mr1Rate.toStringAsFixed(1)}% — خطر تفشي مرتفع! المناعة الجماعية تحتاج 95%.',
+        severity: AlertSeverity.critical,
+        action: 'نفذ حملة تطعيم طارئة ضد الحصبة. ركز على المناطق ذات التغطية الأقل.',
+      ));
+    } else if (mr1Rate > 0 && mr1Rate < 90) {
       alerts.add(SmartAlert(
         type: 'low_coverage',
         title: 'تغطية الحصبة منخفضة',
         message:
-            'نسبة تغطية MR1 هي ${mr1Rate.toStringAsFixed(1)}% — خطر تفشي الحصبة',
+            'نسبة تغطية MR1 هي ${mr1Rate.toStringAsFixed(1)}% — تحتاج تحسين.',
         severity: AlertSeverity.high,
         action: 'عزز حملات التطعيم ضد الحصبة في المناطق المتأثرة.',
       ));
+    }
+
+    // Dropout detection (Penta1 → Penta3)
+    if (penta1Rate > 0 && penta3Rate > 0) {
+      final dropout = penta1Rate - penta3Rate;
+      if (dropout > 15) {
+        alerts.add(SmartAlert(
+          type: 'high_dropout',
+          title: 'فجوة كبيرة بين Penta1 و Penta3',
+            message:
+              'الفرق ${dropout.toStringAsFixed(1)}% بين Penta1 (${penta1Rate.toStringAsFixed(0)}%) و Penta3 (${penta3Rate.toStringAsFixed(0)}%) — تسرب مرتفع!',
+          severity: AlertSeverity.high,
+          action: 'حدد أسباب التسرب: بعد الجرعة الأولى؟ نقل؟ رفض؟ وتتبع المتسربين.',
+        ));
+      }
     }
   }
 
@@ -559,18 +595,57 @@ class SmartAlertsEngine {
       List<SmartAlert> alerts, Map<String, dynamic> data) {
     final recommendations = <String>[];
 
+    // Alert-based recommendations
     for (final alert in alerts) {
       if (alert.action != null) {
         recommendations.add(alert.action!);
       }
     }
 
-    // Add general recommendations
+    // Context-aware recommendations based on data patterns
     final subs = data['submissions'] as Map<String, dynamic>? ?? {};
     final today = subs['today'] as int? ?? 0;
+    final total = subs['total'] as int? ?? 0;
+    final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
+    final draft = byStatus['draft'] as int? ?? 0;
+    final submitted = byStatus['submitted'] as int? ?? 0;
+    final rejected = byStatus['rejected'] as int? ?? 0;
+
+    // Submission velocity recommendations
     if (today == 0) {
-      recommendations
-          .add('لا توجد إرساليات اليوم — تحقق من حالة الفرق الميدانية.');
+      recommendations.add('لا توجد إرساليات اليوم — تحقق من حالة الفرق الميدانية وحفزهم.');
+    } else if (today > 0 && today < 5) {
+      recommendations.add('الإرساليات قليلة اليوم ($today) — شجع الفرق على زيادة الإدخال.');
+    }
+
+    // Draft backlog
+    if (draft > 10) {
+      recommendations.add('هناك $draft مسودة لم تُرسل بعد — تذكير المشرفين بإرسالها.');
+    }
+
+    // Rejection rate
+    if (total > 0 && rejected > 0) {
+      final rejectRate = (rejected / total * 100);
+      if (rejectRate > 10) {
+        recommendations.add('نسبة الرفض مرتفعة (${rejectRate.toStringAsFixed(0)}%) — تدريب المدخلين على جودة البيانات.');
+      }
+    }
+
+    // Pending review
+    if (submitted > 20) {
+      recommendations.add('$submitted إرسالية بانتظار المراجعة — سرّع عملية الاعتماد.');
+    }
+
+    // Governorate coverage
+    final govData = data['governorates'] as List? ?? [];
+    if (govData.isNotEmpty) {
+      final inactiveGovs = govData.where((g) {
+        final count = (g as Map<String, dynamic>)['submissions_count'] as int? ?? 0;
+        return count == 0;
+      }).length;
+      if (inactiveGovs > 0) {
+        recommendations.add('$inactiveGovs محافظة بدون إرساليات — تحقق من الفرق الميدانية هناك.');
+      }
     }
 
     return recommendations.toSet().toList(); // Remove duplicates

@@ -2582,17 +2582,32 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
       return _buildAlertsContent(cs, {});
     }
 
-    try {
-      final analyticsAsync =
-          ref.watch(dashboardAnalyticsProvider(const AnalyticsFilter()));
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _fetchFreshAlertData(),
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? {};
+        return _buildAlertsContent(cs, data);
+      },
+    );
+  }
 
-      return analyticsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => _buildAlertsContent(cs, {}),
-        data: (analytics) => _buildAlertsContent(cs, analytics),
-      );
+  /// Fetch fresh alert data from Edge Function (not cached)
+  Future<Map<String, dynamic>> _fetchFreshAlertData() async {
+    try {
+      final api = ref.read(apiClientProvider);
+      final resp = await api.callFunction('ai-chat-v3', {
+        'mode': 'health',
+      }).timeout(const Duration(seconds: 10));
+      return resp['health'] as Map<String, dynamic>? ?? {};
     } catch (_) {
-      return _buildAlertsContent(cs, {});
+      // Fallback to cached analytics
+      try {
+        final cache = await ref.read(
+            dashboardAnalyticsProvider(const AnalyticsFilter()).future);
+        return cache;
+      } catch (_) {
+        return {};
+      }
     }
   }
 
@@ -2607,7 +2622,11 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
     final supervisionPriorities =
         SmartAlertsEngine.getSupervisionPriorities(data);
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() {}); // triggers rebuild + fresh fetch
+      },
+      child: SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -2749,6 +2768,7 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
           ],
         ],
       ),
+    ),
     );
   }
 

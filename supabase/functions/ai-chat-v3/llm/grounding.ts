@@ -416,7 +416,92 @@ function processSubmissionsData(
     })
   }
 
+  // ═══ Source 5: Pre-computed Analytics (Smart Analysis) ═══
+  const analytics = computePreAnalysis(filteredData, byGovernorate, byDay, byStatus)
+  if (analytics) {
+    sources.push({
+      id: 11,
+      type: 'aggregate',
+      table: 'form_submissions',
+      summary: analytics.summary,
+      quote: analytics.quote,
+      metadata: { analysis_type: 'pre_computed' },
+    })
+  }
+
   return sources
+}
+
+// ═══ Pre-Analysis Engine — تحليل مسبق ذكي ═══
+function computePreAnalysis(
+  data: any[],
+  byGovernorate: Record<string, number>,
+  byDay: Record<string, number>,
+  byStatus: Record<string, number>,
+): { summary: string; quote: string } | null {
+  if (!data || data.length < 2) return null
+
+  const parts: string[] = []
+
+  // 1. Trend analysis (last 7 days vs previous 7 days)
+  const sortedDays = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b))
+  if (sortedDays.length >= 4) {
+    const mid = Math.floor(sortedDays.length / 2)
+    const firstHalf = sortedDays.slice(0, mid).reduce((s, [_, c]) => s + c, 0)
+    const secondHalf = sortedDays.slice(mid).reduce((s, [_, c]) => s + c, 0)
+    const trendPct = firstHalf > 0 ? Math.round(((secondHalf - firstHalf) / firstHalf) * 100) : 0
+    const trendEmoji = trendPct > 10 ? '📈' : trendPct < -10 ? '📉' : '➡️'
+    parts.push(`${trendEmoji} الاتجاه: ${trendPct > 0 ? '+' : ''}${trendPct}% (${firstHalf} → ${secondHalf})`)
+  }
+
+  // 2. Top/Bottom governorates
+  const sortedGovs = Object.entries(byGovernorate).sort((a, b) => b[1] - a[1])
+  if (sortedGovs.length >= 3) {
+    const top3 = sortedGovs.slice(0, 3).map(([g, c]) => `${g}(${c})`).join(', ')
+    const bottom3 = sortedGovs.slice(-3).map(([g, c]) => `${g}(${c})`).join(', ')
+    parts.push(`🏆 أفضل 3: ${top3}`)
+    parts.push(`⚠️ أضعف 3: ${bottom3}`)
+  }
+
+  // 3. Approval rate
+  const total = data.length
+  const approved = byStatus.approved || 0
+  const submitted = byStatus.submitted || 0
+  const rejected = byStatus.rejected || 0
+  const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0
+  const rejectRate = total > 0 ? Math.round((rejected / total) * 100) : 0
+  parts.push(`✅ نسبة الاعتماد: ${approvalRate}% | ❌ نسبة الرفض: ${rejectRate}%`)
+
+  // 4. GPS coverage
+  const withGps = data.filter(r => r.gps_lat).length
+  const gpsRate = total > 0 ? Math.round((withGps / total) * 100) : 0
+  parts.push(`📍 تغطية GPS: ${gpsRate}% (${withGps}/${total})`)
+
+  // 5. Offline vs Online
+  const offlineCount = data.filter(r => r.is_offline).length
+  const onlineCount = total - offlineCount
+  parts.push(`📴 أوفلاين: ${offlineCount} | 🌐 أونلاين: ${onlineCount}`)
+
+  // 6. Submission velocity (avg per day)
+  const dayCount = Object.keys(byDay).length
+  const avgPerDay = dayCount > 0 ? Math.round(total / dayCount) : 0
+  parts.push(`📊 المتوسط اليومي: ${avgPerDay} إرسالية/يوم`)
+
+  // 7. Anomaly detection (governorates with unusually high/low activity)
+  if (sortedGovs.length >= 5) {
+    const counts = sortedGovs.map(([_, c]) => c)
+    const avg = counts.reduce((s, c) => s + c, 0) / counts.length
+    const stdDev = Math.sqrt(counts.reduce((s, c) => s + Math.pow(c - avg, 2), 0) / counts.length)
+    const outliers = sortedGovs.filter(([_, c]) => Math.abs(c - avg) > 2 * stdDev)
+    if (outliers.length > 0) {
+      parts.push(`🔍 شذوذ: ${outliers.map(([g, c]) => `${g}(${c})`).join(', ')} — انحراف كبير عن المعدل (${Math.round(avg)})`)
+    }
+  }
+
+  return {
+    summary: `تحليل مسبق: ${parts.length} مؤشر`,
+    quote: parts.join('\n'),
+  }
 }
 
 // ═══ Form Data Analyzer — تحليل محتوى الاستمارة JSONB ═══

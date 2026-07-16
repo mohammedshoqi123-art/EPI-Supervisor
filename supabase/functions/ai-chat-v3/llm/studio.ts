@@ -575,7 +575,7 @@ export async function generateStudioArtifact(
       roleContext += '- ركز على الإرشادات العملية والخطوات الواضحة\n'
       roleContext += '- استخدم لغة بسيطة ومباشرة\n'
     }
-    if (gov) roleContext += `- ركز على بيانات محافظة ${gov} عند توفرها\n'
+    if (gov) roleContext += `- ركز على بيانات محافظة ${gov} عند توفرها\n`
     messages[0].content = (messages[0].content || '') + roleContext
   }
 

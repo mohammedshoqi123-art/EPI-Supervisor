@@ -45,6 +45,12 @@ class FcmNotificationService {
     _messageController.add(data);
   }
 
+  /// Request notification permissions
+  static Future<bool> requestPermissions() async {
+    debugPrint('[FCM] Permission request (stub — always true)');
+    return true;
+  }
+
   /// Subscribe to a topic
   static Future<void> subscribeToTopic(String topic) async {
     debugPrint('[FCM] Subscribe to topic: $topic (implement in mobile app)');

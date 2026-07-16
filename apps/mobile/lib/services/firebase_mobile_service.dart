@@ -1,83 +1,37 @@
 import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:epi_core/epi_core.dart';
 
 /// ═══════════════════════════════════════════════════════════════
 ///  Firebase Initialization for Mobile App
 ///
-///  Call from main.dart before runApp():
-///    await FirebaseMobileService.init();
+///  This is a STUB that initializes FcmNotificationService without
+///  requiring Firebase packages at compile time.
+///
+///  To enable real Firebase push notifications:
+///  1. Add firebase_core + firebase_messaging to pubspec.yaml
+///  2. Add google-services.json (Android) / GoogleService-Info.plist (iOS)
+///  3. Replace this file with the full Firebase implementation
 /// ═══════════════════════════════════════════════════════════════
-
-/// Background message handler — MUST be top-level
-@pragma('vm:entry-point')
-Future<void> firebaseBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  debugPrint('[Firebase] Background message: ${message.notification?.title}');
-}
 
 class FirebaseMobileService {
   static bool _initialized = false;
 
-  /// Initialize Firebase + FCM + register token
+  /// Initialize — currently a stub, extend with real Firebase when ready
   static Future<void> init() async {
     if (_initialized) return;
 
     try {
-      // Initialize Firebase
-      await Firebase.initializeApp();
-
-      // Register background handler
-      FirebaseMessaging.onBackgroundMessage(firebaseBackgroundHandler);
-
-      // Request permission
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-      );
-
-      debugPrint('[Firebase] Permission: ${settings.authorizationStatus}');
-
-      // Get FCM token
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) {
-        debugPrint('[Firebase] Token: ${token.substring(0, 20)}...');
-        // Register with core service
-        await FcmNotificationService.init(token: token);
-        // TODO: Register token with Supabase (call register_device_token RPC)
-      }
-
-      // Token refresh
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-        FcmNotificationService.updateToken(newToken);
-        // TODO: Update token on server
-      });
-
-      // Foreground messages
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('[Firebase] Foreground: ${message.notification?.title}');
-        FcmNotificationService.handleMessage({
-          'title': message.notification?.title ?? '',
-          'body': message.notification?.body ?? '',
-          'data': message.data,
-        });
-      });
-
-      // App opened from notification
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        debugPrint('[Firebase] Opened from notification: ${message.data}');
-        // TODO: Navigate based on message data
-      });
+      // Initialize the core FCM service (without Firebase — just logging)
+      await FcmNotificationService.init();
 
       _initialized = true;
-      debugPrint('[Firebase] ✅ Initialized');
+      debugPrint('[Firebase] ✅ Service initialized (stub mode)');
+      debugPrint('[Firebase] To enable real push notifications:');
+      debugPrint('[Firebase] 1. Add firebase_core + firebase_messaging to pubspec.yaml');
+      debugPrint('[Firebase] 2. Configure google-services.json / GoogleService-Info.plist');
+      debugPrint('[Firebase] 3. Replace this stub with full implementation');
     } catch (e) {
       debugPrint('[Firebase] ❌ Init failed: $e');
-      // App should work without Firebase
-      await FcmNotificationService.init();
     }
   }
 }

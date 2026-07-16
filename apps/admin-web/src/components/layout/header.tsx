@@ -9,11 +9,13 @@ import { useCampaign } from '@/lib/campaign-context'
 interface HeaderProps {
   title: string
   subtitle?: string
+  description?: string
+  actions?: React.ReactNode
   onRefresh?: () => void
   onSearch?: (query: string) => void
 }
 
-export function Header({ title, subtitle, onRefresh, onSearch }: HeaderProps) {
+export function Header({ title, subtitle, description, actions, onRefresh, onSearch }: HeaderProps) {
   const navigate = useNavigate()
   const [time, setTime] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
@@ -76,10 +78,11 @@ export function Header({ title, subtitle, onRefresh, onSearch }: HeaderProps) {
             </div>
           )}
         </div>
-        {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
+        {(subtitle || description) && <p className="text-sm text-muted-foreground mt-0.5">{subtitle || description}</p>}
       </div>
 
       <div className="flex items-center gap-3">
+        {actions && <div className="flex items-center gap-2">{actions}</div>}
         {/* Clock */}
         <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-xs text-muted-foreground">
           <Clock className="w-3.5 h-3.5" />

@@ -287,7 +287,7 @@ function ChatArea({ channel, onEdit }: { channel: ChatChannel; onEdit: () => voi
   const [searchQuery, setSearchQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const { data: messages, isLoading } = useChannelMessages(channel.code)
   const sendMessage = useSendMessage()

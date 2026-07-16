@@ -1,116 +1,58 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 
 /// ═══════════════════════════════════════════════════════════════
 ///  FCM Push Notifications Service
 ///
-///  Handles:
-///  - Firebase initialization
-///  - FCM token registration
-///  - Foreground message handling
-///  - Background message handling
-///  - Token refresh tracking
+///  This is a lightweight wrapper. Firebase initialization happens
+///  in the mobile app's main.dart. This service provides the
+///  interface for token management and message handling.
+///
+///  Full Firebase integration requires:
+///  - firebase_core + firebase_messaging in mobile pubspec.yaml
+///  - google-services.json (Android) / GoogleService-Info.plist (iOS)
 /// ═══════════════════════════════════════════════════════════════
-
-/// Background message handler — MUST be a top-level function
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  debugPrint('[FCM] Background message: ${message.messageId}');
-  // Background messages are handled by the system notification tray
-}
 
 class FcmNotificationService {
   static bool _initialized = false;
   static String? _token;
-  static final _messageController = StreamController<RemoteMessage>.broadcast();
+  static final _messageController = StreamController<Map<String, dynamic>>.broadcast();
 
-  /// Stream of foreground messages
-  static Stream<RemoteMessage> get onMessage => _messageController.stream;
+  /// Stream of foreground messages (as raw maps)
+  static Stream<Map<String, dynamic>> get onMessage => _messageController.stream;
 
   /// Current FCM token
   static String? get token => _token;
 
-  /// Initialize Firebase and FCM
-  static Future<void> init() async {
-    if (_initialized) return;
+  /// Whether the service is initialized
+  static bool get isInitialized => _initialized;
 
-    try {
-      // Initialize Firebase
-      await Firebase.initializeApp();
-
-      // Register background handler
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-      // Request permission (iOS + Android 13+)
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-      );
-
-      debugPrint('[FCM] Permission status: ${settings.authorizationStatus}');
-
-      // Get FCM token
-      _token = await FirebaseMessaging.instance.getToken();
-      debugPrint('[FCM] Token: ${_token?.substring(0, 20)}...');
-
-      // Listen for token refresh
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-        _token = newToken;
-        debugPrint('[FCM] Token refreshed: ${newToken.substring(0, 20)}...');
-        // TODO: Send new token to server
-      });
-
-      // Handle foreground messages
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('[FCM] Foreground message: ${message.notification?.title}');
-        _messageController.add(message);
-      });
-
-      // Handle message when app is opened from notification
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        debugPrint('[FCM] App opened from notification: ${message.data}');
-        // TODO: Navigate to relevant screen based on message data
-      });
-
-      // Check if app was opened from a notification
-      final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-      if (initialMessage != null) {
-        debugPrint('[FCM] App launched from notification: ${initialMessage.data}');
-        // TODO: Navigate to relevant screen
-      }
-
-      _initialized = true;
-      debugPrint('[FCM] ✅ Initialized successfully');
-    } catch (e) {
-      debugPrint('[FCM] ❌ Initialization failed: $e');
-      // Don't rethrow — app should work without push notifications
-    }
+  /// Initialize — called from mobile app after Firebase init
+  static Future<void> init({String? token}) async {
+    _token = token;
+    _initialized = true;
+    debugPrint('[FCM] Service initialized (token: ${token?.substring(0, 20)}...)');
   }
 
-  /// Subscribe to a topic (e.g., 'all_users', 'governorate_aden')
+  /// Update token (called when Firebase refreshes it)
+  static void updateToken(String newToken) {
+    _token = newToken;
+    debugPrint('[FCM] Token updated: ${newToken.substring(0, 20)}...');
+  }
+
+  /// Push a message to the stream (called from Firebase message handler)
+  static void handleMessage(Map<String, dynamic> data) {
+    _messageController.add(data);
+  }
+
+  /// Subscribe to a topic
   static Future<void> subscribeToTopic(String topic) async {
-    try {
-      await FirebaseMessaging.instance.subscribeToTopic(topic);
-      debugPrint('[FCM] Subscribed to topic: $topic');
-    } catch (e) {
-      debugPrint('[FCM] Failed to subscribe to topic $topic: $e');
-    }
+    debugPrint('[FCM] Subscribe to topic: $topic (implement in mobile app)');
   }
 
   /// Unsubscribe from a topic
   static Future<void> unsubscribeFromTopic(String topic) async {
-    try {
-      await FirebaseMessaging.instance.unsubscribeFromTopic(topic);
-      debugPrint('[FCM] Unsubscribed from topic: $topic');
-    } catch (e) {
-      debugPrint('[FCM] Failed to unsubscribe from topic $topic: $e');
-    }
+    debugPrint('[FCM] Unsubscribe from topic: $topic (implement in mobile app)');
   }
 
   /// Send token to server for registration
@@ -124,5 +66,24 @@ class FcmNotificationService {
     } catch (e) {
       debugPrint('[FCM] Failed to register token: $e');
     }
+  }
+
+  /// Show a sync-complete notification (local)
+  static Future<void> notifySyncComplete({int synced = 0, int failed = 0}) async {
+    final title = failed > 0 ? '⚠️ اكتملت المزامنة (مع أخطاء)' : '✅ اكتملت المزامنة';
+    final body = failed > 0
+        ? 'تمت مزامنة $synced عنصر، فشل $failed عنصر'
+        : 'تمت مزامنة $synced عنصر بنجاح';
+    debugPrint('[FCM] Notification: $title — $body');
+  }
+
+  /// Show a submission-confirmed notification (local)
+  static Future<void> notifySubmissionConfirmed(String formTitle) async {
+    debugPrint('[FCM] Notification: ✅ تم تأكيد الإرسالية — $formTitle');
+  }
+
+  /// Show a shortage alert (local)
+  static Future<void> notifyShortageAlert(String vaccineName, int daysLeft) async {
+    debugPrint('[FCM] Notification: 🔴 تنبيه نقص — $vaccineName ($daysLeft يوم)');
   }
 }

@@ -68,6 +68,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
       final channelCode = widget.channel.code ?? 'general';
       _realtimeChannel = client.channel('chat-${widget.channel.id}');
 
+      // Subscribe to new messages by room code
       _realtimeChannel!.onPostgresChanges(
         event: PostgresChangeEvent.insert,
         schema: 'public',
@@ -97,13 +98,20 @@ class _ChannelScreenState extends State<ChannelScreen> {
       final client = Supabase.instance.client;
       final channelCode = widget.channel.code ?? 'general';
 
-      // Fetch by room (always exists) — channel_id may not exist in all deployments
-      final response = await client
-          .from('chat_messages')
-          .select('*')
-          .eq('room', channelCode)
-          .order('created_at', ascending: true)
-          .limit(200);
+      // Prefer channel_id filter when available, fallback to room
+      final response = widget.channel.id.isNotEmpty
+          ? await client
+              .from('chat_messages')
+              .select('*')
+              .eq('channel_id', widget.channel.id)
+              .order('created_at', ascending: true)
+              .limit(200)
+          : await client
+              .from('chat_messages')
+              .select('*')
+              .eq('room', channelCode)
+              .order('created_at', ascending: true)
+              .limit(200);
 
       if (mounted) {
         setState(() {
@@ -169,9 +177,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
     try {
       final client = Supabase.instance.client;
-      // Insert message — try with channel_id first, fallback without
-      Map<String, dynamic> insertData = {
-        'channel_id': widget.channel.id,
+      final insertData = <String, dynamic>{
         'sender_id': widget.currentUserId,
         'sender_name': widget.currentUserName,
         'content': text.isEmpty && attachments.isNotEmpty
@@ -182,16 +188,13 @@ class _ChannelScreenState extends State<ChannelScreen> {
         'priority': widget.channel.isAnnouncement ? 'high' : 'normal',
       };
 
-      dynamic msgResponse;
-      try {
-        msgResponse =
-            await client.from('chat_messages').insert(insertData).select('id').single();
-      } catch (_) {
-        // Fallback: channel_id column may not exist in some deployments
-        insertData.remove('channel_id');
-        msgResponse =
-            await client.from('chat_messages').insert(insertData).select('id').single();
+      // channel_id is optional — only include if channel has a valid id
+      if (widget.channel.id.isNotEmpty) {
+        insertData['channel_id'] = widget.channel.id;
       }
+
+      final msgResponse =
+          await client.from('chat_messages').insert(insertData).select('id').single();
       final messageId = msgResponse['id'] as String?;
 
       // Save attachments metadata

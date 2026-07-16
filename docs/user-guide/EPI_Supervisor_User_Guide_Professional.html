@@ -1,0 +1,1998 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPI Supervisor — دليل المستخدم الرسمي</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Cairo:wght@400;600;700;800;900&display=swap');
+
+        :root {
+            --primary: #00897B;
+            --primary-dark: #00695C;
+            --primary-light: #B2DFDB;
+            --accent: #00BCD4;
+            --accent-dark: #0097A7;
+            --success: #4CAF50;
+            --warning: #FF9800;
+            --danger: #F44336;
+            --info: #2196F3;
+            --dark: #1A2332;
+            --gray-900: #111827;
+            --gray-800: #1F2937;
+            --gray-700: #374151;
+            --gray-600: #4B5563;
+            --gray-500: #6B7280;
+            --gray-400: #9CA3AF;
+            --gray-300: #D1D5DB;
+            --gray-200: #E5E7EB;
+            --gray-100: #F3F4F6;
+            --gray-50: #F9FAFB;
+            --white: #FFFFFF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        body {
+            font-family: 'Tajawal', 'Segoe UI', sans-serif;
+            font-size: 11pt;
+            line-height: 1.8;
+            color: var(--gray-800);
+            background: var(--white);
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* ═══ COVER PAGE ═══ */
+        .cover {
+            width: 100%;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #004D40 0%, #00695C 30%, #00897B 60%, #009688 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            page-break-after: always;
+        }
+
+        .cover::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        .cover::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -30%;
+            width: 80%;
+            height: 80%;
+            background: radial-gradient(circle, rgba(0,188,212,0.15) 0%, transparent 70%);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        .cover-content {
+            position: relative;
+            z-index: 2;
+            padding: 40px;
+        }
+
+        .cover-logo {
+            width: 120px;
+            height: 120px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            font-size: 60px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.2);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+
+        .cover h1 {
+            font-family: 'Cairo', sans-serif;
+            font-size: 36pt;
+            font-weight: 900;
+            margin-bottom: 10px;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            letter-spacing: -1px;
+        }
+
+        .cover h2 {
+            font-size: 16pt;
+            font-weight: 400;
+            opacity: 0.9;
+            margin-bottom: 40px;
+            letter-spacing: 2px;
+        }
+
+        .cover-meta {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            margin-top: 40px;
+            flex-wrap: wrap;
+        }
+
+        .cover-meta-item {
+            background: rgba(255,255,255,0.1);
+            padding: 15px 25px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        .cover-meta-item .label {
+            font-size: 9pt;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .cover-meta-item .value {
+            font-size: 12pt;
+            font-weight: 700;
+        }
+
+        .cover-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 10pt;
+            margin-top: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* ═══ PAGE LAYOUT ═══ */
+        .page {
+            width: 100%;
+            min-height: 100vh;
+            padding: 60px 50px;
+            position: relative;
+            page-break-after: always;
+        }
+
+        .page::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 6px;
+            height: 100%;
+            background: linear-gradient(to bottom, var(--primary), var(--accent));
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--gray-200);
+        }
+
+        .page-header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .page-header-logo {
+            width: 35px;
+            height: 35px;
+            background: var(--primary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .page-header-title {
+            font-family: 'Cairo', sans-serif;
+            font-size: 10pt;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+
+        .page-header-section {
+            font-size: 9pt;
+            color: var(--gray-500);
+        }
+
+        .page-footer {
+            position: absolute;
+            bottom: 30px;
+            left: 50px;
+            right: 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 15px;
+            border-top: 1px solid var(--gray-200);
+            font-size: 8pt;
+            color: var(--gray-400);
+        }
+
+        /* ═══ TYPOGRAPHY ═══ */
+        h1.section-title {
+            font-family: 'Cairo', sans-serif;
+            font-size: 24pt;
+            font-weight: 900;
+            color: var(--primary-dark);
+            margin-bottom: 10px;
+            position: relative;
+            padding-right: 20px;
+        }
+
+        h1.section-title::before {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 5px;
+            bottom: 5px;
+            width: 6px;
+            background: linear-gradient(to bottom, var(--primary), var(--accent));
+            border-radius: 3px;
+        }
+
+        h1.section-title .number {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            width: 45px;
+            height: 45px;
+            line-height: 45px;
+            text-align: center;
+            border-radius: 12px;
+            font-size: 18pt;
+            margin-left: 15px;
+            vertical-align: middle;
+        }
+
+        h2 {
+            font-family: 'Cairo', sans-serif;
+            font-size: 15pt;
+            font-weight: 800;
+            color: var(--gray-900);
+            margin: 30px 0 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--primary-light);
+        }
+
+        h3 {
+            font-size: 12pt;
+            font-weight: 700;
+            color: var(--gray-800);
+            margin: 20px 0 10px;
+        }
+
+        p {
+            margin-bottom: 12px;
+            text-align: justify;
+            color: var(--gray-700);
+        }
+
+        /* ═══ TABLES ═══ */
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 20px 0;
+            font-size: 10pt;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        thead th {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            padding: 14px 16px;
+            text-align: right;
+            font-weight: 700;
+            font-size: 10pt;
+        }
+
+        tbody td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--gray-100);
+            vertical-align: top;
+        }
+
+        tbody tr:nth-child(even) {
+            background: var(--gray-50);
+        }
+
+        tbody tr:hover {
+            background: var(--primary-light);
+            background: rgba(0, 137, 123, 0.05);
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* ═══ CARDS ═══ */
+        .info-card {
+            background: linear-gradient(135deg, var(--gray-50), var(--white));
+            border: 1px solid var(--gray-200);
+            border-radius: 16px;
+            padding: 24px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--primary);
+            border-radius: 0 4px 4px 0;
+        }
+
+        .info-card.tip {
+            border-color: var(--success);
+            background: linear-gradient(135deg, #F0FDF4, #FFFFFF);
+        }
+
+        .info-card.tip::before {
+            background: var(--success);
+        }
+
+        .info-card.warning {
+            border-color: var(--warning);
+            background: linear-gradient(135deg, #FFFBEB, #FFFFFF);
+        }
+
+        .info-card.warning::before {
+            background: var(--warning);
+        }
+
+        .info-card.danger {
+            border-color: var(--danger);
+            background: linear-gradient(135deg, #FEF2F2, #FFFFFF);
+        }
+
+        .info-card.danger::before {
+            background: var(--danger);
+        }
+
+        .info-card .card-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .info-card .card-title {
+            font-family: 'Cairo', sans-serif;
+            font-weight: 800;
+            font-size: 11pt;
+            margin-bottom: 8px;
+            color: var(--gray-900);
+        }
+
+        .info-card .card-body {
+            font-size: 10pt;
+            color: var(--gray-600);
+            line-height: 1.7;
+        }
+
+        /* ═══ STEP CARDS ═══ */
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            background: var(--white);
+            border: 1px solid var(--gray-200);
+            border-radius: 14px;
+            padding: 18px;
+            transition: all 0.2s;
+        }
+
+        .step:hover {
+            border-color: var(--primary-light);
+            box-shadow: 0 4px 15px rgba(0,137,123,0.1);
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 14pt;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 4px;
+        }
+
+        .step-desc {
+            font-size: 10pt;
+            color: var(--gray-600);
+        }
+
+        /* ═══ FEATURE GRID ═══ */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .feature-item {
+            background: var(--white);
+            border: 1px solid var(--gray-200);
+            border-radius: 14px;
+            padding: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            background: linear-gradient(135deg, var(--primary-light), var(--white));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            border: 1px solid var(--primary-light);
+        }
+
+        .feature-title {
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 4px;
+            font-size: 10.5pt;
+        }
+
+        .feature-desc {
+            font-size: 9.5pt;
+            color: var(--gray-500);
+            line-height: 1.6;
+        }
+
+        /* ═══ STATUS BADGES ═══ */
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-size: 9pt;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #DCFCE7;
+            color: #166534;
+        }
+
+        .badge-warning {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+
+        .badge-danger {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+
+        .badge-info {
+            background: #DBEAFE;
+            color: #1E40AF;
+        }
+
+        .badge-purple {
+            background: #F3E8FF;
+            color: #6B21A8;
+        }
+
+        /* ═══ CODE BLOCKS ═══ */
+        pre {
+            background: var(--gray-900);
+            color: #E2E8F0;
+            padding: 20px;
+            border-radius: 14px;
+            font-family: 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 9.5pt;
+            line-height: 1.6;
+            margin: 16px 0;
+            overflow-x: auto;
+            direction: ltr;
+            text-align: left;
+        }
+
+        code {
+            background: var(--gray-100);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-family: 'Fira Code', monospace;
+            font-size: 9.5pt;
+            color: var(--primary-dark);
+        }
+
+        /* ═══ LISTS ═══ */
+        ul, ol {
+            padding-right: 25px;
+            margin: 12px 0;
+        }
+
+        li {
+            margin-bottom: 8px;
+            color: var(--gray-700);
+        }
+
+        li::marker {
+            color: var(--primary);
+        }
+
+        /* ═══ TOC ═══ */
+        .toc {
+            background: linear-gradient(135deg, var(--gray-50), var(--white));
+            border: 2px solid var(--gray-200);
+            border-radius: 20px;
+            padding: 35px;
+            margin: 30px 0;
+        }
+
+        .toc h2 {
+            margin-top: 0;
+            color: var(--primary-dark);
+            border-bottom: 3px solid var(--primary);
+            padding-bottom: 12px;
+        }
+
+        .toc-list {
+            list-style: none;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .toc-list li {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--white);
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+            margin: 0;
+            transition: all 0.2s;
+        }
+
+        .toc-list li:hover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+            background: rgba(0,137,123,0.05);
+        }
+
+        .toc-num {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            background: var(--primary);
+            color: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 11pt;
+        }
+
+        .toc-text {
+            font-weight: 600;
+            font-size: 10.5pt;
+            color: var(--gray-800);
+        }
+
+        /* ═══ ICON GRID ═══ */
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .icon-item {
+            text-align: center;
+            padding: 20px 12px;
+            background: var(--white);
+            border: 1px solid var(--gray-200);
+            border-radius: 14px;
+        }
+
+        .icon-item .icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .icon-item .label {
+            font-size: 9pt;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        /* ═══ COMPARISON ═══ */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .comparison-col {
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .comparison-col.before {
+            background: linear-gradient(135deg, #FEF2F2, #FFFFFF);
+            border: 2px solid #FECACA;
+        }
+
+        .comparison-col.after {
+            background: linear-gradient(135deg, #F0FDF4, #FFFFFF);
+            border: 2px solid #BBF7D0;
+        }
+
+        .comparison-col h3 {
+            margin-top: 0;
+        }
+
+        /* ═══ FLOW CHART ═══ */
+        .flow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .flow-step {
+            background: var(--white);
+            border: 2px solid var(--primary-light);
+            border-radius: 14px;
+            padding: 14px 24px;
+            text-align: center;
+            font-weight: 600;
+            min-width: 250px;
+        }
+
+        .flow-arrow {
+            font-size: 20px;
+            color: var(--primary);
+        }
+
+        /* ═══ PRINT ═══ */
+        @media print {
+            .cover {
+                min-height: 100vh;
+            }
+
+            .page {
+                min-height: auto;
+                page-break-inside: avoid;
+            }
+
+            .page-break {
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- COVER PAGE                                  -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="cover">
+    <div class="cover-content">
+        <div class="cover-logo">🏥</div>
+        <h1>EPI Supervisor</h1>
+        <h2>دليل المستخدم الرسمي</h2>
+        <p style="font-size: 13pt; opacity: 0.85; max-width: 600px; margin: 0 auto;">
+            نظام الإشراف الميداني المتكامل لحملات التطعيم الصحي الموسع
+        </p>
+        <div class="cover-meta">
+            <div class="cover-meta-item">
+                <div class="label">الإصدار</div>
+                <div class="value">3.13.2</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">التاريخ</div>
+                <div class="value">يوليو 2026</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">التصنيف</div>
+                <div class="value">سري — داخلي</div>
+            </div>
+        </div>
+        <div class="cover-badge">
+            🇾🇪 برنامج التحصين الصحي الموسع — الجمهورية اليمنية
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- TABLE OF CONTENTS                           -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">دليل المستخدم</div>
+    </div>
+
+    <h1 class="section-title">الفهرس</h1>
+
+    <div class="toc">
+        <h2>📋 محتويات الدليل</h2>
+        <ul class="toc-list">
+            <li>
+                <span class="toc-num">١</span>
+                <span class="toc-text">نظرة عامة على النظام</span>
+            </li>
+            <li>
+                <span class="toc-num">٢</span>
+                <span class="toc-text">التثبيت والتشغيل</span>
+            </li>
+            <li>
+                <span class="toc-num">٣</span>
+                <span class="toc-text">تسجيل الدخول</span>
+            </li>
+            <li>
+                <span class="toc-num">٤</span>
+                <span class="toc-text">لوحة التحكم</span>
+            </li>
+            <li>
+                <span class="toc-num">٥</span>
+                <span class="toc-text">النماذج والإدخال</span>
+            </li>
+            <li>
+                <span class="toc-num">٦</span>
+                <span class="toc-text">الأوفلاين والمزامنة</span>
+            </li>
+            <li>
+                <span class="toc-num">٧</span>
+                <span class="toc-text">مركز الاتصال</span>
+            </li>
+            <li>
+                <span class="toc-num">٨</span>
+                <span class="toc-text">المساعد الذكي</span>
+            </li>
+            <li>
+                <span class="toc-num">٩</span>
+                <span class="toc-text">الإشعارات</span>
+            </li>
+            <li>
+                <span class="toc-num">١٠</span>
+                <span class="toc-text">لوحة التحكم الويب</span>
+            </li>
+            <li>
+                <span class="toc-num">١١</span>
+                <span class="toc-text">الأدوار والصلاحيات</span>
+            </li>
+            <li>
+                <span class="toc-num">١٢</span>
+                <span class="toc-text">استكشاف الأخطاء</span>
+            </li>
+        </ul>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ٢</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 1: OVERVIEW                         -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">١. نظرة عامة</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">١</span> نظرة عامة على النظام</h1>
+
+    <h2>ما هي منصة مشرف EPI؟</h2>
+    <p>
+        منصة مشرف EPI هو نظام SaaS متكامل مصمم خصيصاً لإدارة والإشراف على حملات التطعيم الميدانية في اليمن.
+        يوفر النظام حلولاً شاملة لرقمنة عملية جمع البيانات، وتسريع تدفق المعلومات من الميدان إلى صناع القرار،
+        وتحسين دقة البيانات وجودتها من خلال تحليلات فورية متقدمة.
+    </p>
+
+    <div class="feature-grid">
+        <div class="feature-item">
+            <div class="feature-icon">📱</div>
+            <div>
+                <div class="feature-title">تطبيق موبايل</div>
+                <div class="feature-desc">يعمل بدون إنترنت — يحفظ البيانات محلياً ويُزامن تلقائياً</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">🌐</div>
+            <div>
+                <div class="feature-title">لوحة تحكم ويب</div>
+                <div class="feature-desc">إدارة شاملة مع رسوم بيانية وخرائط تفاعلية</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">🤖</div>
+            <div>
+                <div class="feature-title">مساعد ذكي</div>
+                <div class="feature-desc">يحلل بيانات النظام ويعطي توصيات مبنية على AI</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">📡</div>
+            <div>
+                <div class="feature-title">مزامنة فورية</div>
+                <div class="feature-desc">Realtime updates مع حماية البيانات الأوفلاين</div>
+            </div>
+        </div>
+    </div>
+
+    <h2>بنية النظام</h2>
+    <pre>
+┌─────────────────────────────────────────────────────────┐
+│                     EPI Supervisor                       │
+├─────────────────────┬───────────────────────────────────┤
+│   📱 Mobile App     │      🌐 Web Dashboard             │
+│   (Flutter 3.27)    │      (React + Vite)               │
+│                     │                                    │
+│   • Android 8+      │      • لوحة تحكم                  │
+│   • iOS 14+         │      • إدارة المستخدمين           │
+│   • Offline-First   │      • تقارير وتصدير              │
+├─────────────────────┴───────────────────────────────────┤
+│                   ☁️ Supabase Backend                    │
+│  ┌───────────┐ ┌──────────────┐ ┌────────────────────┐ │
+│  │ PostgreSQL│ │ Edge         │ │ Storage            │ │
+│  │ + PostGIS │ │ Functions    │ │ (صور + ملفات)      │ │
+│  │ + RLS     │ │ (Deno/TS)    │ │ (10MB max)         │ │
+│  └───────────┘ └──────────────┘ └────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+    </pre>
+
+    <h2>الأجهزة المدعومة</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>المنصة</th>
+                <th>الإصدار المطلوب</th>
+                <th>الحالة</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Android</strong></td>
+                <td>8.0 (API 26) أو أعلى</td>
+                <td><span class="badge badge-success">مدعوم بالكامل</span></td>
+            </tr>
+            <tr>
+                <td><strong>iOS</strong></td>
+                <td>14.0 أو أعلى</td>
+                <td><span class="badge badge-success">مدعوم بالكامل</span></td>
+            </tr>
+            <tr>
+                <td><strong>الويب</strong></td>
+                <td>Chrome 90+, Firefox 88+, Safari 14+</td>
+                <td><span class="badge badge-success">مدعوم بالكامل</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ٣</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 2: INSTALLATION                     -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">٢. التثبيت والتشغيل</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">٢</span> التثبيت والتشغيل</h1>
+
+    <h2>تثبيت Android (APK)</h2>
+    <div class="steps">
+        <div class="step">
+            <div class="step-number">١</div>
+            <div class="step-content">
+                <div class="step-title">تحميل الملف</div>
+                <div class="step-desc">افتح المتصفح على هاتفك وانتقل لرابط التحميل المقدم من الإدارة</div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">٢</div>
+            <div class="step-content">
+                <div class="step-title">تفعيل المصادر غير المعروفة</div>
+                <div class="step-desc">الإعدادات ← الأمان ← مصادر غير معروفة ← تفعيل</div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">٣</div>
+            <div class="step-content">
+                <div class="step-title">تثبيت التطبيق</div>
+                <div class="step-desc">اضغط على ملف APK المحمّل ← تثبيت ← فتح</div>
+            </div>
+        </div>
+    </div>
+
+    <h2>تثبيت iOS</h2>
+    <div class="steps">
+        <div class="step">
+            <div class="step-number">١</div>
+            <div class="step-content">
+                <div class="step-title">البحث في App Store</div>
+                <div class="step-desc">ابحث عن "مشرف EPI" في App Store</div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">٢</div>
+            <div class="step-content">
+                <div class="step-title">تحميل وتثبيت</div>
+                <div class="step-desc">اضغط "تحميل" ← انتظر اكتمال التحميل ← افتح التطبيق</div>
+            </div>
+        </div>
+    </div>
+
+    <h2>لوحة التحكم الويب</h2>
+    <div class="info-card">
+        <div class="card-icon">🌐</div>
+        <div class="card-title">الوصول المباشر</div>
+        <div class="card-body">
+            افتح المتصفح وانتقل إلى:<br>
+            <code>https://mohammedshoqi123-art.github.io/EPI-Supervisor/</code><br>
+            سجّل دخول ببياناتك المقدمة من الإدارة.
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ٤</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 3: LOGIN                            -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">٣. تسجيل الدخول</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">٣</span> تسجيل الدخول والدخول الأول</h1>
+
+    <h2>خطوات تسجيل الدخول</h2>
+    <div class="steps">
+        <div class="step">
+            <div class="step-number">١</div>
+            <div class="step-content">
+                <div class="step-title">فتح التطبيق</div>
+                <div class="step-desc">اضغط على أيقونة "مشرف EPI" على هاتفك</div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">٢</div>
+            <div class="step-content">
+                <div class="step-title">إدخال البيانات</div>
+                <div class="step-desc">أدخل البريد الإلكتروني وكلمة المرور المقدمة من الإدارة</div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">٣</div>
+            <div class="step-content">
+                <div class="step-title">تسجيل الدخول</div>
+                <div class="step-desc">اضغط "تسجيل الدخول" وانتظر تحميل البيانات</div>
+            </div>
+        </div>
+    </div>
+
+    <h2>الإعداد الأول</h2>
+    <p>عند الدخول لأول مرة، سيطلب منك النظام تفعيل بعض الصلاحيات:</p>
+
+    <div class="feature-grid">
+        <div class="feature-item">
+            <div class="feature-icon">📍</div>
+            <div>
+                <div class="feature-title">تفعيل الموقع (GPS)</div>
+                <div class="feature-desc">ضروري لتسجيل إحداثيات الإرساليات الميدانية</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">🔔</div>
+            <div>
+                <div class="feature-title">السماح بالإشعارات</div>
+                <div class="feature-desc">لتلقي التنبيهات والتحديثات المهمة</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-card warning">
+        <div class="card-icon">⚠️</div>
+        <div class="card-title">مهم</div>
+        <div class="card-body">
+            تأكد من تفعيل الإنترنت في المرة الأولى لتحميل النماذج والبيانات الأساسية.
+            بعد التحميل الأول، سيعمل التطبيق بدون إنترنت.
+        </div>
+    </div>
+
+    <div class="info-card tip">
+        <div class="card-icon">💡</div>
+        <div class="card-title">نسيت كلمة المرور؟</div>
+        <div class="card-body">
+            اضغط "نسيت كلمة المرور" في شاشة الدخول واتبع التعليمات المرسلة لبريدك الإلكتروني.
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ٥</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 4: DASHBOARD                        -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">٤. لوحة التحكم</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">٤</span> لوحة التحكم الرئيسية</h1>
+
+    <h2>مؤشرات الأداء الرئيسية (KPIs)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>المؤشر</th>
+                <th>الوصف</th>
+                <th>اللون</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>إرساليات اليوم</strong></td>
+                <td>عدد الإرساليات المرسلة اليوم</td>
+                <td><span class="badge badge-info">أزرق</span></td>
+            </tr>
+            <tr>
+                <td><strong>إرساليات الأسبوع</strong></td>
+                <td>مجموع إرساليات الأسبوع الحالي</td>
+                <td><span class="badge badge-success">أخضر</span></td>
+            </tr>
+            <tr>
+                <td><strong>النواقص الحرجة</strong></td>
+                <td>عدد النواقص ذات severity "حرج"</td>
+                <td><span class="badge badge-danger">أحمر</span></td>
+            </tr>
+            <tr>
+                <td><strong>المحافظات النشطة</strong></td>
+                <td>عدد المحافظات التي أرسلت بيانات</td>
+                <td><span class="badge badge-purple">بنفسجي</span></td>
+            </tr>
+            <tr>
+                <td><strong>نسبة التغطية</strong></td>
+                <td>نسبة التغطية الحالية للقاحات</td>
+                <td><span class="badge badge-warning">أصفر</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>شريط حالة المزامنة</h2>
+    <div class="icon-grid">
+        <div class="icon-item">
+            <div class="icon">🟢</div>
+            <div class="label">متصل — كل شي مزامن</div>
+        </div>
+        <div class="icon-item">
+            <div class="icon">🟡</div>
+            <div class="label">عناصر في الانتظار</div>
+        </div>
+        <div class="icon-item">
+            <div class="icon">🔵</div>
+            <div class="label">جاري المزامنة</div>
+        </div>
+        <div class="icon-item">
+            <div class="icon">🔴</div>
+            <div class="label">غير متصل</div>
+        </div>
+    </div>
+
+    <h2>السحب للتحديث</h2>
+    <div class="info-card tip">
+        <div class="card-icon">💡</div>
+        <div class="card-title">تحديث البيانات</div>
+        <div class="card-body">
+            اسحب الشاشة للأسفل لتحديث البيانات من السيرفر. هذا يعمل فقط عند وجود إنترنت.
+            في حالة الأوفلاين، ستبقى البيانات المحفوظة كما هي.
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ٦</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 5: FORMS                            -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">٥. النماذج والإدخال</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">٥</span> النماذج والإدخال الميداني</h1>
+
+    <h2>أنواع الحقول</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>نوع الحقل</th>
+                <th>طريقة الملء</th>
+                <th>مثال</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>نص</strong></td>
+                <td>اكتب النص مباشرة</td>
+                <td>اسم المرفق</td>
+            </tr>
+            <tr>
+                <td><strong>رقم</strong></td>
+                <td>اكتب الرقم</td>
+                <td>عدد المطعمين</td>
+            </tr>
+            <tr>
+                <td><strong>اختيار من قائمة</strong></td>
+                <td>اضغط واختر</td>
+                <td>نوع اللقاح</td>
+            </tr>
+            <tr>
+                <td><strong>نعم/لا</strong></td>
+                <td>اضغط الزر المناسب</td>
+                <td>هل تم التلقيح؟</td>
+            </tr>
+            <tr>
+                <td><strong>GPS</strong></td>
+                <td>اضغط "تحديد الموقع"</td>
+                <td>إحداثيات الميدان</td>
+            </tr>
+            <tr>
+                <td><strong>صورة</strong></td>
+                <td>التقط أو اختر من المعرض</td>
+                <td>صورة التقرير</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>خطوات الإدخال</h2>
+    <div class="flow">
+        <div class="flow-step">📝 اختر النموذج المطلوب</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step">✏️ املأ جميع الحقول</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step">📍 حدد الموقع (GPS)</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step">📸 أرفق الصور (اختياري)</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step">✅ مراجعة وإرسال</div>
+    </div>
+
+    <div class="info-card tip">
+        <div class="card-icon">💡</div>
+        <div class="card-title">عمل أوفلاين</div>
+        <div class="card-body">
+            إذا كنت بدون إنترنت، سيُحفظ النموذج محلياً تلقائياً.
+            عند عودة الإنترنت، ستُرسل جميع النماذج المحفوظة للسيرفر.
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ٧</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 6: OFFLINE                          -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">٦. الأوفلاين والمزامنة</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">٦</span> نظام الأوفلاين والمزامنة</h1>
+
+    <h2>كيف يعمل النظام؟</h2>
+    <p>
+        النظام مصمم بأسلوب <strong>Offline-First</strong> — يعني أن جميع البيانات تُحفظ محلياً أولاً،
+        ثم تُزامن مع السيرفر عند توفر الإنترنت. هذا يضمن عدم فقدان أي بيانات حتى في المناطق المنعزلة.
+    </p>
+
+    <div class="flow">
+        <div class="flow-step">📱 ملء النموذج في الميدان</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step">💾 حفظ محلي (Hive)</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step">⏳ انتظار المزامنة (كل 5 دقائق)</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step">🌐 عند وجود إنترنت → إرسال تلقائي</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-step">✅ تأكيد الاستلام من السيرفر</div>
+    </div>
+
+    <h2>حالات المزامنة</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>الحالة</th>
+                <th>الوصف</th>
+                <th>المطلوب</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="badge badge-success">🟢 متصل</span></td>
+                <td>كل البيانات مزامنة</td>
+                <td>لا شيء — استمر في العمل</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-warning">🟡 انتظار</span></td>
+                <td>عناصر تنتظر المزامنة</td>
+                <td>انتظر أو اضغط "مزامنة يدوية"</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-info">🔵 جاري</span></td>
+                <td>المزامنة جارية حالياً</td>
+                <td>انتظر — لا تغلق التطبيق</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-danger">🔴 أوفلاين</span></td>
+                <td>لا يوجد إنترنت</td>
+                <td>أكمل العمل — سيُزامن لاحقاً</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="info-card danger">
+        <div class="card-icon">🔴</div>
+        <div class="card-title">مهم — لا تقلق من فقدان البيانات</div>
+        <div class="card-body">
+            النماذج المحفوظة محلياً لا تُحذف أبداً حتى بعد إعادة تشغيل التطبيق.
+            المزامنة تحاول 5 مرات تلقائياً. إذا فشلت، تبقى في الأرشيف للمراجعة اليدوية.
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ٨</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 7: COMMUNICATION                    -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">٧. مركز الاتصال</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">٧</span> مركز الاتصال والقنوات</h1>
+
+    <h2>التبويبات الأربعة</h2>
+    <div class="icon-grid">
+        <div class="icon-item">
+            <div class="icon">📢</div>
+            <div class="label">تعاميم</div>
+        </div>
+        <div class="icon-item">
+            <div class="icon">💬</div>
+            <div class="label">قنوات</div>
+        </div>
+        <div class="icon-item">
+            <div class="icon">📋</div>
+            <div class="label">تغذية راجعة</div>
+        </div>
+        <div class="icon-item">
+            <div class="icon">☀️</div>
+            <div class="label">موجز</div>
+        </div>
+    </div>
+
+    <h2>القنوات المتاحة</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>القناة</th>
+                <th>النوع</th>
+                <th>من يمكنه الكتابة</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>🚨 <strong>قناة الطوارئ</strong></td>
+                <td>إعلان رسمي</td>
+                <td>admin, central, governorate, district</td>
+            </tr>
+            <tr>
+                <td>📢 <strong>غرفة العمليات</strong></td>
+                <td>إعلان رسمي</td>
+                <td>admin, central</td>
+            </tr>
+            <tr>
+                <td>📢 <strong>بث المحافظات</strong></td>
+                <td>إعلان رسمي</td>
+                <td>admin, central, governorate</td>
+            </tr>
+            <tr>
+                <td>❓ <strong>استفسارات للمركز</strong></td>
+                <td>استفسار</td>
+                <td><span class="badge badge-success">الجميع</span></td>
+            </tr>
+            <tr>
+                <td>💬 <strong>عام</strong></td>
+                <td>نقاش مفتوح</td>
+                <td><span class="badge badge-success">الجميع</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>إرسال رسالة مع مرفق</h2>
+    <div class="steps">
+        <div class="step">
+            <div class="step-number">١</div>
+            <div class="step-content">
+                <div class="step-title">اختر القناة</div>
+                <div class="step-desc">اضغط على القناة المطلوبة من القائمة الجانبية</div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">٢</div>
+            <div class="step-content">
+                <div class="step-title">اكتب الرسالة</div>
+                <div class="step-desc">اكتب نص الرسالة في حقل الإدخال</div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">٣</div>
+            <div class="step-content">
+                <div class="step-title">أرفق ملف (اختياري)</div>
+                <div class="step-desc">اضغط 📎 ← اختر صورة/ملف (حد أقصى 10 ميجا)</div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">٤</div>
+            <div class="step-content">
+                <div class="step-title">إرسال</div>
+                <div class="step-desc">اضغط أيقونة الإرسال ✈️</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ٩</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 8: AI ASSISTANT                     -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">٨. المساعد الذكي</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">٨</span> المساعد الذكي</h1>
+
+    <h2>التبويبات الثلاثة</h2>
+    <div class="feature-grid">
+        <div class="feature-item">
+            <div class="feature-icon">💬</div>
+            <div>
+                <div class="feature-title">مساعد النظام</div>
+                <div class="feature-desc">محادثة ذكية — اسأل عن أي بيانات في النظام</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">✨</div>
+            <div>
+                <div class="feature-title">الاستوديو</div>
+                <div class="feature-desc">توليد تقارير وأسئلة شائعة وخرائط ذهنية</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">🔔</div>
+            <div>
+                <div class="feature-title">تنبيهات ذكية</div>
+                <div class="feature-desc">تنبيهات تلقائية بناءً على تحليل البيانات</div>
+            </div>
+        </div>
+    </div>
+
+    <h2>أمثلة على الأسئلة</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>السؤال</th>
+                <th>نوع التحليل</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>"كم إرسالية اليوم؟"</td>
+                <td>إحصائيات فورية</td>
+            </tr>
+            <tr>
+                <td>"حلل أداء الجولة الحالية"</td>
+                <td>تحليل شامل</td>
+            </tr>
+            <tr>
+                <td>"ما النواقص الحرجة؟"</td>
+                <td>نواقص</td>
+            </tr>
+            <tr>
+                <td>"قارن بين تعز وعدن"</td>
+                <td>مقارنة</td>
+            </tr>
+            <tr>
+                <td>"تنبؤ اكتمال الجولة"</td>
+                <td>تنبؤ ذكي</td>
+            </tr>
+            <tr>
+                <td>"من هم المشرفون الخاملون؟"</td>
+                <td>تحليل أداء</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>الاستوديو — أنواع المحتوى</h2>
+    <div class="icon-grid">
+        <div class="icon-item">
+            <div class="icon">📋</div>
+            <div class="label">وثيقة موجزة</div>
+        </div>
+        <div class="icon-item">
+            <div class="icon">📚</div>
+            <div class="label">دليل دراسي</div>
+        </div>
+        <div class="icon-item">
+            <div class="icon">❓</div>
+            <div class="label">أسئلة شائعة</div>
+        </div>
+        <div class="icon-item">
+            <div class="icon">🧠</div>
+            <div class="label">خريطة ذهنية</div>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <div class="card-icon">🤖</div>
+        <div class="card-title">كيف يعمل المساعد؟</div>
+        <div class="card-body">
+            المساعد يستمد بياناته مباشرة من قاعدة البيانات (Grounding) مع 28 أداة تحليلية.
+            يفهم السياق ويحفظ ذاكرة المحادثة. يعمل حتى بدون إنترنت (بيانات محدودة).
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ١٠</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 9: NOTIFICATIONS                    -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">٩. الإشعارات</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">٩</span> التنبيهات والإشعارات</h1>
+
+    <h2>أنواع الإشعارات</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>النوع</th>
+                <th>اللون</th>
+                <th>مثال</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>معلومات</strong></td>
+                <td><span class="badge badge-info">🔵 أزرق</span></td>
+                <td>تم تحديث النماذج</td>
+            </tr>
+            <tr>
+                <td><strong>نجاح</strong></td>
+                <td><span class="badge badge-success">🟢 أخضر</span></td>
+                <td>تمت مزامنة 10 إرساليات</td>
+            </tr>
+            <tr>
+                <td><strong>تحذير</strong></td>
+                <td><span class="badge badge-warning">🟡 أصفر</span></td>
+                <td>5 إرساليات بانتظار المراجعة</td>
+            </tr>
+            <tr>
+                <td><strong>خطأ</strong></td>
+                <td><span class="badge badge-danger">🔴 أحمر</span></td>
+                <td>فشلت مزامنة إرسالية</td>
+            </tr>
+            <tr>
+                <td><strong>مزامنة</strong></td>
+                <td><span class="badge badge-purple">🟣 بنفسجي</span></td>
+                <td>اكتملت المزامنة بنجاح</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>تنبيهات المساعد الذكي</h2>
+    <p>يقوم المساعد الذكي بتوليد تنبيهات تلقائية بناءً على تحليل البيانات:</p>
+    <div class="feature-grid">
+        <div class="feature-item">
+            <div class="feature-icon">🚨</div>
+            <div>
+                <div class="feature-title">نواقص حرجة</div>
+                <div class="feature-desc">عند وجود نواقص ب severity "حرج"</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">📉</div>
+            <div>
+                <div class="feature-title">تغطية منخفضة</div>
+                <div class="feature-desc">عند انخفاض تغطية اللقاحات عن 80%</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">⚠️</div>
+            <div>
+                <div class="feature-title">تسرب مرتفع</div>
+                <div class="feature-desc">عند ارتفاع معدل التسرب عن 10%</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">📋</div>
+            <div>
+                <div class="feature-title">إشراف متأخر</div>
+                <div class="feature-desc">عند تأخر الزيارات الإشرافية</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ١١</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 10: WEB DASHBOARD                   -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">١٠. لوحة التحكم الويب</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">١٠</span> لوحة التحكم الويب</h1>
+
+    <h2>الأقسام الرئيسية</h2>
+    <div class="feature-grid">
+        <div class="feature-item">
+            <div class="feature-icon">📊</div>
+            <div>
+                <div class="feature-title">لوحة التحكم</div>
+                <div class="feature-desc">مؤشرات KPI حية + رسوم بيانية + خريطة المحافظات</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">👥</div>
+            <div>
+                <div class="feature-title">إدارة المستخدمين</div>
+                <div class="feature-desc">إضافة/تعديل/تعطيل حسابات المستخدمين</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">📝</div>
+            <div>
+                <div class="feature-title">إدارة النماذج</div>
+                <div class="feature-desc">إنشاء نماذج ديناميكية مع حقول مخصصة</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">✅</div>
+            <div>
+                <div class="feature-title">الإرساليات</div>
+                <div class="feature-desc">مراجعة + اعتماد + رفض + تصدير</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">📦</div>
+            <div>
+                <div class="feature-title">النواقص</div>
+                <div class="feature-desc">تتبع نواقص المستلزمات وحلها</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">💬</div>
+            <div>
+                <div class="feature-title">مركز الاتصال</div>
+                <div class="feature-desc">إدارة القنوات + إرسال رسائل + مراجعة التذاكر</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">🤖</div>
+            <div>
+                <div class="feature-title">المساعد الذكي</div>
+                <div class="feature-desc">محادثة AI + توليد تقارير + تحليلات</div>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">📈</div>
+            <div>
+                <div class="feature-title">التحليلات</div>
+                <div class="feature-desc">رسوم بيانية متقدمة + مقارنات + تنبؤات</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ١٢</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 11: ROLES                           -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">١١. الأدوار والصلاحيات</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">١١</span> الأدوار والصلاحيات</h1>
+
+    <h2>الأدوار المتاحة</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>الدور</th>
+                <th>الوصف</th>
+                <th>الصلاحيات الرئيسية</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>admin</strong></td>
+                <td>مدير النظام</td>
+                <td>كل الصلاحيات — إدارة كاملة</td>
+            </tr>
+            <tr>
+                <td><strong>central</strong></td>
+                <td>المركز</td>
+                <td>إدارة النماذج + المراجعة + التقارير</td>
+            </tr>
+            <tr>
+                <td><strong>governorate</strong></td>
+                <td>مشرف محافظة</td>
+                <td>إدخال بيانات محافظته + مراجعة المديريات</td>
+            </tr>
+            <tr>
+                <td><strong>district</strong></td>
+                <td>مشرف مديرية</td>
+                <td>إدخال بيانات مديريته</td>
+            </tr>
+            <tr>
+                <td><strong>data_entry</strong></td>
+                <td>إدخال بيانات</td>
+                <td>إدخال البيانات فقط</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>مصفوفة الصلاحيات التفصيلية</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>الميزة</th>
+                <th>admin</th>
+                <th>central</th>
+                <th>governorate</th>
+                <th>district</th>
+                <th>data_entry</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>عرض لوحة التحكم</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+            </tr>
+            <tr>
+                <td>إدخال نماذج</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+            </tr>
+            <tr>
+                <td>مراجعة الإرساليات</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>❌</td>
+                <td>❌</td>
+            </tr>
+            <tr>
+                <td>إدارة المستخدمين</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>❌</td>
+                <td>❌</td>
+                <td>❌</td>
+            </tr>
+            <tr>
+                <td>إدارة النماذج</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>❌</td>
+                <td>❌</td>
+                <td>❌</td>
+            </tr>
+            <tr>
+                <td>كتابة في كل القنوات</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>❌</td>
+                <td>❌</td>
+                <td>❌</td>
+            </tr>
+            <tr>
+                <td>المساعد الذكي</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+                <td>✅</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ١٣</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 12: TROUBLESHOOTING                 -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="page">
+    <div class="page-header">
+        <div class="page-header-right">
+            <div class="page-header-logo">🏥</div>
+            <div class="page-header-title">EPI Supervisor</div>
+        </div>
+        <div class="page-header-section">١٢. استكشاف الأخطاء</div>
+    </div>
+
+    <h1 class="section-title"><span class="number">١٢</span> استكشاف الأخطاء وحلها</h1>
+
+    <h2>المشاكل الشائعة وحلولها</h2>
+
+    <div class="info-card danger">
+        <div class="card-icon">🔑</div>
+        <div class="card-title">لا يمكن تسجيل الدخول</div>
+        <div class="card-body">
+            <strong>الأسباب:</strong> خطأ في البيانات، لا يوجد إنترنت، الحساب غير مُفعّل<br>
+            <strong>الحل:</strong> تأكد من صحة البيانات واتصال الإنترنت. تواصل مع المدير لتفعيل الحساب.
+        </div>
+    </div>
+
+    <div class="info-card warning">
+        <div class="card-icon">🐌</div>
+        <div class="card-title">التطبيق بطيء</div>
+        <div class="card-body">
+            <strong>الأسباب:</strong> بيانات كثيرة مخزنة، ذاكرة ممتلئة، إنترنت ضعيف<br>
+            <strong>الحل:</strong> الإعدادات ← مسح الكاش. أغلق التطبيقات الأخرى. تأكد من مساحة كافية.
+        </div>
+    </div>
+
+    <div class="info-card warning">
+        <div class="card-icon">📡</div>
+        <div class="card-title">المزامنة لا تعمل</div>
+        <div class="card-body">
+            <strong>الأسباب:</strong> لا يوجد إنترنت، السيرفر مزدحم، ملف كبير<br>
+            <strong>الحل:</strong> تأكد من الإنترنت. انتظر وحاول مرة أخرى. تحقق من حجم الملفات (10 ميجا كحد).
+        </div>
+    </div>
+
+    <div class="info-card">
+        <div class="card-icon">📸</div>
+        <div class="card-title">الصور لا تُرسل</div>
+        <div class="card-body">
+            <strong>الأسباب:</strong> الصورة كبيرة، مساحة غير كافية، مشكلة شبكة<br>
+            <strong>الحل:</strong> قلّل حجم الصورة. تأكد من المساحة. جرب شبكة أفضل.
+        </div>
+    </div>
+
+    <h2>الأسئلة الشائعة</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>السؤال</th>
+                <th>الجواب</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>هل يعمل بدون إنترنت؟</td>
+                <td><strong>نعم!</strong> Offline-First — يحفظ محلياً ويُزامن لاحقاً</td>
+            </tr>
+            <tr>
+                <td>كيف أعرف أن إرساليتي وصلت؟</td>
+                <td>حالة الإرسالية: 🟡 مسودة ← 🔵 مرسلة ← 🟢 معتمدة</td>
+            </tr>
+            <tr>
+                <td>هل بياناتي آمنة؟</td>
+                <td><strong>نعم!</strong> تشفير AES + RLS + Supabase sécurisé</td>
+            </tr>
+            <tr>
+                <td>كيف أرسل شكوى؟</td>
+                <td>القنوات ← تغذية راجعة ← تذكرة جديدة</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="page-footer">
+        <span>EPI Supervisor — دليل المستخدم الرسمي</span>
+        <span>صفحة ١٤</span>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- BACK COVER                                  -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="cover" style="background: linear-gradient(135deg, #00695C, #004D40);">
+    <div class="cover-content">
+        <div class="cover-logo">📞</div>
+        <h1 style="font-size: 28pt;">الدعم الفني</h1>
+        <h2 style="font-size: 14pt;">نحن هنا لمساعدتك</h2>
+        <div class="cover-meta">
+            <div class="cover-meta-item">
+                <div class="label">البريد الإلكتروني</div>
+                <div class="value">support@epi.ye</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">الهاتف</div>
+                <div class="value">+967-XXX-XXXX</div>
+            </div>
+            <div class="cover-meta-item">
+                <div class="label">ساعات العمل</div>
+                <div class="value">السبت — الخميس<br>8:00 ص — 4:00 م</div>
+            </div>
+        </div>
+        <div style="margin-top: 60px; opacity: 0.6; font-size: 10pt;">
+            <p>© 2026 برنامج التحصين الصحي الموسع — الجمهورية اليمنية</p>
+            <p>جميع الحقوق محفوظة</p>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

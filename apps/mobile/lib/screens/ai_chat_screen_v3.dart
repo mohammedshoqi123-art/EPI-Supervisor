@@ -377,13 +377,16 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             _msgs[_msgs.length - 1] = ChatMsg(
               role: 'assistant',
               content: buffer.toString(),
-              source: 'groq_stream',
-              provider: 'groq',
-              providerTier: 2,
-              providerConfidence: 85,
+              source: 'stream',
+              // ⚠️ FIX: Don't hardcode provider — we don't know which provider won the race
+              // The Edge Function returns provider info in non-streaming mode,
+              // but streaming SSE chunks don't include provider metadata.
+              provider: null,  // Will be shown as 'stream' badge
+              providerTier: null,
+              providerConfidence: null,
               latencyMs: DateTime.now().millisecondsSinceEpoch - _lastSend!.millisecondsSinceEpoch,
               raced: true,
-              attemptedProviders: const ['groq', 'pollinations', 'zai'],
+              attemptedProviders: null,  // Unknown in streaming mode
             );
           }
           _loading = false;
@@ -460,8 +463,14 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         userMessage = '🔒 انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.';
       } else if (errorMsg.contains('429')) {
         userMessage = '⏳ أرسلت رسائل كثيرة. انتظر دقيقة وحاول مرة أخرى.';
+      } else if (errorMsg.contains('TimeoutException') || errorMsg.contains('timeout')) {
+        userMessage = '⏱️ استغرق الرد وقتاً طويلاً. المحاور مشغولة حالياً — حاول مرة أخرى أو اسأل سؤالاً أقصر.';
+      } else if (errorMsg.contains('SocketException') || errorMsg.contains('Failed host')) {
+        userMessage = '📡 لا يمكن الاتصال بالخادم. تحقق من اتصالك بالإنترنت.';
       } else {
-        userMessage = '⚠️ حدث خطأ. حاول مرة أخرى.';
+        userMessage = '⚠️ حدث خطأ غير متوقع. حاول مرة أخرى.
+
+💡 إذا تكرر الخطأ، جرّب تسجيل الخروج والدخول مرة أخرى.';
       }
       setState(() {
         _msgs.add(

@@ -110,13 +110,15 @@ function isModelAvailable(model: string): boolean {
 }
 
 // ═══ Model Candidates (priority order) ═══
-// Only include models that actually work (verified 2026-07-12)
-// We retry openai/openai-fast multiple times because rate limits clear quickly
+// Diverse models to avoid single-point-of-failure.
+// Verified working on Pollinations (2026-07-18).
+// Strategy: Try different model families so rate-limits on one don't block all.
 const MODEL_CANDIDATES = [
-  'openai',        // Primary — most reliable
-  'openai-fast',   // Alias — sometimes works when openai is rate-limited
-  'openai',        // Retry (rate limit may have cleared)
-  'openai-fast',   // Final retry
+  'openai',              // Primary — GPT-OSS 20B, most reliable
+  'openai-fast',         // Faster variant — sometimes works when openai is rate-limited
+  'openai-reasoning',    // Reasoning model — different rate-limit bucket
+  'openai',              // Retry after rate-limit cooldown (500ms delay helps)
+  'openai-fast',         // Final retry
 ]
 
 /**
@@ -265,3 +267,4 @@ export function getPollinationsHealth() {
     lockouts,
   }
 }
+

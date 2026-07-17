@@ -1510,14 +1510,27 @@ serve(async (req) => {
     // as grounding sources. Force LLM to cite [n]. Refuse if no data.
     // This is THE fix for "wrong answers" — LLM hallucinated because it
     // had no real data when tool-calling failed.
+    //
+    // ⚠️ FIX: Wrap grounding in a 8s timeout — if DB queries are slow,
+    // proceed without grounding instead of blocking the entire request.
     let grounding: GroundingResult | null = null
     if (message) {
       console.log(`[GROUNDING] Grounding message: "${message.slice(0, 80)}..."`)
-      grounding = await groundMessage(supabase, message, campaignRound)
-      console.log(`[GROUNDING] Found ${grounding.sources.length} sources, hasData=${grounding.hasData}, intent=${grounding.detectedIntent}`)
+      try {
+        grounding = await Promise.race([
+          groundMessage(supabase, message, campaignRound),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Grounding timeout (8s)')), 8_000)
+          ),
+        ])
+        console.log(`[GROUNDING] Found ${grounding.sources.length} sources, hasData=${grounding.hasData}, intent=${grounding.detectedIntent}`)
+      } catch (groundErr) {
+        console.warn(`[GROUNDING] ⚠️ Grounding failed/timed out: ${String(groundErr).slice(0, 100)} — proceeding without grounding`)
+        grounding = null
+      }
 
       // Add grounding context to messages — this is what the LLM sees
-      if (grounding.contextText) {
+      if (grounding?.contextText) {
         messages[0].content += grounding.contextText
       }
     }

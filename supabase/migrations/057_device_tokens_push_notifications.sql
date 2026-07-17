@@ -26,15 +26,21 @@ CREATE INDEX IF NOT EXISTS idx_device_tokens_token ON device_tokens(token) WHERE
 -- ═══ 2) RLS Policies ═══
 ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
 
+-- ⚠️ FIX: DROP IF EXISTS before CREATE — PostgreSQL doesn't support IF NOT EXISTS for policies
+-- This was causing SQLSTATE 42710 "policy already exists" on production re-deploys
+DROP POLICY IF EXISTS "device_tokens_select_own" ON device_tokens;
 CREATE POLICY "device_tokens_select_own" ON device_tokens FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "device_tokens_insert_own" ON device_tokens;
 CREATE POLICY "device_tokens_insert_own" ON device_tokens FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "device_tokens_update_own" ON device_tokens;
 CREATE POLICY "device_tokens_update_own" ON device_tokens FOR UPDATE
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "device_tokens_delete_own" ON device_tokens;
 CREATE POLICY "device_tokens_delete_own" ON device_tokens FOR DELETE
   USING (user_id = auth.uid());
 

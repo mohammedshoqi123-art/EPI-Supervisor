@@ -468,9 +468,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       } else if (errorMsg.contains('SocketException') || errorMsg.contains('Failed host')) {
         userMessage = '📡 لا يمكن الاتصال بالخادم. تحقق من اتصالك بالإنترنت.';
       } else {
-        userMessage = '⚠️ حدث خطأ غير متوقع. حاول مرة أخرى.
-
-💡 إذا تكرر الخطأ، جرّب تسجيل الخروج والدخول مرة أخرى.';
+        userMessage = '⚠️ حدث خطأ غير متوقع. حاول مرة أخرى.';
       }
       setState(() {
         _msgs.add(

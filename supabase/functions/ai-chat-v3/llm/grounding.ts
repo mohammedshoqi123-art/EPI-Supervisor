@@ -1896,7 +1896,12 @@ async function fetchSupervisionEvaluationData(supa: any, plan: QueryPlan, campai
 // ═══ Web Search — مصادر موثوقة (WHO, UNICEF, CDC) ═══
 // يبحث في الإنترنت عن معلومات EPI من مصادر موثوقة
 async function searchTrustedWebSources(message: string): Promise<GroundingSource[]> {
-  // قائمة المصادر الموثوقة لـ EPI
+  // ⚠️ DISABLED: DuckDuckGo web search was causing 8-30s delays and often
+  // returning 403/empty responses from Supabase Edge Functions.
+  // This was the #1 cause of AI assistant timeouts.
+  // Instead, return trusted source links directly based on keyword matching.
+  // This is instant (0ms) and always works.
+
   const TRUSTED_SOURCES = [
     { name: 'WHO Immunization', url: 'https://www.who.int/health-topics/immunization', keywords: ['تطعيم', 'لقاح', 'تحصين', 'immunization', 'vaccine', 'vaccination'] },
     { name: 'WHO Yemen', url: 'https://www.who.int/yemen', keywords: ['اليمن', 'yemen', 'صحة'] },
@@ -1905,78 +1910,27 @@ async function searchTrustedWebSources(message: string): Promise<GroundingSource
     { name: 'Gavi Vaccine Alliance', url: 'https://www.gavi.org', keywords: ['gavi', 'vaccine', 'تطعيم'] },
   ]
 
-  // محاولة البحث عبر DuckDuckGo (لا يحتاج API key)
-  try {
-    const searchQuery = encodeURIComponent(`EPI immunization vaccine ${message.slice(0, 100)}`)
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${searchQuery}`
+  const results: GroundingSource[] = []
 
-    const resp = await fetch(searchUrl, {
-      headers: { 'User-Agent': 'EPI-Copilot/1.0' },
-      signal: AbortSignal.timeout(8_000),
+  // Direct keyword matching — instant, no network call
+  const matchedSources = TRUSTED_SOURCES.filter(s =>
+    s.keywords.some(k => message.toLowerCase().includes(k.toLowerCase()))
+  )
+
+  for (const src of matchedSources.slice(0, 3)) {
+    results.push({
+      id: 100 + results.length,
+      type: 'knowledge_chunk',
+      summary: `${src.name} — مصدر موثوق`,
+      quote: `للمزيد من المعلومات الفنية، راجع: ${src.url}`,
+      metadata: {
+        source_doc: src.url,
+        chunk_id: `trusted-${results.length}`,
+      },
     })
-
-    if (!resp.ok) return []
-
-    const html = await resp.text()
-    // استخراج النتائج (بسيط)
-    const results: GroundingSource[] = []
-    const linkRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/g
-    const snippetRegex = /<a[^>]+class="result__snippet"[^>]*>([^<]+)<\/a>/g
-
-    const links: { url: string; title: string }[] = []
-    let match
-    while ((match = linkRegex.exec(html)) !== null && links.length < 3) {
-      const rawUrl = match[1]
-      const title = match[2].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-      // DuckDuckGo redirects — extract actual URL
-      const urlMatch = rawUrl.match(/uddg=([^&]+)/)
-      if (urlMatch) {
-        const actualUrl = decodeURIComponent(urlMatch[1])
-        // فقط المصادر الموثوقة
-        if (TRUSTED_SOURCES.some(s => actualUrl.includes(s.url.replace('https://', '').split('/')[0]))) {
-          links.push({ url: actualUrl, title })
-        }
-      }
-    }
-
-    // إضافة المصادر الموثوقة الموجودة كـ fallback
-    for (const link of links) {
-      results.push({
-        id: 100 + results.length,
-        type: 'knowledge_chunk',
-        summary: link.title,
-        quote: `المصدر: ${link.url}\n${link.title}`,
-        metadata: {
-          source_doc: link.url,
-          chunk_id: `web-${results.length}`,
-        },
-      })
-    }
-
-    // إذا لم نجد نتائج موثوقة، أضف روابط المصادر الموثوقة الأساسية
-    if (results.length === 0) {
-      const matchedSources = TRUSTED_SOURCES.filter(s =>
-        s.keywords.some(k => message.includes(k))
-      )
-      for (const src of matchedSources.slice(0, 3)) {
-        results.push({
-          id: 100 + results.length,
-          type: 'knowledge_chunk',
-          summary: `${src.name} — مصدر موثوق`,
-          quote: `للمزيد من المعلومات الفنية، راجع: ${src.url}`,
-          metadata: {
-            source_doc: src.url,
-            chunk_id: `trusted-${results.length}`,
-          },
-        })
-      }
-    }
-
-    return results
-  } catch (e) {
-    console.warn('[WEB_SEARCH] Error:', String(e).slice(0, 80))
-    return []
   }
+
+  return results
 }
 
 // ═══ MAIN: Grounding Engine Entry Point ═══

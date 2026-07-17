@@ -141,10 +141,10 @@ function buildPollinationsAttempt(
   opts: HybridOptions,
   timeoutMs: number,
 ): ProviderAttempt {
-  // ⚠️ Pollinations is slow (~20s cold start from Supabase Edge Function).
-  // Override the race timeout with a longer one so it doesn't get killed prematurely.
-  // The race timeout (timeoutMs) is typically 10s, but Pollinations needs ~25s.
-  const POLLINATIONS_TIMEOUT = Math.max(timeoutMs, 30_000)  // at least 30s for Pollinations
+  // ⚠️ FIX: Reduced Pollinations timeout from 30s to 15s.
+  // Direct testing shows Pollinations responds in <5s normally.
+  // 30s was causing long hangs when Pollinations was down.
+  const POLLINATIONS_TIMEOUT = Math.max(timeoutMs, 15_000)  // at least 15s for Pollinations
 
   const promise = (async () => {
     const controller = new AbortController()
@@ -159,7 +159,7 @@ function buildPollinationsAttempt(
         pollinationsMultiModel(messages, {
           maxTokens: opts.maxTokens || 2000,
           temperature: opts.temperature,
-          timeoutMs: 25_000,  // per-attempt timeout
+          timeoutMs: 12_000,  // ⚠️ Reduced from 25s — 12s per attempt
         }),
         new Promise<null>((r) => setTimeout(() => r(null), POLLINATIONS_TIMEOUT)),
       ])

@@ -141,7 +141,7 @@ export async function pollinationsMultiModel(
 ): Promise<PollinationsAttemptResult> {
   const startTime = Date.now()
   const attempts: PollinationsAttemptResult['attempts'] = []
-  const perAttemptTimeout = opts.timeoutMs || 25_000
+  const perAttemptTimeout = opts.timeoutMs || 15_000  // ⚠️ Reduced from 25s — 15s is enough
 
   // Filter out locked models
   const availableModels = MODEL_CANDIDATES.filter(m => isModelAvailable(m))

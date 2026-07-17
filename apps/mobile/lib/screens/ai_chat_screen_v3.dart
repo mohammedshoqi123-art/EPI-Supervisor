@@ -263,7 +263,9 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         }
       }
 
-      // Default: Edge Function (ai-chat-v3) with streaming
+      // ⚠️ FIX: Use NON-STREAMING by default — streaming was causing timeouts
+      // because hybridRouteStream doesn't support Pollinations reliably.
+      // Non-streaming is more reliable and still fast (<3s via Hybrid Gateway).
       final history =
           _msgs.length > 6 ? _msgs.sublist(_msgs.length - 6) : _msgs;
       final historyJson = history
@@ -275,122 +277,65 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
               })
           .toList();
 
-      setState(() {
-        _msgs.add(ChatMsg(role: 'assistant', content: '', source: 'streaming'));
-      });
-
-      final buffer = StringBuffer();
-      bool gotAnyText = false;
-
       // ═══ Pass active campaign round to AI so it filters data correctly ═══
       final activeRound = ref.read(campaignRoundProvider);
       final activeCampaign = ref.read(campaignProvider).value;
 
-      await for (final chunk in api.callFunctionStream('ai-chat-v3', {
+      // ⚠️ FIX: Direct non-streaming call — more reliable than streaming
+      final resp = await api.callFunction('ai-chat-v3', {
         'message': text,
         'history': historyJson,
-        'stream': true,
         if (template != null) 'template': template,
         if (activeCampaign == 'integrated_activity') 'campaign_round': activeRound,
-      }).timeout(const Duration(seconds: 60), onTimeout: (sink) {
-        sink.close();
+      }).timeout(const Duration(seconds: 45), onTimeout: () {
         throw TimeoutException('انتهت مهلة الطلب');
-      })) {
-        if (!_mounted) return;
-        gotAnyText = true;
-        buffer.write(chunk);
+      });
+
+      final reply =
+          resp['reply'] as String? ?? resp['message'] as String? ?? '';
+      final source = resp['source'] as String? ?? 'unknown';
+      final provider = resp['provider'] as String?;
+      final providerTier = resp['provider_tier'] as int?;
+      final providerConfidence = resp['provider_confidence'] as int?;
+      final latencyMs = resp['latency_ms'] as int?;
+      final raced = resp['raced'] as bool?;
+      final attemptedProviders = resp['attempted_providers'] != null
+          ? List<String>.from(resp['attempted_providers'])
+          : null;
+      final toolsUsed = resp['tools_used'] != null
+          ? List<String>.from(resp['tools_used'])
+          : null;
+      final groundedInSources = resp['grounded_in_sources'] as int?;
+      final groundingSources = resp['grounding_sources'] != null
+          ? (resp['grounding_sources'] as List)
+              .map((s) => GroundingSource.fromJson(Map<String, dynamic>.from(s)))
+              .toList()
+          : null;
+      final suggestedFollowups = resp['suggested_followups'] != null
+          ? List<String>.from(resp['suggested_followups'])
+          : null;
+      final ungrounded = resp['ungrounded'] as bool?;
+
+      if (_mounted) {
         setState(() {
-          if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
-            _msgs[_msgs.length - 1] = ChatMsg(
-              role: 'assistant',
-              content: buffer.toString(),
-              source: 'streaming',
-            );
-          }
-        });
-        _scrollDown();
-      }
-
-      if (!_mounted) return;
-
-      if (!gotAnyText) {
-        final resp = await api.callFunction('ai-chat-v3', {
-          'message': text,
-          'history': historyJson,
-          if (template != null) 'template': template,
-          if (activeCampaign == 'integrated_activity') 'campaign_round': activeRound,
-        }).timeout(const Duration(seconds: 45));
-        final reply =
-            resp['reply'] as String? ?? resp['message'] as String? ?? '';
-        final source = resp['source'] as String? ?? 'unknown';
-        // Extract AI Gateway metadata for the new badge
-        final provider = resp['provider'] as String?;
-        final providerTier = resp['provider_tier'] as int?;
-        final providerConfidence = resp['provider_confidence'] as int?;
-        final latencyMs = resp['latency_ms'] as int?;
-        final raced = resp['raced'] as bool?;
-        final attemptedProviders = resp['attempted_providers'] != null
-            ? List<String>.from(resp['attempted_providers'])
-            : null;
-        final toolsUsed = resp['tools_used'] != null
-            ? List<String>.from(resp['tools_used'])
-            : null;
-
-        // ─── New: Grounding sources (NotebookLM-style) ───
-        final groundedInSources = resp['grounded_in_sources'] as int?;
-        final groundingSources = resp['grounding_sources'] != null
-            ? (resp['grounding_sources'] as List)
-                .map((s) => GroundingSource.fromJson(Map<String, dynamic>.from(s)))
-                .toList()
-            : null;
-        final suggestedFollowups = resp['suggested_followups'] != null
-            ? List<String>.from(resp['suggested_followups'])
-            : null;
-        final ungrounded = resp['ungrounded'] as bool?;
-
-        setState(() {
-          if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
-            _msgs[_msgs.length - 1] = ChatMsg(
-              role: 'assistant',
-              content: reply.isNotEmpty ? reply : '⚠️ تم استلام رد فارغ.',
-              source: source,
-              provider: provider,
-              providerTier: providerTier,
-              providerConfidence: providerConfidence,
-              latencyMs: latencyMs,
-              raced: raced,
-              attemptedProviders: attemptedProviders,
-              toolsUsed: toolsUsed,
-              groundedInSources: groundedInSources,
-              groundingSources: groundingSources,
-              suggestedFollowups: suggestedFollowups,
-              ungrounded: ungrounded,
-            );
-          }
+          _msgs.add(ChatMsg(
+            role: 'assistant',
+            content: reply.isNotEmpty ? reply : '⚠️ تم استلام رد فارغ.',
+            source: source,
+            provider: provider,
+            providerTier: providerTier,
+            providerConfidence: providerConfidence,
+            latencyMs: latencyMs,
+            raced: raced,
+            attemptedProviders: attemptedProviders,
+            toolsUsed: toolsUsed,
+            groundedInSources: groundedInSources,
+            groundingSources: groundingSources,
+            suggestedFollowups: suggestedFollowups,
+            ungrounded: ungrounded,
+          ));
           _loading = false;
-      _typingAnimCtrl.stop();
-        });
-      } else {
-        HapticFeedback.lightImpact();
-        setState(() {
-          if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
-            _msgs[_msgs.length - 1] = ChatMsg(
-              role: 'assistant',
-              content: buffer.toString(),
-              source: 'stream',
-              // ⚠️ FIX: Don't hardcode provider — we don't know which provider won the race
-              // The Edge Function returns provider info in non-streaming mode,
-              // but streaming SSE chunks don't include provider metadata.
-              provider: null,  // Will be shown as 'stream' badge
-              providerTier: null,
-              providerConfidence: null,
-              latencyMs: DateTime.now().millisecondsSinceEpoch - _lastSend!.millisecondsSinceEpoch,
-              raced: true,
-              attemptedProviders: null,  // Unknown in streaming mode
-            );
-          }
-          _loading = false;
-      _typingAnimCtrl.stop();
+          _typingAnimCtrl.stop();
         });
       }
       unawaited(ChatStore.save(_msgs));
@@ -407,6 +352,8 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           latencyMs: _msgs.last.latencyMs,
         ));
       }
+      _scrollDown();
+      return;
     } on TimeoutException {
       if (!_mounted) return;
       setState(() {
@@ -463,12 +410,8 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         userMessage = '🔒 انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.';
       } else if (errorMsg.contains('429')) {
         userMessage = '⏳ أرسلت رسائل كثيرة. انتظر دقيقة وحاول مرة أخرى.';
-      } else if (errorMsg.contains('TimeoutException') || errorMsg.contains('timeout')) {
-        userMessage = '⏱️ استغرق الرد وقتاً طويلاً. المحاور مشغولة حالياً — حاول مرة أخرى أو اسأل سؤالاً أقصر.';
-      } else if (errorMsg.contains('SocketException') || errorMsg.contains('Failed host')) {
-        userMessage = '📡 لا يمكن الاتصال بالخادم. تحقق من اتصالك بالإنترنت.';
       } else {
-        userMessage = '⚠️ حدث خطأ غير متوقع. حاول مرة أخرى.';
+        userMessage = '⚠️ حدث خطأ. حاول مرة أخرى.';
       }
       setState(() {
         _msgs.add(
@@ -2589,32 +2532,17 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
       return _buildAlertsContent(cs, {});
     }
 
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _fetchFreshAlertData(),
-      builder: (context, snapshot) {
-        final data = snapshot.data ?? {};
-        return _buildAlertsContent(cs, data);
-      },
-    );
-  }
-
-  /// Fetch fresh alert data from Edge Function (not cached)
-  Future<Map<String, dynamic>> _fetchFreshAlertData() async {
     try {
-      final api = ref.read(apiClientProvider);
-      final resp = await api.callFunction('ai-chat-v3', {
-        'mode': 'health',
-      }).timeout(const Duration(seconds: 10));
-      return resp['health'] as Map<String, dynamic>? ?? {};
+      final analyticsAsync =
+          ref.watch(dashboardAnalyticsProvider(const AnalyticsFilter()));
+
+      return analyticsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => _buildAlertsContent(cs, {}),
+        data: (analytics) => _buildAlertsContent(cs, analytics),
+      );
     } catch (_) {
-      // Fallback to cached analytics
-      try {
-        final cache = await ref.read(
-            dashboardAnalyticsProvider(const AnalyticsFilter()).future);
-        return cache;
-      } catch (_) {
-        return {};
-      }
+      return _buildAlertsContent(cs, {});
     }
   }
 
@@ -2629,11 +2557,7 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
     final supervisionPriorities =
         SmartAlertsEngine.getSupervisionPriorities(data);
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        setState(() {}); // triggers rebuild + fresh fetch
-      },
-      child: SingleChildScrollView(
+    return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -2775,7 +2699,6 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
           ],
         ],
       ),
-    ),
     );
   }
 

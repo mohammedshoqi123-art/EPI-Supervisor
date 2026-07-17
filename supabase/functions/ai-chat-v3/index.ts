@@ -1616,14 +1616,17 @@ serve(async (req) => {
     }
 
     // Non-streaming — use Hybrid Parallel Racing Gateway
+    // ⚠️ FIX: Reduced timeouts to prevent long hangs when all providers fail.
+    // Pollinations usually responds in <5s (tested directly), so 15s is plenty.
+    // If all providers fail, we want to fail fast and show the fallback answer.
     const hybridResult = await hybridRouteChat(messages, gatewayEnv, {
       model: dbModelId,
       maxTokens: dbMaxTokens,
       temperature: dbTemperature,
       tools: needsTools ? TOOLS : undefined,
       needTools: needsTools,
-      raceTimeoutMs: 30_000,   // ⚠️ Increased from 10s — Pollinations needs ~15-20s with large context
-      fallbackTimeoutMs: 40_000,  // ⚠️ Increased from 20s for Tier 4 providers
+      raceTimeoutMs: 15_000,   // ⚠️ Reduced from 30s — 15s is enough for Pollinations
+      fallbackTimeoutMs: 20_000,  // ⚠️ Reduced from 40s — fail fast for fallbacks
     })
 
     // ─── If we got tool calls, execute them then ask LLM for final answer ───

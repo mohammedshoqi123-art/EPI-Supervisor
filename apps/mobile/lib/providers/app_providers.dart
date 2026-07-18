@@ -284,6 +284,7 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
 
   CampaignNotifier(this._ref) : super(CampaignType.polioCampaign) {
     _load();
+    _loadVisibility();
   }
 
   Future<void> _load() async {
@@ -299,6 +300,38 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
       );
     } catch (_) {
       // Default to polio campaign if loading fails
+    }
+  }
+
+  /// ═══ Load campaign visibility from Supabase campaign_types table ═══
+  /// This allows admin to hide campaigns from the mobile app via web dashboard
+  Future<void> _loadVisibility() async {
+    try {
+      final db = _ref.read(databaseServiceProvider);
+      final api = _ref.read(apiClientProvider);
+      final result = await api.select('campaign_types', select: 'key, visible');
+      final visibilityMap = <String, bool>{};
+      for (final row in result) {
+        final key = row['key'] as String?;
+        final visible = row['visible'] as bool?;
+        if (key != null) {
+          visibilityMap[key] = visible ?? true;
+        }
+      }
+      await CampaignType.loadVisibility(visibilityMap);
+
+      // If current campaign is hidden, switch to first visible one
+      if (!state.isVisible && CampaignType.visibleValues.isNotEmpty) {
+        state = CampaignType.visibleValues.first;
+      }
+
+      if (kDebugMode) {
+        debugPrint('[CampaignNotifier] Visibility loaded: $visibilityMap');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[CampaignNotifier] Visibility load failed: $e');
+      }
     }
   }
 

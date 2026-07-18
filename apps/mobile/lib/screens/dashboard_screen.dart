@@ -427,13 +427,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             const SizedBox(height: 16),
             const Text('اختر النشاط', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
-            ...[
-              ('polio_campaign', 'حملة شلل الأطفال', Icons.vaccines_rounded),
-              ('integrated_activity', 'النشاط الإيصالي التكاملي', Icons.medical_services_rounded),
-            ].map((item) {
-              final value = item.$1;
-              final label = item.$2;
-              final icon = item.$3;
+            ...CampaignType.visibleValues.map((campaign) {
+              final value = campaign.value;
+              final label = campaign.labelAr;
+              final icon = campaign == CampaignType.polioCampaign
+                  ? Icons.vaccines_rounded
+                  : Icons.medical_services_rounded;
               final current = ref.read(campaignProvider).value;
               return ListTile(
                 leading: Icon(icon, color: AppTheme.primaryColor),

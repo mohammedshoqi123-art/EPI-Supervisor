@@ -254,7 +254,7 @@ async function deleteFromSupabase(id: string): Promise<boolean> {
   }
 }
 
-/** Toggle visibility in Supabase */
+/** Toggle visibility in Supabase — works for ALL campaigns including built-in */
 async function toggleVisibilityInSupabase(id: string, visible: boolean): Promise<boolean> {
   if (!isConfigured) return false
   try {
@@ -262,6 +262,8 @@ async function toggleVisibilityInSupabase(id: string, visible: boolean): Promise
       .from('campaign_types')
       .update({ visible })
       .eq('key', id)
+    // Note: built_in campaigns CAN now be hidden — this allows
+    // admin to hide polio_campaign or integrated_activity from mobile app
 
     return !error
   } catch {
@@ -388,6 +390,10 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     const found = allCampaignsRef.current.find(c => c.id === id)
     if (!found) return
 
+    const newVisible = found.builtIn
+      ? hiddenBuiltinsRef.current.has(id)  // built-in: toggle hidden set
+      : !(found.visible !== false)          // custom: toggle visible field
+
     if (found.builtIn) {
       setHiddenBuiltins(prev => {
         const next = new Set(prev)
@@ -395,11 +401,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         else next.add(id)
         return next
       })
-      return
     }
 
-    const newVisible = !(found.visible !== false)
+    // Update local state
     setCampaigns(prev => prev.map(c => c.id === id ? { ...c, visible: newVisible } : c))
+
+    // ═══ Sync to Supabase — THIS is what makes mobile app respect the toggle ═══
     toggleVisibilityInSupabase(id, newVisible)
   }, [])
 

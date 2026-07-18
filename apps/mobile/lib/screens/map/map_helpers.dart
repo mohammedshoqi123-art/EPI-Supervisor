@@ -149,6 +149,10 @@ class MapHelpers {
     }
   }
 
+  /// Whether the user can view full GPS coordinates.
+  /// ═══ DEFENSE IN DEPTH: Primary protection is server-side (Migration 058) ═══
+  /// The server fuzzes coordinates for lower roles in the fetch_submissions RPC.
+  /// This client-side check is a UI hint only (shows/hides the "full coords" badge).
   static bool canViewFullCoords(UserRole? role) {
     return role == UserRole.admin ||
         role == UserRole.central ||

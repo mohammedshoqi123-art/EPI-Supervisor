@@ -139,10 +139,9 @@ final forceRefreshProvider = Provider<Future<void> Function(String cacheKey)>((
 final syncPendingCountProvider = StreamProvider<int>((ref) async* {
   final offline = await ref.watch(offlineManagerProvider.future);
   yield offline.pendingCount;
-  yield* Stream.periodic(
-    const Duration(seconds: 300),
-    (_) => offline.pendingCount,
-  ).distinct();
+  // ═══ FIX ME4: Reactive pending count — updates immediately on queue changes ═══
+  // Previously: polled every 300s, badge was stale for up to 5 minutes
+  yield* offline.pendingCountStream.distinct();
 });
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -652,8 +651,9 @@ final localDraftCountProvider = StreamProvider<int>((ref) async* {
 // NOTIFICATIONS — reactive unread count with polling
 // ═══════════════════════════════════════════════════════════════
 
-/// Reactive notification unread count — polls every 300s when online.
-/// ═══ PERFORMANCE: 300s interval (was 60s), only fetches when online ═══
+/// Reactive notification unread count — polls every 60s when online.
+/// ═══ FIX: Reduced from 300s to 60s for urgent notification delivery ═══
+/// Also invalidates on realtime sync events (feedback_tickets, official_memos)
 final notificationCountProvider = StreamProvider<int>((ref) async* {
   yield 0;
   final api = ref.read(apiClientProvider);
@@ -664,7 +664,7 @@ final notificationCountProvider = StreamProvider<int>((ref) async* {
   } catch (_) {
     yield 0;
   }
-  yield* Stream.periodic(const Duration(seconds: 300), (_) async {
+  yield* Stream.periodic(const Duration(seconds: 60), (_) async {
     try {
       if (ConnectivityUtils.isOnline) {
         await NotificationService.loadFromDB(refresh: true);

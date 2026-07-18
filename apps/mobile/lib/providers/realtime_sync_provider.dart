@@ -16,6 +16,8 @@ class RealtimeSyncService {
   final Ref _ref;
   RealtimeChannel? _channel;  // ═══ PERFORMANCE: Single channel instead of 5 ═══
   bool _isListening = false;
+  Timer? _debounceTimer;
+  final Set<String> _pendingInvalidations = {};
 
   /// Stream of change events — UI can listen to show "data changed" indicator
   final _changeController = StreamController<String>.broadcast();
@@ -95,20 +97,7 @@ class RealtimeSyncService {
         callback: (payload) {
           debugPrint('[RealtimeSync] New submission: ${payload.newRecord['id']}');
           _changeController.add('form_submissions');
-          // Invalidate providers so UI refreshes
-          _ref.invalidate(formStatsProvider);
-        },
-      );
-
-      _channel!.onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'form_submissions',
-        callback: (payload) {
-          debugPrint('[RealtimeSync] New submission: ${payload.newRecord['id']}');
-          _changeController.add('form_submissions');
-          // ═══ FIX: Invalidate ALL submission-related caches ═══
-          _ref.invalidate(formStatsProvider);
+          _scheduleInvalidation('form_submissions');
         },
       );
 
@@ -119,7 +108,31 @@ class RealtimeSyncService {
         callback: (payload) {
           debugPrint('[RealtimeSync] Submission updated: ${payload.newRecord['id']}');
           _changeController.add('form_submissions');
-          _ref.invalidate(formStatsProvider);
+          _scheduleInvalidation('form_submissions');
+        },
+      );
+
+      // ═══ FIX: Subscribe to feedback_tickets and official_memos ═══
+      // Previously: changes by other users required manual refresh
+      _channel!.onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'feedback_tickets',
+        callback: (payload) {
+          debugPrint('[RealtimeSync] Feedback ticket changed: ${payload.eventType}');
+          _changeController.add('feedback_tickets');
+          _scheduleInvalidation('feedback_tickets');
+        },
+      );
+
+      _channel!.onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'official_memos',
+        callback: (payload) {
+          debugPrint('[RealtimeSync] Official memo changed: ${payload.eventType}');
+          _changeController.add('official_memos');
+          _scheduleInvalidation('official_memos');
         },
       );
 
@@ -162,8 +175,23 @@ class RealtimeSyncService {
     }
   }
 
+  /// Debounced provider invalidation — batches rapid changes
+  void _scheduleInvalidation(String table) {
+    _pendingInvalidations.add(table);
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      for (final t in _pendingInvalidations) {
+        if (t == 'form_submissions' || t == 'feedback_tickets' || t == 'official_memos') {
+          _ref.invalidate(formStatsProvider);
+        }
+      }
+      _pendingInvalidations.clear();
+    });
+  }
+
   /// Stop listening for changes
   void dispose() {
+    _debounceTimer?.cancel();
     _channel?.unsubscribe();
     _changeController.close();
     _isListening = false;

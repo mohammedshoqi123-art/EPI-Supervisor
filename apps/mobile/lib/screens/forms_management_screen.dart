@@ -34,31 +34,37 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     });
     try {
       final client = Supabase.instance.client;
-      final forms = await client
-          .from('forms')
-          .select('*')
-          .isFilter('deleted_at', null)
-          .order('created_at', ascending: false);
-      _forms = (forms as List<dynamic>).cast<Map<String, dynamic>>();
 
+      // ═══ FIX: Load forms and submissions stats in parallel (2 queries instead of N+1) ═══
+      final results = await Future.wait([
+        client
+            .from('forms')
+            .select('*')
+            .isFilter('deleted_at', null)
+            .order('created_at', ascending: false),
+        client
+            .from('form_submissions')
+            .select('form_id, status'),
+      ]);
+
+      _forms = (results[0] as List<dynamic>).cast<Map<String, dynamic>>();
+      final allSubs = (results[1] as List<dynamic>).cast<Map<String, dynamic>>();
+
+      // ═══ Compute stats from single result set (no per-form queries) ═══
       final Map<String, Map<String, int>> stats = {};
+      for (final sub in allSubs) {
+        final fid = sub['form_id'] as String?;
+        if (fid == null) continue;
+        final counts = stats.putIfAbsent(fid, () => <String, int>{});
+        counts['total'] = (counts['total'] ?? 0) + 1;
+        final st = sub['status'] ?? 'draft';
+        counts[st] = (counts[st] ?? 0) + 1;
+      }
+
+      // Ensure all forms have stats (even if 0 submissions)
       for (final f in _forms) {
         final fid = f['id'] as String;
-        try {
-          final subs = await client
-              .from('form_submissions')
-              .select('id, status')
-              .eq('form_id', fid);
-          final subList = subs as List<dynamic>;
-          final counts = <String, int>{'total': subList.length};
-          for (final s in subList) {
-            final st = s['status'] ?? 'draft';
-            counts[st] = (counts[st] ?? 0) + 1;
-          }
-          stats[fid] = counts;
-        } catch (_) {
-          stats[fid] = {'total': 0};
-        }
+        stats.putIfAbsent(fid, () => {'total': 0});
       }
 
       if (mounted) {

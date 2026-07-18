@@ -241,8 +241,10 @@ class _ReferenceCard extends StatelessWidget {
 
   Future<void> _openFile(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
+    try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('[References] Failed to launch URL: $e');
     }
   }
 }

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -559,7 +558,7 @@ class SubmissionsStatusDonut extends StatelessWidget {
 /// Categories: إرسالياتي (mine) / مركزي / محافظة / مديرية
 /// ═══════════════════════════════════════════════════════════
 
-class SubmissionsByLevelChart extends ConsumerStatefulWidget {
+class SubmissionsByLevelChart extends ConsumerWidget {
   final AsyncValue<AuthState> authState;
   final String? campaignType;
   final int? campaignRound;
@@ -572,72 +571,75 @@ class SubmissionsByLevelChart extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<SubmissionsByLevelChart> createState() =>
-      _SubmissionsByLevelChartState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    // ═══ FIX: Use submissionsProvider which handles offline cache ═══
+    // Previously: direct db.getSubmissions() call that bypassed cache
+    final filter = SubmissionsFilter(
+      campaignType: campaignType,
+      campaignRound: campaignRound,
+      status: 'submitted',
+      limit: 10000,
+    );
+    final submissionsAsync = ref.watch(submissionsProvider(filter));
+
+    return submissionsAsync.when(
+      loading: () => Container(
+        height: 200,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Container(
+        height: 160,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            e.toString(),
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
+      ),
+      data: (submissions) => _SubmissionsByLevelBody(
+        submissions: submissions,
+        authState: authState,
+      ),
+    );
+  }
 }
 
-class _SubmissionsByLevelChartState
-    extends ConsumerState<SubmissionsByLevelChart> {
-  List<Map<String, dynamic>> _submissions = [];
-  bool _loading = true;
-  String? _error;
+class _SubmissionsByLevelBody extends StatelessWidget {
+  final List<Map<String, dynamic>> submissions;
+  final AsyncValue<AuthState> authState;
+
+  const _SubmissionsByLevelBody({
+    required this.submissions,
+    required this.authState,
+  });
 
   @override
-  void initState() {
-    super.initState();
-    _fetchData();
-  }
-
-  @override
-  void didUpdateWidget(SubmissionsByLevelChart oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.campaignType != widget.campaignType ||
-        oldWidget.campaignRound != widget.campaignRound) {
-      _fetchData();
-    }
-  }
-
-  Future<void> _fetchData() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    // ═══ FIX: فحص isOnline — لا نحظر التطبيق بالاوفلاين ═══
-    if (!ConnectivityUtils.isOnline) {
-      if (mounted) {
-        setState(() {
-          _error = 'لا توجد بيانات — غير متصل بالإنترنت';
-          _loading = false;
-        });
-      }
-      return;
-    }
-    try {
-      final db = ref.read(databaseServiceProvider);
-      final data = await db.getSubmissions(
-        campaignType: widget.campaignType,
-        campaignRound: widget.campaignRound,
-        status: 'submitted',
-        limit: 10000,
-      ).timeout(
-        const Duration(seconds: 20),
-        onTimeout: () => throw TimeoutException('Network timeout'),
-      );
-      if (mounted) {
-        setState(() {
-          _submissions = data;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _loading = false;
-        });
-      }
-    }
-  }
+  Widget build(BuildContext context) {
+    final data = submissions;
 
   @override
   Widget build(BuildContext context) {
@@ -689,15 +691,15 @@ class _SubmissionsByLevelChartState
     }
 
     // ═══ Compute level breakdown ═══
-    final authState = widget.authState.valueOrNull;
-    final userId = authState?.userId;
+    final authStateValue = authState.valueOrNull;
+    final userId = authStateValue?.userId;
 
     int mineCount = 0;
     int centralCount = 0;
     int governorateCount = 0;
     int districtCount = 0;
 
-    for (final s in _submissions) {
+    for (final s in data) {
       final submitterId = s['submitted_by'] as String?;
       final role = (s['profiles'] as Map?)?['role'] as String? ?? '';
 

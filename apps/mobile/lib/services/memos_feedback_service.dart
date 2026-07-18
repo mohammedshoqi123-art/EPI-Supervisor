@@ -602,14 +602,49 @@ final feedbackTicketsServiceProvider = Provider<FeedbackTicketsService>((ref) {
   return FeedbackTicketsService(ref.read(apiClientProvider));
 });
 
-/// Memos provider — auto-refreshes every 60 seconds
+/// Memos provider — auto-refreshes every 60 seconds, caches offline
 final memosProvider = StreamProvider<List<OfficialMemo>>((ref) async* {
   final service = ref.read(officialMemosServiceProvider);
   final controller = StreamController<List<OfficialMemo>>();
 
   Future<void> refresh() async {
-    final memos = await service.getUserMemos();
-    if (!controller.isClosed) controller.add(memos);
+    try {
+      final memos = await service.getUserMemos();
+      if (!controller.isClosed) controller.add(memos);
+      // ═══ FIX: Cache memos for offline viewing ═══
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final rawList = memos.map((m) => {
+          'id': m.id,
+          'memo_number': m.memoNumber,
+          'title': m.title,
+          'body': m.body,
+          'priority': m.priority,
+          'issued_by': m.issuedBy,
+          'issuer_name': m.issuerName,
+          'issuer_role': m.issuerRole,
+          'target_roles': m.targetRoles,
+          'requires_acknowledgment': m.requiresAcknowledgment,
+          'valid_until': m.validUntil?.toIso8601String(),
+          'attachments': m.attachments,
+          'created_at': m.createdAt.toIso8601String(),
+          'is_acknowledged': m.isAcknowledged,
+          'acknowledged_at': m.acknowledgedAt?.toIso8601String(),
+        }).toList();
+        await cache.forceInvalidate('memos_offline');
+        await cache.getList('memos_offline', () async => rawList, maxAge: const Duration(days: 7));
+      } catch (_) {}
+    } catch (e) {
+      // ═══ FIX: On failure, try offline cache ═══
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final cached = await cache.getList('memos_offline', () async => [], maxAge: const Duration(days: 365));
+        if (cached.isNotEmpty) {
+          final memos = cached.map((m) => OfficialMemo.fromMap(m)).toList();
+          if (!controller.isClosed) controller.add(memos);
+        }
+      } catch (_) {}
+    }
   }
 
   await refresh();
@@ -625,7 +660,7 @@ final memosProvider = StreamProvider<List<OfficialMemo>>((ref) async* {
   }
 });
 
-/// Feedback tickets provider — single StreamProvider (1 RPC call)
+/// Feedback tickets provider — single StreamProvider (1 RPC call), caches offline
 /// All filters are applied client-side to reduce network calls from 4 → 1
 final allFeedbackTicketsProvider =
     StreamProvider<List<FeedbackTicket>>((ref) async* {
@@ -633,8 +668,41 @@ final allFeedbackTicketsProvider =
   final controller = StreamController<List<FeedbackTicket>>();
 
   Future<void> refresh() async {
-    final tickets = await service.getUserTickets(filter: 'all');
-    if (!controller.isClosed) controller.add(tickets);
+    try {
+      final tickets = await service.getUserTickets(filter: 'all');
+      if (!controller.isClosed) controller.add(tickets);
+      // ═══ FIX: Cache tickets for offline viewing ═══
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final rawList = tickets.map((t) => {
+          'id': t.id,
+          'title': t.title,
+          'description': t.description,
+          'category': t.category,
+          'priority': t.priority,
+          'status': t.status,
+          'created_by': t.createdBy,
+          'creator_name': t.creatorName,
+          'assigned_to': t.assignedTo,
+          'assignee_name': t.assigneeName,
+          'sla_deadline': t.slaDeadline?.toIso8601String(),
+          'created_at': t.createdAt.toIso8601String(),
+          'updated_at': t.updatedAt?.toIso8601String(),
+        }).toList();
+        await cache.forceInvalidate('tickets_offline');
+        await cache.getList('tickets_offline', () async => rawList, maxAge: const Duration(days: 7));
+      } catch (_) {}
+    } catch (e) {
+      // ═══ FIX: On failure, try offline cache ═══
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final cached = await cache.getList('tickets_offline', () async => [], maxAge: const Duration(days: 365));
+        if (cached.isNotEmpty) {
+          final tickets = cached.map((t) => FeedbackTicket.fromMap(t)).toList();
+          if (!controller.isClosed) controller.add(tickets);
+        }
+      } catch (_) {}
+    }
   }
 
   await refresh();

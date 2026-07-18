@@ -31,6 +31,7 @@ class OfflineManager {
   Box<String>? _box;
   final EncryptionService _encryption;
   final _connectivityController = StreamController<bool>.broadcast();
+  final _pendingCountController = StreamController<int>.broadcast();
   final _uuid = const Uuid();
 
   bool _initialized = false;
@@ -39,6 +40,8 @@ class OfflineManager {
   bool _isOnline = true;
   bool get isOnline => _isOnline;
   Stream<bool> get connectivityStream => _connectivityController.stream;
+  /// ═══ FIX ME4: Reactive pending count stream ═══
+  Stream<int> get pendingCountStream => _pendingCountController.stream;
 
   /// Update connectivity status from external source (ConnectivityUtils).
   void updateConnectivity(bool online) {
@@ -73,7 +76,17 @@ class OfflineManager {
             throw TimeoutException('Hive box open timed out');
           },
         );
-      } catch (_) {
+      } catch (e) {
+        // ═══ FIX ME3: Hive corruption recovery ═══
+        // If box open fails (corrupted file from power loss, etc.),
+        // delete the corrupted box and retry
+        if (kDebugMode) {
+          debugPrint('[OfflineManager] Box open failed, attempting recovery: $e');
+        }
+        try {
+          await Hive.deleteBoxFromDisk(_boxName);
+        } catch (_) {}
+
         await Hive.initFlutter().timeout(
           const Duration(seconds: 5),
           onTimeout: () {
@@ -84,9 +97,12 @@ class OfflineManager {
         _box = await Hive.openBox<String>(_boxName).timeout(
           const Duration(seconds: 5),
           onTimeout: () {
-            throw TimeoutException('Hive box open timed out after init');
+            throw TimeoutException('Hive box open timed out after recovery');
           },
         );
+        if (kDebugMode) {
+          debugPrint('[OfflineManager] ✅ Recovered from Hive corruption (data reset)');
+        }
       }
     } catch (e) {
       if (kDebugMode) print('[OfflineManager] Init failed: $e');
@@ -282,6 +298,10 @@ class OfflineManager {
   /// Force recalculate count (call after queue changes)
   void _invalidatePendingCount() {
     _cachedPendingCount = -1;
+    // ═══ FIX ME4: Emit new count to stream ═══
+    if (!_pendingCountController.isClosed) {
+      _pendingCountController.add(pendingCount);
+    }
   }
 
   /// Sync all pending items with retry logic and conflict handling.
@@ -613,6 +633,9 @@ class OfflineManager {
   String? _cacheRawSignature;
   static const int _maxCacheMemoryEntries = 50; // LRU limit
 
+  // ═══ FIX ME2: Cache size limit (50MB) with LRU eviction ═══
+  static const int _maxCacheSizeBytes = 50 * 1024 * 1024; // 50MB
+
   Future<void> cacheData(String key, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
       final cache = _getCache();
@@ -620,6 +643,30 @@ class OfflineManager {
         'data': data,
         'cached_at': DateTime.now().toIso8601String(),
       };
+
+      // ═══ LRU Eviction: Remove oldest entries if cache exceeds 50MB ═══
+      final cacheJson = jsonEncode(cache);
+      if (cacheJson.length > _maxCacheSizeBytes) {
+        // Sort by cached_at, remove oldest until under limit
+        final entries = cache.entries.toList()
+          ..sort((a, b) {
+            final aTime = a.value['cached_at'] ?? '';
+            final bTime = b.value['cached_at'] ?? '';
+            return aTime.compareTo(bTime);
+          });
+
+        int currentSize = cacheJson.length;
+        for (final entry in entries) {
+          if (currentSize <= _maxCacheSizeBytes * 0.8) break; // Evict to 80%
+          final entrySize = jsonEncode({entry.key: entry.value}).length;
+          cache.remove(entry.key);
+          currentSize -= entrySize;
+          if (kDebugMode) {
+            debugPrint('[OfflineManager] LRU evicted cache key: ${entry.key}');
+          }
+        }
+      }
+
       final encrypted = _encryption.encrypt(jsonEncode(cache));
       await _safeBox?.put(_cacheKey, encrypted);
       // Update memory cache
@@ -726,5 +773,6 @@ class OfflineManager {
 
   void dispose() {
     _connectivityController.close();
+    _pendingCountController.close();
   }
 }

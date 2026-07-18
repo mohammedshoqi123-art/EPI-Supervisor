@@ -284,7 +284,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       final filter = SubmissionsFilter(
         campaignType: campaign.value,
         campaignRound: round,
-        limit: 5000,
+        limit: 500,
         offset: 0,
       );
       final data = await ref.read(submissionsProvider(filter).future);

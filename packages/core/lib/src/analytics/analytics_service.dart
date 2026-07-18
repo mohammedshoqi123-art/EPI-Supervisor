@@ -177,7 +177,7 @@ class AnalyticsService {
       'form_submissions',
       select: 'created_at, status',
       filters: filters,
-      limit: 5000,
+      limit: 500,
     );
 
     // Group by date
@@ -218,7 +218,7 @@ class AnalyticsService {
       'form_submissions',
       select: 'governorate_id',
       filters: filters,
-      limit: 5000,
+      limit: 500,
     );
 
     // Step 2: Count locally (fast — just counting strings)

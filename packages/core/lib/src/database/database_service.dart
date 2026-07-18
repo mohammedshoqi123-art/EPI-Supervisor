@@ -183,7 +183,7 @@ class DatabaseService {
 
       // Step 2: Use RPC to fetch ALL submissions (bypasses 1000-row limit)
       final allSubmissions = await _api.rpc('fetch_submissions', params: {
-        'p_limit': limit ?? 10000,
+        'p_limit': limit ?? 1000,
         'p_offset': offset ?? 0,
         if (status != null) 'p_status': status,
         if (formId != null) 'p_form_id': formId,
@@ -372,7 +372,7 @@ class DatabaseService {
           extraFilters: campaignRound != null
               ? {'campaign_round': campaignRound}
               : null,
-          limit: 5000,
+          limit: 500,
         );
       } else {
         // Round-only filter (no campaign_type)
@@ -380,7 +380,7 @@ class DatabaseService {
           'form_submissions',
           select: 'id',
           filters: {'campaign_round': campaignRound},
-          limit: 5000,
+          limit: 500,
         );
       }
       final submissionIds =

@@ -83,7 +83,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     ref.invalidate(submissionsProvider(SubmissionsFilter(
       campaignType: ref.read(campaignProvider).value,
       campaignRound: ref.read(campaignRoundProvider),
-      limit: 5000,
+      limit: 500,
     )));
     ref.invalidate(governoratesProvider);
   }
@@ -144,7 +144,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
             .watch(submissionsProvider(SubmissionsFilter(
               campaignType: ref.watch(campaignProvider).value,
               campaignRound: ref.watch(campaignRoundProvider),
-              limit: 5000,
+              limit: 500,
             )))
             .valueOrNull ??
         [];
@@ -429,7 +429,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
             .watch(submissionsProvider(SubmissionsFilter(
               campaignType: ref.watch(campaignProvider).value,
               campaignRound: ref.watch(campaignRoundProvider),
-              limit: 5000,
+              limit: 500,
             )))
             .valueOrNull ??
         [];

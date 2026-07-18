@@ -2,6 +2,12 @@
 // EPI Copilot — Intent Classification (LLM + Regex Hybrid)
 // ═══════════════════════════════════════════════════════════
 
+
+// ═══ Intent groups for system prompt ═══
+export const HEALTH_INTENTS: IntentName[] = ['health_data', 'vaccination_query', 'campaign_status', 'coverage_analysis']
+export const GOV_INTENTS: IntentName[] = ['governorate_report', 'district_report', 'comparison', 'ranking']
+export const REPORT_INTENTS: IntentName[] = ['generate_report', 'export_data', 'daily_report', 'weekly_report']
+
 export type IntentName =
   | 'query_submissions' | 'query_shortages' | 'query_analytics'
   | 'generate_report' | 'query_governorates' | 'query_users'

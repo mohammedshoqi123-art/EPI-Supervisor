@@ -641,55 +641,6 @@ class _SubmissionsByLevelBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = submissions;
 
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return Container(
-        height: 200,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_error != null) {
-      return Container(
-        height: 160,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Text(
-            'تعذّر تحميل البيانات',
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 13,
-              color: AppTheme.textHint.withValues(alpha: 0.5),
-            ),
-          ),
-        ),
-      );
-    }
-
     // ═══ Compute level breakdown ═══
     final authStateValue = authState.valueOrNull;
     final userId = authStateValue?.userId;

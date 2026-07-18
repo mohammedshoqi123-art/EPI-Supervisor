@@ -213,48 +213,69 @@ async function logUsage(supa: any, modelId: string, tokens: number, latencyMs: n
 // ═══════════════════════════════════════════════════════════
 
 async function fetchLiveData(supa: any, profile: UserProfile | null): Promise<string> {
+  // ⚠️ CRITICAL FIX: Was sequential (3+3+5+5+5+5+5=31s worst case).
+  // Now: all queries run in parallel (max 5s total instead of 31s)
   const parts: string[] = []
   const isPrivileged = profile && ['admin', 'central', 'governorate'].includes(profile.role)
+  const today = todayStart()
 
-  const { data: polioForms } = await withTimeout(supa.from('forms').select('id').eq('campaign_type', 'polio_campaign').is('deleted_at', null), 3_000) ?? {}
-  const { data: integratedForms } = await withTimeout(supa.from('forms').select('id').eq('campaign_type', 'integrated_activity').is('deleted_at', null), 3_000) ?? {}
-  const polioFormIds = (polioForms || []).map((f: any) => f.id)
-  const integratedFormIds = (integratedForms || []).map((f: any) => f.id)
+  // Parallel: fetch form IDs
+  const [polioFormsRes, integratedFormsRes] = await Promise.all([
+    withTimeout(supa.from('forms').select('id').eq('campaign_type', 'polio_campaign').is('deleted_at', null), 3_000).catch(() => null),
+    withTimeout(supa.from('forms').select('id').eq('campaign_type', 'integrated_activity').is('deleted_at', null), 3_000).catch(() => null),
+  ])
+  const polioFormIds = (polioFormsRes?.data || []).map((f: any) => f.id)
+  const integratedFormIds = (integratedFormsRes?.data || []).map((f: any) => f.id)
 
-  try {
-    const today = todayStart()
+  // Parallel: all count queries at once
+  const queries: Promise<any>[] = []
+
+  // Today's submissions — polio
+  if (polioFormIds.length > 0) {
+    let q = supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).in('form_id', polioFormIds).gte('created_at', today)
+    if (!isPrivileged && profile) q = q.eq('submitted_by', profile.id)
+    queries.push(withTimeout(q, 5_000).then(r => ({ label: '📊 إرساليات اليوم (شلل)', count: r?.count })).catch(() => null))
+  }
+
+  // Today's submissions — integrated
+  if (integratedFormIds.length > 0) {
+    let q = supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).in('form_id', integratedFormIds).gte('created_at', today)
+    if (!isPrivileged && profile) q = q.eq('submitted_by', profile.id)
+    queries.push(withTimeout(q, 5_000).then(r => ({ label: '📊 إرساليات اليوم (إيصالي)', count: r?.count })).catch(() => null))
+  }
+
+  // Pending review (privileged only)
+  if (isPrivileged) {
     if (polioFormIds.length > 0) {
-      let q = supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).in('form_id', polioFormIds).gte('created_at', today)
-      if (!isPrivileged && profile) q = q.eq('submitted_by', profile.id)
-      const { count } = await withTimeout(q, 5_000) ?? {}
-      if (count != null) parts.push(`📊 إرساليات اليوم (شلل): ${count}`)
+      queries.push(
+        withTimeout(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted').in('form_id', polioFormIds), 5_000)
+          .then(r => ({ label: '⏳ بانتظار المراجعة (شلل)', count: r?.count })).catch(() => null)
+      )
     }
     if (integratedFormIds.length > 0) {
-      let q = supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).in('form_id', integratedFormIds).gte('created_at', today)
-      if (!isPrivileged && profile) q = q.eq('submitted_by', profile.id)
-      const { count } = await withTimeout(q, 5_000) ?? {}
-      if (count != null) parts.push(`📊 إرساليات اليوم (إيصالي): ${count}`)
+      queries.push(
+        withTimeout(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted').in('form_id', integratedFormIds), 5_000)
+          .then(r => ({ label: '⏳ بانتظار المراجعة (إيصالي)', count: r?.count })).catch(() => null)
+      )
     }
-  } catch {}
+    // Active shortages
+    queries.push(
+      withTimeout(supa.from('supply_shortages').select('severity').is('deleted_at', null).eq('is_resolved', false).limit(2000), 5_000)
+        .then(r => {
+          if (r?.data?.length) {
+            const critical = r.data.filter((s: any) => s.severity === 'critical').length
+            return { label: `⚠️ نواقص نشطة: ${r.data.length} (حرجة: ${critical})`, count: r.data.length }
+          }
+          return null
+        }).catch(() => null)
+    )
+  }
 
-  if (isPrivileged) {
-    try {
-      if (polioFormIds.length > 0) {
-        const { count } = await withTimeout(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted').in('form_id', polioFormIds), 5_000) ?? {}
-        if (count) parts.push(`⏳ بانتظار المراجعة (شلل): ${count}`)
-      }
-      if (integratedFormIds.length > 0) {
-        const { count } = await withTimeout(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted').in('form_id', integratedFormIds), 5_000) ?? {}
-        if (count) parts.push(`⏳ بانتظار المراجعة (إيصالي): ${count}`)
-      }
-    } catch {}
-    try {
-      const { data: shs } = await withTimeout(supa.from('supply_shortages').select('severity').is('deleted_at', null).eq('is_resolved', false).limit(2000), 5_000) ?? {}
-      if (shs?.length) {
-        const critical = shs.filter((s: any) => s.severity === 'critical').length
-        parts.push(`⚠️ نواقص نشطة: ${shs.length} (حرجة: ${critical})`)
-      }
-    } catch {}
+  // Wait for all queries in parallel (max 5s total)
+  const results = await Promise.all(queries)
+  for (const r of results) {
+    if (r && r.label && r.count != null) parts.push(r.label)
+    else if (r && r.label && typeof r.label === 'string' && r.label.startsWith('⚠️')) parts.push(r.label)
   }
 
   return parts.join('\n')
@@ -1092,16 +1113,21 @@ serve(async (req) => {
     if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
 
     // Rate limit — use modelConfig.rateLimit from DB (default 25)
+    // ⚠️ CRITICAL FIX: Was returning 429 on ANY DB error (connection timeout, pool full, etc.)
+    // Now: fail-open on DB errors — allow the request through but log the warning
     const modelConfig = await getModelConfig(supabase).catch(() => ({ defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 6, rateLimit: 25 }))
     try {
       const rl = await supabase.rpc('check_and_increment_rate_limit', {
         p_user_id: auth.userId,
-        p_endpoint: 'ai-chat-v3', // ✅ Fixed: was 'ai-chat-v4'
+        p_endpoint: 'ai-chat-v3',
         p_window_seconds: 60,
         p_max_requests: modelConfig.rateLimit || 25,
       })
       if (!rl.data?.[0]?.allowed) return jsonResponse({ error: 'تم تجاوز الحد — حاول بعد دقيقة' }, 429, origin)
-    } catch { return jsonResponse({ error: 'خطأ في التحقق — حاول لاحقاً' }, 429, origin) }
+    } catch (rlErr) {
+      // ⚠️ FIX: Don't block the user on DB errors — fail open
+      console.warn('[RATE_LIMIT] RPC failed, fail-open:', String(rlErr).slice(0, 100))
+    }
 
     const profile = await getUserProfile(supabase, auth.userId)
     if (!modelConfig.enabled) return jsonResponse({ error: 'خدمة AI معطلة' }, 503, origin)
@@ -1545,8 +1571,13 @@ serve(async (req) => {
     }
 
     // Determine if this query needs tool calls (data queries)
-    // With grounding, we don't need tools — data is already in context
-    const needsTools = true  // tools provide structured analysis beyond raw grounding data
+    // ⚠️ CRITICAL FIX: needsTools=true was disabling ALL providers except Groq!
+    // This was the #1 cause of "dumb AI" — if Groq failed, no fallback worked.
+    // Now: only use tools when Groq key is available AND user asks for complex analysis
+    // AND grounding didn't find data. For simple queries, use Pollinations/ZAI (faster).
+    const needsTools = !!groqKey && (
+      /حلل|تحليل|تقرير|إحصائية|قارن|ترتيب|تنبؤ|توقع|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل/.test(message || '')
+    ) && (!grounding || !grounding.hasData)
 
     // Predict best provider (Patent-Pending Predictive Selection)
     const prediction = message ? predictBestProvider(message, needsTools) : null

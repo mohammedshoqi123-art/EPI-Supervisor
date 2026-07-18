@@ -287,7 +287,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         'history': historyJson,
         if (template != null) 'template': template,
         if (activeCampaign == 'integrated_activity') 'campaign_round': activeRound,
-      }).timeout(const Duration(seconds: 45), onTimeout: () {
+      }).timeout(const Duration(seconds: 90), onTimeout: () {
         throw TimeoutException('انتهت مهلة الطلب');
       });
 

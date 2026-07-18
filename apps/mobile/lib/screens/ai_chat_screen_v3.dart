@@ -375,8 +375,15 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         userMessage = '🔒 انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.';
       } else if (errorMsg.contains('429')) {
         userMessage = '⏳ أرسلت رسائل كثيرة. انتظر دقيقة وحاول مرة أخرى.';
+      } else if (errorMsg.contains('503') || errorMsg.contains('service')) {
+        userMessage = '⚠️ خدمة AI مؤقتاً غير متاحة. جرب مرة أخرى بعد لحظات.';
+      } else if (errorMsg.contains('500') || errorMsg.contains('Internal')) {
+        userMessage = '⚠️ خطأ في الخادم. جاري إعادة المحاولة...';
+      } else if (errorMsg.contains('Function') || errorMsg.contains('function')) {
+        userMessage = '⚠️ خدمة AI غير مُنشرة. تواصل مع المدير.';
       } else {
-        userMessage = '⚠️ حدث خطأ. حاول مرة أخرى.';
+        userMessage = '⚠️ حدث خطأ: ${errorMsg.length > 100 ? errorMsg.substring(0, 100) : errorMsg}';
+        debugPrint('[AI_CHAT] Full error: $errorMsg');
       }
       setState(() {
         _msgs.add(

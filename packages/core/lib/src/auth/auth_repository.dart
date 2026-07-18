@@ -298,14 +298,6 @@ class AuthRepository {
         email: email,
         password: password,
       );
-
-      // ═══ FIX: نُ emit isAuthenticated=true فوراً بعد نجاح signIn ═══
-      // Supabase's onAuthStateChange should fire, but it may be delayed.
-      // Emitting here ensures GoRouter redirect picks it up immediately.
-      if (response.user != null) {
-        await _loadProfile(response.user!.id);
-      }
-
       return response;
     } catch (e) {
       _currentState = _currentState.copyWith(

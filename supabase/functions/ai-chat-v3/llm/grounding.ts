@@ -4,7 +4,7 @@
 //
 // ROOT CAUSE OF WRONG ANSWERS:
 // The old system relied on LLM to call tools via Groq (which doesn't
-// always happen), and fallbacks (Pollinations, ZAI) don't support tool
+// always happen), and fallbacks (Pollinations, Groq) don't support tool
 // calls at all. So when the LLM had no data, it HALLUCINATED.
 //
 // SOLUTION (NotebookLM-style):
@@ -2036,7 +2036,7 @@ export async function groundMessage(
     contextText += '5. ركّز على التحليل والتوصيات العملية، ليس فقط سرد الأرقام\n\n'
 
     // ⚠️ FIX: Cap total contextText to ~12000 chars to avoid token overflow on
-    // providers with smaller context windows (ZAI 1024 tokens, Pollinations free tier).
+    // providers with smaller context windows (Groq 1024 tokens, Pollinations free tier).
     // The "100% data" update made contextText huge (sample rows + JSON data + analysis),
     // causing 400/413 errors on providers. Truncate gracefully.
     const MAX_CONTEXT_CHARS = 12000

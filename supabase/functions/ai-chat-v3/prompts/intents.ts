@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// EPI Copilot — Intent Classification
+// EPI Copilot — Intent Classification (LLM + Regex Hybrid)
 // ═══════════════════════════════════════════════════════════
 
 export type IntentName =
@@ -11,6 +11,7 @@ export type IntentName =
   | 'data_quality' | 'user_activity' | 'campaign_analysis'
   | 'general_question'
 
+// ═══ Regex-based classification (fast, no API call) ═══
 const INTENT_RULES: [IntentName, RegExp][] = [
   ['query_submissions', /إرساليات|إرسال|استمارة|كم عدد|كم إرسالية|إدخالات|نماذج مُرسلة/i],
   ['query_shortages', /نقص|نواقص|احتياج|مفقود|نواقص حرجة|مخزون/i],
@@ -32,10 +33,28 @@ const INTENT_RULES: [IntentName, RegExp][] = [
   ['campaign_analysis', /حملة|شلل أطفال|إيصالي|تكاملي|الحملات/i],
 ]
 
-// Intents that benefit from EPI knowledge
-export const HEALTH_INTENTS: IntentName[] = ['query_health', 'analyze_trend', 'forecast', 'campaign_analysis']
-export const GOV_INTENTS: IntentName[] = ['query_governorates', 'compare_data', 'proactive']
-export const REPORT_INTENTS: IntentName[] = ['generate_report', 'export_data', 'data_quality']
+// ═══ LLM-based classification hints (used when regex is ambiguous) ═══
+// These patterns suggest the user needs data analysis → use tools
+export const DATA_QUERY_PATTERNS = [
+  /كم\s+(عدد|نسبة|معدل|مجموع|متوسط)/i,
+  /أيش\s+(الوضع|الأداء|النتيجة|الإحصائيات)/i,
+  /كيف\s+(الوضع|الأداء|النتيجة)/i,
+  /وش\s+(الأخبار|الوضع|الأداء)/i,
+  /حلل|تحليل|قارن|مقارنة/i,
+  /أفضل|أسوأ|أضعف|أقوى/i,
+  /نسبة|معدل|اتجاه|تطور/i,
+  /كل المحافظات|جميع المحافظات/i,
+  /الجولة|الحملة/i,
+]
+
+// Patterns that suggest simple knowledge questions (no tools needed)
+export const KNOWLEDGE_PATTERNS = [
+  /ما هو|ما هي|ايش هو|ايش هي|وش هو|وش هي/i,
+  /لماذا|ليش|ليه|سبب/i,
+  /هل يسبب|هل يحمي|هل مجاني|هل آمن/i,
+  /متى|كم مرة|كم جرعة/i,
+  /شرح|دليل|طريقة|خطوات/i,
+]
 
 export function classifyIntent(text: string): { intent: IntentName; confidence: number } {
   let bestIntent: IntentName = 'general_question'
@@ -63,4 +82,14 @@ export function classifyCompoundIntents(text: string): IntentName[] {
     }
   }
   return intents.length > 0 ? intents : ['general_question']
+}
+
+// ═══ Check if query needs data tools ═══
+export function needsDataTools(text: string): boolean {
+  return DATA_QUERY_PATTERNS.some(p => p.test(text))
+}
+
+// ═══ Check if query is a simple knowledge question ═══
+export function isKnowledgeQuestion(text: string): boolean {
+  return KNOWLEDGE_PATTERNS.some(p => p.test(text))
 }

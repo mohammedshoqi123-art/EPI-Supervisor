@@ -25,7 +25,7 @@ import { sanitizeUserMessage } from './utils/guard.ts'
 import { detectGreeting } from './utils/greeting.ts'
 import { classifyIntent, classifyCompoundIntents } from './prompts/intents.ts'
 import { buildSystemPrompt } from './prompts/system.ts'
-import { groqChat, huggingfaceChat, openrouterChat, zaiChat, mimoChat, generateSummary } from './llm/providers.ts'
+import { groqChat, huggingfaceChat, openrouterChat, generateSummary } from './llm/providers.ts'
 import { hybridRouteChat, hybridRouteStream, getHybridHealthStats, predictBestProvider } from './llm/hybrid-gateway.ts'
 import { analyzeUserMessage, trackFeedback, trackLatency, getEscalationPrefix } from './llm/smart-escalation.ts'
 import { groundMessage, validateCitations, type GroundingResult } from './llm/grounding.ts'
@@ -67,13 +67,13 @@ async function getModelConfig(supa: any): Promise<ModelConfig> {
       enabled: settingsMap.ai_enabled !== false,
       fallbackEnabled: settingsMap.ai_fallback_enabled !== false,
       streamEnabled: settingsMap.ai_stream_enabled !== false,
-      maxHistory: Number(settingsMap.ai_max_history) || 6,
+      maxHistory: Number(settingsMap.ai_max_history) || 20,
       rateLimit: Number(settingsMap.ai_rate_limit) || 25,
     }
     _modelConfigCache = { data: config, ts: now }
     return config
   } catch {
-    return { defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 6, rateLimit: 25 }
+    return { defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 20, rateLimit: 25 }
   }
 }
 
@@ -995,6 +995,21 @@ async function executeToolCalls(supa: any, toolCalls: any[], userId?: string, co
     const fnName = tc.function?.name
     const fnArgs = JSON.parse(tc.function?.arguments || '{}')
     console.log(`[Tool Call] ${fnName}(${JSON.stringify(fnArgs)})`)
+
+    // ═══ RBAC: Write tools require admin role ═══
+    if (WRITE_TOOLS.has(fnName) && userId) {
+      const { data: userProfile } = await supa.from('profiles').select('role').eq('id', userId).single()
+      if (userProfile?.role !== 'admin') {
+        results.push({
+          tool_call_id: tc.id,
+          role: 'tool',
+          name: fnName,
+          content: JSON.stringify({ error: '⛔ هذه العملية متاحة للمدير فقط', needs_admin: true }),
+        })
+        continue
+      }
+    }
+
     const result = await executeFunction(supa, fnName, fnArgs, context)
     if (WRITE_TOOLS.has(fnName) && userId) {
       logWriteOperation(supa, userId, fnName, fnArgs, result, fnArgs._confirmed === true).catch(() => {})
@@ -1115,7 +1130,7 @@ serve(async (req) => {
     // Rate limit — use modelConfig.rateLimit from DB (default 25)
     // ⚠️ CRITICAL FIX: Was returning 429 on ANY DB error (connection timeout, pool full, etc.)
     // Now: fail-open on DB errors — allow the request through but log the warning
-    const modelConfig = await getModelConfig(supabase).catch(() => ({ defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 6, rateLimit: 25 }))
+    const modelConfig = await getModelConfig(supabase).catch(() => ({ defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 20, rateLimit: 25 }))
     try {
       const rl = await supabase.rpc('check_and_increment_rate_limit', {
         p_user_id: auth.userId,
@@ -1149,16 +1164,8 @@ serve(async (req) => {
     // guard below, breaking admin UI health/status widgets.
     const groqKey = Deno.env.get('GROQ_API_KEY')
     const hfToken = Deno.env.get('HF_API_TOKEN')
-    const mimoKey = Deno.env.get('MIMO_API_KEY') ?? Deno.env.get('GEMINI_API_KEY')
     const openrouterKey = Deno.env.get('OPENROUTER_API_KEY')
-    const zaiKey = Deno.env.get('ZAI_API_KEY')
-    // ⚠️ FIX: These were loaded ONLY in debug_providers mode but NEVER passed to gatewayEnv!
-    // This is why NVIDIA, Cloudflare, SiliconFlow, DeepSeek never worked.
-    const cfApiKey = Deno.env.get('CF_API_TOKEN')
-    const cfAccountId = Deno.env.get('CF_ACCOUNT_ID')
     const nvidiaKey = Deno.env.get('NVIDIA_API_KEY')
-    const siliconflowKey = Deno.env.get('SILICONFLOW_API_KEY')
-    const deepseekKey = Deno.env.get('DEEPSEEK_API_KEY')
 
     const dbModel = modelConfig.defaultModel
     const dbModelId = dbModel?.model_id
@@ -1172,7 +1179,7 @@ serve(async (req) => {
     }
     if (mode === 'model_status') {
       const { data: models } = await supabase.from('ai_models').select('*').order('priority')
-      return jsonResponse({ models: models || [], availableKeys: { groq: !!groqKey, mimo: !!mimoKey, huggingface: !!hfToken, openrouter: !!openrouterKey, zai: !!zaiKey }, userProfile: profile ? { name: profile.full_name, role: profile.role } : null }, 200, origin)
+      return jsonResponse({ models: models || [], availableKeys: { groq: !!groqKey, huggingface: !!hfToken, openrouter: !!openrouterKey, nvidia: !!nvidiaKey }, userProfile: profile ? { name: profile.full_name, role: profile.role } : null }, 200, origin)
     }
     if (mode === 'health') {
       const health = await getSystemHealthScore(supabase)
@@ -1220,17 +1227,7 @@ serve(async (req) => {
         results.groq = { ok: false, error: String(e).slice(0, 200) }
       }
 
-      // Test ZAI
-      try {
-        const { zaiChat } = await import('./llm/providers.ts')
-        const t1 = Date.now()
-        const r = await zaiChat(testMsg, zaiKey || '', 50)
-        results.zai = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null }
-      } catch (e: any) {
-        results.zai = { ok: false, error: String(e).slice(0, 200) }
-      }
-
-      // Test HuggingFace (new router endpoint)
+      // Test HuggingFace
       try {
         const { huggingfaceChat } = await import('./llm/providers.ts')
         const t1 = Date.now()
@@ -1240,7 +1237,7 @@ serve(async (req) => {
         results.huggingface = { ok: false, error: String(e).slice(0, 200) }
       }
 
-      // Test OpenRouter (free models)
+      // Test OpenRouter
       try {
         const { openrouterChat } = await import('./llm/providers.ts')
         const t1 = Date.now()
@@ -1250,18 +1247,7 @@ serve(async (req) => {
         results.openrouter = { ok: false, error: String(e).slice(0, 200) }
       }
 
-      // Test Cloudflare (if key set)
-      const cfKey = Deno.env.get('CF_API_TOKEN')
-      try {
-        const { cloudflareChat } = await import('./llm/providers.ts')
-        const t1 = Date.now()
-        const r = await cloudflareChat(testMsg, cfKey || '')
-        results.cloudflare = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null, hasKey: !!cfKey }
-      } catch (e: any) {
-        results.cloudflare = { ok: false, error: String(e).slice(0, 200), hasKey: !!cfKey }
-      }
-
-      // Test NVIDIA (keyless or with key)
+      // Test NVIDIA
       const nvKey = Deno.env.get('NVIDIA_API_KEY')
       try {
         const { nvidiaChat } = await import('./llm/providers.ts')
@@ -1272,40 +1258,12 @@ serve(async (req) => {
         results.nvidia = { ok: false, error: String(e).slice(0, 200), hasKey: !!nvKey }
       }
 
-      // Test SiliconFlow (if key set)
-      const sfKey = Deno.env.get('SILICONFLOW_API_KEY')
-      try {
-        const { siliconflowChat } = await import('./llm/providers.ts')
-        const t1 = Date.now()
-        const r = await siliconflowChat(testMsg, sfKey || '')
-        results.siliconflow = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null, hasKey: !!sfKey }
-      } catch (e: any) {
-        results.siliconflow = { ok: false, error: String(e).slice(0, 200), hasKey: !!sfKey }
-      }
-
-      // Test DeepSeek (if key set)
-      const dsKey = Deno.env.get('DEEPSEEK_API_KEY')
-      try {
-        const { deepseekChat } = await import('./llm/providers.ts')
-        const t1 = Date.now()
-        const r = await deepseekChat(testMsg, dsKey || '')
-        results.deepseek = { ok: !!r, latency: Date.now() - t1, reply: r ? String(r).slice(0, 100) : null, hasKey: !!dsKey }
-      } catch (e: any) {
-        results.deepseek = { ok: false, error: String(e).slice(0, 200), hasKey: !!dsKey }
-      }
-
       // Check env vars
       results.env = {
         GROQ_API_KEY: groqKey ? `${groqKey.slice(0, 10)}...${groqKey.slice(-4)} (${groqKey.length} chars)` : 'NOT SET',
-        ZAI_API_KEY: zaiKey ? `${zaiKey.slice(0, 10)}...${zaiKey.slice(-4)} (${zaiKey.length} chars)` : 'NOT SET',
         HF_API_TOKEN: hfToken ? `${hfToken.slice(0, 10)}... (${hfToken.length} chars)` : 'NOT SET',
         OPENROUTER_API_KEY: openrouterKey ? `${openrouterKey.slice(0, 10)}... (${openrouterKey.length} chars)` : 'NOT SET',
-        MIMO_API_KEY: mimoKey ? `${mimoKey.slice(0, 10)}... (${mimoKey.length} chars)` : 'NOT SET',
-        CF_API_TOKEN: cfKey ? `${cfKey.slice(0, 10)}... (${cfKey.length} chars)` : 'NOT SET',
-        CF_ACCOUNT_ID: Deno.env.get('CF_ACCOUNT_ID') ? 'SET' : 'NOT SET',
-        NVIDIA_API_KEY: nvKey ? `${nvKey.slice(0, 10)}... (${nvKey.length} chars)` : 'NOT SET (keyless mode)',
-        SILICONFLOW_API_KEY: sfKey ? `${sfKey.slice(0, 10)}... (${sfKey.length} chars)` : 'NOT SET',
-        DEEPSEEK_API_KEY: dsKey ? `${dsKey.slice(0, 10)}... (${dsKey.length} chars)` : 'NOT SET',
+        NVIDIA_API_KEY: nvKey ? `${nvKey.slice(0, 10)}... (${nvKey.length} chars)` : 'NOT SET',
       }
 
       return jsonResponse({ debug: results, timestamp: new Date().toISOString() }, 200, origin)
@@ -1332,10 +1290,9 @@ serve(async (req) => {
 
       const gatewayEnv: Record<string, string | undefined> = {
         GROQ_API_KEY: groqKey,
-        ZAI_API_KEY: zaiKey,
         HF_API_TOKEN: hfToken,
         OPENROUTER_API_KEY: openrouterKey,
-        MIMO_API_KEY: mimoKey,
+        NVIDIA_API_KEY: nvidiaKey,
       }
 
       const artifact = await generateStudioArtifact(
@@ -1500,10 +1457,57 @@ serve(async (req) => {
       : (context?.campaign_round ? Number(context.campaign_round) : NaN) || await getActiveCampaignRound(supabase)
     const roundLabel = getRoundLabelAr(campaignRound)
 
+    // ═══ Fetch form schemas for system prompt ═══
+    let formSchemasText = ''
+    try {
+      const { data: forms } = await withTimeout(
+        supabase.from('forms')
+          .select('id, title_ar, schema, campaign_type')
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('title_ar')
+          .limit(20),
+        5_000,
+      ) ?? {}
+      if (forms && forms.length > 0) {
+        formSchemasText = forms.map((f: any) => {
+          let fieldNames: string[] = []
+          if (f.schema) {
+            if (Array.isArray(f.schema)) {
+              fieldNames = f.schema.map((s: any) => s.name || s.key || s.id || '').filter(Boolean)
+            } else if (f.schema.fields) {
+              fieldNames = f.schema.fields.map((s: any) => s.name || s.key || s.id || '').filter(Boolean)
+            } else if (f.schema.sections) {
+              for (const section of f.schema.sections) {
+                if (section.fields) fieldNames.push(...section.fields.map((s: any) => s.name || s.key || s.id || '').filter(Boolean))
+              }
+            }
+          }
+          const ct = f.campaign_type === 'polio_campaign' ? 'شلل الأطفال' : 'إيصالي تكاملي'
+          return `📋 ${f.title_ar} (${ct})\n   ID: ${f.id}\n   الحقول: ${fieldNames.length > 0 ? fieldNames.join(', ') : 'غير محدد'}`
+        }).join('\n\n')
+      }
+    } catch (e) {
+      console.warn('[FORM_SCHEMAS] Failed to fetch:', String(e).slice(0, 100))
+    }
+
+    // ═══ Campaign info ═══
+    let campaignInfoText = ''
+    try {
+      const { data: campaigns } = await withTimeout(
+        supabase.from('campaign_types').select('key, label_ar, icon, visible').eq('visible', true),
+        3_000,
+      ) ?? {}
+      if (campaigns) {
+        campaignInfoText = campaigns.map((c: any) => `${c.icon} ${c.label_ar} (${c.key})`).join('\n')
+      }
+    } catch {}
+
     // System prompt
     const systemPrompt = buildSystemPrompt(
       profile || { id: auth.userId, role: 'data_entry', full_name: 'مستخدم', governorate_id: null, district_id: null, governorate_name: null },
       liveData, conversationSummary + feedbackContext, primaryIntent,
+      feedbackContext, formSchemasText, campaignInfoText,
     )
 
     // Append round-aware context to system prompt so LLM is aware
@@ -1568,28 +1572,20 @@ serve(async (req) => {
       }
     }
 
-    // Build env map for the gateway
+    // Build env map for the gateway (5 providers)
     const gatewayEnv: Record<string, string | undefined> = {
       GROQ_API_KEY: groqKey,
-      ZAI_API_KEY: zaiKey,
       HF_API_TOKEN: hfToken,
       OPENROUTER_API_KEY: openrouterKey,
-      MIMO_API_KEY: mimoKey,
-      // ⚠️ FIX: These were MISSING — providers existed but keys were never passed!
-      CF_API_TOKEN: cfApiKey,
-      CF_ACCOUNT_ID: cfAccountId,
       NVIDIA_API_KEY: nvidiaKey,
-      SILICONFLOW_API_KEY: siliconflowKey,
-      DEEPSEEK_API_KEY: deepseekKey,
     }
 
     // Determine if this query needs tool calls (data queries)
-    // ⚠️ CRITICAL FIX: needsTools=true was disabling ALL providers except Groq!
-    // This was the #1 cause of "dumb AI" — if Groq failed, no fallback worked.
-    // Now: only use tools when Groq key is available AND user asks for complex analysis
-    // AND grounding didn't find data. For simple queries, use Pollinations/ZAI (faster).
+    // Use tools when: Groq key available AND (intent suggests data OR grounding found no data)
+    const { needsDataTools: checkNeedsData } = await import('./prompts/intents.ts')
     const needsTools = !!groqKey && (
-      /حلل|تحليل|تقرير|إحصائية|قارن|ترتيب|تنبؤ|توقع|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل/.test(message || '')
+      checkNeedsData(message || '') ||
+      /حلل|تقرير|إحصائية|قارن|ترتيب|تنبؤ|توقع|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل/.test(message || '')
     ) && (!grounding || !grounding.hasData)
 
     // Predict best provider (Patent-Pending Predictive Selection)
@@ -1661,16 +1657,19 @@ serve(async (req) => {
 
     // Non-streaming — use Hybrid Parallel Racing Gateway
     // ⚠️ FIX: Reduced timeouts to prevent long hangs when all providers fail.
-    // Pollinations usually responds in <5s (tested directly), so 15s is plenty.
-    // If all providers fail, we want to fail fast and show the fallback answer.
+    // ═══ Dynamic timeout based on query complexity ═══
+    const isDeepAnalysis = /تحليل|تقرير|قارن|كل المحافظات|تفصيل|إحصائيات/.test(message || '')
+    const raceTimeout = isDeepAnalysis ? 30_000 : 15_000
+    const fallbackTimeout = isDeepAnalysis ? 45_000 : 20_000
+    console.log(`[TIMEOUT] Deep=${isDeepAnalysis} race=${raceTimeout}ms fallback=${fallbackTimeout}ms`)
+
     const hybridResult = await hybridRouteChat(messages, gatewayEnv, {
       model: dbModelId,
       maxTokens: dbMaxTokens,
       temperature: dbTemperature,
       tools: needsTools ? TOOLS : undefined,
       needTools: needsTools,
-      raceTimeoutMs: 15_000,   // ⚠️ Reduced from 30s — 15s is enough for Pollinations
-      fallbackTimeoutMs: 20_000,  // ⚠️ Reduced from 40s — fail fast for fallbacks
+      timeoutMs: raceTimeout,
     })
 
     // ─── If we got tool calls, execute them then ask LLM for final answer ───

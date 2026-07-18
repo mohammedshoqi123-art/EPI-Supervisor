@@ -44,12 +44,14 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   late AnimationController _typingAnimCtrl;
   bool _showWelcome = true;
 
-  // ═══ Bot state (unified local→AI) ═══
+  // ═══ BotEngine REMOVED — was causing "dumb" responses and interfering
+  // with the Edge Function AI. All AI queries now go through ai-chat-v3 only.
+  // Stubs kept below to prevent compile errors in dead _buildBotTab code. ═══
   final _botCtrl = TextEditingController();
   final _botScroll = ScrollController();
-  late BotEngine _botEngine;
   final List<BotMessage> _botMsgs = [];
   bool _botLoading = false;
+  BotEngine get _botEngine => BotEngine()..initialize();
 
   // ═══ TTS for reading messages aloud ═══
   FlutterTts? _tts;
@@ -64,10 +66,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     );
     // Fix: only start typing animation when loading — don't repeat infinitely
     _restore();
-    _botEngine = BotEngine();
-    _botEngine.initialize();
-    _setupDynamicKB();
-    _loadLastConversation();
+    // ⚠️ BotEngine removed — was causing dumb responses
     _initTts();
   }
 
@@ -127,8 +126,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     _tts?.stop();
     _ctrl.dispose();
     _scroll.dispose();
-    _botCtrl.dispose();
-    _botScroll.dispose();
     _typingAnimCtrl.dispose();
     super.dispose();
   }
@@ -180,22 +177,19 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     unawaited(_saveMessageToThread(role: 'user', content: text));
 
     try {
-      // ═══ OFFLINE FALLBACK: Use local BotEngine when no internet ═══
+      // ⚠️ BotEngine removed — offline users get a clear message instead of dumb responses
       if (!ConnectivityUtils.isOnline) {
-        final localResp = _botEngine.sendMessage(text);
-        if (_mounted && localResp != null) {
+        if (_mounted) {
           setState(() {
             _msgs.add(ChatMsg(
               role: 'assistant',
-              content: localResp.text,
+              content: '📡 لا يوجد اتصال بالإنترنت. المساعد الذكي يتطلب اتصالاً للرد على استفساراتك. تحقق من الاتصال وحاول مرة أخرى.',
               source: 'offline',
             ));
             _loading = false;
       _typingAnimCtrl.stop();
           });
           unawaited(ChatStore.save(_msgs));
-        } else if (_mounted) {
-          setState(() => _loading = false);
         }
         return;
       }
@@ -370,48 +364,21 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       if (!_mounted) return;
       final errorMsg = e.toString();
 
-      // ═══ OFFLINE FALLBACK: If network error, use local BotEngine ═══
+      // ⚠️ BotEngine removed — show clear error messages instead of dumb fallbacks
+      String userMessage;
       if (errorMsg.contains('Network') ||
           errorMsg.contains('Socket') ||
-          errorMsg.contains('Timeout') ||
-          errorMsg.contains('timeout') ||
           errorMsg.contains('Failed host') ||
           errorMsg.contains('Internet')) {
-        final localResp = _botEngine.sendMessage(text);
-        if (localResp != null) {
-          setState(() {
-            _msgs.add(ChatMsg(
-              role: 'assistant',
-              content:
-                  '${localResp.text}\n\n_📡 تم الرد من الذاكرة المحلية (أوفلاين)_',
-              source: 'offline',
-            ));
-            _loading = false;
-      _typingAnimCtrl.stop();
-          });
-        } else {
-          setState(() {
-            _msgs.add(ChatMsg(
-              role: 'assistant',
-              content: '📡 لا يوجد اتصال بالإنترنت. حاول مرة أخرى لاحقاً.',
-              source: 'offline',
-            ));
-            _loading = false;
-      _typingAnimCtrl.stop();
-          });
-        }
-        unawaited(ChatStore.save(_msgs));
-        _scrollDown();
-        return;
-      }
-
-      String userMessage;
-      if (errorMsg.contains('Unauthorized') || errorMsg.contains('401')) {
+        userMessage = '📡 لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مرة أخرى.';
+      } else if (errorMsg.contains('Unauthorized') || errorMsg.contains('401')) {
         userMessage = '🔒 انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.';
       } else if (errorMsg.contains('429')) {
         userMessage = '⏳ أرسلت رسائل كثيرة. انتظر دقيقة وحاول مرة أخرى.';
+      } else if (errorMsg.contains('Timeout') || errorMsg.contains('timeout')) {
+        userMessage = '⏱️ انتهت مهلة الطلب. الخادم مشغول — حاول مرة أخرى.';
       } else {
-        userMessage = '⚠️ حدث خطأ. حاول مرة أخرى.';
+        userMessage = '⚠️ حدث خطأ: ${errorMsg.substring(0, errorMsg.length > 100 ? 100 : errorMsg.length)}';
       }
       setState(() {
         _msgs.add(

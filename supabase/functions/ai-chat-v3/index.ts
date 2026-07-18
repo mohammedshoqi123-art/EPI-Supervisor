@@ -1152,6 +1152,13 @@ serve(async (req) => {
     const mimoKey = Deno.env.get('MIMO_API_KEY') ?? Deno.env.get('GEMINI_API_KEY')
     const openrouterKey = Deno.env.get('OPENROUTER_API_KEY')
     const zaiKey = Deno.env.get('ZAI_API_KEY')
+    // ⚠️ FIX: These were loaded ONLY in debug_providers mode but NEVER passed to gatewayEnv!
+    // This is why NVIDIA, Cloudflare, SiliconFlow, DeepSeek never worked.
+    const cfApiKey = Deno.env.get('CF_API_TOKEN')
+    const cfAccountId = Deno.env.get('CF_ACCOUNT_ID')
+    const nvidiaKey = Deno.env.get('NVIDIA_API_KEY')
+    const siliconflowKey = Deno.env.get('SILICONFLOW_API_KEY')
+    const deepseekKey = Deno.env.get('DEEPSEEK_API_KEY')
 
     const dbModel = modelConfig.defaultModel
     const dbModelId = dbModel?.model_id
@@ -1568,6 +1575,12 @@ serve(async (req) => {
       HF_API_TOKEN: hfToken,
       OPENROUTER_API_KEY: openrouterKey,
       MIMO_API_KEY: mimoKey,
+      // ⚠️ FIX: These were MISSING — providers existed but keys were never passed!
+      CF_API_TOKEN: cfApiKey,
+      CF_ACCOUNT_ID: cfAccountId,
+      NVIDIA_API_KEY: nvidiaKey,
+      SILICONFLOW_API_KEY: siliconflowKey,
+      DEEPSEEK_API_KEY: deepseekKey,
     }
 
     // Determine if this query needs tool calls (data queries)

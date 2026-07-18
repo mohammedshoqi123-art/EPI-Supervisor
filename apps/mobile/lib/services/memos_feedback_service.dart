@@ -676,18 +676,25 @@ final allFeedbackTicketsProvider =
         final cache = await ref.read(offlineDataCacheProvider.future);
         final rawList = tickets.map((t) => {
           'id': t.id,
-          'title': t.title,
-          'description': t.description,
+          'ticket_number': t.ticketNumber,
+          'from_user_id': t.fromUserId,
+          'from_name': t.fromName,
+          'from_role': t.fromRole,
+          'to_role': t.toRole,
+          'to_governorate_id': t.toGovernorateId,
+          'to_district_id': t.toDistrictId,
+          'subject': t.subject,
+          'body': t.body,
           'category': t.category,
           'priority': t.priority,
           'status': t.status,
-          'created_by': t.createdBy,
-          'creator_name': t.creatorName,
-          'assigned_to': t.assignedTo,
-          'assignee_name': t.assigneeName,
+          'sla_hours': t.slaHours,
           'sla_deadline': t.slaDeadline?.toIso8601String(),
+          'resolved_at': t.resolvedAt?.toIso8601String(),
+          'escalated_at': t.escalatedAt?.toIso8601String(),
+          'escalation_level': t.escalationLevel,
           'created_at': t.createdAt.toIso8601String(),
-          'updated_at': t.updatedAt?.toIso8601String(),
+          'is_overdue': t.isOverdue,
         }).toList();
         await cache.forceInvalidate('tickets_offline');
         await cache.getList('tickets_offline', () async => rawList, maxAge: const Duration(days: 7));

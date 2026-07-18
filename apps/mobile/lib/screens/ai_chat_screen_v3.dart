@@ -282,11 +282,16 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       final activeCampaign = ref.read(campaignProvider).value;
 
       // ⚠️ FIX: Direct non-streaming call — more reliable than streaming
+      // ⚠️ FIX: Always send campaign_round + campaign_type so AI understands context
       final resp = await api.callFunction('ai-chat-v3', {
         'message': text,
         'history': historyJson,
         if (template != null) 'template': template,
-        if (activeCampaign == 'integrated_activity') 'campaign_round': activeRound,
+        'campaign_round': activeRound,  // ← Always send, not just for integrated_activity
+        'context': {
+          'campaign_type': activeCampaign,
+          'campaign_round': activeRound,
+        },
       }).timeout(const Duration(seconds: 45), onTimeout: () {
         throw TimeoutException('انتهت مهلة الطلب');
       });
@@ -2427,7 +2432,11 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
           'message': text,
           'history': histJson,
           'template': 'vaccination',
-          if (activeCampaign == 'integrated_activity') 'campaign_round': activeRound,
+          'campaign_round': activeRound,  // ← Always send
+          'context': {
+            'campaign_type': activeCampaign,
+            'campaign_round': activeRound,
+          },
         }).timeout(const Duration(seconds: 30));
         final reply = resp['reply'] as String? ?? '';
         if (reply.isNotEmpty && _mounted) {

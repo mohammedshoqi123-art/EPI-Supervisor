@@ -10,7 +10,7 @@ export 'function_calling/function_calling_engine.dart';
 // Enhanced Local AI
 export 'enhanced_local_ai.dart';
 
-// ═══ NLP Engine (الكامل من EPI-Bot) ═══
+// ═══ NLP Engine ═══
 export 'epi_nlp_engine.dart';
 
 // ═══ قاعدة المعرفة ═══
@@ -29,6 +29,3 @@ export 'ai_router_v2.dart';
 export 'zai_service.dart';
 export 'openrouter_service.dart';
 export 'smart_alerts_engine.dart';
-
-// ═══ Bot Engine (EPI-Bot Integration) ═══
-export 'bot/bot_export.dart';

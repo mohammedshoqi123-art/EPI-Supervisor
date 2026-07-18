@@ -900,7 +900,7 @@ async function fetchTrendsData(supa: any, plan: QueryPlan, campaignRound: number
 // ═══ Knowledge Base Search (for vaccination advisor) ═══
 // Lightweight semantic search using keyword overlap on knowledge_chunks
 
-async function searchKnowledgeBase(message: string): Promise<GroundingSource[]> {
+export async function searchKnowledgeBase(message: string): Promise<GroundingSource[]> {
   try {
     const knowledgeModule: any = await import('../knowledge_chunks.ts')
     const docs = knowledgeModule.default || knowledgeModule.KNOWLEDGE_CHUNKS || []

@@ -1198,8 +1198,8 @@ serve(async (req) => {
     }
     if (mode === 'predict_provider' && message) {
       // New: predict best provider for a message (debugging tool)
-      const pred = predictBestProvider(message, false)
-      return jsonResponse({ ...pred, message_preview: message.slice(0, 100) }, 200, origin)
+      const pred = predictBestProvider(false, { GROQ_API_KEY: groqKey, HF_API_TOKEN: hfToken, OPENROUTER_API_KEY: openrouterKey, NVIDIA_API_KEY: nvidiaKey })
+      return jsonResponse({ provider: pred, message_preview: message.slice(0, 100) }, 200, origin)
     }
     if (mode === 'debug_providers') {
       // ⚠️ DEBUG MODE: Test each provider directly and return detailed results
@@ -1588,9 +1588,9 @@ serve(async (req) => {
       /حلل|تقرير|إحصائية|قارن|ترتيب|تنبؤ|توقع|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل/.test(message || '')
     ) && (!grounding || !grounding.hasData)
 
-    // Predict best provider (Patent-Pending Predictive Selection)
-    const prediction = message ? predictBestProvider(message, needsTools) : null
-    console.log(`[PREDICT] Best provider: ${prediction?.provider} (${prediction?.reason})`)
+    // Predict best provider
+    const prediction = predictBestProvider(needsTools, gatewayEnv)
+    console.log(`[PREDICT] Best provider: ${prediction}`)
 
     // ─── GROUNDING REFUSAL: if no data found, try knowledge base fallback first ───
     if (grounding && !grounding.hasData && message) {
@@ -1634,8 +1634,7 @@ serve(async (req) => {
         temperature: dbTemperature,
         tools: needsTools ? TOOLS : undefined,
         needTools: needsTools,
-        raceTimeoutMs: 5_000,
-        fallbackTimeoutMs: 12_000,
+        timeoutMs: 15_000,
       })
 
       if (streamResult.response) {

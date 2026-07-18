@@ -43,8 +43,6 @@ export 'src/ai/openrouter_service.dart';
 export 'src/ai/epi_nlp_engine.dart';
 export 'src/ai/epi_knowledge_base.dart';
 export 'src/ai/smart_alerts_engine.dart';
-// ═══ Bot Engine (EPI-Bot Integration) ═══
-
 // ═══ AI Router v2 + Health Consultation ═══
 export 'src/ai/ai_router_v2.dart';
 export 'src/ai/local_health_consultation.dart';

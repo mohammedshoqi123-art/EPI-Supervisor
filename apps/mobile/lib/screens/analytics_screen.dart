@@ -171,7 +171,7 @@ const _serviceNumberFields = {
 
 // ═══ FIX #2: Changed to family.autoDispose with campaignType + campaignRound params ═══
 // Previously: hardcoded cache key + no campaign/round filtering + limit: 200
-// Now: accepts campaignType + campaignRound + limit: 500 (all submissions)
+// Now: accepts campaignType + campaignRound + limit: 5000 (all submissions)
 final _readinessSubsProvider = FutureProvider.family
     .autoDispose<List<Map<String, dynamic>>, ({String? campaignType, int? campaignRound})>((
   ref,
@@ -185,7 +185,7 @@ final _readinessSubsProvider = FutureProvider.family
           formId: _readinessFormId,
           campaignType: params.campaignType,
           campaignRound: params.campaignRound,
-          limit: 500, // ═══ FIX #2: Was 200 — now fetches all submissions ═══
+          limit: 5000, // ═══ FIX #2: Was 200 — now fetches all submissions ═══
         ),
     maxAge: const Duration(hours: 2),
   );
@@ -204,7 +204,7 @@ final _supervisionSubsProvider = FutureProvider.family
           formId: _supervisionFormId,
           campaignType: params.campaignType,
           campaignRound: params.campaignRound,
-          limit: 500, // ═══ FIX #2: Was 200 — now fetches all submissions ═══
+          limit: 5000, // ═══ FIX #2: Was 200 — now fetches all submissions ═══
         ),
     maxAge: const Duration(hours: 2),
   );
@@ -464,7 +464,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       final readinessSubs = await db.getSubmissions(
         formId: _readinessFormId,
         campaignRound: round,
-        limit: 500,
+        limit: 5000,
       );
       if (readinessSubs.isNotEmpty) {
         readinessData = _processReadinessData(readinessSubs);
@@ -473,7 +473,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       final supervisionSubs = await db.getSubmissions(
         formId: _supervisionFormId,
         campaignRound: round,
-        limit: 500,
+        limit: 5000,
       );
       if (supervisionSubs.isNotEmpty) {
         complianceData = _processComplianceData(supervisionSubs);
@@ -525,7 +525,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       final subs = await db.getSubmissions(
         campaignType: campaign,
         campaignRound: round,
-        limit: 1000,
+        limit: 10000,
       );
 
       // Aggregate by user
@@ -594,7 +594,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         formId: formId,
         campaignType: campaign,
         campaignRound: round,
-        limit: 500,
+        limit: 5000,
       );
 
       if (subs.isEmpty) {
@@ -726,14 +726,14 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       final currentSubs = await db.getSubmissions(
         campaignType: campaign,
         campaignRound: currentRound,
-        limit: 1000,
+        limit: 10000,
       );
 
       final prevRound = currentRound > 1 ? currentRound - 1 : 1;
       final prevSubs = await db.getSubmissions(
         campaignType: campaign,
         campaignRound: prevRound,
-        limit: 1000,
+        limit: 10000,
       );
 
       if (mounted) {
@@ -2551,7 +2551,7 @@ final _assessmentSubsProvider = FutureProvider.family
             formId: _assessmentFormId,
             campaignType: params.campaignType,
             campaignRound: params.campaignRound,
-            limit: 500,
+            limit: 5000,
           ),
       maxAge: const Duration(hours: 2),
     );

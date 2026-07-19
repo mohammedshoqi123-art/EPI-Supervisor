@@ -57,7 +57,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     );
     // Fix: only start typing animation when loading — don't repeat infinitely
     _restore();
-    _loadLastConversation();
     _initTts();
   }
 
@@ -102,23 +101,6 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     }
   }
 
-  /// Load last active conversation thread metadata
-  Future<void> _loadLastConversation() async {
-    try {
-      final service = ref.read(aiChatThreadServiceProvider);
-      final threads = await service.getThreads();
-      if (threads.isNotEmpty && _mounted) {
-        final last = threads.first;
-        setState(() {
-          _currentThreadId = last.id;
-          _lastConversationTitle = last.title;
-          _lastConversationTopic = last.lastSummary;
-        });
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('[AiChat] _loadLastConversation error: $e');
-    }
-  }
 
   void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {

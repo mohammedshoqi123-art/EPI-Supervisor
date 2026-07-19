@@ -151,20 +151,23 @@ class RealtimeSyncService {
         },
       );
 
-      _channel!.subscribe(
-        onError: (error) {
+      // ═══ FIX P1-3: Subscribe مع callback لمعالجة الأخطاء ═══
+      _channel!.subscribe((status, [error]) {
+        if (status == RealtimeSubscribeStatus.channelError) {
           debugPrint('[RealtimeSync] ⚠️ Channel error: $error');
           _isListening = false;
           _scheduleReconnect();
-        },
-        onClose: () {
+        } else if (status == RealtimeSubscribeStatus.closed) {
           debugPrint('[RealtimeSync] ⚠️ Channel closed');
           _isListening = false;
           _scheduleReconnect();
-        },
-      );
+        } else if (status == RealtimeSubscribeStatus.subscribed) {
+          debugPrint('[RealtimeSync] ✅ Channel subscribed');
+          _isListening = true;
+          _reconnectAttempts = 0;
+        }
+      });
       _isListening = true;
-      _reconnectAttempts = 0;
       debugPrint('[RealtimeSync] ✅ Started listening (single channel)');
     } catch (e) {
       debugPrint('[RealtimeSync] ❌ Failed to start: $e');
@@ -172,6 +175,7 @@ class RealtimeSyncService {
     }
   }
 
+  /// ═══ FIX P1-3: إعادة اتصال تلقائية مع exponential backoff ═══
   void _scheduleReconnect() {
     if (_reconnectAttempts >= _maxReconnectAttempts) {
       debugPrint('[RealtimeSync] ⚠️ Max reconnect attempts reached');

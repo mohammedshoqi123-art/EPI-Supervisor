@@ -106,7 +106,7 @@ function usePreloadPages() {
     // After 3 seconds of idle, preload the most-visited pages
     const timer = setTimeout(() => {
       import('@/pages/SubmissionsPage')
-      import('@/pages/FormsPage' as string)
+      import('@/pages/forms')
       import('@/pages/MapPage')
     }, 3000)
     return () => clearTimeout(timer)

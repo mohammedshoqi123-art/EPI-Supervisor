@@ -231,7 +231,7 @@ class AttachmentService {
               contentType: mimeType,
               upsert: false,
             ),
-          );
+          ).timeout(const Duration(seconds: 30));
 
       debugPrint('[AttachmentService] uploadFile: success');
 
@@ -273,7 +273,7 @@ class AttachmentService {
               contentType: mimeType,
               upsert: false,
             ),
-          );
+          ).timeout(const Duration(seconds: 30));
 
       return Attachment(
         filePath: storagePath,
@@ -291,7 +291,7 @@ class AttachmentService {
   static Future<String?> getSignedUrl(String filePath, {int expiresIn = 3600}) async {
     try {
       final client = Supabase.instance.client;
-      return await client.storage.from(_bucket).createSignedUrl(filePath, expiresIn);
+      return await client.storage.from(_bucket).createSignedUrl(filePath, expiresIn).timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('[AttachmentService] getSignedUrl error: $e');
       return null;
@@ -302,7 +302,7 @@ class AttachmentService {
   static Future<String?> downloadFile(String filePath, String fileName) async {
     try {
       final client = Supabase.instance.client;
-      final bytes = await client.storage.from(_bucket).download(filePath);
+      final bytes = await client.storage.from(_bucket).download(filePath).timeout(const Duration(seconds: 30));
 
       // Save to temp directory
       final tempDir = await _getTempDir();
@@ -320,7 +320,7 @@ class AttachmentService {
   static Future<bool> deleteFile(String filePath) async {
     try {
       final client = Supabase.instance.client;
-      await client.storage.from(_bucket).remove([filePath]);
+      await client.storage.from(_bucket).remove([filePath]).timeout(const Duration(seconds: 10));
       return true;
     } catch (e) {
       debugPrint('[AttachmentService] deleteFile error: $e');
@@ -351,7 +351,7 @@ class AttachmentService {
         'file_type': attachment.fileType,
         'file_size': attachment.fileSize,
         'uploaded_by': userId,
-      }).select('id').single();
+      }).select('id').single().timeout(const Duration(seconds: 15));
 
       return response['id'] as String?;
     } catch (e) {

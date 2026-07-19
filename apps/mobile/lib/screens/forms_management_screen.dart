@@ -110,7 +110,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'created_by': user?.id,
       };
 
-      await client.from('forms').insert(insertData);
+      await client.from('forms').insert(insertData).timeout(const Duration(seconds: 15));
 
       // Invalidate caches
       try {
@@ -179,7 +179,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'version': (form['version'] as int? ?? 1) + 1,
       };
 
-      await client.from('forms').update(updateData).eq('id', form['id']);
+      await client.from('forms').update(updateData).eq('id', form['id']).timeout(const Duration(seconds: 15));
 
       // ═══ FIX: Invalidate BOTH local cache and Riverpod providers ═══
       try {
@@ -274,7 +274,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       await client.from('forms').update({
         'deleted_at': DateTime.now().toIso8601String(),
         'is_active': false,
-      }).eq('id', form['id']);
+      }).eq('id', form['id']).timeout(const Duration(seconds: 15));
 
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);

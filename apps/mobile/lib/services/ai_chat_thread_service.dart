@@ -92,7 +92,7 @@ class AIChatThreadService {
         'title': title ?? 'محادثة جديدة',
         'is_active': true,
         'is_pinned': false,
-      }).select('id').single();
+      }).select('id').single().timeout(const Duration(seconds: 15));
 
       return response['id'] as String?;
     } catch (e) {
@@ -167,7 +167,7 @@ class AIChatThreadService {
         if (latencyMs != null) 'latency_ms': latencyMs,
         if (groundingSources != null) 'grounding_sources': groundingSources,
         if (followups != null) 'followups': followups,
-      });
+      }).timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('[AIChatThreadService] saveMessage error: $e');
     }

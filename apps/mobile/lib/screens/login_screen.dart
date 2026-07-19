@@ -162,7 +162,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
               try {
                 final client = Supabase.instance.client;
-                await client.auth.resetPasswordForEmail(email);
+                await client.auth.resetPasswordForEmail(email).timeout(const Duration(seconds: 15));
                 if (dialogContext.mounted) {
                   Navigator.pop(dialogContext);
                   ScaffoldMessenger.of(context).showSnackBar(

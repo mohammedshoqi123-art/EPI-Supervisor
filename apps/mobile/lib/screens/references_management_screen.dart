@@ -87,7 +87,7 @@ class _ReferencesManagementScreenState
         'file_url': result['file_url'],
         'is_active': true,
         'created_by': user?.id,
-      });
+      }).timeout(const Duration(seconds: 15));
       await Future.delayed(const Duration(milliseconds: 500));
       _loadReferences();
       if (mounted) {
@@ -139,7 +139,7 @@ class _ReferencesManagementScreenState
         'description_ar': result['description_ar'],
         'category': result['category'],
         'file_url': result['file_url'],
-      }).eq('id', ref['id']);
+      }).eq('id', ref['id']).timeout(const Duration(seconds: 15));
       await Future.delayed(const Duration(milliseconds: 500));
       _loadReferences();
       if (mounted) {
@@ -223,7 +223,7 @@ class _ReferencesManagementScreenState
       await client.from('doc_references').update({
         'deleted_at': DateTime.now().toIso8601String(),
         'is_active': false,
-      }).eq('id', ref['id']);
+      }).eq('id', ref['id']).timeout(const Duration(seconds: 15));
       await Future.delayed(const Duration(milliseconds: 500));
       _loadReferences();
       if (mounted) {

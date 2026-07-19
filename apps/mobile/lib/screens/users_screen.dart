@@ -120,7 +120,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
           'national_id': result['national_id'],
           'secret': '',
         },
-      );
+      ).timeout(const Duration(seconds: 20));
 
       _loadAll();
       if (mounted) {
@@ -178,7 +178,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         'district_id': result['district_id'],
         'national_id': result['national_id'],
       };
-      await client.from('profiles').update(updateData).eq('id', user['id']);
+      await client.from('profiles').update(updateData).eq('id', user['id']).timeout(const Duration(seconds: 15));
       _loadAll();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -86,10 +86,38 @@ class _ChannelScreenState extends State<ChannelScreen> {
       _realtimeChannel!.subscribe();
     } catch (e) {
       debugPrint('[ChannelScreen] Realtime subscribe failed: $e');
-      _fallbackTimer?.cancel();
-      _fallbackTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-        if (mounted) _loadMessages(silent: true);
-      });
+      _startFallbackPolling();
+    }
+  }
+
+  void _startFallbackPolling() {
+    _fallbackTimer?.cancel();
+    _fallbackTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _loadNewMessagesOnly();
+    });
+  }
+
+  Future<void> _loadNewMessagesOnly() async {
+    if (_messages.isEmpty) return _loadMessages(silent: true);
+    try {
+      final client = Supabase.instance.client;
+      final lastId = _messages.last['id'];
+      final channelCode = widget.channel.code ?? 'general';
+      final response = widget.channel.id.isNotEmpty
+          ? await client.from('chat_messages').select('*')
+              .eq('channel_id', widget.channel.id)
+              .gt('id', lastId).order('created_at', ascending: true)
+              .limit(50).timeout(const Duration(seconds: 10))
+          : await client.from('chat_messages').select('*')
+              .eq('room', channelCode)
+              .gt('id', lastId).order('created_at', ascending: true)
+              .limit(50).timeout(const Duration(seconds: 10));
+      final newMsgs = (response as List).cast<Map<String, dynamic>>();
+      if (newMsgs.isNotEmpty && mounted) {
+        setState(() => _messages.addAll(newMsgs));
+      }
+    } catch (e) {
+      debugPrint('[ChannelScreen] Incremental load failed: $e');
     }
   }
 
@@ -98,7 +126,6 @@ class _ChannelScreenState extends State<ChannelScreen> {
       final client = Supabase.instance.client;
       final channelCode = widget.channel.code ?? 'general';
 
-      // Prefer channel_id filter when available, fallback to room
       final response = widget.channel.id.isNotEmpty
           ? await client
               .from('chat_messages')
@@ -106,12 +133,14 @@ class _ChannelScreenState extends State<ChannelScreen> {
               .eq('channel_id', widget.channel.id)
               .order('created_at', ascending: true)
               .limit(200)
+              .timeout(const Duration(seconds: 15))
           : await client
               .from('chat_messages')
               .select('*')
               .eq('room', channelCode)
               .order('created_at', ascending: true)
-              .limit(200);
+              .limit(200)
+              .timeout(const Duration(seconds: 15));
 
       if (mounted) {
         setState(() {
@@ -136,7 +165,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
         'channel_id': widget.channel.id,
         'unread_count': 0,
         'last_read_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'user_id, channel_id');
+      }, onConflict: 'user_id, channel_id').timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('[ChannelScreen] markAsRead error: $e');
     }
@@ -194,7 +223,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
       }
 
       final msgResponse =
-          await client.from('chat_messages').insert(insertData).select('id').single();
+          await client.from('chat_messages').insert(insertData).select('id').single().timeout(const Duration(seconds: 15));
       final messageId = msgResponse['id'] as String?;
 
       // Save attachments metadata
@@ -802,7 +831,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     if (id == null) return;
     try {
       final client = Supabase.instance.client;
-      await client.from('chat_messages').delete().eq('id', id);
+      await client.from('chat_messages').delete().eq('id', id).timeout(const Duration(seconds: 10));
       await _loadMessages(silent: true);
     } catch (_) {}
   }

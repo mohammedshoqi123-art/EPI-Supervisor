@@ -1029,7 +1029,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         // Update password via Supabase Auth
                         await client.auth.updateUser(
                           supa.UserAttributes(password: newPasswordCtrl.text),
-                        );
+                        ).timeout(const Duration(seconds: 15));
 
                         if (dialogContext.mounted) {
                           Navigator.pop(dialogContext);

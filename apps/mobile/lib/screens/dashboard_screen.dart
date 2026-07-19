@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
+import '../providers/realtime_sync_provider.dart';
 import '../services/memos_feedback_service.dart';
 import 'dashboard_header.dart';
 import 'dashboard_charts.dart';

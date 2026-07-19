@@ -80,7 +80,7 @@ class OfflineManager {
       } catch (e) {
         // ═══ FIX ME3: Hive corruption recovery ═══
         // If box open fails (corrupted file from power loss, etc.),
-        // backup corrupted file for diagnostics, then attempt data extraction before deleting.
+        // backup corrupted file for diagnostics, then delete and retry.
         if (kDebugMode) {
           debugPrint('[OfflineManager] Box open failed, attempting recovery: $e');
         }
@@ -103,29 +103,6 @@ class OfflineManager {
           } catch (backupError) {
             if (kDebugMode) {
               debugPrint('[OfflineManager] Could not backup corrupted box: $backupError');
-            }
-          }
-          // ═══ FIX: Try to extract recoverable data before deleting ═══
-          try {
-            // Attempt to open the corrupted box in read-only mode
-            final corruptedBox = await Hive.openBox<String>(_boxName);
-            // Try to read drafts and sync queue from corrupted box
-            final draftsIndex = corruptedBox.get('drafts_index');
-            final syncQueue = corruptedBox.get('sync_queue');
-            if (draftsIndex != null || syncQueue != null) {
-              if (kDebugMode) {
-                debugPrint('[OfflineManager] Found recoverable data — logging for diagnostics');
-              }
-              // Log recovery data for diagnostics (can't write to Hive if it's corrupted)
-              if (kDebugMode) {
-                debugPrint('[OfflineManager] Recovery data - drafts_index length: ${draftsIndex?.length ?? 0}');
-                debugPrint('[OfflineManager] Recovery data - sync_queue length: ${syncQueue?.length ?? 0}');
-              }
-            }
-            await corruptedBox.close();
-          } catch (extractError) {
-            if (kDebugMode) {
-              debugPrint('[OfflineManager] Could not extract recovery data: $extractError');
             }
           }
           await Hive.deleteBoxFromDisk(_boxName);

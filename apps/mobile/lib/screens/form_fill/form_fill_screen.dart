@@ -393,14 +393,17 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
       if (position == null) return;
 
+      final lat = position.latitude;
+      final lng = position.longitude;
+      final acc = position.accuracy;
       setState(() {
         _formData[fieldKey] = {
-          'lat': position!.latitude,
-          'lng': position.longitude,
-          'accuracy': position.accuracy,
+          'lat': lat,
+          'lng': lng,
+          'accuracy': acc,
         };
-        _gpsLat = position.latitude;
-        _gpsLng = position.longitude;
+        _gpsLat = lat;
+        _gpsLng = lng;
       });
     } catch (e) {
       debugPrint('Error getting location: $e');
@@ -493,9 +496,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         return;
       }
 
+      final posLat = position.latitude;
+      final posLng = position.longitude;
       setState(() {
-        _gpsLat = position.latitude;
-        _gpsLng = position.longitude;
+        _gpsLat = posLat;
+        _gpsLng = posLng;
         _isGettingLocation = false;
       });
 
@@ -503,7 +508,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         if (field['type'] == 'gps') {
           final key = field['key'] as String;
           _formData[key] =
-              '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+              '${posLat.toStringAsFixed(6)}, ${posLng.toStringAsFixed(6)}';
         }
       }
       _markChanged();

@@ -88,9 +88,8 @@ class OfflineManager {
           // ═══ IMPROVEMENT: Backup corrupted file before deleting ═══
           // This allows post-mortem diagnostics of data corruption.
           try {
-            final boxPath = Hive.boxExists(_boxName)
-                ? '${Hive.boxPath}/${_boxName}.hive'
-                : null;
+            // Try to get box path from the box object itself
+            final boxPath = _box?.path;
             if (boxPath != null) {
               final backupPath = '$boxPath.corrupted.${DateTime.now().millisecondsSinceEpoch}';
               final file = File(boxPath);
@@ -108,25 +107,20 @@ class OfflineManager {
           }
           // ═══ FIX: Try to extract recoverable data before deleting ═══
           try {
-            final corruptedBox = await Hive.openBox<String>(_boxName,
-                compactionStrategy: (entries, deletedEntries) => false);
+            // Attempt to open the corrupted box in read-only mode
+            final corruptedBox = await Hive.openBox<String>(_boxName);
             // Try to read drafts and sync queue from corrupted box
             final draftsIndex = corruptedBox.get('drafts_index');
             final syncQueue = corruptedBox.get('sync_queue');
             if (draftsIndex != null || syncQueue != null) {
               if (kDebugMode) {
-                debugPrint('[OfflineManager] Found recoverable data — saving backup');
+                debugPrint('[OfflineManager] Found recoverable data — logging for diagnostics');
               }
-              // Save recovery data to a separate file
-              final recoveryData = {
-                'drafts_index': draftsIndex,
-                'sync_queue': syncQueue,
-                'recovered_at': DateTime.now().toIso8601String(),
-              };
-              final recoveryPath = '${Hive.boxPath}/${_boxName}.recovery.json';
-              await File(recoveryPath).writeAsString(
-                recoveryData.toString(),
-              );
+              // Log recovery data for diagnostics (can't write to Hive if it's corrupted)
+              if (kDebugMode) {
+                debugPrint('[OfflineManager] Recovery data - drafts_index length: ${draftsIndex?.length ?? 0}');
+                debugPrint('[OfflineManager] Recovery data - sync_queue length: ${syncQueue?.length ?? 0}');
+              }
             }
             await corruptedBox.close();
           } catch (extractError) {

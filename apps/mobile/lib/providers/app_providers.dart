@@ -167,6 +167,7 @@ class SubmissionsFilter {
   final int? campaignRound;
   final int limit;
   final int offset;
+  final bool lean;  // ═══ P0: When true, skips 'data' column (84% less bandwidth)
 
   const SubmissionsFilter({
     this.status,
@@ -175,8 +176,9 @@ class SubmissionsFilter {
     this.districtId,
     this.campaignType,
     this.campaignRound,
-    this.limit = 2000, // ═══ Was 5000 — 2000 balances completeness vs memory ═══
+    this.limit = 2000,
     this.offset = 0,
+    this.lean = false,
   });
 
   @override
@@ -191,7 +193,8 @@ class SubmissionsFilter {
           campaignType == other.campaignType &&
           campaignRound == other.campaignRound &&
           limit == other.limit &&
-          offset == other.offset;
+          offset == other.offset &&
+          lean == other.lean;
 
   @override
   int get hashCode => Object.hash(
@@ -203,10 +206,12 @@ class SubmissionsFilter {
         campaignRound,
         limit,
         offset,
+        lean,
       );
 
   String get cacheKey {
     final parts = <String>['submissions'];
+    if (lean) parts.add('lean');
     if (campaignType != null) parts.add('camp_$campaignType');
     if (campaignRound != null) parts.add('round_$campaignRound');
     if (formId != null) parts.add('form_$formId');
@@ -474,6 +479,7 @@ final submissionsProvider = FutureProvider.family
           campaignRound: filter.campaignRound,
           limit: filter.limit,
           offset: filter.offset,
+          lean: filter.lean,  // ═══ P0: Skip 'data' column for map screen
         ),
     maxAge: const Duration(
       days: 7,

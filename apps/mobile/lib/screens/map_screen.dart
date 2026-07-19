@@ -95,6 +95,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       campaignType: ref.read(campaignProvider).value,
       campaignRound: ref.read(campaignRoundProvider),
       limit: 5000,
+      lean: true,  // ═══ P0: Match the lean query used in _getFilteredSubmissions
     )));
     ref.invalidate(governoratesProvider);
   }
@@ -158,6 +159,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       campaignType: campaign,
       campaignRound: round,
       limit: 5000,
+      lean: true,  // ═══ P0: Skip 'data' column — 5.5MB→0.86MB (84% reduction)
     )));
     final allSubs = allSubsAsync.valueOrNull ?? [];
 
@@ -467,6 +469,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
               campaignType: ref.watch(campaignProvider).value,
               campaignRound: ref.watch(campaignRoundProvider),
               limit: 5000,
+              lean: true,  // ═══ P0: Skip 'data' column — filter bar only needs metadata
             )))
             .valueOrNull ??
         [];

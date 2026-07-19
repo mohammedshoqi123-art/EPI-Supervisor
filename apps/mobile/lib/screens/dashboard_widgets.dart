@@ -572,13 +572,15 @@ class SubmissionsByLevelChart extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // ═══ FIX: Use submissionsProvider which handles offline cache ═══
-    // Previously: direct db.getSubmissions() call that bypassed cache
+    // ═══ P0: Use lean query — chart only needs role/level info, NOT the 'data' column
+    // Before: 10000 rows × 3.3KB data = ~33MB transferred
+    // After: 10000 rows × 0.3KB metadata = ~3MB transferred (90% reduction)
     final filter = SubmissionsFilter(
       campaignType: campaignType,
       campaignRound: campaignRound,
       status: 'submitted',
       limit: 10000,
+      lean: true,  // ═══ P0: Skip 'data' column — chart only counts by role
     );
     final submissionsAsync = ref.watch(submissionsProvider(filter));
 

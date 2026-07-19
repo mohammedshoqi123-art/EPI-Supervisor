@@ -468,7 +468,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (mounted) context.showError('خدمة الموقع غير مفعّلة');
-        setState(() => _isGettingLocation = false);
+        if (mounted) setState(() => _isGettingLocation = false);
         return;
       }
 
@@ -477,17 +477,18 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           if (mounted) context.showError('تم رفض إذن الموقع');
-          setState(() => _isGettingLocation = false);
+          if (mounted) setState(() => _isGettingLocation = false);
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        if (mounted)
+        if (mounted) {
           context.showError(
             'تم رفض إذن الموقع نهائياً. يرجى تفعيله من الإعدادات',
           );
-        setState(() => _isGettingLocation = false);
+          setState(() => _isGettingLocation = false);
+        }
         return;
       }
 
@@ -511,17 +512,19 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
       if (position == null) {
         if (mounted) context.showError('لم يتم العثور على موقع — حاول في مكان مفتوح');
-        setState(() => _isGettingLocation = false);
+        if (mounted) setState(() => _isGettingLocation = false);
         return;
       }
 
       final posLat = position.latitude;
       final posLng = position.longitude;
-      setState(() {
-        _gpsLat = posLat;
-        _gpsLng = posLng;
-        _isGettingLocation = false;
-      });
+      if (mounted) {
+        setState(() {
+          _gpsLat = posLat;
+          _gpsLng = posLng;
+          _isGettingLocation = false;
+        });
+      }
 
       for (final field in _allFields) {
         if (field['type'] == 'gps') {
@@ -534,7 +537,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
       if (mounted) context.showSuccess('تم تحديد الموقع بنجاح');
     } catch (e) {
-      setState(() => _isGettingLocation = false);
+      if (mounted) setState(() => _isGettingLocation = false);
       if (mounted) context.showError('فشل الحصول على الموقع: ${e.toString()}');
     }
   }

@@ -106,47 +106,77 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
       final cache = await _ref.read(offlineDataCacheProvider.future);
       final campaign = _ref.read(campaignProvider);
 
-      // ═══ 1. Governorates ═══
-      try {
-        final govData = await db.getGovernorates();
-        await cache.putList('governorates', govData);
-        govs = govData.length;
-        steps.add(SyncStepResult(name: 'المحافظات', success: true, count: govs));
-        _log('✅ Governorates: $govs');
-      } catch (e) {
-        steps.add(SyncStepResult(name: 'المحافظات', success: false, error: e.toString()));
-        _log('❌ Governorates: $e');
+      // ═══ FIX: Parallel fetch — Governorates + Districts + Forms + References + Facilities ═══
+      // Previously: 5 sequential network calls = 5 × RTT (round-trip time).
+      // Now: all 5 in parallel = 1 × RTT. Submissions still sequential (pagination).
+
+      final parallelResults = await Future.wait([
+        // 1. Governorates
+        db.getGovernorates().then((data) async {
+          await cache.putList('governorates', data);
+          return {'name': 'المحافظات', 'data': data};
+        }).catchError((e) => {'name': 'المحافظات', 'error': e}),
+
+        // 2. Districts
+        db.getDistricts().then((data) async {
+          await cache.putList('districts_all', data);
+          return {'name': 'المديريات', 'data': data};
+        }).catchError((e) => {'name': 'المديريات', 'error': e}),
+
+        // 3. Forms (for current campaign)
+        db.getForms(campaignType: campaign.value).then((data) async {
+          await cache.putList('forms_${campaign.value}', data);
+          return {'name': 'النماذج', 'data': data};
+        }).catchError((e) => {'name': 'النماذج', 'error': e}),
+
+        // 4. References
+        db.getReferences().then((data) async {
+          await cache.putList('references', data);
+          return {'name': 'المراجع', 'data': data};
+        }).catchError((e) => {'name': 'المراجع', 'error': e}),
+
+        // 5. Health Facilities
+        db.getHealthFacilities().then((data) async {
+          await cache.putList('facilities_all', data);
+          // Also cache by district
+          final byDistrict = <String, List<Map<String, dynamic>>>{};
+          for (final fac in data) {
+            final distId = fac['district_id'] as String? ?? '';
+            if (distId.isNotEmpty) {
+              byDistrict.putIfAbsent(distId, () => []).add(fac);
+            }
+          }
+          for (final entry in byDistrict.entries) {
+            await cache.putList('facilities_${entry.key}', entry.value);
+          }
+          return {'name': 'المرافق', 'data': data};
+        }).catchError((e) => {'name': 'المرافق', 'error': e}),
+      ], eagerError: false);
+
+      // Process parallel results
+      for (final result in parallelResults) {
+        final name = result['name'] as String;
+        if (result.containsKey('error')) {
+          steps.add(SyncStepResult(name: name, success: false, error: result['error'].toString()));
+          _log('❌ $name: ${result['error']}');
+        } else {
+          final data = result['data'] as List;
+          steps.add(SyncStepResult(name: name, success: true, count: data.length));
+          _log('✅ $name: ${data.length}');
+          // Update counters
+          switch (name) {
+            case 'المحافظات': govs = data.length; break;
+            case 'المديريات': dists = data.length; break;
+            case 'النماذج': forms = data.length; break;
+            case 'المراجع': refs = data.length; break;
+            case 'المرافق': facs = data.length; break;
+          }
+        }
       }
-      // ═══ PERFORMANCE: Yield to UI thread between sync steps ═══
+
       await Future.delayed(Duration.zero);
 
-      // ═══ 2. Districts ═══
-      try {
-        final distData = await db.getDistricts();
-        await cache.putList('districts_all', distData);
-        dists = distData.length;
-        steps.add(SyncStepResult(name: 'المديريات', success: true, count: dists));
-        _log('✅ Districts: $dists');
-      } catch (e) {
-        steps.add(SyncStepResult(name: 'المديريات', success: false, error: e.toString()));
-        _log('❌ Districts: $e');
-      }
-      await Future.delayed(Duration.zero);
-
-      // ═══ 3. Forms (for current campaign) ═══
-      try {
-        final formData = await db.getForms(campaignType: campaign.value);
-        await cache.putList('forms_${campaign.value}', formData);
-        forms = formData.length;
-        steps.add(SyncStepResult(name: 'النماذج', success: true, count: forms));
-        _log('✅ Forms: $forms');
-      } catch (e) {
-        steps.add(SyncStepResult(name: 'النماذج', success: false, error: e.toString()));
-        _log('❌ Forms: $e');
-      }
-      await Future.delayed(Duration.zero);
-
-      // ═══ 4. Submissions (pagination — يجلب كل البيانات على دفعات) ═══
+      // ═══ 4. Submissions (pagination — sequential because it's paginated) ═══
       try {
         final allSubs = <Map<String, dynamic>>[];
         const pageSize = 2000;
@@ -185,42 +215,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
       // ═══ PERFORMANCE: Yield to UI thread after heavy submissions sync ═══
       await Future.delayed(Duration.zero);
 
-      // ═══ 5. References ═══
-      try {
-        final refData = await db.getReferences();
-        await cache.putList('references', refData);
-        refs = refData.length;
-        steps.add(SyncStepResult(name: 'المراجع', success: true, count: refs));
-        _log('✅ References: $refs');
-      } catch (e) {
-        steps.add(SyncStepResult(name: 'المراجع', success: false, error: e.toString()));
-        _log('❌ References: $e');
-      }
-      await Future.delayed(Duration.zero);
-
-      // ═══ 6. Health Facilities ═══
-      try {
-        final facData = await db.getHealthFacilities();
-        await cache.putList('facilities_all', facData);
-        facs = facData.length;
-
-        final byDistrict = <String, List<Map<String, dynamic>>>{};
-        for (final fac in facData) {
-          final distId = fac['district_id'] as String? ?? '';
-          if (distId.isNotEmpty) {
-            byDistrict.putIfAbsent(distId, () => []).add(fac);
-          }
-        }
-        for (final entry in byDistrict.entries) {
-          await cache.putList('facilities_${entry.key}', entry.value);
-        }
-
-        steps.add(SyncStepResult(name: 'المرافق', success: true, count: facs));
-        _log('✅ Facilities: $facs');
-      } catch (e) {
-        steps.add(SyncStepResult(name: 'المرافق', success: false, error: e.toString()));
-        _log('❌ Facilities: $e');
-      }
+      // References + Facilities are already synced in parallel block above
 
       // ═══ 7. Sync pending uploads ═══
       try {

@@ -52,10 +52,12 @@ export default defineConfig(({ mode }) => {
             ],
             'chart-vendor': ['recharts'],
             'data-vendor': ['@supabase/supabase-js', '@tanstack/react-query', '@tanstack/react-table'],
-            // ═══ NEW: Isolate heavy export/report libraries ═══
-            // These are only needed when generating reports, not for normal browsing
+            // Isolate heavy export/report libraries — only loaded when generating reports
             'export-vendor': ['xlsx', 'jspdf', 'html-to-image', 'pptxgenjs'],
             'map-vendor': ['leaflet', 'react-leaflet'],
+            // ═══ NEW: Isolate heavy page-specific dependencies ═══
+            'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
+            'cmdk-vendor': ['cmdk'],
           },
         },
       },

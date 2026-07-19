@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 
 interface Props {
   children: ReactNode
+  fallback?: ReactNode
 }
 
 interface State {
@@ -31,6 +32,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      // ═══ FIX: Use custom fallback if provided (per-page error boundaries) ═══
+      if (this.props.fallback) {
+        return this.props.fallback
+      }
+
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-orange-50 p-4">
           <div className="max-w-md text-center space-y-6 p-8">

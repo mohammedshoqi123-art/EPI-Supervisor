@@ -1,7 +1,8 @@
+import { useState, useEffect } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/useApi'
 import { isConfigured } from '@/lib/supabase'
-import { AlertTriangle, RefreshCw, ShieldX } from 'lucide-react'
+import { AlertTriangle, RefreshCw, ShieldX, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { UserRole } from '@/types/database'
 
@@ -14,16 +15,31 @@ interface ProtectedRouteProps {
   allowedRoles?: UserRole[]
 }
 
+// ═══ FIX: Hard timeout (15s) prevents infinite loading when Supabase is unreachable ═══
+// Previously: no timeout — if Supabase was down, the loading spinner ran forever.
+const AUTH_TIMEOUT_MS = 15_000
+
 export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   const { data: authData, isLoading, isError, refetch } = useAuth()
+  const [timedOut, setTimedOut] = useState(false)
+
+  // Timeout watchdog — if loading exceeds 15s, show error UI
+  useEffect(() => {
+    if (!isLoading) {
+      setTimedOut(false)
+      return
+    }
+    const timer = setTimeout(() => setTimedOut(true), AUTH_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [isLoading])
 
   // If Supabase is not configured, redirect to login
   if (!isConfigured) {
     return <Navigate to="/login" replace />
   }
 
-  // Loading state
-  if (isLoading) {
+  // Loading state (with timeout protection)
+  if (isLoading && !timedOut) {
     return (
       <div className="flex h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
         <div className="flex flex-col items-center gap-5">
@@ -36,6 +52,31 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
             <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
             <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
             <div className="w-2 h-2 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ═══ FIX: Timeout state — show connection error with retry options ═══
+  if (timedOut && isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+        <div className="flex flex-col items-center gap-4 max-w-md text-center p-8">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+            <WifiOff className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-xl font-heading font-bold text-gray-800">انتهت مهلة الاتصال</h2>
+          <p className="text-sm text-muted-foreground">
+            يستغرق الاتصال بالخادم وقتاً أطول من المتوقع. تحقق من اتصالك بالإنترنت.
+          </p>
+          <div className="flex gap-3">
+            <Button onClick={() => { setTimedOut(false); refetch() }} className="gap-2">
+              <RefreshCw className="w-4 h-4" /> إعادة المحاولة
+            </Button>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              تحديث الصفحة
+            </Button>
           </div>
         </div>
       </div>

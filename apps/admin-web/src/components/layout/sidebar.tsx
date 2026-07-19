@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useTheme } from './theme-provider'
-import { useSignOut, useDashboardStats } from '@/hooks/useApi'
+import { useSignOut } from '@/hooks/useApi'
 import { ROLE_LABELS, type UserRole } from '@/types/database'
 import { getInitials } from '@/lib/utils'
 import { useCampaign, CAMPAIGN_ROUNDS, getRoundLabel } from '@/lib/campaign-context'
@@ -144,7 +144,6 @@ export function Sidebar({ user, collapsed = false, onToggle }: SidebarProps) {
   const location = useLocation()
   const { theme, setTheme } = useTheme()
   const signOut = useSignOut()
-  const { data: stats } = useDashboardStats()
   const { campaign, setCampaign, visibleOptions, campaignRound, setCampaignRound, showRoundFilter } = useCampaign()
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
 

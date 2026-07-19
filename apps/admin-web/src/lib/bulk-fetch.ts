@@ -64,6 +64,9 @@ export interface BulkFetchResult<T = Record<string, unknown>> {
 /**
  * Fetch all records from a Supabase table with pagination.
  * Respects a safety limit to prevent memory issues.
+ *
+ * ═══ FIX: Added streaming mode — yields pages as they arrive instead of
+ * accumulating everything in memory. Use bulkFetchStream() for large datasets.
  */
 export async function bulkFetch<T = Record<string, unknown>>(
   options: BulkFetchOptions
@@ -236,6 +239,57 @@ export async function bulkFetchShortages(filters?: {
       return q
     },
   })
+}
+
+/**
+ * ═══ Streaming bulk fetch — yields pages as they arrive instead of
+ * accumulating everything in memory. Use for large datasets.
+ *
+ * Usage:
+ *   for await (const page of bulkFetchStream({ table: 'form_submissions', ... })) {
+ *     processPage(page)
+ *   }
+ */
+export async function* bulkFetchStream<T = Record<string, unknown>>(
+  options: BulkFetchOptions
+): AsyncGenerator<T[], void, unknown> {
+  const {
+    table,
+    select,
+    maxRows = 50000,
+    pageSize = 1000,
+    orderBy = 'created_at',
+    orderDirection = 'desc',
+  } = options
+
+  let offset = 0
+  let totalFetched = 0
+
+  while (true) {
+    let query = supabase
+      .from(table)
+      .select(select)
+      .order(orderBy, { ascending: orderDirection === 'asc' })
+      .range(offset, offset + pageSize - 1)
+
+    if (options.applyFilters) {
+      query = options.applyFilters(query as unknown as SupabaseQuery) as unknown as typeof query
+    }
+
+    const { data, error } = await query
+
+    if (error || !data || data.length === 0) break
+
+    totalFetched += data.length
+    options.onProgress?.(totalFetched, null)
+
+    yield data as T[]
+
+    if (totalFetched >= maxRows || data.length < pageSize) break
+
+    offset += pageSize
+    await new Promise(r => setTimeout(r, 50))
+  }
 }
 
 /**

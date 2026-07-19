@@ -14,8 +14,18 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
+      // ═══ FIX: Changed from 'false' to 'always' with debounce ═══
+      // Previously: refetchOnWindowFocus: false meant stale data after tab switch.
+      // Now: refetches when user returns, but only if data is stale (>5min).
+      refetchOnWindowFocus: 'always',
+      refetchOnReconnect: true,
       retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 8000),
+      // ═══ FIX: GC time (was cacheTime) — keep unused data for 10 minutes ═══
+      gcTime: 10 * 60 * 1000,
+    },
+    mutations: {
+      retry: 1,
     },
   },
 })

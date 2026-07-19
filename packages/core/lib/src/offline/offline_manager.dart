@@ -79,11 +79,30 @@ class OfflineManager {
       } catch (e) {
         // ═══ FIX ME3: Hive corruption recovery ═══
         // If box open fails (corrupted file from power loss, etc.),
-        // delete the corrupted box and retry
+        // backup corrupted file for diagnostics, then delete and retry.
         if (kDebugMode) {
           debugPrint('[OfflineManager] Box open failed, attempting recovery: $e');
         }
         try {
+          // ═══ IMPROVEMENT: Backup corrupted file before deleting ═══
+          // This allows post-mortem diagnostics of data corruption.
+          try {
+            final boxPath = _box?.path;
+            if (boxPath != null) {
+              final backupPath = '$boxPath.corrupted.${DateTime.now().millisecondsSinceEpoch}';
+              final file = File(boxPath);
+              if (await file.exists()) {
+                await file.copy(backupPath);
+                if (kDebugMode) {
+                  debugPrint('[OfflineManager] Corrupted box backed up to: $backupPath');
+                }
+              }
+            }
+          } catch (backupError) {
+            if (kDebugMode) {
+              debugPrint('[OfflineManager] Could not backup corrupted box: $backupError');
+            }
+          }
           await Hive.deleteBoxFromDisk(_boxName);
         } catch (_) {}
 

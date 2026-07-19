@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { Component, type ReactNode, Suspense, lazy, useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppLayout } from '@/components/layout/app-layout'
@@ -10,7 +10,7 @@ import LoginPage from '@/pages/LoginPage'
 // Initialize report color theme from localStorage on app startup
 initBrandTheme()
 
-// Lazy load pages for better performance
+// ═══ Lazy load pages for better performance ═══
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const UsersPage = lazy(() => import('@/pages/UsersPage'))
 const FormsPage = lazy(() => import('@/pages/forms'))
@@ -36,6 +36,7 @@ const MemosPage = lazy(() => import('@/pages/MemosPage'))
 const FeedbackPage = lazy(() => import('@/pages/FeedbackPage'))
 const BotKnowledgePage = lazy(() => import('@/pages/BotKnowledgePage'))
 
+// ═══ Page Loader ═══
 function PageLoader() {
   return (
     <div className="flex h-full items-center justify-center">
@@ -49,72 +50,134 @@ function PageLoader() {
   )
 }
 
+// ═══ FIX: Section-level Error Boundary — catches errors per page, not globally ═══
+// Previously: one ErrorBoundary on the whole app → one error crashes everything.
+// Now: each page has its own boundary → error in Dashboard doesn't kill Settings.
+function SectionErrorBoundary({ name, children }: { name: string; children: ReactNode }) {
+  return (
+    <ErrorBoundary
+      fallback={
+        <div className="flex h-full items-center justify-center p-8">
+          <div className="max-w-md text-center space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center mx-auto">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <h2 className="text-lg font-bold text-gray-800">خطأ في تحميل {name}</h2>
+            <p className="text-sm text-muted-foreground">
+              حدث خطأ أثناء تحميل هذه الصفحة. يمكنك المحاولة مرة أخرى أو الانتقال لصفحة أخرى.
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:opacity-90 transition-opacity"
+              >
+                إعادة المحاولة
+              </button>
+              <button
+                onClick={() => window.location.href = '/dashboard'}
+                className="px-4 py-2 rounded-lg border text-sm hover:bg-muted transition-colors"
+              >
+                العودة للرئيسية
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      {children}
+    </ErrorBoundary>
+  )
+}
+
+// ═══ FIX: Suspense with timeout — shows loading then error if page takes too long ═══
+function LazyPage({ name, children }: { name: string; children: ReactNode }) {
+  return (
+    <SectionErrorBoundary name={name}>
+      <Suspense fallback={<PageLoader />}>
+        {children}
+      </Suspense>
+    </SectionErrorBoundary>
+  )
+}
+
+// ═══ Preload popular pages after initial load ═══
+function usePreloadPages() {
+  useEffect(() => {
+    // After 3 seconds of idle, preload the most-visited pages
+    const timer = setTimeout(() => {
+      import('@/pages/SubmissionsPage')
+      import('@/pages/FormsPage' as string)
+      import('@/pages/MapPage')
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [])
+}
+
 export default function App() {
+  usePreloadPages()
+
   return (
     <ErrorBoundary>
-    <TooltipProvider>
-      <Routes>
-        {/* Public routes — no auth required */}
-        <Route path="/public" element={<Suspense fallback={<PageLoader />}><PublicDashboardPage /></Suspense>} />
-        <Route path="/login" element={<LoginPage />} />
+      <TooltipProvider>
+        <Routes>
+          {/* Public routes — no auth required */}
+          <Route path="/public" element={<LazyPage name="لوحة المعلومات"><PublicDashboardPage /></LazyPage>} />
+          <Route path="/login" element={<LoginPage />} />
 
-        {/* ═══════════════════════════════════════════════════════
-            Protected routes — authentication + RBAC
-            Roles: admin, central, governorate, district, data_entry
-        ═══════════════════════════════════════════════════════ */}
+          {/* Protected routes — authentication + RBAC */}
 
-        {/* Routes accessible to ALL authenticated roles */}
-        <Route element={<ProtectedRoute />}>
-          <Route element={<AppLayout />}>
-            <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
-            <Route path="submissions" element={<Suspense fallback={<PageLoader />}><SubmissionsPage /></Suspense>} />
-            <Route path="forms" element={<Suspense fallback={<PageLoader />}><FormsPage /></Suspense>} />
-            <Route path="map" element={<Suspense fallback={<PageLoader />}><MapPage /></Suspense>} />
-            <Route path="chat" element={<Suspense fallback={<PageLoader />}><ChatPage /></Suspense>} />
-            <Route path="communication" element={<Suspense fallback={<PageLoader />}><CommunicationCenterPage /></Suspense>} />
-            <Route path="memos" element={<Suspense fallback={<PageLoader />}><MemosPage /></Suspense>} />
-            <Route path="feedback" element={<Suspense fallback={<PageLoader />}><FeedbackPage /></Suspense>} />
-            <Route path="bot-knowledge" element={<Suspense fallback={<PageLoader />}><BotKnowledgePage /></Suspense>} />
-            <Route path="bot" element={<Suspense fallback={<PageLoader />}><BotChatPage /></Suspense>} />
-            <Route path="studio" element={<Suspense fallback={<PageLoader />}><EpiStudioPage /></Suspense>} />
-            <Route path="notifications" element={<Suspense fallback={<PageLoader />}><NotificationsPage /></Suspense>} />
-            <Route path="references" element={<Suspense fallback={<PageLoader />}><ReferencesPage /></Suspense>} />
+          {/* Routes accessible to ALL authenticated roles */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppLayout />}>
+              <Route path="dashboard" element={<LazyPage name="لوحة التحكم"><DashboardPage /></LazyPage>} />
+              <Route path="submissions" element={<LazyPage name="الإرساليات"><SubmissionsPage /></LazyPage>} />
+              <Route path="forms" element={<LazyPage name="النماذج"><FormsPage /></LazyPage>} />
+              <Route path="map" element={<LazyPage name="الخريطة"><MapPage /></LazyPage>} />
+              <Route path="chat" element={<LazyPage name="الشات"><ChatPage /></LazyPage>} />
+              <Route path="communication" element={<LazyPage name="مركز الاتصال"><CommunicationCenterPage /></LazyPage>} />
+              <Route path="memos" element={<LazyPage name="التعاميم"><MemosPage /></LazyPage>} />
+              <Route path="feedback" element={<LazyPage name="التغذية الراجعة"><FeedbackPage /></LazyPage>} />
+              <Route path="bot-knowledge" element={<LazyPage name="معرفة البوت"><BotKnowledgePage /></LazyPage>} />
+              <Route path="bot" element={<LazyPage name="مستشار التحصين"><BotChatPage /></LazyPage>} />
+              <Route path="studio" element={<LazyPage name="استوديو المحتوى"><EpiStudioPage /></LazyPage>} />
+              <Route path="notifications" element={<LazyPage name="الإشعارات"><NotificationsPage /></LazyPage>} />
+              <Route path="references" element={<LazyPage name="المراجع"><ReferencesPage /></LazyPage>} />
+            </Route>
           </Route>
-        </Route>
 
-        {/* Routes for admin, central, governorate, district — management level */}
-        <Route element={<ProtectedRoute allowedRoles={['admin', 'central', 'governorate', 'district']} />}>
-          <Route element={<AppLayout />}>
-            <Route path="governorates" element={<Suspense fallback={<PageLoader />}><GovernoratesPage /></Suspense>} />
-            <Route path="shortages" element={<Suspense fallback={<PageLoader />}><ShortagesPage /></Suspense>} />
-            <Route path="insights" element={<Suspense fallback={<PageLoader />}><AIInsightsPage /></Suspense>} />
-            <Route path="reports" element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>} />
-            <Route path="scheduled-reports" element={<Suspense fallback={<PageLoader />}><ScheduledReportsPage /></Suspense>} />
+          {/* Routes for admin, central, governorate, district */}
+          <Route element={<ProtectedRoute allowedRoles={['admin', 'central', 'governorate', 'district']} />}>
+            <Route element={<AppLayout />}>
+              <Route path="governorates" element={<LazyPage name="المحافظات"><GovernoratesPage /></LazyPage>} />
+              <Route path="shortages" element={<LazyPage name="النواقص"><ShortagesPage /></LazyPage>} />
+              <Route path="insights" element={<LazyPage name="التحليلات"><AIInsightsPage /></LazyPage>} />
+              <Route path="reports" element={<LazyPage name="التقارير"><ReportsPage /></LazyPage>} />
+              <Route path="scheduled-reports" element={<LazyPage name="التقارير المجدولة"><ScheduledReportsPage /></LazyPage>} />
+            </Route>
           </Route>
-        </Route>
 
-        {/* Routes for admin and central only */}
-        <Route element={<ProtectedRoute allowedRoles={['admin', 'central']} />}>
-          <Route element={<AppLayout />}>
-            <Route path="users" element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
+          {/* Routes for admin and central only */}
+          <Route element={<ProtectedRoute allowedRoles={['admin', 'central']} />}>
+            <Route element={<AppLayout />}>
+              <Route path="users" element={<LazyPage name="المستخدمون"><UsersPage /></LazyPage>} />
+            </Route>
           </Route>
-        </Route>
 
-        {/* Routes for admin only */}
-        <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-          <Route element={<AppLayout />}>
-            <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditPage /></Suspense>} />
-            <Route path="ai-settings" element={<Suspense fallback={<PageLoader />}><AISettingsPage /></Suspense>} />
-            <Route path="pages" element={<Suspense fallback={<PageLoader />}><PagesManagementPage /></Suspense>} />
-            <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
+          {/* Routes for admin only */}
+          <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+            <Route element={<AppLayout />}>
+              <Route path="audit" element={<LazyPage name="سجل التدقيق"><AuditPage /></LazyPage>} />
+              <Route path="ai-settings" element={<LazyPage name="إعدادات الذكاء الاصطناعي"><AISettingsPage /></LazyPage>} />
+              <Route path="pages" element={<LazyPage name="إدارة الصفحات"><PagesManagementPage /></LazyPage>} />
+              <Route path="settings" element={<LazyPage name="الإعدادات"><SettingsPage /></LazyPage>} />
+            </Route>
           </Route>
-        </Route>
 
-        {/* Root redirects to dashboard (auth will redirect to login if needed) */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </TooltipProvider>
+          {/* Root redirects to dashboard */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </TooltipProvider>
     </ErrorBoundary>
   )
 }

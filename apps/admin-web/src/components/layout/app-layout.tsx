@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Sidebar, MobileSidebar } from './sidebar'
-import { useAuth, useNotificationRealtime, useChatMessages } from '@/hooks/useApi'
+import { useAuth, useNotificationRealtime } from '@/hooks/useApi'
 import { AIChatWidget } from '@/components/ai/AIChatWidget'
 import { GlobalSearch } from '@/components/ui/global-search'
+import { ConnectivityBanner } from '@/components/layout/connectivity-banner'
 import { useRealtimeBrowserNotifications } from '@/hooks/useBrowserNotifications'
-import { MessageSquare, X } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -50,6 +51,9 @@ export function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* Connectivity Banner — shows online/offline status */}
+      <ConnectivityBanner />
+
       {/* Desktop Sidebar */}
       <div className="hidden lg:block relative z-30">
         <Sidebar
@@ -98,18 +102,17 @@ export function AppLayout() {
 }
 
 // ═══ Floating Chat Button — always visible, animated ═══
+// ═══ FIX: Removed useChatMessages('general') — was loading chat data on every page ═══
+// Previously: every page navigation triggered a chat messages fetch.
+// Now: just shows the button without preloading chat data.
 function FloatingChatButton() {
   const navigate = useNavigate()
   const location = useLocation()
   const [isHovered, setIsHovered] = useState(false)
-  const [showTooltip, setShowTooltip] = useState(false)
-  const { data: messages } = useChatMessages('general')
 
   // Don't show on chat page itself
   const isOnChatPage = location.pathname === '/chat'
   if (isOnChatPage) return null
-
-  const messageCount = Array.isArray(messages) ? messages.length : 0
 
   return (
     <div className="fixed bottom-6 left-6 z-50">
@@ -131,15 +134,6 @@ function FloatingChatButton() {
           'w-6 h-6 text-white transition-transform duration-300',
           isHovered && 'scale-110'
         )} />
-
-        {/* Badge */}
-        {messageCount > 0 && (
-          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 border-2 border-background flex items-center justify-center">
-            <span className="text-[9px] font-bold text-white">
-              {messageCount > 99 ? '99+' : messageCount > 9 ? '9+' : messageCount}
-            </span>
-          </div>
-        )}
 
         {/* Online indicator */}
         <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-background" />

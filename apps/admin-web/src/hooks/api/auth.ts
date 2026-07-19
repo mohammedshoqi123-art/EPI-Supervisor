@@ -28,7 +28,10 @@ export function useAuth() {
     },
     retry: 1,
     retryDelay: 2000,
-    staleTime: 30000,
+    // ═══ FIX: Longer stale time — auth state rarely changes ═══
+    staleTime: 60000,
+    // ═══ FIX: Don't refetch on reconnect — auth doesn't change on network recovery ═══
+    refetchOnReconnect: false,
     enabled: isConfigured,
   })
 }

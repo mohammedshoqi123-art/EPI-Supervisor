@@ -39,6 +39,10 @@ class ConnectivityUtils {
     'https://www.cloudflare.com/cdn-cgi/trace',
   ];
 
+  // ═══ FIX: Cache last successful probe to avoid redundant HTTP probes ═══
+  static DateTime? _lastSuccessfulProbe;
+  static const _probeCacheDuration = Duration(seconds: 60);
+
   /// Minimum interval between state emissions to prevent event storms
   /// ═══ PERFORMANCE: 2s (was 800ms) — prevents rapid-fire connectivity events ═══
   static const Duration _minEmitInterval = Duration(seconds: 2);
@@ -133,6 +137,13 @@ class ConnectivityUtils {
   /// Now: parallel probes = 4s worst case regardless of URL count
   static Future<bool> _probeInternet() async {
     if (_probing) return _isOnline;
+
+    // ═══ FIX: Return cached result if last probe was recent ═══
+    if (_lastSuccessfulProbe != null &&
+        DateTime.now().difference(_lastSuccessfulProbe!) < _probeCacheDuration) {
+      return true;
+    }
+
     _probing = true;
     _lastProbe = DateTime.now();
 
@@ -155,7 +166,9 @@ class ConnectivityUtils {
         onTimeout: () => List.filled(futures.length, false),
       );
 
-      return results.any((ok) => ok);
+      final success = results.any((ok) => ok);
+      if (success) _lastSuccessfulProbe = DateTime.now();
+      return success;
     } finally {
       _probing = false;
     }

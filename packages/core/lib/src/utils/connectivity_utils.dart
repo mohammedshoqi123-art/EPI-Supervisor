@@ -35,13 +35,22 @@ class ConnectivityUtils {
 
   /// Probe targets — tried in PARALLEL, first success wins.
   /// ═══ PERFORMANCE: 3 URLs including Supabase — more reliable in restricted networks ═══
-  static List<String> get _probeUrls => [
-    'https://www.google.com/generate_204',
-    'https://www.cloudflare.com/cdn-cgi/trace',
+  static List<String> get _probeUrls {
+    final urls = <String>[
+      'https://www.google.com/generate_204',
+      'https://www.cloudflare.com/cdn-cgi/trace',
+    ];
     // ═══ FIX: Add Supabase health check — works in networks that block Google/CF ═══
-    if (SupabaseConfig.url.isNotEmpty)
-      '${SupabaseConfig.url}/rest/v1/',
-  ];
+    try {
+      final supabaseUrl = SupabaseConfig.url;
+      if (supabaseUrl.isNotEmpty) {
+        urls.add('$supabaseUrl/rest/v1/');
+      }
+    } catch (_) {
+      // SupabaseConfig not available yet — skip
+    }
+    return urls;
+  }
 
   // ═══ FIX: Cache last successful probe to avoid redundant HTTP probes ═══
   // Reduced from 60s to 30s — faster detection of connectivity loss

@@ -133,58 +133,75 @@ Future<void> main() async {
 /// Public so SplashScreen can poll until ready
 bool supabaseInitialized = false;
 
-/// ═══ تهيئة Supabase في الخلفية — لا نحظر runApp ═══
-/// محاولة واحدة فقط بـ 10s مهلة. إذا فشلت (اوفلاين)، نحاول لاحقاً
-/// عند عودة الإنترنت عبر ConnectivityUtils.
+/// ═══ FIX P1-1: Supabase Init مع 3 محاولات + exponential backoff ═══
+/// السابق: محاولة واحدة فقط → التطبيق يعلق في offline
+/// الجديد: 3 محاولات (10s, 15s, 20s) + reconnect on connectivity change
 void _initSupabaseInBackground() {
   if (EnvValidator.isOfflineMode || SupabaseConfig.url.isEmpty) {
     debugPrint('[Init] Offline mode or no URL — skipping Supabase');
     return;
   }
 
-  // محاولة واحدة فقط — لا نعيد المحاولة فوراً عند الاوفلاين
-  _tryInitSupabase().then((success) {
+  _tryInitSupabaseWithRetry().then((success) {
     if (!success) {
-      debugPrint('[Init] Supabase init failed — will retry on reconnect');
-      // الاستماع لعودة الإنترنت لإعادة المحاولة
-      ConnectivityUtils.onConnectivityChanged.listen((online) {
+      debugPrint('[Init] Supabase init failed after 3 attempts — entering offline mode');
+      StreamSubscription<bool>? connSub;
+      connSub = ConnectivityUtils.onConnectivityChanged.listen((online) {
         if (online && !supabaseInitialized) {
-          _tryInitSupabase();
+          debugPrint('[Init] Internet returned — retrying Supabase init');
+          _tryInitSupabaseWithRetry().then((retrySuccess) {
+            if (retrySuccess) {
+              connSub?.cancel();
+            }
+          });
         }
       });
     }
   });
 }
 
-Future<bool> _tryInitSupabase() async {
-  if (supabaseInitialized) return true;
-  try {
-    SupabaseConfig.validate();
+/// ═══ FIX P1-1: 3 محاولات مع exponential backoff ═══
+Future<bool> _tryInitSupabaseWithRetry() async {
+  const maxAttempts = 3;
+  const baseTimeout = [10, 15, 20];
+  const baseDelay = [0, 3, 6];
 
-    // ═══ FIX: مهلة 10s فقط بدل 15s ═══
-    await Supabase.initialize(
-      url: SupabaseConfig.url,
-      anonKey: SupabaseConfig.anonKey,
-      debug: AppConfig.isDevelopment,
-      authOptions: const FlutterAuthClientOptions(
-        authFlowType: AuthFlowType.pkce,
-        autoRefreshToken: true,
-      ),
-      realtimeClientOptions: const RealtimeClientOptions(
-        logLevel: RealtimeLogLevel.warn,
-      ),
-      storageOptions: const StorageClientOptions(
-        retryAttempts: 3,
-      ),
-    ).timeout(const Duration(seconds: 10));
+  for (int attempt = 0; attempt < maxAttempts; attempt++) {
+    if (supabaseInitialized) return true;
 
-    supabaseInitialized = true;
-    debugPrint('[Init] ✅ Supabase initialized');
-    return true;
-  } catch (e) {
-    debugPrint('[Init] ❌ Supabase init failed: $e');
-    return false;
+    if (baseDelay[attempt] > 0) {
+      await Future.delayed(Duration(seconds: baseDelay[attempt]));
+    }
+
+    try {
+      SupabaseConfig.validate();
+
+      await Supabase.initialize(
+        url: SupabaseConfig.url,
+        anonKey: SupabaseConfig.anonKey,
+        debug: AppConfig.isDevelopment,
+        authOptions: const FlutterAuthClientOptions(
+          authFlowType: AuthFlowType.pkce,
+          autoRefreshToken: true,
+        ),
+        realtimeClientOptions: const RealtimeClientOptions(
+          logLevel: RealtimeLogLevel.warn,
+        ),
+        storageOptions: const StorageClientOptions(
+          retryAttempts: 3,
+        ),
+      ).timeout(Duration(seconds: baseTimeout[attempt]));
+
+      supabaseInitialized = true;
+      debugPrint('[Init] ✅ Supabase initialized (attempt ${attempt + 1})');
+      return true;
+    } catch (e) {
+      debugPrint('[Init] ❌ Supabase init attempt ${attempt + 1}/$maxAttempts failed: $e');
+    }
   }
+
+  debugPrint('[Init] ⚠️ All $maxAttempts Supabase init attempts failed');
+  return false;
 }
 
 class EpiSupervisorApp extends ConsumerStatefulWidget {

@@ -17,6 +17,10 @@ class RealtimeSyncService {
   RealtimeChannel? _channel;  // ═══ PERFORMANCE: Single channel instead of 5 ═══
   bool _isListening = false;
   Timer? _debounceTimer;
+  Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
+  static const _maxReconnectAttempts = 10;
+  static const _reconnectDelays = [5, 10, 15, 30, 60, 60, 60, 60, 60, 60];
   final Set<String> _pendingInvalidations = {};
 
   /// Stream of change events — UI can listen to show "data changed" indicator
@@ -147,12 +151,43 @@ class RealtimeSyncService {
         },
       );
 
-      _channel!.subscribe();
+      _channel!.subscribe(
+        onError: (error) {
+          debugPrint('[RealtimeSync] ⚠️ Channel error: $error');
+          _isListening = false;
+          _scheduleReconnect();
+        },
+        onClose: () {
+          debugPrint('[RealtimeSync] ⚠️ Channel closed');
+          _isListening = false;
+          _scheduleReconnect();
+        },
+      );
       _isListening = true;
+      _reconnectAttempts = 0;
       debugPrint('[RealtimeSync] ✅ Started listening (single channel)');
     } catch (e) {
       debugPrint('[RealtimeSync] ❌ Failed to start: $e');
+      _scheduleReconnect();
     }
+  }
+
+  void _scheduleReconnect() {
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      debugPrint('[RealtimeSync] ⚠️ Max reconnect attempts reached');
+      return;
+    }
+    final delaySeconds = _reconnectDelays[_reconnectAttempts];
+    _reconnectAttempts++;
+    debugPrint('[RealtimeSync] 🔄 Reconnect in ${delaySeconds}s (attempt $_reconnectAttempts)');
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(Duration(seconds: delaySeconds), () {
+      if (!_isListening) {
+        _channel?.unsubscribe();
+        _channel = null;
+        startListening();
+      }
+    });
   }
 
   /// Check if current user was deactivated — force logout if so
@@ -192,9 +227,11 @@ class RealtimeSyncService {
   /// Stop listening for changes
   void dispose() {
     _debounceTimer?.cancel();
+    _reconnectTimer?.cancel();
     _channel?.unsubscribe();
     _changeController.close();
     _isListening = false;
+    _reconnectAttempts = 0;
     debugPrint('[RealtimeSync] Stopped listening');
   }
 }

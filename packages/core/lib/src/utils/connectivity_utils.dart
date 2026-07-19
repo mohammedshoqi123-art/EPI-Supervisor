@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
-import '../config/supabase_config.dart';
 
 /// Utility for monitoring internet connectivity status.
 /// Single source of truth — all other listeners should read from here.
@@ -34,23 +33,11 @@ class ConnectivityUtils {
   static bool _probing = false;
 
   /// Probe targets — tried in PARALLEL, first success wins.
-  /// ═══ PERFORMANCE: 3 URLs including Supabase — more reliable in restricted networks ═══
-  static List<String> get _probeUrls {
-    final urls = <String>[
-      'https://www.google.com/generate_204',
-      'https://www.cloudflare.com/cdn-cgi/trace',
-    ];
-    // ═══ FIX: Add Supabase health check — works in networks that block Google/CF ═══
-    try {
-      final supabaseUrl = SupabaseConfig.url;
-      if (supabaseUrl.isNotEmpty) {
-        urls.add('$supabaseUrl/rest/v1/');
-      }
-    } catch (_) {
-      // SupabaseConfig not available yet — skip
-    }
-    return urls;
-  }
+  /// ═══ PERFORMANCE: 2 URLs — reliable in most networks ═══
+  static const List<String> _probeUrls = [
+    'https://www.google.com/generate_204',
+    'https://www.cloudflare.com/cdn-cgi/trace',
+  ];
 
   // ═══ FIX: Cache last successful probe to avoid redundant HTTP probes ═══
   // Reduced from 60s to 30s — faster detection of connectivity loss

@@ -69,9 +69,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
     // ═══ FIX: انتظر Supabase.initialize ينتهي (في الخلفية) ═══
     // main.dart يبدأ Supabase في الخلفية، نحن ننتظره هنا
-    // ═══ FIX: زيادة الانتظار إلى 30 ثانية (كان 15) — شبكات بطيئة في العراق ═══
+    // ═══ FIX: انتظار أقصر — 10 ثوانٍ كافية، بعدها ن proceed offline ═══
     bool supabaseReady = false;
-    for (int i = 0; i < 30; i++) {
+    for (int i = 0; i < 10; i++) {
       if (supabaseInitialized) {
         supabaseReady = true;
         break;
@@ -82,9 +82,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
 
     if (!supabaseReady) {
-      // ═══ FIX: Supabase لم يتهيأ بعد (اوفلاين مثلاً) — حاول المتابعة ═══
-      // إذا في session محفوظ، روح للداشبورد. خلاف ذلك، روح للّوجن.
-      debugPrint('[Splash] Supabase not ready after 30s — proceeding');
+      // ═══ FIX: Supabase لم يتهيأ بعد (اوفلاين مثلاً) — proceed immediately ═══
+      debugPrint('[Splash] Supabase not ready after 10s — proceeding offline');
       _hasNavigated = true;
       _waitTimer?.cancel();
       // الروتينج سيتعامل مع الـ auth state، إذهب لـ /dashboard واترك الـ redirect يشتغل

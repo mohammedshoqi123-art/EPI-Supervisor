@@ -92,25 +92,15 @@ class RealtimeSyncService {
         },
       );
 
-      // ═══ FIX P1-5: Subscribe to form_submissions for realtime updates ═══
-      // Previously: other users never saw new submissions in realtime
+      // ═══ FIX: Subscribe to form_submissions — single listener for all events ═══
+      // Previously: separate insert + update listeners = 2 subscriptions
+      // Now: single 'all' listener = 1 subscription
       _channel!.onPostgresChanges(
-        event: PostgresChangeEvent.insert,
+        event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'form_submissions',
         callback: (payload) {
-          debugPrint('[RealtimeSync] New submission: ${payload.newRecord['id']}');
-          _changeController.add('form_submissions');
-          _scheduleInvalidation('form_submissions');
-        },
-      );
-
-      _channel!.onPostgresChanges(
-        event: PostgresChangeEvent.update,
-        schema: 'public',
-        table: 'form_submissions',
-        callback: (payload) {
-          debugPrint('[RealtimeSync] Submission updated: ${payload.newRecord['id']}');
+          debugPrint('[RealtimeSync] Submission ${payload.eventType}: ${payload.newRecord['id']}');
           _changeController.add('form_submissions');
           _scheduleInvalidation('form_submissions');
         },

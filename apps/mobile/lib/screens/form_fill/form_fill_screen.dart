@@ -199,20 +199,38 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         // ═══ FIX: Restore GPS coordinates from draft data ═══
         // GPS fields store "lat, lng" as a string in _formData
         // We must restore _gpsLat/_gpsLng so the UI shows "تم تحديد الموقع ✓"
+        // ═══ FIX: Support both String ("lat, lng") and Map ({lat, lng, accuracy}) formats ═══
+        // Old drafts may have Map format from _getCurrentLocationForField()
         for (final field in _allFields) {
           if (field['type'] == 'gps') {
             final key = field['key'] as String;
-            final gpsStr = _formData[key] as String?;
-            if (gpsStr != null && gpsStr.contains(',')) {
-              final parts = gpsStr.split(',').map((s) => s.trim()).toList();
+            final gpsData = _formData[key];
+            double? lat, lng;
+
+            if (gpsData is String && gpsData.contains(',')) {
+              // Format: "33.300000, 44.300000"
+              final parts = gpsData.split(',').map((s) => s.trim()).toList();
               if (parts.length == 2) {
-                final lat = double.tryParse(parts[0]);
-                final lng = double.tryParse(parts[1]);
-                if (lat != null && lng != null) {
-                  _gpsLat = lat;
-                  _gpsLng = lng;
-                }
+                lat = double.tryParse(parts[0]);
+                lng = double.tryParse(parts[1]);
               }
+            } else if (gpsData is Map) {
+              // Format: {lat: 33.3, lng: 44.3, accuracy: 10} (legacy)
+              lat = (gpsData['lat'] as num?)?.toDouble();
+              lng = (gpsData['lng'] as num?)?.toDouble();
+              // Normalize to String format for consistency
+              if (lat != null && lng != null) {
+                _formData[key] =
+                    '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
+              }
+            } else if (gpsData is num) {
+              // Edge case: stored as single number (shouldn't happen but be safe)
+              debugPrint('[Draft] Unexpected GPS format: $gpsData');
+            }
+
+            if (lat != null && lng != null) {
+              _gpsLat = lat;
+              _gpsLng = lng;
             }
           }
         }
@@ -368,15 +386,16 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       if (permission == LocationPermission.deniedForever) return;
 
       // ═══ FIX: Timeout على GPS — يمنع التعليق في الأماكن المغلقة ═══
-      // السابق: بدون timeout — يعلق indefinitely إذا لم يجد GPS
-      // الجديد: timeout 15s + fallback إلى آخر موقع معروف
+      // ═══ IMPROVEMENT: Use medium accuracy for faster response ═══
+      // High accuracy requires GPS chip → slow indoors, drains battery
+      // Medium accuracy uses WiFi/cell towers → fast, works indoors
       Position? position;
       try {
         position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 10),
+          desiredAccuracy: LocationAccuracy.medium,  // Faster than high
+          timeLimit: const Duration(seconds: 8),
         ).timeout(
-          const Duration(seconds: 15),
+          const Duration(seconds: 10),
           onTimeout: () => throw TimeoutException('GPS timeout'),
         );
       } on TimeoutException {
@@ -396,12 +415,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       final lat = position.latitude;
       final lng = position.longitude;
       final acc = position.accuracy;
+      // ═══ FIX: Store GPS as String (consistent with _getLocation) ═══
+      // Previously: stored as Map {lat, lng, accuracy} — broke draft loading
+      // Now: stored as "lat, lng" String — matches draft restore logic
       setState(() {
-        _formData[fieldKey] = {
-          'lat': lat,
-          'lng': lng,
-          'accuracy': acc,
-        };
+        _formData[fieldKey] =
+            '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
         _gpsLat = lat;
         _gpsLng = lng;
       });
@@ -472,14 +491,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         return;
       }
 
-      // ═══ FIX: Timeout + fallback على GPS ═══
+      // ═══ FIX: Timeout + fallback — medium accuracy for speed ═══
       Position? position;
       try {
         position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 10),
+          desiredAccuracy: LocationAccuracy.medium,  // Faster than high
+          timeLimit: const Duration(seconds: 8),
         ).timeout(
-          const Duration(seconds: 15),
+          const Duration(seconds: 10),
           onTimeout: () => throw TimeoutException('GPS timeout'),
         );
       } on TimeoutException {
@@ -535,6 +554,22 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           }
         } else {
           _formData[key] = entry.value.text;
+        }
+      }
+    }
+
+    // ═══ FIX: Sync GPS coordinates to _formData ═══
+    // Previously: _gpsLat/_gpsLng were separate from _formData
+    // Now: ensure GPS data is always in _formData for auto-save
+    if (_gpsLat != null && _gpsLng != null) {
+      for (final field in _allFields) {
+        if (field['type'] == 'gps') {
+          final key = field['key'] as String;
+          // Only update if not already set (user may have set it manually)
+          if (_formData[key] == null || _formData[key] is Map) {
+            _formData[key] =
+                '${_gpsLat!.toStringAsFixed(6)}, ${_gpsLng!.toStringAsFixed(6)}';
+          }
         }
       }
     }
@@ -879,10 +914,17 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   int _autoSaveFailCount = 0;
+  // ═══ FIX: Track last saved data hash to avoid redundant saves ═══
+  String? _lastSavedDataHash;
 
   Future<void> _autoSave({bool showFeedback = false}) async {
     _syncControllersToFormData();
     if (_formData.isEmpty) return;
+
+    // ═══ FIX: Skip save if data hasn't changed ═══
+    // Prevents unnecessary encryption/Hive writes every 60 seconds
+    final currentHash = _formData.toString();
+    if (currentHash == _lastSavedDataHash) return;
 
     if (!mounted) return;
 
@@ -900,6 +942,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         Map<String, dynamic>.from(_formData),
       );
       _hasUnsavedChanges = false;
+      _lastSavedDataHash = _formData.toString(); // Track saved state
       _autoSaveFailCount = 0; // Reset on success
       if (showFeedback && mounted) {
         context.showSuccess('تم الحفظ التلقائي');

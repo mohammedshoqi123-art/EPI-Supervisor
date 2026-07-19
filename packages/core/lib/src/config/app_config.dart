@@ -42,7 +42,8 @@ class AppConfig {
 
   // ─── GPS ─────────────────────────────────────────────────────────────────
   static const double gpsAccuracyMeters = 50.0;
-  static const Duration gpsTimeout = Duration(seconds: 30);
+  // ═══ FIX: Reduced from 30s to 10s — medium accuracy is fast, no need to wait ═══
+  static const Duration gpsTimeout = Duration(seconds: 10);
 
   // ─── Security ────────────────────────────────────────────────────────────
   static const int sessionTimeoutMinutes = 240; // 4 hours (was 8h — security improvement)

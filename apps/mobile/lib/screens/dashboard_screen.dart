@@ -118,12 +118,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     // ═══ PERFORMANCE: Use .select() to minimize rebuild scope ═══
+    // Only watch the specific fields we need from analytics
     final analytics = ref.watch(
       dashboardAnalyticsProvider(
         AnalyticsFilter(campaignType: ref.watch(campaignProvider).value, campaignRound: ref.watch(campaignRoundProvider)),
       ),
     );
-    final authState = ref.watch(authStateProvider);
+    // ═══ FIX: Only watch specific fields from authState to minimize rebuilds ═══
+    final isAuthenticated = ref.watch(
+      authStateProvider.select((v) => v.valueOrNull?.isAuthenticated ?? false),
+    );
+    final userRole = ref.watch(
+      authStateProvider.select((v) => v.valueOrNull?.role),
+    );
+    final userName = ref.watch(
+      authStateProvider.select((v) => v.valueOrNull?.fullName ?? 'مستخدم'),
+    );
     final pendingCount = ref.watch(
       syncPendingCountProvider.select((v) => v.valueOrNull ?? 0),
     );
@@ -206,7 +216,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             ),
             SliverToBoxAdapter(
               child: DashboardHeroHeader(
-                userName: authState.valueOrNull?.fullName ?? 'مستخدم',
+                userName: userName,
                 campaignLabel: ref.watch(campaignProvider).displayLabel,
                 unreadNotifications: unreadNotifs,
                 unreadCommunication: _computeUnreadCommunication(ref),

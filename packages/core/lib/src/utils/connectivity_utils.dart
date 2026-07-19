@@ -49,8 +49,8 @@ class ConnectivityUtils {
   static const Duration _minEmitInterval = Duration(seconds: 2);
 
   /// How often to recheck when "online" (catches captive portal / wifi-no-internet)
-  /// ═══ PERFORMANCE: 120s (was 30s) — 30s caused constant HTTP probes that blocked UI ═══
-  static const Duration _onlineRecheckInterval = Duration(seconds: 120);
+  /// ═══ PERFORMANCE: 60s (was 120s) — faster detection of connectivity loss ═══
+  static const Duration _onlineRecheckInterval = Duration(seconds: 60);
 
   /// Call once at app startup to start monitoring.
   /// On web: assumes online and skips connectivity_plus listeners (they can hang).
@@ -63,9 +63,10 @@ class ConnectivityUtils {
       return;
     }
 
-    // ═══ PERFORMANCE: Start with optimistic online assumption ═══
-    // Don't block app startup waiting for connectivity check
-    _isOnline = true; // Optimistic — will be corrected by probe
+    // ═══ FIX: Start offline — don't assume connectivity ═══
+    // Previously: _isOnline = true → API calls fail after 30s timeout
+    // Now: start offline, probe immediately, update within seconds
+    _isOnline = false;
 
     try {
       final result = await _connectivity.checkConnectivity().timeout(
@@ -73,11 +74,12 @@ class ConnectivityUtils {
             onTimeout: () => <ConnectivityResult>[],
           );
       final linkUp = _isConnected(result);
-      if (!linkUp) {
-        _isOnline = false;
+      if (linkUp) {
+        // Link is up — probe to verify real internet
+        _probeAndEmit();
       }
     } catch (_) {
-      // Can't check — assume online
+      // Can't check — stay offline
     }
 
     // Listen for link changes (e.g., user toggles airplane mode)
@@ -154,16 +156,16 @@ class ConnectivityUtils {
         try {
           final response = await http
               .head(Uri.parse(url))
-              .timeout(const Duration(seconds: 3));
+              .timeout(const Duration(seconds: 2));  // Reduced from 3s
           return response.statusCode < 500;
         } catch (_) {
           return false;
         }
       }).toList();
 
-      // Wait for ALL to complete (max 3s due to individual timeouts)
+      // Wait for ALL to complete (max 2.5s due to individual timeouts)
       final results = await Future.wait(futures).timeout(
-        const Duration(seconds: 4),
+        const Duration(seconds: 3),  // Reduced from 4s
         onTimeout: () => List.filled(futures.length, false),
       );
 

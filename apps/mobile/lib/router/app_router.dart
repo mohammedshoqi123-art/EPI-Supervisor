@@ -501,6 +501,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     final authState = authAsync.valueOrNull;
     final campaign = ref.watch(campaignProvider);
     final campaignRound = ref.watch(campaignRoundProvider);
+    // ═══ Filter campaigns by visibility ═══
+    final visibleCampaigns = CampaignType.visibleValues;
+
     return EpiDrawer(
       currentRoute: GoRouterState.of(context).matchedLocation,
       userName: authState?.fullName ?? 'مستخدم',
@@ -522,6 +525,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       onCampaignRoundChanged: (round) {
         ref.read(campaignRoundProvider.notifier).selectRound(round);
       },
+      visibleCampaigns: visibleCampaigns.map((c) => c.value).toList(),
     );
   }
 }

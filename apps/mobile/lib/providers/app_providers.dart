@@ -300,6 +300,25 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
     } catch (_) {
       // Default to polio campaign if loading fails
     }
+
+    // ═══ Load visibility in background (non-blocking) ═══
+    _loadVisibilityInBackground();
+  }
+
+  Future<void> _loadVisibilityInBackground() async {
+    try {
+      final api = _ref.read(apiClientProvider);
+      final result = await api.select('campaign_types', select: 'key, visible');
+      final visibilityMap = <String, bool>{};
+      for (final row in result) {
+        final key = row['key'] as String?;
+        final visible = row['visible'] as bool?;
+        if (key != null) visibilityMap[key] = visible ?? true;
+      }
+      await CampaignType.loadVisibility(visibilityMap);
+    } catch (_) {
+      // Silently fail — default to all visible
+    }
   }
 
 

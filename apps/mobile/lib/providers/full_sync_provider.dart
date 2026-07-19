@@ -167,7 +167,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
           // ═══ PERFORMANCE: Yield to UI thread between pagination batches ═══
           await Future.delayed(Duration.zero);
           // حد أقصى 50000 (حماية من الحلقات اللانهائية)
-          if (allSubs.length >= 50000) break;
+          if (allSubs.length >= 5000) break;
         }
 
         final filter = SubmissionsFilter(

@@ -32,6 +32,7 @@ class EpiDrawer extends StatelessWidget {
   final ValueChanged<String>? onCampaignChanged;
   final int activeCampaignRound;
   final ValueChanged<int>? onCampaignRoundChanged;
+  final List<String>? visibleCampaigns;
 
   const EpiDrawer({
     super.key,
@@ -48,6 +49,7 @@ class EpiDrawer extends StatelessWidget {
     this.onCampaignChanged,
     this.activeCampaignRound = 1,
     this.onCampaignRoundChanged,
+    this.visibleCampaigns,
   });
 
   @override
@@ -183,7 +185,9 @@ class EpiDrawer extends StatelessWidget {
                           color: Colors.white,
                           fontSize: 14,
                         ),
-                        items: DrawerCampaign.values.map((c) {
+                        items: DrawerCampaign.values
+                    .where((c) => visibleCampaigns == null || visibleCampaigns!.contains(c.value))
+                    .map((c) {
                           return DropdownMenuItem(
                             value: c.value,
                             child: Text('${c.emoji} ${c.labelAr}'),

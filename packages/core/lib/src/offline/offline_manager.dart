@@ -633,8 +633,7 @@ class OfflineManager {
   String? _cacheRawSignature;
   static const int _maxCacheMemoryEntries = 50; // LRU limit
 
-  // ═══ FIX ME2: Cache size limit (50MB) with LRU eviction ═══
-  static const int _maxCacheSizeBytes = 50 * 1024 * 1024; // 50MB
+  // ═══ No cache size limit — let Hive handle storage ═══
 
   Future<void> cacheData(String key, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
@@ -643,29 +642,6 @@ class OfflineManager {
         'data': data,
         'cached_at': DateTime.now().toIso8601String(),
       };
-
-      // ═══ LRU Eviction: Remove oldest entries if cache exceeds 50MB ═══
-      final cacheJson = jsonEncode(cache);
-      if (cacheJson.length > _maxCacheSizeBytes) {
-        // Sort by cached_at, remove oldest until under limit
-        final entries = cache.entries.toList()
-          ..sort((a, b) {
-            final aTime = a.value['cached_at'] ?? '';
-            final bTime = b.value['cached_at'] ?? '';
-            return aTime.compareTo(bTime);
-          });
-
-        int currentSize = cacheJson.length;
-        for (final entry in entries) {
-          if (currentSize <= _maxCacheSizeBytes * 0.8) break; // Evict to 80%
-          final entrySize = jsonEncode({entry.key: entry.value}).length;
-          cache.remove(entry.key);
-          currentSize -= entrySize;
-          if (kDebugMode) {
-            debugPrint('[OfflineManager] LRU evicted cache key: ${entry.key}');
-          }
-        }
-      }
 
       final encrypted = _encryption.encrypt(jsonEncode(cache));
       await _safeBox?.put(_cacheKey, encrypted);

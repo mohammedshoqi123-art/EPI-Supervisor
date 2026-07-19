@@ -439,7 +439,7 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
 /// Each unique SubmissionsFilter gets its own provider that disposes
 /// when no widgets are watching it. Prevents memory buildup.
 final submissionsProvider = FutureProvider.family
-    .nonAutoDispose<List<Map<String, dynamic>>, SubmissionsFilter>((
+    <List<Map<String, dynamic>>, SubmissionsFilter>((
   ref,
   filter,
 ) async {

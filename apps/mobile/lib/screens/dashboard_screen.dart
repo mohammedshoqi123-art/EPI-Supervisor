@@ -381,10 +381,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   String? _govRankingCacheKey;
 
   Future<List<Map<String, dynamic>>> _getGovernorateRanking() async {
-    // Return cached future if campaign/round hasn't changed
     final currentKey = '${ref.read(campaignProvider).value}_${ref.read(campaignRoundProvider)}';
     if (_govRankingFuture != null && _govRankingCacheKey == currentKey) {
-      return _govRankingFuture!;
+      try {
+        return await _govRankingFuture!;
+      } catch (_) {
+        _govRankingFuture = null;
+      }
     }
     _govRankingCacheKey = currentKey;
     _govRankingFuture = _fetchGovernorateRanking();
@@ -397,7 +400,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       final round = ref.read(campaignRoundProvider);
       return await analyticsService.getGovernorateRanking(
         campaignRound: ref.read(campaignProvider).value == 'integrated_activity' ? round : null,
-      );
+      ).timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('[Dashboard] Gov ranking failed: $e');
       return [];

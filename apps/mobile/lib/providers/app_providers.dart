@@ -33,20 +33,16 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
     return manager;
   }
 
-  // On mobile, initialize Hive with timeout
+  // On mobile, initialize Hive with timeout + graceful fallback
   try {
-    // ═══ FIX: Shorter timeout (15s) — account for PBKDF2 in isolate (~2-5s)
-    // but still fail fast enough to not block UI indefinitely ═══
     await manager.init().timeout(
       const Duration(seconds: 15),
       onTimeout: () {
-        debugPrint('[offlineManagerProvider] Hive init timed out after 25s');
-        throw TimeoutException('Offline storage initialization timed out');
+        debugPrint('[offlineManagerProvider] Hive timeout — degraded mode');
       },
     );
   } catch (e) {
-    debugPrint('[offlineManagerProvider] Init failed: $e');
-    rethrow;
+    debugPrint('[offlineManagerProvider] Hive failed: $e — degraded mode');
   }
 
   // ═══ FIX: Set initial connectivity from ConnectivityUtils ═══
@@ -329,30 +325,18 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
 
   Future<void> selectCampaign(CampaignType campaign) async {
     if (campaign == state) return;
+    final prev = state;
     state = campaign;
     try {
-      // Save to Supabase
-      final db = _ref.read(databaseServiceProvider);
-      await db.setActiveCampaign(campaign.value);
-
-      // ═══ FIX: DO NOT invalidate the persistent cache here! ═══
-      // Calling cache.invalidate() deletes the Hive entries for forms,
-      // preventing offline access to the "other" campaign type.
-      // Instead, we only invalidate the Riverpod providers themselves.
-      // This clears the app's memory but preserves the disk cache (Hive).
-
-      // Invalidate all providers that depend on campaign.
-      // Family.autoDispose providers (submissionTrend, governorateRanking, shortages)
-      // will auto-refresh when their consumers re-read with new args (no manual invalidate needed).
+      if (ConnectivityUtils.isOnline) {
+        final db = _ref.read(databaseServiceProvider);
+        await db.setActiveCampaign(campaign.value);
+      }
       _ref.invalidate(formsProvider);
       _ref.invalidate(dashboardAnalyticsProvider);
-
-      if (kDebugMode) {
-        debugPrint(
-            '[CampaignNotifier] Campaign changed to ${campaign.value} - Providers invalidated');
-      }
     } catch (e) {
-      debugPrint('[CampaignNotifier] Save failed: $e');
+      state = prev;
+      debugPrint('[CampaignNotifier] Save failed — reverted: $e');
     }
   }
 }
@@ -690,7 +674,7 @@ final notificationCountProvider = StreamProvider<int>((ref) async* {
   } catch (_) {
     yield 0;
   }
-  yield* Stream.periodic(const Duration(seconds: 60), (_) async {
+  yield* Stream.periodic(const Duration(seconds: 300), (_) async {
     try {
       if (ConnectivityUtils.isOnline) {
         await NotificationService.loadFromDB(refresh: true);

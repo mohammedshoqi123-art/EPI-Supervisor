@@ -56,9 +56,15 @@ class EnvValidator {
           'pass --dart-define=ENCRYPTION_KEY=<32+ chars> when building.',
         );
       }
-      // In production, this is a fatal error
       if (!kDebugMode) {
         errors.add('ENCRYPTION_KEY is not configured (required for offline storage)');
+      }
+    } else if (encKey.length < 32) {
+      if (kDebugMode) {
+        debugPrint('⚠️ ENCRYPTION_KEY too short (${encKey.length} chars, need >= 32)');
+      }
+      if (!kDebugMode) {
+        errors.add('ENCRYPTION_KEY too short (${encKey.length} chars, need >= 32)');
       }
     }
 

@@ -658,6 +658,21 @@ class OfflineManager {
   Future<void> cacheData(String key, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
       final cache = _getCache();
+
+      // LRU eviction: remove oldest if over limit
+      if (cache.length >= _maxCacheMemoryEntries && !cache.containsKey(key)) {
+        String? oldestKey;
+        DateTime? oldestTime;
+        for (final e in cache.entries) {
+          final t = DateTime.tryParse(e.value['cached_at'] ?? '');
+          if (t != null && (oldestTime == null || t.isBefore(oldestTime))) {
+            oldestTime = t;
+            oldestKey = e.key;
+          }
+        }
+        if (oldestKey != null) cache.remove(oldestKey);
+      }
+
       cache[key] = {
         'data': data,
         'cached_at': DateTime.now().toIso8601String(),
@@ -665,9 +680,8 @@ class OfflineManager {
 
       final encrypted = _encryption.encrypt(jsonEncode(cache));
       await _safeBox?.put(_cacheKey, encrypted);
-      // Update memory cache
       _cacheMemory = cache;
-      _cacheRawSignature = null; // Invalidate signature
+      _cacheRawSignature = null;
     });
   }
 

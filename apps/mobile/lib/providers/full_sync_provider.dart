@@ -90,11 +90,9 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
       return const FullSyncResult();
     }
 
-    // ═══ FIX: فحص isOnline أول شيء — لا نضيع وقت بالاوفلاين ═══
     if (!ConnectivityUtils.isOnline) {
-      return const FullSyncResult(
-        error: 'لا يمكن المزامنة بدون إنترنت',
-      );
+      state = FullSyncState.error;
+      return const FullSyncResult(error: 'لا يمكن المزامنة بدون إنترنت');
     }
 
     state = FullSyncState.syncing;
@@ -151,7 +149,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
           }
           return {'name': 'المرافق', 'data': data};
         }).catchError((e) => {'name': 'المرافق', 'error': e}),
-      ], eagerError: false);
+      ], eagerError: false).timeout(const Duration(seconds: 45));
 
       // Process parallel results
       for (final result in parallelResults) {
@@ -176,28 +174,29 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
 
       await Future.delayed(Duration.zero);
 
-      // ═══ 4. Submissions (pagination — sequential because it's paginated) ═══
+      // ═══ 4. Submissions (pagination with timeout) ═══
       try {
         final allSubs = <Map<String, dynamic>>[];
         const pageSize = 2000;
         int offset = 0;
         bool hasMore = true;
+        final subStart = DateTime.now();
 
         while (hasMore) {
           final batch = await db.getSubmissions(
             campaignType: campaign.value,
             limit: pageSize,
             offset: offset,
-          );
-          if (batch.isEmpty || batch.length < pageSize) {
-            hasMore = false;
-          }
+          ).timeout(const Duration(seconds: 15));
+          if (batch.isEmpty || batch.length < pageSize) hasMore = false;
           allSubs.addAll(batch);
           offset += pageSize;
-          // ═══ PERFORMANCE: Yield to UI thread between pagination batches ═══
           await Future.delayed(Duration.zero);
-          // حد أقصى 50000 (حماية من الحلقات اللانهائية)
           if (allSubs.length >= 5000) break;
+          if (DateTime.now().difference(subStart) > const Duration(seconds: 60)) {
+            _log('⚠️ Submissions timeout at ${allSubs.length}');
+            hasMore = false;
+          }
         }
 
         final filter = SubmissionsFilter(

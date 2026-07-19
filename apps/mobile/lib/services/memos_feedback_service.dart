@@ -326,7 +326,7 @@ class OfficialMemosService {
         'requires_acknowledgment': requiresAcknowledgment,
         'valid_until': validUntil?.toUtc().toIso8601String(),
         'is_active': true,
-      }).select('id').single();
+      }).select('id').single().timeout(const Duration(seconds: 15));
 
       return response['id'] as String?;
     } catch (e) {
@@ -346,7 +346,7 @@ class OfficialMemosService {
         'memo_id': memoId,
         'user_id': userId,
         'acknowledged_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'memo_id, user_id');
+      }, onConflict: 'memo_id, user_id').timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('[OfficialMemosService] acknowledgeMemo error: $e');
       rethrow;
@@ -487,7 +487,7 @@ class FeedbackTicketsService {
         'priority': priority,
         'status': 'sent',
         'sla_hours': slaHours,
-      }).select('id').single();
+      }).select('id').single().timeout(const Duration(seconds: 15));
 
       return response['id'] as String?;
     } catch (e) {
@@ -535,7 +535,7 @@ class FeedbackTicketsService {
         'body': comment ?? 'تم تحديث الحالة إلى: $newStatus',
         'response_type': 'status_change',
         'new_status': newStatus,
-      });
+      }).timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('[FeedbackTicketsService] updateTicketStatus error: $e');
       rethrow;
@@ -559,13 +559,13 @@ class FeedbackTicketsService {
         'responder_role': responderRole,
         'body': body,
         'response_type': 'reply',
-      });
+      }).timeout(const Duration(seconds: 15));
 
       // Auto-update status to 'received' if currently 'sent'
       await client.from('feedback_tickets').update({
         'status': 'received',
         'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', ticketId).eq('status', 'sent');
+      }).eq('id', ticketId).eq('status', 'sent').timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('[FeedbackTicketsService] addReply error: $e');
       rethrow;

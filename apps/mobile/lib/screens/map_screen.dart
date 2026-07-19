@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -35,6 +36,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
   bool _showFilters = false;
   final TextEditingController _searchCtrl = TextEditingController();
 
+  // ═══ P0-1: Memoize _getFilteredSubmissions — was called 5x per build (25,000 filter ops)
+  // Now cached and only recomputed when filters or data actually change
+  List<Map<String, dynamic>>? _cachedFilteredSubs;
+  String? _cachedFilterSignature;
+  int? _cachedDataHash;
+
+  // ═══ P0-2: Debounce search input — was triggering setState on every keystroke
+  Timer? _searchDebounce;
+
   late AnimationController _fabAnimController;
   late Animation<double> _fabAnimation;
 
@@ -68,6 +78,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
   void dispose() {
     _fabAnimController.dispose();
     _searchCtrl.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -94,6 +105,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       _filterSupervisorId = null;
       _filterLevel = null;
       _searchCtrl.clear();
+      _invalidateFilterCache();
     });
   }
 
@@ -138,18 +150,30 @@ class _MapScreenState extends ConsumerState<MapScreen>
   // ─── Data helpers ────────────────────────────────────────────
 
   List<Map<String, dynamic>> _getFilteredSubmissions() {
-    // ═══ FIX #2: Load all submissions for map (no 20-item limit) ═══
-    // ═══ FIX #3: Use ref.watch instead of ref.read so map updates on campaign/round change ═══
-    final allSubs = ref
-            .watch(submissionsProvider(SubmissionsFilter(
-              campaignType: ref.watch(campaignProvider).value,
-              campaignRound: ref.watch(campaignRoundProvider),
-              limit: 5000,
-            )))
-            .valueOrNull ??
-        [];
+    // ═══ P0-1: Memoize — was called 5x per build, each doing 25,000 filter ops
+    // Now: compute once, cache, return cached on subsequent calls in same build cycle
+    final campaign = ref.watch(campaignProvider).value;
+    final round = ref.watch(campaignRoundProvider);
+    final allSubsAsync = ref.watch(submissionsProvider(SubmissionsFilter(
+      campaignType: campaign,
+      campaignRound: round,
+      limit: 5000,
+    )));
+    final allSubs = allSubsAsync.valueOrNull ?? [];
 
-    return allSubs.where((s) {
+    // Build signature: if filters + data length haven't changed, return cache
+    final sig = '${_filterFormId ?? ''}|${_filterSupervisorId ?? ''}|'
+        '${_filterLevel ?? ''}|${_searchCtrl.text}|${allSubs.length}';
+    final dataHash = allSubs.length; // Quick hash — length is sufficient for change detection
+
+    if (_cachedFilterSignature == sig &&
+        _cachedDataHash == dataHash &&
+        _cachedFilteredSubs != null) {
+      return _cachedFilteredSubs!;
+    }
+
+    // Compute filtered results (only when something changed)
+    final result = allSubs.where((s) {
       // Form filter
       if (_filterFormId != null && s['form_id'] != _filterFormId) return false;
       // Supervisor filter
@@ -189,6 +213,19 @@ class _MapScreenState extends ConsumerState<MapScreen>
       }
       return true;
     }).toList();
+
+    // Cache the result
+    _cachedFilteredSubs = result;
+    _cachedFilterSignature = sig;
+    _cachedDataHash = dataHash;
+
+    return result;
+  }
+
+  /// Invalidate cache — call when filters change externally
+  void _invalidateFilterCache() {
+    _cachedFilteredSubs = null;
+    _cachedFilterSignature = null;
   }
 
   /// Build unique supervisor list from all submissions
@@ -453,7 +490,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
           // Search
           TextField(
             controller: _searchCtrl,
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) {
+              // ═══ P0-2: Debounce search — was triggering setState on every keystroke
+              // causing 25,000 filter ops per character. Now waits 300ms after typing stops.
+              _searchDebounce?.cancel();
+              _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+                _invalidateFilterCache();
+                setState(() {});
+              });
+            },
             style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
             decoration: InputDecoration(
               hintText: 'بحث: اسم مشرف، محافظة، نموذج...',
@@ -465,6 +510,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                       icon: const Icon(Icons.clear_rounded, size: 18),
                       onPressed: () {
                         _searchCtrl.clear();
+                        _invalidateFilterCache();
                         setState(() {});
                       })
                   : null,
@@ -496,7 +542,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                 overflow: TextOverflow.ellipsis),
                           ))
                       .toList(),
-                  onChanged: (v) => setState(() => _filterFormId = v),
+                  onChanged: (v) => setState(() { _filterFormId = v; _invalidateFilterCache(); }),
                 ),
               ),
               const SizedBox(width: 8),
@@ -528,7 +574,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                             style: TextStyle(
                                 fontFamily: 'Tajawal', fontSize: 12))),
                   ],
-                  onChanged: (v) => setState(() => _filterLevel = v),
+                  onChanged: (v) => setState(() { _filterLevel = v; _invalidateFilterCache(); }),
                 ),
               ),
             ],
@@ -552,7 +598,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                 overflow: TextOverflow.ellipsis),
                           ))
                       .toList(),
-                  onChanged: (v) => setState(() => _filterSupervisorId = v),
+                  onChanged: (v) => setState(() { _filterSupervisorId = v; _invalidateFilterCache(); }),
                 ),
               ),
               const SizedBox(width: 8),

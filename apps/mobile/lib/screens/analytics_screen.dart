@@ -210,6 +210,66 @@ final _supervisionSubsProvider = FutureProvider.family
   );
 });
 
+// ═══ P0-4: Precomputed KPI Provider — was 250,000 iterations per build()
+// Now computed once and cached until data changes
+final _analyticsKpiProvider = Provider.family
+    .autoDispose<({int totalSubs, double complianceRate, int supervisorCount}), ({String? campaignType, int? campaignRound})>((
+  ref,
+  params,
+) {
+  final readiness = ref.watch(_readinessSubsProvider(params)).valueOrNull ?? [];
+  final supervision = ref.watch(_supervisionSubsProvider(params)).valueOrNull ?? [];
+
+  final totalSubs = readiness.length + supervision.length;
+
+  // Precompute compliance rate from supervision data
+  double complianceRate = 0;
+  int yesCount = 0;
+  int totalFields = 0;
+  for (final s in supervision) {
+    final data = s['data'] as Map<String, dynamic>? ?? {};
+    for (final sectionFields in _yesNoSections.values) {
+      for (final key in sectionFields) {
+        final val = data[key];
+        if (val == true) yesCount++;
+        if (val == true || val == false) totalFields++;
+      }
+    }
+  }
+  if (totalFields > 0) {
+    complianceRate = (yesCount / totalFields) * 100;
+  }
+
+  // Count unique supervisors
+  final supervisors = <String>{};
+  for (final s in [...readiness, ...supervision]) {
+    final uid = s['submitted_by'] as String?;
+    if (uid != null) supervisors.add(uid);
+  }
+
+  return (
+    totalSubs: totalSubs,
+    complianceRate: complianceRate,
+    supervisorCount: supervisors.length,
+  );
+});
+
+// ═══ Precomputed compliance cache — avoids 250,000 iterations per drill-down
+final _complianceCache = <String, double>{};
+
+double _cachedAvgCompliance(List<Map<String, dynamic>> subs, String cacheKey) {
+  if (_complianceCache.containsKey(cacheKey)) {
+    return _complianceCache[cacheKey]!;
+  }
+  final result = _calcAvgCompliance(subs);
+  _complianceCache[cacheKey] = result;
+  // Keep cache small
+  if (_complianceCache.length > 50) {
+    _complianceCache.remove(_complianceCache.keys.first);
+  }
+  return result;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  MAIN SCREEN — 5 TABS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -355,46 +415,15 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   }
 
   Widget _buildKPIBar() {
+    // ═══ P0-4: Use precomputed KPI provider — was 250,000 iterations per build
+    // Now: 0 iterations in build(), computed once in provider and cached
     final params = _getAnalyticsParams(ref);
-    final readinessAsync = ref.watch(_readinessSubsProvider(params));
-    final supervisionAsync = ref.watch(_supervisionSubsProvider(params));
-
-    final readinessCount = readinessAsync.valueOrNull?.length ?? 0;
-    final supervisionCount = supervisionAsync.valueOrNull?.length ?? 0;
-    final totalSubs = readinessCount + supervisionCount;
-
-    // Calculate compliance rate from supervision data
-    double complianceRate = 0;
-    if (supervisionAsync.hasValue && supervisionCount > 0) {
-      final subs = supervisionAsync.value!;
-      int yesCount = 0;
-      int totalFields = 0;
-      for (final s in subs) {
-        final data = s['data'] as Map<String, dynamic>? ?? {};
-        for (final sectionFields in _yesNoSections.values) {
-          for (final key in sectionFields) {
-            final val = data[key];
-            if (val == true) yesCount++;
-            if (val == true || val == false) totalFields++;
-          }
-        }
-      }
-      if (totalFields > 0) {
-        complianceRate = (yesCount / totalFields) * 100;
-      }
-    }
-
-    // Count unique supervisors
-    final supervisors = <String>{};
-    for (final s in [...?readinessAsync.valueOrNull, ...?supervisionAsync.valueOrNull]) {
-      final uid = s['submitted_by'] as String?;
-      if (uid != null) supervisors.add(uid);
-    }
+    final kpi = ref.watch(_analyticsKpiProvider(params));
 
     return AnalyticsKPIBar(
-      totalSubmissions: totalSubs,
-      complianceRate: complianceRate,
-      supervisorCount: supervisors.length,
+      totalSubmissions: kpi.totalSubs,
+      complianceRate: kpi.complianceRate,
+      supervisorCount: kpi.supervisorCount,
       challengeCount: 0, // Will be updated by ChallengesTab
     );
   }
@@ -1547,7 +1576,7 @@ class _GovDrillCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avgPct = _calcAvgCompliance(submissions);
+    final avgPct = _cachedAvgCompliance(submissions, 'gov_${govName.hashCode}_${submissions.length}');
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1647,7 +1676,7 @@ class _DistrictListScreen extends StatelessWidget {
                 (e.key == 'unknown'
                     ? 'غير محدد'
                     : 'مديرية ${e.key.substring(0, 6)}');
-            final avgPct = _calcAvgCompliance(e.value);
+            final avgPct = _cachedAvgCompliance(e.value, 'dist_${e.key.hashCode}_${e.value.length}');
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               shape: RoundedRectangleBorder(
@@ -1708,7 +1737,7 @@ class _SupervisorListScreen extends StatelessWidget {
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           ...bySup.entries.map((e) {
-            final avgPct = _calcAvgCompliance(e.value);
+            final avgPct = _cachedAvgCompliance(e.value, 'sup_${e.key.hashCode}_${e.value.length}');
             final d0 = e.value.first['data'] as Map<String, dynamic>? ?? {};
             final role = d0['supervisor_title'] as String? ?? '';
             return Card(

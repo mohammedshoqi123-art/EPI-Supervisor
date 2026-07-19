@@ -345,8 +345,10 @@ class SyncService {
 
         final cache = _dataCache;
         if (cache != null) {
-          // Invalidate all submission + analytics + shortages + trend + ranking caches
-          // Includes integrated activity analytics (readiness + supervision + numbers)
+          // ═══ FIX: Invalidate ALL caches — not just submissions ═══
+          // Previously: only submissions + analytics + shortages caches were cleared.
+          // Now: also governorates, districts, forms, facilities, references
+          // This ensures new data from other users is visible after sync.
           const prefixes = [
             'submissions',
             'dashboard_analytics',
@@ -355,6 +357,11 @@ class SyncService {
             'governorate_ranking',
             'readiness_subs',
             'supervision_subs',
+            'governorates',
+            'districts',
+            'facilities',
+            'forms',
+            'references',
           ];
 
           int invalidated = 0;
@@ -365,7 +372,7 @@ class SyncService {
 
           if (kDebugMode)
             debugPrint(
-              '[SyncService] Invalidated $invalidated cache prefixes (submissions + analytics)',
+              '[SyncService] Invalidated $invalidated cache prefixes (all data)',
             );
         }
       }

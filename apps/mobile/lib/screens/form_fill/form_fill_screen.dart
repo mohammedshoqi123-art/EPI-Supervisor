@@ -367,12 +367,35 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       }
       if (permission == LocationPermission.deniedForever) return;
 
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      // ═══ FIX: Timeout على GPS — يمنع التعليق في الأماكن المغلقة ═══
+      // السابق: بدون timeout — يعلق indefinitely إذا لم يجد GPS
+      // الجديد: timeout 15s + fallback إلى آخر موقع معروف
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        ).timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('GPS timeout'),
+        );
+      } on TimeoutException {
+        // Fallback to last known position
+        debugPrint('[GPS] High accuracy timeout — trying last known position');
+        position = await Geolocator.getLastKnownPosition();
+        if (position != null) {
+          if (mounted) context.showSuccess('تم استخدام آخر موقع معروف');
+        } else {
+          if (mounted) context.showError('لم يتم العثور على موقع — حاول في مكان مفتوح');
+          return;
+        }
+      }
+
+      if (position == null) return;
+
       setState(() {
         _formData[fieldKey] = {
-          'lat': position.latitude,
+          'lat': position!.latitude,
           'lng': position.longitude,
           'accuracy': position.accuracy,
         };
@@ -381,6 +404,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       });
     } catch (e) {
       debugPrint('Error getting location: $e');
+      if (mounted) context.showError('فشل الحصول على الموقع: ${e.toString()}');
     }
   }
 
@@ -445,10 +469,29 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 30),
-      );
+      // ═══ FIX: Timeout + fallback على GPS ═══
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        ).timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('GPS timeout'),
+        );
+      } on TimeoutException {
+        debugPrint('[GPS] High accuracy timeout — trying last known position');
+        position = await Geolocator.getLastKnownPosition();
+        if (position != null && mounted) {
+          context.showSuccess('تم استخدام آخر موقع معروف');
+        }
+      }
+
+      if (position == null) {
+        if (mounted) context.showError('لم يتم العثور على موقع — حاول في مكان مفتوح');
+        setState(() => _isGettingLocation = false);
+        return;
+      }
 
       setState(() {
         _gpsLat = position.latitude;
@@ -830,6 +873,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     }
   }
 
+  int _autoSaveFailCount = 0;
+
   Future<void> _autoSave({bool showFeedback = false}) async {
     _syncControllersToFormData();
     if (_formData.isEmpty) return;
@@ -838,7 +883,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
     try {
       final offline = await ref.read(offlineManagerProvider.future).timeout(
-        const Duration(seconds: 10), // ⚠️ FIX: 10s بدلاً من 5s
+        const Duration(seconds: 10),
         onTimeout: () {
           throw TimeoutException('Offline storage not ready for auto-save');
         },
@@ -850,13 +895,25 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         Map<String, dynamic>.from(_formData),
       );
       _hasUnsavedChanges = false;
+      _autoSaveFailCount = 0; // Reset on success
       if (showFeedback && mounted) {
         context.showSuccess('تم الحفظ التلقائي');
       }
     } on TimeoutException {
-      // صامت — سيحاول مرة أخرى في الـ timer القادم
+      _autoSaveFailCount++;
+      // Show warning after 3 consecutive failures
+      if (_autoSaveFailCount >= 3 && mounted) {
+        context.showError('⚠️ الحفظ التلقائي يفشل — تحقق من التخزين المحلي');
+        _autoSaveFailCount = 0;
+      }
     } catch (e) {
+      _autoSaveFailCount++;
       debugPrint('[AutoSave] Failed: $e');
+      // Show warning after 3 consecutive failures
+      if (_autoSaveFailCount >= 3 && mounted) {
+        context.showError('⚠️ الحفظ التلقائي يفشل: ${e.toString()}');
+        _autoSaveFailCount = 0;
+      }
     }
   }
 

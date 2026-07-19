@@ -47,7 +47,7 @@ class EnvValidator {
     const sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
     const encKey = String.fromEnvironment('ENCRYPTION_KEY', defaultValue: '');
 
-    // ═══ ENCRYPTION_KEY: مطلوب في الإنتاج — بدونه التطبيق ي crash ═══
+    // ═══ ENCRYPTION_KEY: مطلوب في كل الأوضاع — بدونه التطبيق ي crash ═══
     if (encKey.isEmpty || _isPlaceholder(encKey)) {
       if (kDebugMode) {
         debugPrint(
@@ -56,16 +56,14 @@ class EnvValidator {
           'pass --dart-define=ENCRYPTION_KEY=<32+ chars> when building.',
         );
       }
-      if (!kDebugMode) {
-        errors.add('ENCRYPTION_KEY is not configured (required for offline storage)');
-      }
+      // FIX: Always report error — crash is imminent without encryption key
+      errors.add('ENCRYPTION_KEY is not configured (required for offline storage)');
     } else if (encKey.length < 32) {
       if (kDebugMode) {
         debugPrint('⚠️ ENCRYPTION_KEY too short (${encKey.length} chars, need >= 32)');
       }
-      if (!kDebugMode) {
-        errors.add('ENCRYPTION_KEY too short (${encKey.length} chars, need >= 32)');
-      }
+      // FIX: Always report error — short key causes encryption failures
+      errors.add('ENCRYPTION_KEY too short (${encKey.length} chars, need >= 32)');
     }
 
     if (kDebugMode) {
@@ -109,6 +107,12 @@ class EnvValidator {
         lower.contains('your-') ||
         lower.contains('placeholder') ||
         lower.contains('xxx') ||
+        lower.contains('<replace') ||
+        lower.contains('replacE_WITH') ||
+        lower.startsWith('<') ||
+        lower.endsWith('>') ||
+        lower.contains('your_') ||
+        lower.contains('example') ||
         lower == 'default';
   }
 }

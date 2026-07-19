@@ -168,7 +168,19 @@ class AuthRepository {
       if (timeUntilExpiry.inMinutes < 15) {
         debugPrint(
             '[Auth] Token expiring in ${timeUntilExpiry.inMinutes}min — refreshing...');
-        await _client?.auth.refreshSession();
+        // ═══ FIX: إضافة timeout على refreshSession — لا يعلق indefinitely ═══
+        try {
+          await _client?.auth.refreshSession().timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('[Auth] Session refresh timed out');
+              throw TimeoutException('Session refresh timed out');
+            },
+          );
+        } catch (refreshError) {
+          debugPrint('[Auth] Session refresh error: $refreshError');
+          rethrow;
+        }
         _refreshRetryCount = 0;
       }
     } catch (e) {

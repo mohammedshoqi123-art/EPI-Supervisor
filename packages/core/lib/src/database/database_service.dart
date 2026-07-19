@@ -266,7 +266,13 @@ class DatabaseService {
       return result;
     } catch (e) {
       debugPrint('[DatabaseService] getSubmissions RPC error, falling back: $e');
-      // Fallback to old method if RPC fails (capped at 1000 by PostgREST)
+      // ═══ FIX: Fallback with pagination — avoids 1000-row PostgREST cap ═══
+      // Previously: single selectIn call capped at 1000 rows silently
+      // Now: paginate through all data with 1000-row batches
+      const fallbackPageSize = 1000;
+      final effectiveLimit = limit ?? 10000;
+      final effectiveOffset = offset ?? 0;
+
       if (campaignType != null && formId == null) {
         final campaignForms = await getForms(campaignType: campaignType);
         if (campaignForms.isEmpty) return [];
@@ -279,18 +285,31 @@ class DatabaseService {
         if (submittedBy != null) extraFilters['submitted_by'] = submittedBy;
         if (campaignRound != null) extraFilters['campaign_round'] = campaignRound;
 
-        return _api.selectIn(
-          'form_submissions',
-          'form_id',
-          formIds,
-          select:
-              '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
-          extraFilters: extraFilters,
-          orderBy: orderBy ?? 'created_at',
-          ascending: ascending,
-          limit: limit,
-          offset: offset,
-        );
+        // ═══ FIX: Paginate fallback to get all rows beyond 1000 ═══
+        final allResults = <Map<String, dynamic>>[];
+        int currentOffset = effectiveOffset;
+        bool hasMore = true;
+        while (hasMore && allResults.length < effectiveLimit) {
+          final batch = await _api.selectIn(
+            'form_submissions',
+            'form_id',
+            formIds,
+            select:
+                '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
+            extraFilters: extraFilters,
+            orderBy: orderBy ?? 'created_at',
+            ascending: ascending,
+            limit: fallbackPageSize,
+            offset: currentOffset,
+          );
+          if (batch.isEmpty || batch.length < fallbackPageSize) {
+            hasMore = false;
+          }
+          allResults.addAll(batch);
+          currentOffset += fallbackPageSize;
+        }
+        debugPrint('[DatabaseService] Fallback pagination: ${allResults.length} rows fetched');
+        return allResults;
       }
 
       final filters = <String, dynamic>{};
@@ -301,16 +320,29 @@ class DatabaseService {
       if (submittedBy != null) filters['submitted_by'] = submittedBy;
       if (campaignRound != null) filters['campaign_round'] = campaignRound;
 
-      return _api.select(
-        'form_submissions',
-        select:
-            '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
-        filters: filters,
-        orderBy: orderBy ?? 'created_at',
-        ascending: ascending,
-        limit: limit,
-        offset: offset,
-      );
+      // ═══ FIX: Paginate fallback for non-campaign queries too ═══
+      final allResults = <Map<String, dynamic>>[];
+      int currentOffset = effectiveOffset;
+      bool hasMore = true;
+      while (hasMore && allResults.length < effectiveLimit) {
+        final batch = await _api.select(
+          'form_submissions',
+          select:
+              '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
+          filters: filters,
+          orderBy: orderBy ?? 'created_at',
+          ascending: ascending,
+          limit: fallbackPageSize,
+          offset: currentOffset,
+        );
+        if (batch.isEmpty || batch.length < fallbackPageSize) {
+          hasMore = false;
+        }
+        allResults.addAll(batch);
+        currentOffset += fallbackPageSize;
+      }
+      debugPrint('[DatabaseService] Fallback pagination: ${allResults.length} rows fetched');
+      return allResults;
     }
   }
 

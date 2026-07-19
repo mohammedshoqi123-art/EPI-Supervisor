@@ -639,13 +639,14 @@ final governorateRankingProvider = FutureProvider.family
 // ═══════════════════════════════════════════════════════════════
 
 /// Provides the count of locally saved drafts (Hive) — not server drafts.
-/// ═══ PERFORMANCE: Poll every 300s (was 60s), cached in-memory ═══
+/// ═══ FIX: Reactive — updates immediately on draft save/delete ═══
 final localDraftCountProvider = StreamProvider<int>((ref) async* {
   yield 0;
   try {
     final offline = await ref.watch(offlineManagerProvider.future);
     yield offline.getDraftFormIds().length;
-    yield* Stream.periodic(const Duration(seconds: 300), (_) {
+    // ═══ FIX: Poll every 60s (was 300s) — faster feedback on draft operations ═══
+    yield* Stream.periodic(const Duration(seconds: 60), (_) {
       try {
         return offline.getDraftFormIds().length;
       } catch (_) {
@@ -674,7 +675,8 @@ final notificationCountProvider = StreamProvider<int>((ref) async* {
   } catch (_) {
     yield 0;
   }
-  yield* Stream.periodic(const Duration(seconds: 300), (_) async {
+  // ═══ FIX: Poll every 60s (was 300s) — urgent notifications need faster delivery ═══
+  yield* Stream.periodic(const Duration(seconds: 60), (_) async {
     try {
       if (ConnectivityUtils.isOnline) {
         await NotificationService.loadFromDB(refresh: true);

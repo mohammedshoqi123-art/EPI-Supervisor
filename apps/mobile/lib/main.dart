@@ -207,8 +207,10 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
   }
 
   void _initRealtimeSync() {
-    // Delay to ensure Supabase is ready
-    Future.delayed(const Duration(seconds: 3), () {
+    // ═══ FIX: انتظر حتى Supabase جاهز فعلاً قبل تهيئة Realtime ═══
+    // السابق: Future.delayed(3s) — قد يحاول قبل Supabase.init ينتهي
+    // الجديد: polling على supabaseInitialized flag
+    _waitForSupabaseReady().then((_) {
       if (mounted) {
         try {
           ref.read(realtimeSyncProvider);
@@ -218,6 +220,15 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
         }
       }
     });
+  }
+
+  /// Wait until Supabase is initialized (max 30 seconds)
+  Future<void> _waitForSupabaseReady() async {
+    for (int i = 0; i < 30; i++) {
+      if (supabaseInitialized) return;
+      await Future.delayed(const Duration(seconds: 1));
+    }
+    debugPrint('[App] Supabase not ready after 30s — skipping realtime sync');
   }
 
   Future<void> _checkOnboarding() async {

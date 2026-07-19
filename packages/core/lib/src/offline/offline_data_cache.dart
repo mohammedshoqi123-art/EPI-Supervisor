@@ -291,32 +291,47 @@ class OfflineDataCache {
   /// ═══ OFFLINE FALLBACK: Find related cached data by prefix ═══
   /// When exact key not found, try to find a broader key with the same prefix.
   /// Example: 'submissions_camp_polio_campaign_round_1' → try 'submissions_camp_polio_campaign'
-  /// or any 'submissions_*' key.
+  /// ═══ FIX: Filter by campaign type to avoid returning wrong data ═══
   dynamic _findRelatedCache(String cacheKey) {
     // Extract prefix (first part before campaign/round filters)
     final parts = cacheKey.split('_');
     if (parts.length < 2) return null;
     final prefix = parts.first;
 
-    // Try to find in memory cache with same prefix
-    for (final entry in _memoryCache.entries) {
-      if (entry.key.startsWith(prefix)) {
-        return entry.value.data;
+    // ═══ FIX: Extract campaign type from the requested key to filter matches ═══
+    String? campaignFilter;
+    if (cacheKey.contains('_camp_')) {
+      final campIdx = parts.indexOf('camp');
+      if (campIdx >= 0 && campIdx + 1 < parts.length) {
+        campaignFilter = parts[campIdx + 1];
       }
     }
 
-    // Try to find in persistent cache with same prefix
+    // Try to find in memory cache with same prefix AND same campaign
+    for (final entry in _memoryCache.entries) {
+      if (entry.key.startsWith(prefix)) {
+        // ═══ FIX: Only return if campaign matches (or no campaign filter) ═══
+        if (campaignFilter == null || entry.key.contains(campaignFilter)) {
+          return entry.value.data;
+        }
+      }
+    }
+
+    // Try to find in persistent cache with same prefix AND same campaign
     try {
       final allKeys = _offline.getCacheKeys();
       for (final key in allKeys) {
         if (key.startsWith(prefix)) {
-          final cached = _offline.getCachedData(key);
-          if (cached != null) {
-            // Handle list wrapper format
-            if (cached is Map && cached['_type'] == 'list') {
-              return cached['_list'];
+          // ═══ FIX: Only return if campaign matches (or no campaign filter) ═══
+          if (campaignFilter == null || key.contains(campaignFilter)) {
+            final cached = _offline.getCachedData(key);
+            if (cached != null) {
+              // Handle list wrapper format
+              if (cached is Map && cached['_type'] == 'list') {
+                return cached['_list'];
+              }
+              return cached;
             }
-            return cached;
           }
         }
       }

@@ -52,6 +52,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       if (mounted) _pulseAnim.stop();
     });
 
+    // ═══ FIX: Realtime Sync — refresh Dashboard when data changes on server ═══
+    // Previously: changes by other users required manual refresh
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final realtimeSync = ref.read(realtimeSyncProvider);
+        realtimeSync.onChange.listen((table) {
+          if (!mounted) return;
+          if (table == 'form_submissions' || table == 'feedback_tickets' || table == 'official_memos') {
+            final campaign = ref.read(campaignProvider);
+            final round = ref.read(campaignRoundProvider);
+            ref.invalidate(dashboardAnalyticsProvider(
+              AnalyticsFilter(campaignType: campaign.value, campaignRound: round),
+            ));
+            ref.invalidate(formStatsProvider);
+            ref.invalidate(notificationCountProvider);
+          }
+        });
+      } catch (e) {
+        debugPrint('[Dashboard] Realtime listener setup failed: $e');
+      }
+    });
+
     // ═══ NO auto-refresh on connectivity — user presses sync button ═══
 
     WidgetsBinding.instance.addPostFrameCallback((_) {

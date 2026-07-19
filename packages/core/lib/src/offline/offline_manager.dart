@@ -80,7 +80,7 @@ class OfflineManager {
       } catch (e) {
         // ═══ FIX ME3: Hive corruption recovery ═══
         // If box open fails (corrupted file from power loss, etc.),
-        // backup corrupted file for diagnostics, then delete and retry.
+        // backup corrupted file for diagnostics, then attempt data extraction before deleting.
         if (kDebugMode) {
           debugPrint('[OfflineManager] Box open failed, attempting recovery: $e');
         }
@@ -88,7 +88,9 @@ class OfflineManager {
           // ═══ IMPROVEMENT: Backup corrupted file before deleting ═══
           // This allows post-mortem diagnostics of data corruption.
           try {
-            final boxPath = _box?.path;
+            final boxPath = Hive.boxExists(_boxName)
+                ? '${Hive.boxPath}/${_boxName}.hive'
+                : null;
             if (boxPath != null) {
               final backupPath = '$boxPath.corrupted.${DateTime.now().millisecondsSinceEpoch}';
               final file = File(boxPath);
@@ -102,6 +104,34 @@ class OfflineManager {
           } catch (backupError) {
             if (kDebugMode) {
               debugPrint('[OfflineManager] Could not backup corrupted box: $backupError');
+            }
+          }
+          // ═══ FIX: Try to extract recoverable data before deleting ═══
+          try {
+            final corruptedBox = await Hive.openBox<String>(_boxName,
+                compactionStrategy: (entries, deletedEntries) => false);
+            // Try to read drafts and sync queue from corrupted box
+            final draftsIndex = corruptedBox.get('drafts_index');
+            final syncQueue = corruptedBox.get('sync_queue');
+            if (draftsIndex != null || syncQueue != null) {
+              if (kDebugMode) {
+                debugPrint('[OfflineManager] Found recoverable data — saving backup');
+              }
+              // Save recovery data to a separate file
+              final recoveryData = {
+                'drafts_index': draftsIndex,
+                'sync_queue': syncQueue,
+                'recovered_at': DateTime.now().toIso8601String(),
+              };
+              final recoveryPath = '${Hive.boxPath}/${_boxName}.recovery.json';
+              await File(recoveryPath).writeAsString(
+                recoveryData.toString(),
+              );
+            }
+            await corruptedBox.close();
+          } catch (extractError) {
+            if (kDebugMode) {
+              debugPrint('[OfflineManager] Could not extract recovery data: $extractError');
             }
           }
           await Hive.deleteBoxFromDisk(_boxName);

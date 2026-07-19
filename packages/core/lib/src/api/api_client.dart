@@ -361,19 +361,21 @@ class ApiClient {
 
   Future<Map<String, dynamic>> callFunction(
     String functionName,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, {
+    Duration? timeout,
+  }) async {
     try {
       // Ensure token is fresh before calling the function
       // ✅ This has its own 8s timeout and never blocks indefinitely
       await _ensureFreshSession();
 
-      // ═══ FIX A2: Reduced timeout from 90s to 30s ═══
+      // ═══ FIX: Timeout قابل للتعديل — الافتراضي 30s، يمكن زيادته للدوان الثقيلة ═══
+      final effectiveTimeout = timeout ?? _functionTimeout;
       final response =
           await _safeClient.functions.invoke(functionName, body: body).timeout(
-                _functionTimeout,
+                effectiveTimeout,
                 onTimeout: () => throw TimeoutException(
-                  'Function $functionName timed out after ${_functionTimeout.inSeconds}s',
+                  'Function $functionName timed out after ${effectiveTimeout.inSeconds}s',
                 ),
               );
 
@@ -381,7 +383,7 @@ class ApiClient {
       return _parseFunctionResponse(response.data, functionName);
     } on TimeoutException {
       throw NetworkException(
-        'انتهت مهلة الطلب (${_functionTimeout.inSeconds} ثانية). تحقق من اتصالك بالإنترنت وأعد المحاولة.',
+        'انتهت مهلة الطلب. تحقق من اتصالك بالإنترنت وأعد المحاولة.',
       );
     } on FunctionException catch (e) {
       // If 401, try refreshing the token ONCE and retry
@@ -567,10 +569,12 @@ class ApiClient {
   }
 
   /// Stream Edge Function response token by token (SSE)
+  /// ═══ FIX: إضافة timeout على الاتصال — لا يعلق indefinitely ═══
   Stream<String> callFunctionStream(
     String functionName,
-    Map<String, dynamic> body,
-  ) async* {
+    Map<String, dynamic> body, {
+    Duration timeout = const Duration(seconds: 90),
+  }) async* {
     final httpClient = http.Client();
     try {
       await _ensureFreshSession();
@@ -585,7 +589,14 @@ class ApiClient {
         })
         ..body = jsonEncode(body);
 
-      final streamed = await httpClient.send(request);
+      // ═══ FIX: Timeout على HTTP request — يمنع التعليق ═══
+      final streamed = await httpClient.send(request).timeout(
+        timeout,
+        onTimeout: () {
+          httpClient.close();
+          throw TimeoutException('Stream connection timed out');
+        },
+      );
       final decoder = const Utf8Decoder();
       String buffer = '';
 

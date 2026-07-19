@@ -122,7 +122,7 @@ function FloatingChatButton() {
       <button
         onClick={() => navigate('/chat')}
         onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => { setIsHovered(false); setShowTooltip(false) }}
+        onMouseLeave={() => setIsHovered(false)}
         className={cn(
           'relative w-14 h-14 rounded-full shadow-xl transition-all duration-300 flex items-center justify-center group',
           'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700',

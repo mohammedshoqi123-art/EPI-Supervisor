@@ -19,6 +19,7 @@ import 'package:epi_shared/epi_shared.dart';
 import 'router/app_router.dart';
 import 'screens/onboarding_screen.dart';
 import 'providers/realtime_sync_provider.dart';
+import 'providers/app_providers.dart';  // For offlineManagerProvider
 
 final themeModeProvider = StateProvider<ThemeMode>((_) => ThemeMode.system);
 
@@ -290,6 +291,7 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
     // 2. Re-check connectivity
     ConnectivityUtils.recheckNow().catchError((e) {
       debugPrint('[App] Connectivity recheck failed: $e');
+      return false;
     });
 
     // 3. Refresh Supabase session if needed

@@ -893,16 +893,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         .where((s) => s['gps_lat'] != null && s['gps_lng'] != null)
         .toList();
 
-    // ═══ PERFORMANCE: Limit markers to prevent UI freeze ═══
-    // flutter_map slows down with 1000+ markers
-    const maxMarkers = 500;
-    final bool isLimited = subs.length > maxMarkers;
-    if (isLimited) {
-      // Show most recent markers only
-      subs.sort((a, b) => (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString()));
-      subs = subs.sublist(0, maxMarkers);
-    }
-
+    // ═══ PERFORMANCE: All markers visible — lightweight widget to prevent freeze ═══
     final markers = subs.map((sub) {
       final lat = (sub['gps_lat'] as num).toDouble();
       final lng = (sub['gps_lng'] as num).toDouble();
@@ -917,34 +908,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
               : MapHelpers.statusColor(status);
       final isSelected = _selectedSubmission?['id'] == sub['id'];
 
+      // ═══ LIGHTWEIGHT marker — no boxShadow, no GestureDetector per marker ═══
+      // GestureDetector on 2000+ markers causes freeze. Use simple Container.
       return Marker(
         point: LatLng(lat, lng),
-        width: isSelected ? 28 : 14,
-        height: isSelected ? 36 : 14,
-        child: GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            setState(() {
-              _selectedCluster = null;
-              _selectedSubmission = sub;
-            });
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              border:
-                  Border.all(color: Colors.white, width: isSelected ? 2 : 1.5),
-              boxShadow: [
-                BoxShadow(
-                    color: color.withValues(alpha: isSelected ? 0.5 : 0.3),
-                    blurRadius: isSelected ? 10 : 4)
-              ],
-            ),
-            child: isSelected
-                ? const Icon(Icons.place, color: Colors.white, size: 14)
-                : null,
+        width: isSelected ? 24 : 12,
+        height: isSelected ? 24 : 12,
+        child: Container(
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 1.5),
           ),
+          child: isSelected
+              ? const Icon(Icons.place, color: Colors.white, size: 12)
+              : null,
         ),
       );
     }).toList();

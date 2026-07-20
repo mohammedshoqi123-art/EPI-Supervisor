@@ -169,6 +169,7 @@ class DatabaseService {
     String? orderBy,
     bool ascending = false,
     bool lean = false,  // ═══ P0: When true, skip 'data' column (5.5MB→0.86MB for map)
+    String? createdAfter,  // ═══ NEW: for incremental sync — only fetch records after this date ═══
   }) async {
     // ═══ P0: Lean mode — direct REST query with only needed columns (no 'data' JSONB)
     // This reduces response from 5.5MB to 0.86MB for 1415 submissions (84% reduction)
@@ -216,6 +217,15 @@ class DatabaseService {
         if (submittedBy != null) {
           result = result.where((s) => s['submitted_by'] == submittedBy).toList();
         }
+
+        // INCREMENTAL SYNC: filter by createdAfter (client-side)
+        if (createdAfter != null && createdAfter.isNotEmpty) {
+          result = result.where((s) {
+            final createdAt = s['created_at']?.toString() ?? '';
+            return createdAt.compareTo(createdAfter) > 0;
+          }).toList();
+        }
+
         return result;
       } catch (e) {
         debugPrint('[DatabaseService] Lean query failed, falling back to RPC: $e');

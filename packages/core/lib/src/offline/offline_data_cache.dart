@@ -138,6 +138,85 @@ class OfflineDataCache {
     }
   }
 
+  /// ═══ Incremental Sync — only fetch NEW records and merge with cache ═══
+  /// Returns cached data immediately, then fetches records newer than
+  /// the latest `created_at` in cache and merges them.
+  /// This avoids re-fetching 2000+ records every time.
+  Future<List<Map<String, dynamic>>> incrementalGetList(
+    String cacheKey,
+    Future<List<Map<String, dynamic>>> Function({String? createdAfter}) fetchFn, {
+    Duration maxAge = const Duration(hours: 24),
+    String dateField = 'created_at',
+    String idField = 'id',
+  }) async {
+    // 1. Get existing cached data (memory or persistent)
+    List<Map<String, dynamic>> existing = [];
+    final memCached = _getFromMemory<List>(cacheKey, maxAge);
+    if (memCached != null) {
+      existing = List<Map<String, dynamic>>.from(memCached);
+    } else {
+      final persisted = _getFromPersistentRaw<List>(cacheKey);
+      if (persisted != null) {
+        existing = List<Map<String, dynamic>>.from(persisted);
+        _putToMemory(cacheKey, persisted);
+      }
+    }
+
+    // 2. Find latest created_at in cache
+    String? latestDate;
+    if (existing.isNotEmpty) {
+      for (final item in existing) {
+        final d = item[dateField]?.toString() ?? '';
+        if (d.isNotEmpty && (latestDate == null || d.compareTo(latestDate) > 0)) {
+          latestDate = d;
+        }
+      }
+    }
+
+    if (!_offline.isOnline) {
+      if (existing.isNotEmpty) return existing;
+      throw Exception('لا توجد بيانات مخزنة ولا يوجد اتصال بالإنترنت');
+    }
+
+    try {
+      // 3. Fetch only new records (after latest cached date)
+      final newRecords = await fetchFn(createdAfter: latestDate).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Incremental fetch timeout for $cacheKey'),
+      );
+
+      if (newRecords.isEmpty) {
+        // No new records — return existing cache
+        return existing;
+      }
+
+      // 4. Merge: add new records, dedup by idField
+      final existingIds = existing.map((e) => e[idField]?.toString()).toSet();
+      final trulyNew = newRecords.where((r) {
+        final id = r[idField]?.toString();
+        return id != null && !existingIds.contains(id);
+      }).toList();
+
+      if (trulyNew.isEmpty) return existing;
+
+      // 5. Merge and save
+      final merged = [...existing, ...trulyNew];
+      await _saveToCache(cacheKey, merged);
+
+      if (kDebugMode) {
+        debugPrint('[OfflineDataCache] Incremental sync: ${existing.length} existing + ${trulyNew.length} new = ${merged.length} total');
+      }
+
+      return merged;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[OfflineDataCache] Incremental fetch failed for $cacheKey, using cache: $e');
+      }
+      if (existing.isNotEmpty) return existing;
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> getMap(
     String cacheKey,
     Future<Map<String, dynamic>> Function() fetchFn, {

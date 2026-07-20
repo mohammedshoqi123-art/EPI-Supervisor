@@ -452,22 +452,27 @@ final submissionsProvider = FutureProvider.family
   filter,
 ) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
-  return cache.getList(
+
+  // INCREMENTAL SYNC: only fetch NEW records and merge with cache
+  return cache.incrementalGetList(
     filter.cacheKey,
-    () => ref.read(databaseServiceProvider).getSubmissions(
-          formId: filter.formId,
-          status: filter.status,
-          governorateId: filter.governorateId,
-          districtId: filter.districtId,
-          campaignType: filter.campaignType,
-          campaignRound: filter.campaignRound,
-          limit: filter.limit,
-          offset: filter.offset,
-          lean: filter.lean,  // ═══ P0: Skip 'data' column for map screen
-        ),
-    maxAge: const Duration(
-      days: 7,
-    ), // ═══ Cache 7 days — sync button refreshes ═══
+    ({String? createdAfter}) async {
+      return ref.read(databaseServiceProvider).getSubmissions(
+            formId: filter.formId,
+            status: filter.status,
+            governorateId: filter.governorateId,
+            districtId: filter.districtId,
+            campaignType: filter.campaignType,
+            campaignRound: filter.campaignRound,
+            limit: filter.limit,
+            offset: filter.offset,
+            lean: filter.lean,
+            createdAfter: createdAfter,
+          );
+    },
+    maxAge: const Duration(days: 7),
+    dateField: 'created_at',
+    idField: 'id',
   );
 });
 

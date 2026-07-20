@@ -98,12 +98,17 @@ class ConnectivityUtils {
   }
 
   static void _handleLinkChange(bool linkUp) {
-    if (linkUp) {
-      // Link came up — probe to verify real internet
-      _probeAndEmit();
-    } else {
-      // Link definitely down — emit offline immediately
-      _emitIfChanged(false);
+    try {
+      if (linkUp) {
+        // Link came up — probe to verify real internet
+        _probeAndEmit();
+      } else {
+        // Link definitely down — emit offline immediately
+        _emitIfChanged(false);
+      }
+    } catch (e) {
+      // ═══ FIX: Don't crash on connectivity errors ═══
+      debugPrint('[ConnectivityUtils] _handleLinkChange error: $e');
     }
   }
 
@@ -178,9 +183,16 @@ class ConnectivityUtils {
   }
 
   static void _probeAndEmit() {
-    _probeInternet().then((online) {
-      _emitIfChanged(online);
-    });
+    try {
+      _probeInternet().then((online) {
+        _emitIfChanged(online);
+      }).catchError((e) {
+        // ═══ FIX: Don't crash on probe errors ═══
+        debugPrint('[ConnectivityUtils] _probeAndEmit error: $e');
+      });
+    } catch (e) {
+      debugPrint('[ConnectivityUtils] _probeAndEmit sync error: $e');
+    }
   }
 
   static void _emitIfChanged(bool online) {

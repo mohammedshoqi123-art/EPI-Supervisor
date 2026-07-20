@@ -239,27 +239,11 @@ class _MainShellState extends ConsumerState<MainShell> {
       key: _scaffoldKey,
       body: Column(
         children: [
-          // Offline/Online status banner
+          // Offline/Online status banner — using ValueListenableBuilder to avoid full rebuild
           if (!isOnline || pendingCount > 0)
-            GestureDetector(
-              onTap: () async {
-                // ═══ FIX: اسمح للمستخدم بإعادة فحص الاتصال يدوياً ═══
-                HapticFeedback.lightImpact();
-                final online = await ConnectivityUtils.recheckNow();
-                if (mounted && online) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('عاد الاتصال بالإنترنت ✅',
-                          style: TextStyle(fontFamily: 'Tajawal')),
-                      behavior: SnackBarBehavior.floating,
-                      backgroundColor: Colors.green,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-              },
-              child: ConnectivityBanner(
-                  isOnline: isOnline, pendingCount: pendingCount),
+            _OfflineBanner(
+              isOnline: isOnline,
+              pendingCount: pendingCount,
             ),
           Expanded(child: widget.child),
         ],
@@ -572,6 +556,39 @@ class _AiFabState extends State<_AiFab> with SingleTickerProviderStateMixin {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ═══ Offline Banner — isolated widget to prevent full MainShell rebuild ═══
+class _OfflineBanner extends StatelessWidget {
+  final bool isOnline;
+  final int pendingCount;
+
+  const _OfflineBanner({
+    required this.isOnline,
+    required this.pendingCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        HapticFeedback.lightImpact();
+        final online = await ConnectivityUtils.recheckNow();
+        if (online) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('عاد الاتصال بالإنترنت ✅',
+                  style: TextStyle(fontFamily: 'Tajawal')),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: ConnectivityBanner(isOnline: isOnline, pendingCount: pendingCount),
     );
   }
 }

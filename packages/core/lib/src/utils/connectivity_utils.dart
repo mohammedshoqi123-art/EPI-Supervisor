@@ -33,10 +33,11 @@ class ConnectivityUtils {
   static bool _probing = false;
 
   /// Probe targets — tried in PARALLEL, first success wins.
-  /// ═══ PERFORMANCE: 2 URLs — reliable in most networks ═══
+  /// ═══ PERFORMANCE: 3 URLs — includes Supabase for networks that block Google/Cloudflare ═══
   static const List<String> _probeUrls = [
     'https://www.google.com/generate_204',
     'https://www.cloudflare.com/cdn-cgi/trace',
+    'https://yinoyjmzzrxrpuxbzwwm.supabase.co/rest/v1/',
   ];
 
   // ═══ FIX: Cache last successful probe to avoid redundant HTTP probes ═══

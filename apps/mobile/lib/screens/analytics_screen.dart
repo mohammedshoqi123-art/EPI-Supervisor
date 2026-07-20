@@ -883,6 +883,13 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         if (val is num) {
           totals[key] = (totals[key] ?? 0) + val.toInt();
           counts[key] = (counts[key] ?? 0) + 1;
+        } else if (val is String) {
+          // ═══ FIX: Try parsing string numbers ═══
+          final parsed = int.tryParse(val);
+          if (parsed != null) {
+            totals[key] = (totals[key] ?? 0) + parsed;
+            counts[key] = (counts[key] ?? 0) + 1;
+          }
         }
       }
     }

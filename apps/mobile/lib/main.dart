@@ -241,16 +241,55 @@ class EpiSupervisorApp extends ConsumerStatefulWidget {
   ConsumerState<EpiSupervisorApp> createState() => _EpiSupervisorAppState();
 }
 
-class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp> {
+class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
+    with WidgetsBindingObserver {
   bool _showOnboarding = false;
   bool _checkingOnboarding = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkOnboarding();
     // ═══ Start Realtime Sync — listen for admin dashboard changes ═══
     _initRealtimeSync();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // ═══ FIX: Handle app lifecycle to prevent black screen on resume ═══
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[App] Resumed — refreshing session and connectivity');
+      // Re-check connectivity on resume
+      ConnectivityUtils.recheckNow().catchError((e) {
+        debugPrint('[App] Connectivity recheck failed: $e');
+      });
+      // Refresh Supabase session if needed
+      _refreshSessionOnResume();
+    }
+  }
+
+  Future<void> _refreshSessionOnResume() async {
+    try {
+      if (SupabaseConfig.isConfigured) {
+        final client = Supabase.instance.client;
+        final session = client.auth.currentSession;
+        if (session != null && session.isExpired) {
+          debugPrint('[App] Session expired on resume — refreshing...');
+          await client.auth.refreshSession();
+          debugPrint('[App] Session refreshed successfully');
+        }
+      }
+    } catch (e) {
+      debugPrint('[App] Session refresh on resume failed: $e');
+    }
   }
 
   void _initRealtimeSync() {

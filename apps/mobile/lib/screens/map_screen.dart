@@ -893,6 +893,16 @@ class _MapScreenState extends ConsumerState<MapScreen>
         .where((s) => s['gps_lat'] != null && s['gps_lng'] != null)
         .toList();
 
+    // ═══ PERFORMANCE: Limit markers to prevent UI freeze ═══
+    // flutter_map slows down with 1000+ markers
+    const maxMarkers = 500;
+    final bool isLimited = subs.length > maxMarkers;
+    if (isLimited) {
+      // Show most recent markers only
+      subs.sort((a, b) => (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString()));
+      subs = subs.sublist(0, maxMarkers);
+    }
+
     final markers = subs.map((sub) {
       final lat = (sub['gps_lat'] as num).toDouble();
       final lng = (sub['gps_lng'] as num).toDouble();

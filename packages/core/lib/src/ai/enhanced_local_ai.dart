@@ -237,9 +237,9 @@ class EnhancedLocalAI {
 
   String _analyzeQuality(Map<String, dynamic> d) {
     final subs = d['submissions'] as Map<String, dynamic>? ?? {};
-    final total = subs['total'] as int? ?? 0;
+    final total = (subs['total'] as num?)?.toInt() ?? 0;
     final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
-    final rejected = byStatus['rejected'] as int? ?? 0;
+    final rejected = (byStatus['rejected'] as num?)?.toInt() ?? 0;
 
     final buffer = StringBuffer();
     buffer.writeln('✅ تحليل جودة البيانات:');
@@ -286,7 +286,7 @@ class EnhancedLocalAI {
     }
 
     final subs = d['submissions'] as Map<String, dynamic>? ?? {};
-    final today = subs['today'] as int? ?? 0;
+    final today = (subs['today'] as num?)?.toInt() ?? 0;
     if (today == 0) {
       buffer.writeln('\n• لا توجد إرساليات اليوم — تحقق من حالة الفريق');
     }

@@ -163,12 +163,12 @@ class LocalAnalyticsEngine {
     final submissions = data['submissions'] as Map<String, dynamic>? ?? {};
     final shortages = data['shortages'] as Map<String, dynamic>? ?? {};
 
-    final total = submissions['total'] as int? ?? 0;
-    final today = submissions['today'] as int? ?? 0;
-    final totalShortages = shortages['total'] as int? ?? 0;
-    final resolved = shortages['resolved'] as int? ?? 0;
+    final total = (submissions['total'] as num?)?.toInt() ?? 0;
+    final today = (submissions['today'] as num?)?.toInt() ?? 0;
+    final totalShortages = (shortages['total'] as num?)?.toInt() ?? 0;
+    final resolved = (shortages['resolved'] as num?)?.toInt() ?? 0;
     final bySeverity = shortages['bySeverity'] as Map<String, dynamic>? ?? {};
-    final critical = bySeverity['critical'] as int? ?? 0;
+    final critical = (bySeverity['critical'] as num?)?.toInt() ?? 0;
     final byStatus = submissions['byStatus'] as Map<String, dynamic>? ?? {};
 
     // Health score

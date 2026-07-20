@@ -158,8 +158,8 @@ class SmartAlertsEngine {
 
     // Submission count reminders
     final subs = data['submissions'] as Map<String, dynamic>? ?? {};
-    final total = subs['total'] as int? ?? 0;
-    final today = subs['today'] as int? ?? 0;
+    final total = (subs['total'] as num?)?.toInt() ?? 0;
+    final today = (subs['today'] as num?)?.toInt() ?? 0;
 
     if (total == 0) {
       alerts.add(SmartAlert(
@@ -328,10 +328,10 @@ class SmartAlertsEngine {
       Map<String, dynamic> data, List<SmartAlert> alerts) {
     final shorts = data['shortages'] as Map<String, dynamic>? ?? {};
     final critical =
-        (shorts['bySeverity'] as Map<String, dynamic>?)?['critical'] as int? ??
+        ((shorts['bySeverity'] as Map<String, dynamic>?)?['critical'] as num?)?.toInt() ??
             0;
-    final total = shorts['total'] as int? ?? 0;
-    final pending = shorts['pending'] as int? ?? 0;
+    final total = (shorts['total'] as num?)?.toInt() ?? 0;
+    final pending = (shorts['pending'] as num?)?.toInt() ?? 0;
 
     if (critical > 0) {
       alerts.add(SmartAlert(
@@ -449,9 +449,9 @@ class SmartAlertsEngine {
   static void _checkDataQuality(
       Map<String, dynamic> data, List<SmartAlert> alerts) {
     final subs = data['submissions'] as Map<String, dynamic>? ?? {};
-    final total = subs['total'] as int? ?? 0;
+    final total = (subs['total'] as num?)?.toInt() ?? 0;
     final rejected =
-        (subs['byStatus'] as Map<String, dynamic>?)?['rejected'] as int? ?? 0;
+        ((subs['byStatus'] as Map<String, dynamic>?)?['rejected'] as num?)?.toInt() ?? 0;
 
     if (total > 0 && rejected > 0) {
       final rejectRate = (rejected / total * 100);
@@ -572,8 +572,8 @@ class SmartAlertsEngine {
     }
 
     final shorts = data['shortages'] as Map<String, dynamic>? ?? {};
-    final resolved = shorts['resolved'] as int? ?? 0;
-    final total = shorts['total'] as int? ?? 0;
+    final resolved = (shorts['resolved'] as num?)?.toInt() ?? 0;
+    final total = (shorts['total'] as num?)?.toInt() ?? 0;
 
     if (total > 0 && resolved / total > 0.7) {
       alerts.add(SmartAlert(
@@ -604,12 +604,12 @@ class SmartAlertsEngine {
 
     // Context-aware recommendations based on data patterns
     final subs = data['submissions'] as Map<String, dynamic>? ?? {};
-    final today = subs['today'] as int? ?? 0;
-    final total = subs['total'] as int? ?? 0;
+    final today = (subs['today'] as num?)?.toInt() ?? 0;
+    final total = (subs['total'] as num?)?.toInt() ?? 0;
     final byStatus = subs['byStatus'] as Map<String, dynamic>? ?? {};
-    final draft = byStatus['draft'] as int? ?? 0;
-    final submitted = byStatus['submitted'] as int? ?? 0;
-    final rejected = byStatus['rejected'] as int? ?? 0;
+    final draft = (byStatus['draft'] as num?)?.toInt() ?? 0;
+    final submitted = (byStatus['submitted'] as num?)?.toInt() ?? 0;
+    final rejected = (byStatus['rejected'] as num?)?.toInt() ?? 0;
 
     // Submission velocity recommendations
     if (today == 0) {
@@ -640,7 +640,7 @@ class SmartAlertsEngine {
     final govData = data['governorates'] as List? ?? [];
     if (govData.isNotEmpty) {
       final inactiveGovs = govData.where((g) {
-        final count = (g as Map<String, dynamic>)['submissions_count'] as int? ?? 0;
+        final count = ((g as Map<String, dynamic>)['submissions_count'] as num?)?.toInt() ?? 0;
         return count == 0;
       }).length;
       if (inactiveGovs > 0) {

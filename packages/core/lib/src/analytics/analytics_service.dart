@@ -249,7 +249,7 @@ class AnalyticsService {
         'name_ar': govNames[e.key] ?? 'غير محدد',
         'count': e.value,
       }).toList()
-        ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+        ..sort((a, b) => ((b['count'] as num?)?.toInt() ?? 0).compareTo((a['count'] as num?)?.toInt() ?? 0));
     } catch (_) {
       // Fallback: return without names
       return counts.entries.map((e) => {
@@ -257,7 +257,7 @@ class AnalyticsService {
         'name_ar': 'غير محدد',
         'count': e.value,
       }).toList()
-        ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+        ..sort((a, b) => ((b['count'] as num?)?.toInt() ?? 0).compareTo((a['count'] as num?)?.toInt() ?? 0));
     }
   }
 

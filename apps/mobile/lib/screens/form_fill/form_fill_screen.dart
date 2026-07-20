@@ -385,29 +385,26 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       }
       if (permission == LocationPermission.deniedForever) return;
 
-      // ═══ FIX: Timeout على GPS — يمنع التعليق في الأماكن المغلقة ═══
-      // ═══ IMPROVEMENT: Use medium accuracy for faster response ═══
-      // High accuracy requires GPS chip → slow indoors, drains battery
-      // Medium accuracy uses WiFi/cell towers → fast, works indoors
+      // ═══ FIX: فقط الموقع الفعلي — لا fallback لموقع قديم ═══
+      // المستخدم يضغط زرار الموقع يدوياً إذا فشل GPS
       Position? position;
       try {
         position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,  // Faster than high
-          timeLimit: const Duration(seconds: 8),
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 15),
         ).timeout(
-          const Duration(seconds: 10),
+          const Duration(seconds: 18),
           onTimeout: () => throw TimeoutException('GPS timeout'),
         );
       } on TimeoutException {
-        // Fallback to last known position
-        debugPrint('[GPS] High accuracy timeout — trying last known position');
-        position = await Geolocator.getLastKnownPosition();
-        if (position != null) {
-          if (mounted) context.showSuccess('تم استخدام آخر موقع معروف');
-        } else {
-          if (mounted) context.showError('لم يتم العثور على موقع — حاول في مكان مفتوح');
-          return;
-        }
+        // لا fallback — نطلب من المستخدم المحاولة مرة أخرى
+        debugPrint('[GPS] Current position timeout — no fallback to last known');
+        if (mounted) context.showError('لم يتم الحصول على الموقع الحالي — اضغط على زر الموقع مرة أخرى');
+        return;
+      } catch (e) {
+        debugPrint('[GPS] Error getting current position: $e');
+        if (mounted) context.showError('فشل الحصول على الموقع — اضغط على زر الموقع مرة أخرى');
+        return;
       }
 
       if (position == null) return;
@@ -492,26 +489,34 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         return;
       }
 
-      // ═══ FIX: Timeout + fallback — medium accuracy for speed ═══
+      // ═══ FIX: فقط الموقع الفعلي — لا fallback لموقع قديم ═══
       Position? position;
       try {
         position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,  // Faster than high
-          timeLimit: const Duration(seconds: 8),
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 15),
         ).timeout(
-          const Duration(seconds: 10),
+          const Duration(seconds: 18),
           onTimeout: () => throw TimeoutException('GPS timeout'),
         );
       } on TimeoutException {
-        debugPrint('[GPS] High accuracy timeout — trying last known position');
-        position = await Geolocator.getLastKnownPosition();
-        if (position != null && mounted) {
-          context.showSuccess('تم استخدام آخر موقع معروف');
+        debugPrint('[GPS] Current position timeout — no fallback');
+        if (mounted) {
+          context.showError('لم يتم الحصول على الموقع الحالي — اضغط على زر الموقع مرة أخرى');
+          setState(() => _isGettingLocation = false);
         }
+        return;
+      } catch (e) {
+        debugPrint('[GPS] Error getting current position: $e');
+        if (mounted) {
+          context.showError('فشل الحصول على الموقع — اضغط على زر الموقع مرة أخرى');
+          setState(() => _isGettingLocation = false);
+        }
+        return;
       }
 
       if (position == null) {
-        if (mounted) context.showError('لم يتم العثور على موقع — حاول في مكان مفتوح');
+        if (mounted) context.showError('لم يتم الحصول على الموقع — اضغط على زر الموقع مرة أخرى');
         if (mounted) setState(() => _isGettingLocation = false);
         return;
       }

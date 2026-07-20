@@ -751,9 +751,29 @@ class OfflineManager {
   /// Get all drafts — decrypts each individually (not one giant blob)
   List<Map<String, dynamic>> getAllDrafts() {
     final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
-    final index = List<String>.from(jsonDecode(indexStr));
-    final result = <Map<String, dynamic>>[];
+    List<String> index;
+    try {
+      index = List<String>.from(jsonDecode(indexStr));
+    } catch (_) {
+      index = [];
+    }
 
+    // ═══ FIX: If index is empty, scan Hive keys as fallback ═══
+    // This handles corrupted or missing index after migration
+    if (index.isEmpty && _box != null && _box!.isOpen) {
+      final draftKeys = _box!.keys
+          .where((k) => k.toString().startsWith('drafts/'))
+          .map((k) => k.toString().replaceFirst('drafts/', ''))
+          .toList();
+      if (draftKeys.isNotEmpty) {
+        debugPrint('[OfflineManager] ⚠️ Index empty but found ${draftKeys.length} draft keys — rebuilding index');
+        index = draftKeys;
+        // Rebuild index for future fast reads
+        _box!.put(_draftsIndexKey, jsonEncode(draftKeys));
+      }
+    }
+
+    final result = <Map<String, dynamic>>[];
     for (final draftId in index) {
       final data = _box?.get('drafts/$draftId');
       if (data == null || data.isEmpty) continue;

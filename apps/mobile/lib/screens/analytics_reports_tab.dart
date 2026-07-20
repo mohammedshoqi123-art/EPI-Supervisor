@@ -92,6 +92,17 @@ class _ReportsTabState extends State<ReportsTab> {
           ]),
           const SizedBox(height: 20),
 
+          // New reports
+          _sectionLabel('تقارير جديدة'),
+          const SizedBox(height: 10),
+          _reportGrid([
+            _ReportItem('coverage_report', 'تقرير التغطية', Icons.trending_up_rounded, const Color(0xFF4CAF50)),
+            _ReportItem('dropout_report', 'تحليل التسرب', Icons.person_remove_rounded, const Color(0xFFE53935)),
+            _ReportItem('campaign_progress', 'تقدم الحملة', Icons.campaign_rounded, const Color(0xFF2196F3)),
+            _ReportItem('supervisor_activity', 'نشاط المشرفين', Icons.people_rounded, const Color(0xFFFF9800)),
+          ]),
+          const SizedBox(height: 20),
+
           // Per-form reports
           _sectionLabel('تقارير النماذج'),
           const SizedBox(height: 10),

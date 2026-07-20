@@ -64,10 +64,9 @@ class ConnectivityUtils {
       return;
     }
 
-    // ═══ FIX: Start offline — use cached data immediately ═══
-    // Previously: _isOnline = true → app thinks it's online → waits for network → 60-90s loading
-    // Now: start offline → use cached data instantly → probe in background → update when online
-    // This eliminates the "loading forever" issue
+    // ═══ FIX: Trust connectivity_plus for initial state ═══
+    // If link is up, assume online immediately. Verify with HTTP probe in background.
+    // This prevents false "offline" when network is actually available.
     _isOnline = false;
 
     try {
@@ -77,7 +76,10 @@ class ConnectivityUtils {
           );
       final linkUp = _isConnected(result);
       if (linkUp) {
-        // Link is up — probe to verify real internet
+        // Link is up — assume online immediately (don't wait for probe)
+        _isOnline = true;
+        _throttledEmit(true);
+        // Verify with HTTP probe in background (non-blocking)
         _probeAndEmit();
       }
     } catch (_) {
@@ -101,14 +103,17 @@ class ConnectivityUtils {
   static void _handleLinkChange(bool linkUp) {
     try {
       if (linkUp) {
-        // Link came up — probe to verify real internet
+        // ═══ FIX: Emit online IMMEDIATELY when link comes up ═══
+        // Don't wait for HTTP probe — assume online if link is up
+        // This prevents false "offline" during transitions
+        _emitIfChanged(true);
+        // Verify with probe in background (non-blocking)
         _probeAndEmit();
       } else {
         // Link definitely down — emit offline immediately
         _emitIfChanged(false);
       }
     } catch (e) {
-      // ═══ FIX: Don't crash on connectivity errors ═══
       debugPrint('[ConnectivityUtils] _handleLinkChange error: $e');
     }
   }

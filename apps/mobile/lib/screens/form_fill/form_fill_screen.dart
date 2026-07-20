@@ -148,10 +148,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       // بناء صفحات الأقسام المجمعة
       _buildSectionPages();
 
-      // ═══ AUTO-FILL: populate fields from user profile ═══
-      _autoFillFromProfile();
-      // ⚠️ FIX: بعد التعبئة التلقائية، لا تعتبرها "تغييرات غير محفوظة"
-      // المستخدم لم يغير شيئاً بنفسه بعد
+      // ═══ FIX: Check if loading a draft BEFORE auto-fill ═══
+      // This prevents GPS auto-detect from overwriting draft coordinates
+      final isDraft = widget.draftId != null;
+      _autoFillFromProfile(skipGps: isDraft);
       _hasUnsavedChanges = false;
 
       await _loadDraft();
@@ -248,7 +248,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   /// Auto-fill form fields from the authenticated user's profile.
   /// Fields are auto-filled ONLY if they are empty (not overwritten by draft).
-  void _autoFillFromProfile() {
+  void _autoFillFromProfile({bool skipGps = false}) {
     final authState = ref.read(authStateProvider).valueOrNull;
     if (authState == null || !authState.isAuthenticated) return;
 
@@ -348,8 +348,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         _formData['district_id'] = authState.districtId;
       }
 
-      // GPS — auto-detect current location
-      if (type == 'gps' && (field['auto_detect'] == true || autoFill == 'current_location')) {
+      // GPS — auto-detect current location (SKIP if loading draft)
+      if (!skipGps && type == 'gps' && (field['auto_detect'] == true || autoFill == 'current_location')) {
         _getCurrentLocationForField(key);
       }
 

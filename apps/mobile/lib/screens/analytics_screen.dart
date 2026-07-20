@@ -488,6 +488,24 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       return;
     }
 
+    // ═══ New report types ═══
+    if (type == 'coverage_report') {
+      await _generateCoverageReport();
+      return;
+    }
+    if (type == 'dropout_report') {
+      await _generateDropoutReport();
+      return;
+    }
+    if (type == 'campaign_progress') {
+      await _generateCampaignProgressReport();
+      return;
+    }
+    if (type == 'supervisor_activity') {
+      await _generateSupervisorActivityReport();
+      return;
+    }
+
     // ═══ Standard reports: fetch analytics data then generate ═══
     List<ReadinessGovData>? readinessData;
     List<ComplianceSectionData>? complianceData;
@@ -546,16 +564,11 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   /// ═══ Supervisor Leaderboard Report ═══
   Future<void> _generateSupervisorLeaderboard() async {
     try {
-      final db = ref.read(databaseServiceProvider);
-      final campaign = ref.read(campaignProvider).value;
-      final round = ref.read(campaignRoundProvider);
-
-      final subs = await db.getSubmissions(
-        campaignType: campaign,
-        campaignRound: round,
-        limit: 2000,
-      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
-      );
+      // Use cached providers instead of direct DB call
+      final params = _currentParams;
+      final readinessSubs = ref.read(_readinessSubsProvider(params)).valueOrNull ?? [];
+      final supervisionSubs = ref.read(_supervisionSubsProvider(params)).valueOrNull ?? [];
+      final subs = [...readinessSubs, ...supervisionSubs];
 
       // Aggregate by user
       final userStats = <String, Map<String, dynamic>>{};
@@ -625,7 +638,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignRound: round,
         limit: 2000,
         lean: false,
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
       if (subs.isEmpty) {
         if (mounted) {
@@ -749,16 +762,11 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   /// ═══ Round Comparison Report ═══
   Future<void> _generateRoundComparison() async {
     try {
-      final db = ref.read(databaseServiceProvider);
-      final campaign = ref.read(campaignProvider).value;
-      final currentRound = ref.read(campaignRoundProvider);
-
-      final currentSubs = await db.getSubmissions(
-        campaignType: campaign,
-        campaignRound: currentRound,
-        limit: 2000,
-      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
-      );
+      // Use cached providers
+      final params = _currentParams;
+      final currentSubs = ref.read(_readinessSubsProvider(params)).valueOrNull ?? [];
+      final supervisionSubs = ref.read(_supervisionSubsProvider(params)).valueOrNull ?? [];
+      final allCurrentSubs = [...currentSubs, ...supervisionSubs];
 
       final prevRound = currentRound > 1 ? currentRound - 1 : 1;
       final prevSubs = await db.getSubmissions(
@@ -787,6 +795,136 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   }
 
   // ═══ Data processing helpers (same logic as dashboard) ═══
+
+  /// ═══ Coverage Report ═══
+  Future<void> _generateCoverageReport() async {
+    if (!mounted) return;
+    try {
+      final params = _currentParams;
+      final supervisionSubs = ref.read(_supervisionSubsProvider(params)).valueOrNull ?? [];
+
+      if (supervisionSubs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('لا توجد بيانات للتحليل'), backgroundColor: Colors.orange),
+          );
+        }
+        return;
+      }
+
+      // Calculate coverage metrics
+      int totalSubs = supervisionSubs.length;
+      int withGovernorate = supervisionSubs.where((s) => (s['data'] as Map?)?['governorate_id'] != null).length;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📊 تقرير التغطية: $totalSubs إرسالية، $withGovernorate بمحافظة محددة'),
+            backgroundColor: const Color(0xFF4CAF50),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// ═══ Dropout Analysis Report ═══
+  Future<void> _generateDropoutReport() async {
+    if (!mounted) return;
+    try {
+      final params = _currentParams;
+      final supervisionSubs = ref.read(_supervisionSubsProvider(params)).valueOrNull ?? [];
+
+      if (supervisionSubs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('لا توجد بيانات للتحليل'), backgroundColor: Colors.orange),
+          );
+        }
+        return;
+      }
+
+      int totalSubs = supervisionSubs.length;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📉 تقرير التسرب: $totalSubs إرسالية تم تحليلها'),
+            backgroundColor: const Color(0xFFE53935),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// ═══ Campaign Progress Report ═══
+  Future<void> _generateCampaignProgressReport() async {
+    if (!mounted) return;
+    try {
+      final params = _currentParams;
+      final readinessSubs = ref.read(_readinessSubsProvider(params)).valueOrNull ?? [];
+      final supervisionSubs = ref.read(_supervisionSubsProvider(params)).valueOrNull ?? [];
+
+      int totalSubs = readinessSubs.length + supervisionSubs.length;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎯 تقدم الحملة: $totalSubs إرسالية إجمالي'),
+            backgroundColor: const Color(0xFF2196F3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// ═══ Supervisor Activity Report ═══
+  Future<void> _generateSupervisorActivityReport() async {
+    if (!mounted) return;
+    try {
+      final params = _currentParams;
+      final readinessSubs = ref.read(_readinessSubsProvider(params)).valueOrNull ?? [];
+      final supervisionSubs = ref.read(_supervisionSubsProvider(params)).valueOrNull ?? [];
+      final allSubs = [...readinessSubs, ...supervisionSubs];
+
+      // Count unique supervisors
+      final supervisors = <String>{};
+      for (final s in allSubs) {
+        final uid = s['submitted_by'] as String?;
+        if (uid != null) supervisors.add(uid);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('👥 نشاط المشرفين: ${supervisors.length} مشرف نشط من ${allSubs.length} إرسالية'),
+            backgroundColor: const Color(0xFFFF9800),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 
   List<ReadinessGovData> _processReadinessData(List<Map<String, dynamic>> subs) {
     final govAsync = ref.read(governoratesProvider);

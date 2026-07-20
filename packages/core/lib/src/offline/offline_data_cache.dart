@@ -206,9 +206,17 @@ class OfflineDataCache {
       }
     }
 
+    // ═══ OFFLINE-FIRST: Return cached data immediately if available ═══
+    // Don't wait for network - do incremental sync in background
     if (!_offline.isOnline) {
       if (existing.isNotEmpty) return existing;
       throw Exception('لا توجد بيانات مخزنة ولا يوجد اتصال بالإنترنت');
+    }
+
+    // If we have cached data, return it immediately and sync in background
+    if (existing.isNotEmpty) {
+      _refreshIncrementalInBackground(cacheKey, fetchFn, latestDate, existing, dateField, idField);
+      return existing;
     }
 
     try {
@@ -219,7 +227,6 @@ class OfflineDataCache {
       );
 
       if (newRecords.isEmpty) {
-        // No new records — return existing cache
         return existing;
       }
 
@@ -485,6 +492,44 @@ class OfflineDataCache {
       _refreshingKeys.remove(key);
       if (kDebugMode)
         debugPrint('[OfflineDataCache] Background refresh failed for $key: $e');
+    });
+  }
+
+  /// Incremental background refresh — fetch only new records and merge
+  void _refreshIncrementalInBackground(
+    String cacheKey,
+    Future<List<Map<String, dynamic>>> Function({String? createdAfter}) fetchFn,
+    String? latestDate,
+    List<Map<String, dynamic>> existing,
+    String dateField,
+    String idField,
+  ) {
+    if (_refreshingKeys.contains(cacheKey)) return;
+    _refreshingKeys.add(cacheKey);
+
+    fetchFn(createdAfter: latestDate).then((newRecords) async {
+      if (newRecords.isEmpty) {
+        _refreshingKeys.remove(cacheKey);
+        return;
+      }
+      // Merge: dedup by idField
+      final existingIds = existing.map((e) => e[idField]?.toString()).toSet();
+      final trulyNew = newRecords.where((r) {
+        final id = r[idField]?.toString();
+        return id != null && !existingIds.contains(id);
+      }).toList();
+
+      if (trulyNew.isNotEmpty) {
+        final merged = [...existing, ...trulyNew];
+        await _saveToCache(cacheKey, merged);
+        if (kDebugMode)
+          debugPrint('[OfflineDataCache] BG incremental: +${trulyNew.length} = ${merged.length} total');
+      }
+      _refreshingKeys.remove(cacheKey);
+    }).catchError((e) {
+      _refreshingKeys.remove(cacheKey);
+      if (kDebugMode)
+        debugPrint('[OfflineDataCache] BG incremental failed for $cacheKey: $e');
     });
   }
 

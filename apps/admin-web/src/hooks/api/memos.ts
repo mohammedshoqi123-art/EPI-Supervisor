@@ -209,3 +209,36 @@ export function useDeactivateMemo() {
     },
   })
 }
+
+/**
+ * Update an existing memo
+ */
+export function useUpdateMemo() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      title?: string
+      body?: string
+      priority?: MemoPriority
+      target_roles?: string[]
+      requires_acknowledgment?: boolean
+      valid_until?: string | null
+    }): Promise<void> => {
+      const { id, ...updates } = input
+      const { error } = await supabase
+        .from('official_memos')
+        .update(updates)
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['memos'] })
+      queryClient.invalidateQueries({ queryKey: ['user-memos'] })
+      toast({ title: 'تم تحديث التعميم بنجاح', variant: 'success' })
+    },
+    onError: (error: any) => {
+      toast({ title: `فشل: ${error.message}`, variant: 'destructive' })
+    },
+  })
+}

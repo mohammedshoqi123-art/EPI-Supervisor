@@ -259,3 +259,58 @@ export function useUpdateTicketStatus() {
     },
   })
 }
+
+/**
+ * Update a feedback ticket
+ */
+export function useUpdateTicket() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      subject?: string
+      body?: string
+      category?: FeedbackCategory
+      priority?: FeedbackPriority
+    }): Promise<void> => {
+      const { id, ...updates } = input
+      const { error } = await supabase
+        .from('feedback_tickets')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feedback-tickets'] })
+      queryClient.invalidateQueries({ queryKey: ['all-feedback-tickets'] })
+      toast({ title: 'تم تحديث التذكرة بنجاح', variant: 'success' })
+    },
+    onError: (error: any) => {
+      toast({ title: `فشل: ${error.message}`, variant: 'destructive' })
+    },
+  })
+}
+
+/**
+ * Delete a feedback ticket (soft delete)
+ */
+export function useDeleteTicket() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (ticketId: string): Promise<void> => {
+      const { error } = await supabase
+        .from('feedback_tickets')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', ticketId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feedback-tickets'] })
+      queryClient.invalidateQueries({ queryKey: ['all-feedback-tickets'] })
+      toast({ title: 'تم حذف التذكرة', variant: 'success' })
+    },
+    onError: (error: any) => {
+      toast({ title: `فشل: ${error.message}`, variant: 'destructive' })
+    },
+  })
+}

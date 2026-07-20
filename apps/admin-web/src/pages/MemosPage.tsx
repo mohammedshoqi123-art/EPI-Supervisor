@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   ScrollText, Plus, CheckCircle2, Clock, AlertTriangle,
   Send, Loader2, Users, Calendar, Shield,
-  RefreshCw, Trash2, CheckCheck
+  RefreshCw, Trash2, CheckCheck, Pencil,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,7 @@ import {
 import { Header } from '@/components/layout/header'
 import {
   useMemos, useUserMemos, useCreateMemo, useAcknowledgeMemo,
-  useDeactivateMemo, useMemoAckStats,
+  useDeactivateMemo, useMemoAckStats, useUpdateMemo,
 } from '@/hooks/api/memos'
 import { useAuth } from '@/hooks/api/auth'
 import { cn, formatRelativeTime } from '@/lib/utils'
@@ -57,6 +57,14 @@ export default function MemosPage() {
   const [activeTab, setActiveTab] = useState<'incoming' | 'mandatory' | 'acknowledged'>('incoming')
   const [showComposer, setShowComposer] = useState(false)
   const [selectedMemo, setSelectedMemo] = useState<OfficialMemo | null>(null)
+  const [editingMemo, setEditingMemo] = useState<OfficialMemo | null>(null)
+
+  // Listen for edit events from detail dialog
+  if (typeof window !== 'undefined') {
+    window.addEventListener('editMemo', ((e: CustomEvent) => {
+      setEditingMemo(e.detail)
+    }) as EventListener)
+  }
 
   // Admin/central can see all memos; others see only their memos
   const userRole = user?.role as string | undefined
@@ -162,6 +170,15 @@ export default function MemosPage() {
           open={!!selectedMemo}
           onOpenChange={(open) => !open && setSelectedMemo(null)}
           isAdmin={isAdmin}
+        />
+      )}
+
+      {/* ═══ Edit Dialog ═══ */}
+      {editingMemo && (
+        <MemoEditDialog
+          memo={editingMemo}
+          open={!!editingMemo}
+          onOpenChange={(open) => !open && setEditingMemo(null)}
         />
       )}
     </div>
@@ -509,19 +526,35 @@ function MemoDetailDialog({
 
         <DialogFooter className="gap-2">
           {isAdmin && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                deactivateMutation.mutate(memo.id, {
-                  onSuccess: () => onOpenChange(false),
-                })
-              }}
-              disabled={deactivateMutation.isPending}
-            >
-              <Trash2 className="h-4 w-4" />
-              حذف
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Open edit mode
+                  onOpenChange(false)
+                  // Trigger edit via parent
+                  const event = new CustomEvent('editMemo', { detail: memo })
+                  window.dispatchEvent(event)
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+                تعديل
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  deactivateMutation.mutate(memo.id, {
+                    onSuccess: () => onOpenChange(false),
+                  })
+                }}
+                disabled={deactivateMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                حذف
+              </Button>
+            </>
           )}
           {needsAck && (
             <Button
@@ -552,5 +585,161 @@ function StatBox({ label, value, color }: { label: string; value: number; color:
       <p className={cn('text-2xl font-bold', color)}>{value}</p>
       <p className="text-xs text-muted-foreground mt-1">{label}</p>
     </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// Memo Edit Dialog
+// ═══════════════════════════════════════
+
+function MemoEditDialog({
+  memo,
+  open,
+  onOpenChange,
+}: {
+  memo: OfficialMemo
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [title, setTitle] = useState(memo.title)
+  const [body, setBody] = useState(memo.body)
+  const [priority, setPriority] = useState<MemoPriority>(memo.priority)
+  const [targetRoles, setTargetRoles] = useState<string[]>(memo.target_roles || ALL_ROLES)
+  const [requiresAck, setRequiresAck] = useState(memo.requires_acknowledgment)
+  const [validUntil, setValidUntil] = useState(memo.valid_until || '')
+
+  const updateMutation = useUpdateMemo()
+
+  const handleSubmit = async () => {
+    if (!title.trim() || !body.trim()) return
+
+    await updateMutation.mutateAsync({
+      id: memo.id,
+      title: title.trim(),
+      body: body.trim(),
+      priority,
+      target_roles: targetRoles,
+      requires_acknowledgment: requiresAck,
+      valid_until: validUntil || null,
+    })
+
+    onOpenChange(false)
+  }
+
+  const toggleRole = (role: string) => {
+    setTargetRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>تعديل التعميم</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Title */}
+          <div className="space-y-2">
+            <Label>عنوان التعميم</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="مثال: تعميم ببدء الجولة الثانية"
+            />
+          </div>
+
+          {/* Body */}
+          <div className="space-y-2">
+            <Label>نص التعميم</Label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="اكتب نص التعميم هنا..."
+              rows={6}
+              className="w-full p-3 rounded-lg border bg-background text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+
+          {/* Priority */}
+          <div className="space-y-2">
+            <Label>الأولوية</Label>
+            <Select value={priority} onValueChange={(v) => setPriority(v as MemoPriority)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="routine">روتيني</SelectItem>
+                <SelectItem value="normal">عادي</SelectItem>
+                <SelectItem value="important">هام</SelectItem>
+                <SelectItem value="critical">حرج جداً</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Target roles */}
+          <div className="space-y-2">
+            <Label>الموجَّه إلى</Label>
+            <div className="flex flex-wrap gap-2">
+              {ALL_ROLES.map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => toggleRole(role)}
+                  className={cn(
+                    'rounded-md border px-3 py-1 text-xs font-medium transition-colors',
+                    targetRoles.includes(role)
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-input bg-background hover:bg-accent'
+                  )}
+                >
+                  {ROLE_LABELS[role]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Requires acknowledgment */}
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div>
+              <Label>إقرار الاستلام إلزامي</Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                {requiresAck ? 'كل مستلم يجب أن يضغط "أقرأتُ"' : 'مجرد إشعار — لا إقرار مطلوب'}
+              </p>
+            </div>
+            <Switch checked={requiresAck} onCheckedChange={setRequiresAck} />
+          </div>
+
+          {/* Valid until */}
+          <div className="space-y-2">
+            <Label>صلاحية زمنية (اختياري)</Label>
+            <Input
+              type="date"
+              value={validUntil}
+              onChange={(e) => setValidUntil(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">اتركه فارغاً لصلاحية دائمة</p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            إلغاء
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={updateMutation.isPending || !title.trim() || !body.trim()}
+          >
+            {updateMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Pencil className="h-4 w-4" />
+            )}
+            حفظ التعديلات
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

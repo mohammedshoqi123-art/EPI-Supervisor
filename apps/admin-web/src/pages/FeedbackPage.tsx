@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   MessageCircle, Plus, Clock, AlertTriangle, Send, Loader2,
   RefreshCw, Reply, CheckCircle2, XCircle, Clock3,
-  ArrowUpCircle,
+  ArrowUpCircle, Pencil, Trash2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,7 @@ import {
 import { Header } from '@/components/layout/header'
 import {
   useFeedbackTickets, useCreateTicket, useAddReply,
-  useUpdateTicketStatus, useTicketResponses,
+  useUpdateTicketStatus, useTicketResponses, useUpdateTicket, useDeleteTicket,
 } from '@/hooks/api/feedback'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import type {
@@ -83,6 +83,14 @@ export default function FeedbackPage() {
   const [activeFilter, setActiveFilter] = useState<FeedbackFilter>('all')
   const [showComposer, setShowComposer] = useState(false)
   const [selectedTicket, setSelectedTicket] = useState<FeedbackTicket | null>(null)
+  const [editingTicket, setEditingTicket] = useState<FeedbackTicket | null>(null)
+
+  // Listen for edit events from detail dialog
+  if (typeof window !== 'undefined') {
+    window.addEventListener('editTicket', ((e: CustomEvent) => {
+      setEditingTicket(e.detail)
+    }) as EventListener)
+  }
 
   const ticketsQuery = useFeedbackTickets(activeFilter)
   const tickets = ticketsQuery.data || []
@@ -172,6 +180,15 @@ export default function FeedbackPage() {
           ticket={selectedTicket}
           open={!!selectedTicket}
           onOpenChange={(open) => !open && setSelectedTicket(null)}
+        />
+      )}
+
+      {/* ═══ Edit Dialog ═══ */}
+      {editingTicket && (
+        <TicketEditDialog
+          ticket={editingTicket}
+          open={!!editingTicket}
+          onOpenChange={(open) => !open && setEditingTicket(null)}
         />
       )}
     </div>
@@ -532,6 +549,37 @@ function TicketDetailDialog({
           </Button>
         </div>
 
+        {/* Edit & Delete buttons */}
+        <div className="flex items-center gap-2 pt-2 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              onOpenChange(false)
+              const event = new CustomEvent('editTicket', { detail: ticket })
+              window.dispatchEvent(event)
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+            تعديل
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              if (confirm('هل أنت متأكد من حذف هذه التذكرة؟')) {
+                const deleteMutation = useDeleteTicket()
+                deleteMutation.mutate(ticket.id, {
+                  onSuccess: () => onOpenChange(false),
+                })
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+            حذف
+          </Button>
+        </div>
+
         {/* Status change buttons */}
         {ticket.status !== 'resolved' && ticket.status !== 'closed' && (
           <div className="flex items-center gap-2 pt-2 border-t">
@@ -560,6 +608,126 @@ function TicketDetailDialog({
             </DropdownMenu>
           </div>
         )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ═══════════════════════════════════════
+// Ticket Edit Dialog
+// ═══════════════════════════════════════
+
+function TicketEditDialog({
+  ticket,
+  open,
+  onOpenChange,
+}: {
+  ticket: FeedbackTicket
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [subject, setSubject] = useState(ticket.subject)
+  const [body, setBody] = useState(ticket.body)
+  const [category, setCategory] = useState<FeedbackCategory>(ticket.category)
+  const [priority, setPriority] = useState<FeedbackPriority>(ticket.priority)
+
+  const updateMutation = useUpdateTicket()
+
+  const handleSubmit = async () => {
+    if (!subject.trim() || !body.trim()) return
+
+    await updateMutation.mutateAsync({
+      id: ticket.id,
+      subject: subject.trim(),
+      body: body.trim(),
+      category,
+      priority,
+    })
+
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>تعديل التذكرة</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Subject */}
+          <div className="space-y-2">
+            <Label>الموضوع</Label>
+            <Input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="مثال: تأخر رفع تقرير الجاهزية"
+            />
+          </div>
+
+          {/* Body */}
+          <div className="space-y-2">
+            <Label>النص</Label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="اشرح التغذية الراجعة بالتفصيل..."
+              rows={5}
+              className="w-full p-3 rounded-lg border bg-background text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+
+          {/* Category */}
+          <div className="space-y-2">
+            <Label>الفئة</Label>
+            <Select value={category} onValueChange={(v) => setCategory(v as FeedbackCategory)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="performance">أداء</SelectItem>
+                <SelectItem value="compliance">التزام</SelectItem>
+                <SelectItem value="data_quality">جودة بيانات</SelectItem>
+                <SelectItem value="delay">تأخير</SelectItem>
+                <SelectItem value="behavior">سلوك</SelectItem>
+                <SelectItem value="general">عام</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Priority */}
+          <div className="space-y-2">
+            <Label>الأولوية</Label>
+            <Select value={priority} onValueChange={(v) => setPriority(v as FeedbackPriority)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">منخفض</SelectItem>
+                <SelectItem value="normal">عادي</SelectItem>
+                <SelectItem value="high">عالي</SelectItem>
+                <SelectItem value="critical">حرج</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            إلغاء
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={updateMutation.isPending || !subject.trim() || !body.trim()}
+          >
+            {updateMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Pencil className="h-4 w-4" />
+            )}
+            حفظ التعديلات
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

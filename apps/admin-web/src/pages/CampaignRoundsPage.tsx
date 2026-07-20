@@ -45,7 +45,8 @@ const CAMPAIGN_LABELS: Record<string, string> = {
 }
 
 export default function CampaignRoundsPage() {
-  const { user } = useAuth()
+  const { data: authData } = useAuth()
+  const user = authData?.profile
   const [rounds, setRounds] = useState<CampaignRound[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedCampaign, setSelectedCampaign] = useState('integrated_activity')

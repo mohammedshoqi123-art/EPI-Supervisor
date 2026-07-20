@@ -183,7 +183,7 @@ final _readinessSubsProvider = FutureProvider.family
           formId: _readinessFormId,
           campaignType: params.campaignType,
           campaignRound: params.campaignRound,
-          limit: 1000, // ═══ PERFORMANCE: Reduced from 2000 ═══
+          limit: 2000, // ═══ FIX: Accurate analytics ═══
           lean: true, // ═══ PERFORMANCE: Skip 'data' column — 84% less bandwidth ═══
         ),
     maxAge: const Duration(hours: 2),
@@ -201,7 +201,7 @@ final _supervisionSubsProvider = FutureProvider.family
           formId: _supervisionFormId,
           campaignType: params.campaignType,
           campaignRound: params.campaignRound,
-          limit: 1000, // ═══ PERFORMANCE: Reduced from 2000 ═══
+          limit: 2000, // ═══ FIX: Accurate analytics ═══
           lean: true, // ═══ PERFORMANCE: Skip 'data' column — 84% less bandwidth ═══
         ),
     maxAge: const Duration(hours: 2),
@@ -492,6 +492,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         formId: _readinessFormId,
         campaignRound: round,
         limit: 2000,
+      lean: true, // ═══ PERFORMANCE: Skip data column ═══
       );
       if (readinessSubs.isNotEmpty) {
         readinessData = _processReadinessData(readinessSubs);
@@ -501,6 +502,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         formId: _supervisionFormId,
         campaignRound: round,
         limit: 2000,
+      lean: true, // ═══ PERFORMANCE: Skip data column ═══
       );
       if (supervisionSubs.isNotEmpty) {
         complianceData = _processComplianceData(supervisionSubs);
@@ -553,6 +555,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignType: campaign,
         campaignRound: round,
         limit: 2000,
+      lean: true, // ═══ PERFORMANCE: Skip data column ═══
       );
 
       // Aggregate by user
@@ -622,6 +625,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignType: campaign,
         campaignRound: round,
         limit: 2000,
+      lean: true, // ═══ PERFORMANCE: Skip data column ═══
       );
 
       if (subs.isEmpty) {
@@ -754,6 +758,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignType: campaign,
         campaignRound: currentRound,
         limit: 2000,
+      lean: true, // ═══ PERFORMANCE: Skip data column ═══
       );
 
       final prevRound = currentRound > 1 ? currentRound - 1 : 1;
@@ -761,6 +766,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignType: campaign,
         campaignRound: prevRound,
         limit: 2000,
+      lean: true, // ═══ PERFORMANCE: Skip data column ═══
       );
 
       if (mounted) {

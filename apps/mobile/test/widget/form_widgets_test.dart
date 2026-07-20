@@ -12,7 +12,7 @@ void main() {
       return ProviderScope(
         overrides: [
           // Override governoratesProvider to return empty list (no Hive needed)
-          governoratesProvider.overrideWithValue(const AsyncValue.data([])),
+          governoratesProvider.overrideWith((ref) => Future.value([])),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -47,7 +47,7 @@ void main() {
       return ProviderScope(
         overrides: [
           // Override districtsProvider to return empty list (no Hive needed)
-          districtsProvider(govId).overrideWithValue(const AsyncValue.data([])),
+          districtsProvider(govId).overrideWith((ref) => Future.value([])),
         ],
         child: MaterialApp(
           home: Scaffold(

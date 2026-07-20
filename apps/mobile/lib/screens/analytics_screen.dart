@@ -2585,6 +2585,7 @@ final _assessmentSubsProvider = FutureProvider.family
             campaignType: params.campaignType,
             campaignRound: params.campaignRound,
             limit: 2000,
+            lean: true, // ═══ PERFORMANCE: Skip 'data' column ═══
           ),
       maxAge: const Duration(hours: 2),
     );

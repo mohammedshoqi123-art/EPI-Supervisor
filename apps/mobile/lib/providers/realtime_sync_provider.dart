@@ -93,19 +93,6 @@ class RealtimeSyncService {
       // Removed: forms, doc_references, governorates, districts, supply_shortages
       // These are reference data — refreshed via manual sync button
 
-      _channel!.onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'official_memos',
-        callback: (payload) {
-          debugPrint('[RealtimeSync] Official memo changed: ${payload.eventType}');
-          _changeController.add('official_memos');
-          _scheduleInvalidation('official_memos');
-        },
-      );
-
-      // Removed: supply_shortages — refreshed via manual sync button
-
       _channel!.subscribe((status, [error]) {
         if (status == RealtimeSubscribeStatus.subscribed) {
           _reconnectAttempts = 0;

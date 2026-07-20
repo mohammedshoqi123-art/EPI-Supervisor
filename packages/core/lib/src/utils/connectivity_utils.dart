@@ -162,8 +162,8 @@ class ConnectivityUtils {
         try {
           final response = await http
               .head(Uri.parse(url))
-              .timeout(const Duration(seconds: 2));  // Reduced from 3s
-          return response.statusCode < 500;
+              .timeout(const Duration(seconds: 5));  // Increased for slow networks
+          return response.statusCode < 500 || response.statusCode == 401 || response.statusCode == 403;
         } catch (_) {
           return false;
         }
@@ -171,7 +171,7 @@ class ConnectivityUtils {
 
       // Wait for ALL to complete (max 2.5s due to individual timeouts)
       final results = await Future.wait(futures).timeout(
-        const Duration(seconds: 3),  // Reduced from 4s
+        const Duration(seconds: 8),  // Increased for slow networks
         onTimeout: () => List.filled(futures.length, false),
       );
 

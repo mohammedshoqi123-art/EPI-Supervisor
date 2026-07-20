@@ -25,7 +25,7 @@ class GroundingSource {
   });
 
   factory GroundingSource.fromJson(Map<String, dynamic> j) => GroundingSource(
-    id: j['id'] as int,
+    id: (j['id'] as num?)?.toInt() ?? 0,
     type: j['type'] as String? ?? 'unknown',
     summary: j['summary'] as String? ?? '',
     quote: j['quote'] as String?,

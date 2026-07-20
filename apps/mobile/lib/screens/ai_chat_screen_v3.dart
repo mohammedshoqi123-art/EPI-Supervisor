@@ -266,9 +266,9 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           resp['reply'] as String? ?? resp['message'] as String? ?? '';
       final source = resp['source'] as String? ?? 'unknown';
       final provider = resp['provider'] as String?;
-      final providerTier = resp['provider_tier'] as int?;
-      final providerConfidence = resp['provider_confidence'] as int?;
-      final latencyMs = resp['latency_ms'] as int?;
+      final providerTier = (resp['provider_tier'] as num?)?.toInt();
+      final providerConfidence = (resp['provider_confidence'] as num?)?.toInt();
+      final latencyMs = (resp['latency_ms'] as num?)?.toInt();
       final raced = resp['raced'] as bool?;
       final attemptedProviders = resp['attempted_providers'] != null
           ? List<String>.from(resp['attempted_providers'])
@@ -276,7 +276,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       final toolsUsed = resp['tools_used'] != null
           ? List<String>.from(resp['tools_used'])
           : null;
-      final groundedInSources = resp['grounded_in_sources'] as int?;
+      final groundedInSources = (resp['grounded_in_sources'] as num?)?.toInt();
       final groundingSources = resp['grounding_sources'] != null
           ? (resp['grounding_sources'] as List)
               .map((s) => GroundingSource.fromJson(Map<String, dynamic>.from(s)))
@@ -745,7 +745,7 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
         if (content.isEmpty) continue;
 
         final provider = msg['provider'] as String?;
-        final groundedInSources = msg['grounded_in_sources'] as int?;
+        final groundedInSources = (msg['grounded_in_sources'] as num?)?.toInt();
         final suggestedFollowupsJson = msg['suggested_followups'];
         List<String>? suggestedFollowups;
         if (suggestedFollowupsJson is List) {
@@ -1138,8 +1138,8 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
           return const SizedBox.shrink();
         }
         final data = snapshot.data!;
-        final healthy = data['healthy'] as int? ?? 0;
-        final total = data['total_providers'] as int? ?? 0;
+        final healthy = (data['healthy'] as num?)?.toInt() ?? 0;
+        final total = (data['total_providers'] as num?)?.toInt() ?? 0;
         final blocked = (data['blocked'] as List?)?.cast<String>() ?? [];
 
         if (total == 0) return const SizedBox.shrink();

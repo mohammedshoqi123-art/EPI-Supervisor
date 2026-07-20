@@ -778,15 +778,29 @@ class OfflineManager {
       final data = _box?.get('drafts/$draftId');
       if (data == null || data.isEmpty) continue;
       try {
-        final v = Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
+        // Try encrypted first
+        final decrypted = _encryption.decrypt(data);
+        final v = Map<String, dynamic>.from(jsonDecode(decrypted));
         result.add({
           'draft_id': draftId,
           'form_id': v['form_id'] ?? draftId,
           'data': v['data'],
           'saved_at': v['saved_at'],
         });
-      } catch (e) {
-        debugPrint('[OfflineManager] ⚠️ Draft $draftId failed to decrypt: $e');
+      } catch (decryptError) {
+        // Fallback: try reading as plain JSON (may not be encrypted)
+        try {
+          final v = Map<String, dynamic>.from(jsonDecode(data));
+          result.add({
+            'draft_id': draftId,
+            'form_id': v['form_id'] ?? draftId,
+            'data': v['data'],
+            'saved_at': v['saved_at'],
+          });
+          debugPrint('[OfflineManager] Draft $draftId read as plain JSON (not encrypted)');
+        } catch (_) {
+          debugPrint('[OfflineManager] ⚠️ Draft $draftId failed to decrypt AND parse: $decryptError');
+        }
       }
     }
     return result;

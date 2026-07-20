@@ -266,14 +266,34 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      debugPrint('[App] Resumed — refreshing session and connectivity');
-      // Re-check connectivity on resume
-      ConnectivityUtils.recheckNow().catchError((e) {
-        debugPrint('[App] Connectivity recheck failed: $e');
-      });
-      // Refresh Supabase session if needed
-      _refreshSessionOnResume();
+      debugPrint('[App] Resumed — reinitializing Hive + session + connectivity');
+      _reinitializeOnResume();
     }
+  }
+
+  Future<void> _reinitializeOnResume() async {
+    // 1. Re-check Hive box — it may have been closed by the OS
+    try {
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw Exception('OfflineManager timeout on resume'),
+      );
+      if (!offline.isInitialized) {
+        debugPrint('[App] Hive box closed on resume — reinitializing...');
+        await offline.init();
+        debugPrint('[App] Hive box reopened successfully');
+      }
+    } catch (e) {
+      debugPrint('[App] Hive reinit on resume failed: $e');
+    }
+
+    // 2. Re-check connectivity
+    ConnectivityUtils.recheckNow().catchError((e) {
+      debugPrint('[App] Connectivity recheck failed: $e');
+    });
+
+    // 3. Refresh Supabase session if needed
+    _refreshSessionOnResume();
   }
 
   Future<void> _refreshSessionOnResume() async {

@@ -177,16 +177,21 @@ final _readinessSubsProvider = FutureProvider.family
   (ref, params) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
   final cacheKey = 'readiness_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
-  return cache.getList(
+  return cache.incrementalGetList(
     cacheKey,
-    () => ref.read(databaseServiceProvider).getSubmissions(
-          formId: _readinessFormId,
-          campaignType: params.campaignType,
-          campaignRound: params.campaignRound,
-          limit: 2000, // ═══ FIX: Accurate analytics ═══
-          lean: false, // ═══ FIX: Analytics NEEDS 'data' column — lean was causing empty analytics ═══
-        ),
+    ({String? createdAfter}) async {
+      return ref.read(databaseServiceProvider).getSubmissions(
+            formId: _readinessFormId,
+            campaignType: params.campaignType,
+            campaignRound: params.campaignRound,
+            limit: 2000,
+            lean: false,
+            createdAfter: createdAfter,
+          );
+    },
     maxAge: const Duration(hours: 2),
+    dateField: 'updated_at',
+    idField: 'id',
   );
 });
 
@@ -195,16 +200,21 @@ final _supervisionSubsProvider = FutureProvider.family
   (ref, params) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
   final cacheKey = 'supervision_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
-  return cache.getList(
+  return cache.incrementalGetList(
     cacheKey,
-    () => ref.read(databaseServiceProvider).getSubmissions(
-          formId: _supervisionFormId,
-          campaignType: params.campaignType,
-          campaignRound: params.campaignRound,
-          limit: 2000, // ═══ FIX: Accurate analytics ═══
-          lean: false, // ═══ FIX: Analytics NEEDS 'data' column — lean was causing empty analytics ═══
-        ),
+    ({String? createdAfter}) async {
+      return ref.read(databaseServiceProvider).getSubmissions(
+            formId: _supervisionFormId,
+            campaignType: params.campaignType,
+            campaignRound: params.campaignRound,
+            limit: 2000,
+            lean: false,
+            createdAfter: createdAfter,
+          );
+    },
     maxAge: const Duration(hours: 2),
+    dateField: 'updated_at',
+    idField: 'id',
   );
 });
 
@@ -485,25 +495,14 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     List<ChallengeData>? challengesData;
 
     try {
-      final db = ref.read(databaseServiceProvider);
-      final round = ref.read(campaignRoundProvider);
-
-      final readinessSubs = await db.getSubmissions(
-        formId: _readinessFormId,
-        campaignRound: round,
-        limit: 2000,
-      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
-      );
+      // Use cached providers instead of direct DB calls — avoids re-fetching 2000 records
+      final params = _currentParams;
+      final readinessSubs = ref.read(_readinessSubsProvider(params)).valueOrNull ?? [];
       if (readinessSubs.isNotEmpty) {
         readinessData = _processReadinessData(readinessSubs);
       }
 
-      final supervisionSubs = await db.getSubmissions(
-        formId: _supervisionFormId,
-        campaignRound: round,
-        limit: 2000,
-      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
-      );
+      final supervisionSubs = ref.read(_supervisionSubsProvider(params)).valueOrNull ?? [];
       if (supervisionSubs.isNotEmpty) {
         complianceData = _processComplianceData(supervisionSubs);
         serviceNumbersData = _processServiceNumbersData(supervisionSubs);
@@ -625,8 +624,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignType: campaign,
         campaignRound: round,
         limit: 2000,
-      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
-      );
+        lean: false,
+      ).timeout(const Duration(seconds: 30));
 
       if (subs.isEmpty) {
         if (mounted) {
@@ -2585,16 +2584,21 @@ final _assessmentSubsProvider = FutureProvider.family
   (ref, params) async {
     final cache = await ref.watch(offlineDataCacheProvider.future);
     final cacheKey = 'assessment_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
-    return cache.getList(
+    return cache.incrementalGetList(
       cacheKey,
-      () => ref.read(databaseServiceProvider).getSubmissions(
-            formId: _assessmentFormId,
-            campaignType: params.campaignType,
-            campaignRound: params.campaignRound,
-            limit: 2000,
-            lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
-          ),
+      ({String? createdAfter}) async {
+        return ref.read(databaseServiceProvider).getSubmissions(
+              formId: _assessmentFormId,
+              campaignType: params.campaignType,
+              campaignRound: params.campaignRound,
+              limit: 2000,
+              lean: false,
+              createdAfter: createdAfter,
+            );
+      },
       maxAge: const Duration(hours: 2),
+      dateField: 'updated_at',
+      idField: 'id',
     );
   },
 );

@@ -471,7 +471,7 @@ final submissionsProvider = FutureProvider.family
           );
     },
     maxAge: const Duration(days: 7),
-    dateField: 'created_at',
+    dateField: 'updated_at',
     idField: 'id',
   );
 });

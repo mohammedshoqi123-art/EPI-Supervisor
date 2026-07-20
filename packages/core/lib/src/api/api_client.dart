@@ -22,6 +22,10 @@ class ApiClient {
   static _InFilterSentinel inList(List<dynamic> values) =>
       _InFilterSentinel(values);
 
+  /// Helper to create a GT (greater than) filter for select queries.
+  /// Usage: ApiClient.select('table', filters: {'created_at': ApiClient.gt('2026-01-01')})
+  static _GtFilterSentinel gt(dynamic value) => _GtFilterSentinel(value);
+
   /// Lazy initialization — don't crash if Supabase isn't set up yet.
   SupabaseClient get _safeClient {
     if (_client == null) {
@@ -61,6 +65,8 @@ class ApiClient {
             query = query.isFilter(key, null);
           } else if (filters[key] is _InFilterSentinel) {
             query = query.inFilter(key, (filters[key] as _InFilterSentinel).values);
+          } else if (filters[key] is _GtFilterSentinel) {
+            query = query.gt(key, (filters[key] as _GtFilterSentinel).value);
           } else if (filters[key] != null) {
             query = query.eq(key, filters[key]);
           }
@@ -183,6 +189,8 @@ class ApiClient {
             query = query.isFilter(key, null);
           } else if (filters[key] is _InFilterSentinel) {
             query = query.inFilter(key, (filters[key] as _InFilterSentinel).values);
+          } else if (filters[key] is _GtFilterSentinel) {
+            query = query.gt(key, (filters[key] as _GtFilterSentinel).value);
           } else if (filters[key] != null) {
             query = query.eq(key, filters[key]);
           }
@@ -823,4 +831,11 @@ class _NullFilterSentinel {
 class _InFilterSentinel {
   final List<dynamic> values;
   const _InFilterSentinel(this.values);
+}
+
+/// Sentinel class for GT (greater than) filter support in [ApiClient.select].
+/// Usage: ApiClient.select('table', filters: {'created_at': ApiClient.gt('2026-01-01')})
+class _GtFilterSentinel {
+  final dynamic value;
+  const _GtFilterSentinel(this.value);
 }

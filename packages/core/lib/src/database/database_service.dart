@@ -185,7 +185,7 @@ class DatabaseService {
         }
 
         // Build lean select string — NO 'data' column (saves 84% bandwidth)
-        const leanSelect = 'id,status,governorate_id,district_id,created_at,form_id,campaign_round,submitted_by,reviewed_by,reviewed_at,gps_lat,gps_lng,is_offline,notes,photos,governorates!governorate_id(name_ar),districts!district_id(name_ar),forms!form_id(title_ar,campaign_type),profiles!submitted_by(full_name,role)';
+        const leanSelect = 'id,status,governorate_id,district_id,created_at,updated_at,form_id,campaign_round,submitted_by,reviewed_by,reviewed_at,gps_lat,gps_lng,is_offline,notes,photos,governorates!governorate_id(name_ar),districts!district_id(name_ar),forms!form_id(title_ar,campaign_type),profiles!submitted_by(full_name,role)';
 
         var query = _api.select('form_submissions',
           select: leanSelect,
@@ -195,6 +195,7 @@ class DatabaseService {
             if (formId != null) 'form_id': formId,
             if (governorateId != null) 'governorate_id': governorateId,
             if (campaignRound != null) 'campaign_round': campaignRound,
+            if (createdAfter != null) 'created_at': ApiClient.gt(createdAfter),
           },
           orderBy: orderBy ?? 'created_at',
           ascending: ascending,
@@ -216,14 +217,6 @@ class DatabaseService {
         }
         if (submittedBy != null) {
           result = result.where((s) => s['submitted_by'] == submittedBy).toList();
-        }
-
-        // INCREMENTAL SYNC: filter by createdAfter (client-side)
-        if (createdAfter != null && createdAfter.isNotEmpty) {
-          result = result.where((s) {
-            final createdAt = s['created_at']?.toString() ?? '';
-            return createdAt.compareTo(createdAfter) > 0;
-          }).toList();
         }
 
         return result;

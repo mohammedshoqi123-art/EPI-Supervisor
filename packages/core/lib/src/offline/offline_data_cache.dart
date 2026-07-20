@@ -19,6 +19,11 @@ class OfflineDataCache {
   static const String _cacheBoxKey = 'data_cache';
   static const String _metadataKey = 'cache_metadata';
 
+  // ═══ INCREMENTAL SYNC: Counter for periodic full refresh ═══
+  // Every N incremental syncs, force a full refresh to catch updates/deletes
+  static const int _incrementalSyncsBeforeFullRefresh = 5;
+  final Map<String, int> _incrementalSyncCounts = {};
+
   final OfflineManager _offline;
   final EncryptionService _encryption;
 
@@ -170,6 +175,34 @@ class OfflineDataCache {
         if (d.isNotEmpty && (latestDate == null || d.compareTo(latestDate) > 0)) {
           latestDate = d;
         }
+      }
+    }
+
+    // ═══ PERIODIC FULL REFRESH: every N incremental syncs, force full fetch ═══
+    // This catches updated records that incremental sync misses.
+    final syncCount = (_incrementalSyncCounts[cacheKey] ?? 0) + 1;
+    _incrementalSyncCounts[cacheKey] = syncCount;
+    final forceFullRefresh = syncCount % _incrementalSyncsBeforeFullRefresh == 0;
+
+    if (forceFullRefresh && existing.isNotEmpty) {
+      _incrementalSyncCounts[cacheKey] = 0;
+      if (kDebugMode) {
+        debugPrint('[OfflineDataCache] Periodic full refresh for $cacheKey (every $_incrementalSyncsBeforeFullRefresh syncs)');
+      }
+      try {
+        final allData = await fetchFn().timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Full refresh timeout for $cacheKey'),
+        );
+        if (allData.isNotEmpty) {
+          await _saveToCache(cacheKey, allData);
+          return allData;
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[OfflineDataCache] Full refresh failed, falling back to incremental: $e');
+        }
+        // Fall through to incremental sync
       }
     }
 

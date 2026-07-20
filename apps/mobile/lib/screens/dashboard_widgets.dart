@@ -579,7 +579,7 @@ class SubmissionsByLevelChart extends ConsumerWidget {
       campaignType: campaignType,
       campaignRound: campaignRound,
       status: 'submitted',
-      limit: 10000,
+      limit: 2000, // ═══ PERFORMANCE: Reduced from 10000 ═══
       lean: true,  // ═══ P0: Skip 'data' column — chart only counts by role
     );
     final submissionsAsync = ref.watch(submissionsProvider(filter));

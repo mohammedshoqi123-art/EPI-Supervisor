@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+// ═══ PERFORMANCE: Use compute() for background JSON encoding ═══
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -569,8 +570,32 @@ class OfflineManager {
         'data': data,
         'saved_at': DateTime.now().toIso8601String(),
       };
-      // ═══ PROPOSAL 2: Encrypt only THIS draft = <1ms ═══
-      final encrypted = _encryption.encrypt(jsonEncode(draftData));
+
+      // ═══ PERFORMANCE: For large data (>50KB), use Isolate for JSON encoding ═══
+      // Small data: encode on UI thread (fast enough)
+      // Large data (with photos): encode in background isolate
+      final jsonString = jsonEncode(draftData);
+      String encrypted;
+
+      if (jsonString.length > 50 * 1024) {
+        // Large payload — encrypt in background isolate
+        try {
+          encrypted = await compute(_encryptInIsolate, _EncryptParams(
+            jsonString,
+            _encryption,
+          )).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => _encryption.encrypt(jsonString),
+          );
+        } catch (e) {
+          // Fallback to main thread
+          encrypted = _encryption.encrypt(jsonString);
+        }
+      } else {
+        // Small payload — encrypt on UI thread (<1ms)
+        encrypted = _encryption.encrypt(jsonString);
+      }
+
       await _box?.put('drafts/$draftId', encrypted);
 
       // Update index (unencrypted — just IDs, no decrypt needed)
@@ -786,4 +811,18 @@ class OfflineManager {
     _connectivityController.close();
     _pendingCountController.close();
   }
+}
+
+// ═══ PERFORMANCE: Isolate helpers for background encryption ═══
+// These must be top-level functions for compute() to work
+
+class _EncryptParams {
+  final String jsonString;
+  final EncryptionService encryption;
+  const _EncryptParams(this.jsonString, this.encryption);
+}
+
+/// Top-level function for compute() — encrypts JSON string in background isolate
+String _encryptInIsolate(_EncryptParams params) {
+  return params.encryption.encrypt(params.jsonString);
 }

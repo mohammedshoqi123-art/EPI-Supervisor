@@ -288,6 +288,21 @@ class OfflineDataCache {
     return DateTime.now().difference(entry.timestamp) > maxAge;
   }
 
+  /// Public: Check if cache entry is stale (for smart sync)
+  bool isStale(String key, Duration maxAge) {
+    // Check memory cache first
+    final entry = _memoryCache[key];
+    if (entry != null) {
+      return DateTime.now().difference(entry.timestamp) > maxAge;
+    }
+    // Check persistent cache
+    final persisted = _offline.getCachedData(key, offlineOverride: true);
+    if (persisted == null) return true;
+    // If it's in persistent cache, consider it fresh enough
+    // (persistent cache has its own retention logic)
+    return false;
+  }
+
   /// ═══ OFFLINE FALLBACK: Find related cached data by prefix ═══
   /// When exact key not found, try to find a broader key with the same prefix.
   /// Example: 'submissions_camp_polio_campaign_round_1' → try 'submissions_camp_polio_campaign'

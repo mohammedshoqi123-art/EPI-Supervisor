@@ -125,8 +125,55 @@ Future<void> main() async {
       } catch (e) {
         debugPrint('[Init] ⚠️ NotificationService init failed: $e');
       }
+
+      // ═══ PERFORMANCE: Prefetch critical data in background ═══
+      // Loads governorates, districts, forms into cache so screens open instantly
+      // Runs after UI is rendered — doesn't block startup
+      if (supabaseInitialized && ConnectivityUtils.isOnline) {
+        _prefetchCriticalData();
+      }
     });
   });
+}
+
+/// Prefetch critical reference data into cache
+/// Runs in background after app starts — doesn't block UI
+Future<void> _prefetchCriticalData() async {
+  try {
+    // Wait a bit for the app to fully initialize
+    await Future.delayed(const Duration(seconds: 3));
+
+    // Use a simple approach — just warm up the providers by reading them
+    // The providers handle caching internally
+    debugPrint('[Prefetch] Starting background data prefetch...');
+
+    // These will populate the cache if not already present
+    // Each provider has its own cache, so this is idempotent
+    final db = DatabaseService(ApiClient());
+
+    // Prefetch in parallel — governorates + districts + forms
+    await Future.wait([
+      db.getGovernorates().then((data) {
+        debugPrint('[Prefetch] ✅ Governorates: ${data.length}');
+      }).catchError((e) {
+        debugPrint('[Prefetch] ❌ Governorates: $e');
+      }),
+      db.getDistricts().then((data) {
+        debugPrint('[Prefetch] ✅ Districts: ${data.length}');
+      }).catchError((e) {
+        debugPrint('[Prefetch] ❌ Districts: $e');
+      }),
+      db.getForms().then((data) {
+        debugPrint('[Prefetch] ✅ Forms: ${data.length}');
+      }).catchError((e) {
+        debugPrint('[Prefetch] ❌ Forms: $e');
+      }),
+    ]).timeout(const Duration(seconds: 15));
+
+    debugPrint('[Prefetch] ✅ Background prefetch complete');
+  } catch (e) {
+    debugPrint('[Prefetch] ❌ Background prefetch failed: $e');
+  }
 }
 
 /// Track whether Supabase.initialize has been called successfully

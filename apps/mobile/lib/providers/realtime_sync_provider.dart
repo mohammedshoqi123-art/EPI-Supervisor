@@ -38,29 +38,12 @@ class RealtimeSyncService {
       final client = Supabase.instance.client;
 
       // ═══ PERFORMANCE FIX: Single channel for all tables ═══
-      // Reduces from 5 WebSocket connections to 1
+      // ═══ PERFORMANCE: Only subscribe to tables that need realtime updates ═══
+      // Reference data (forms, references, governorates, districts) is refreshed
+      // via manual sync button, not realtime — reduces WebSocket overhead.
       _channel = client.channel('mobile-sync');
 
-      _channel!.onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'forms',
-        callback: (payload) {
-          debugPrint('[RealtimeSync] Forms changed: ${payload.eventType}');
-          _changeController.add('forms');
-        },
-      );
-
-      _channel!.onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'doc_references',
-        callback: (payload) {
-          debugPrint('[RealtimeSync] References changed: ${payload.eventType}');
-          _changeController.add('references');
-        },
-      );
-
+      // Keep: Profile updates — needed for user deactivation check
       _channel!.onPostgresChanges(
         event: PostgresChangeEvent.update,
         schema: 'public',
@@ -71,30 +54,7 @@ class RealtimeSyncService {
         },
       );
 
-      _channel!.onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'governorates',
-        callback: (payload) {
-          debugPrint(
-              '[RealtimeSync] Governorates changed: ${payload.eventType}');
-          _changeController.add('governorates');
-        },
-      );
-
-      _channel!.onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'districts',
-        callback: (payload) {
-          debugPrint('[RealtimeSync] Districts changed: ${payload.eventType}');
-          _changeController.add('districts');
-        },
-      );
-
-      // ═══ FIX: Subscribe to form_submissions — single listener for all events ═══
-      // Previously: separate insert + update listeners = 2 subscriptions
-      // Now: single 'all' listener = 1 subscription
+      // Keep: Submissions — most important for sync status and dashboard updates
       _channel!.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
@@ -106,8 +66,7 @@ class RealtimeSyncService {
         },
       );
 
-      // ═══ FIX: Subscribe to feedback_tickets and official_memos ═══
-      // Previously: changes by other users required manual refresh
+      // Keep: Feedback tickets — for notification badge
       _channel!.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
@@ -118,6 +77,21 @@ class RealtimeSyncService {
           _scheduleInvalidation('feedback_tickets');
         },
       );
+
+      // Keep: Official memos — for notification badge
+      _channel!.onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'official_memos',
+        callback: (payload) {
+          debugPrint('[RealtimeSync] Official memo changed: ${payload.eventType}');
+          _changeController.add('official_memos');
+          _scheduleInvalidation('official_memos');
+        },
+      );
+
+      // Removed: forms, doc_references, governorates, districts, supply_shortages
+      // These are reference data — refreshed via manual sync button
 
       _channel!.onPostgresChanges(
         event: PostgresChangeEvent.all,
@@ -130,16 +104,7 @@ class RealtimeSyncService {
         },
       );
 
-      // ═══ FIX: Also subscribe to supply_shortages ═══
-      _channel!.onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'supply_shortages',
-        callback: (payload) {
-          debugPrint('[RealtimeSync] New shortage: ${payload.newRecord['id']}');
-          _changeController.add('supply_shortages');
-        },
-      );
+      // Removed: supply_shortages — refreshed via manual sync button
 
       _channel!.subscribe((status, [error]) {
         if (status == RealtimeSubscribeStatus.subscribed) {
@@ -151,7 +116,7 @@ class RealtimeSyncService {
         }
       });
       _isListening = true;
-      debugPrint('[RealtimeSync] ✅ Started listening (single channel)');
+      debugPrint('[RealtimeSync] ✅ Started listening (4 essential listeners)');
     } catch (e) {
       debugPrint('[RealtimeSync] ❌ Failed to start: $e');
       _scheduleReconnect();

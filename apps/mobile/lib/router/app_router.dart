@@ -221,78 +221,7 @@ class MainShell extends ConsumerStatefulWidget {
 }
 
 class _MainShellState extends ConsumerState<MainShell> {
-  bool _isSyncing = false;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
-
-  /// ═══ مزامنة شاملة — تجلب ALL data من السيرفر وتحفظها بالكاش ═══
-  /// ═══ PERFORMANCE FIX: Uses microtask to avoid blocking UI ═══
-  Future<void> _triggerFullSync() async {
-    if (_isSyncing) return;
-    if (!ConnectivityUtils.isOnline) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'لا يمكن المزامنة بدون إنترنت 🔌',
-              style: TextStyle(fontFamily: 'Tajawal'),
-            ),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
-
-    setState(() => _isSyncing = true);
-    HapticFeedback.mediumImpact();
-
-    try {
-      // ═══ PERFORMANCE: Yield to UI thread before heavy work ═══
-      await Future.delayed(const Duration(milliseconds: 50));
-
-      final result = await ref.read(fullSyncProvider.notifier).syncAll();
-
-      if (mounted) {
-        if (result.error != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'فشلت المزامنة: ${result.error}',
-                style: const TextStyle(fontFamily: 'Tajawal'),
-              ),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'تمت المزامنة ✅ ${result.forms} نموذج، ${result.submissions} إرسالية، ${result.governorates} محافظة',
-                style: const TextStyle(fontFamily: 'Tajawal'),
-              ),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'خطأ: $e',
-              style: const TextStyle(fontFamily: 'Tajawal'),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSyncing = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -403,11 +332,13 @@ class AppDrawer extends ConsumerStatefulWidget {
 
 class _AppDrawerState extends ConsumerState<AppDrawer> {
   bool _isSyncingConfig = false;
+  String _syncProgress = '';
 
+  /// مزامنة ذكية — تستخدم full_sync_provider
   Future<void> _syncConfig() async {
     if (_isSyncingConfig) return;
 
-    // ═══ SAFETY: Don't clear cache if offline — user will lose all data ═══
+    // ═══ SAFETY: Don't sync if offline ═══
     if (!ConnectivityUtils.isOnline) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -424,58 +355,50 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       return;
     }
 
-    setState(() => _isSyncingConfig = true);
+    setState(() {
+      _isSyncingConfig = true;
+      _syncProgress = 'جاري المزامنة...';
+    });
 
     try {
-      // 1. مسح كاش النماذج والاستمارات فقط
-      final cache = await ref.read(offlineDataCacheProvider.future);
-      final campaign = ref.read(campaignProvider);
-      await cache.forceInvalidate('forms_${campaign.value}');
-      await cache.forceInvalidate('forms_all');
-
-      // 2. طلب بيانات جديدة من السيرفر
-      ref.invalidate(formsProvider);
-
-      // 3. رفع الإرساليات المحفوظة محلياً
-      // ═══ FIX: مهلة على syncService — لا نحظر UI ═══
-      SyncService? syncService;
-      try {
-        syncService = await ref.read(syncServiceProvider.future).timeout(
-          const Duration(seconds: 5),
-        );
-      } on TimeoutException {
-        syncService = null;
-      }
-      if (syncService == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'المزامنة تستغرق وقتاً طويلاً — حاول مرة أخرى',
-                style: TextStyle(fontFamily: 'Tajawal'),
-              ),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-      final result = await syncService.sync().timeout(
-        const Duration(seconds: 30),
-        onTimeout: () => SyncCycleResult.empty(),
+      // استخدام المزامنة الذكية
+      final result = await ref.read(fullSyncProvider.notifier).syncAll(
+        onProgress: (step, current, total) {
+          if (mounted) {
+            setState(() {
+              _syncProgress = '$step ($current/$total)';
+            });
+          }
+        },
+      ).timeout(
+        const Duration(seconds: 90),
+        onTimeout: () => const FullSyncResult(error: 'انتهت مهلة المزامنة'),
       );
 
       if (mounted) {
-        final msg = result.synced > 0
-            ? 'تم تحديث النماذج ومزامنة ${result.synced} إرسالية ✅'
-            : 'تم جلب أحدث النماذج من السيرفر ✅';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg, style: const TextStyle(fontFamily: 'Tajawal')),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        if (result.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'فشلت المزامنة: ${result.error}',
+                style: const TextStyle(fontFamily: 'Tajawal'),
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result.summary,
+                style: const TextStyle(fontFamily: 'Tajawal'),
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -491,14 +414,19 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isSyncingConfig = false);
+      if (mounted) {
+        setState(() {
+          _isSyncingConfig = false;
+          _syncProgress = '';
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authAsync = ref.watch(authStateProvider);
-    final authState = authAsync.valueOrNull;
+    // ═══ PERFORMANCE: Use .select() to minimize rebuild scope ═══
+    final authState = ref.watch(authStateProvider.select((v) => v.valueOrNull));
     final campaign = ref.watch(campaignProvider);
     final campaignRound = ref.watch(campaignRoundProvider);
     // ═══ Filter campaigns by visibility ═══
@@ -515,6 +443,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       },
       onSyncConfig: _syncConfig,
       isSyncingConfig: _isSyncingConfig,
+      syncProgress: _syncProgress,
       activeCampaign: campaign.value,
       onCampaignChanged: (v) {
         ref

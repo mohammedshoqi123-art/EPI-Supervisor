@@ -28,6 +28,7 @@ class EpiDrawer extends StatelessWidget {
   final VoidCallback? onLogout;
   final VoidCallback? onSyncConfig;
   final bool isSyncingConfig;
+  final String? syncProgress; // Progress text during sync
   final String activeCampaign;
   final ValueChanged<String>? onCampaignChanged;
   final int activeCampaignRound;
@@ -45,6 +46,7 @@ class EpiDrawer extends StatelessWidget {
     this.onLogout,
     this.onSyncConfig,
     this.isSyncingConfig = false,
+    this.syncProgress,
     this.activeCampaign = 'polio_campaign',
     this.onCampaignChanged,
     this.activeCampaignRound = 1,
@@ -394,9 +396,11 @@ class EpiDrawer extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  subtitle: const Text(
-                    'جلب أحدث النماذج والاستمارات',
-                    style: TextStyle(
+                  subtitle: Text(
+                    isSyncingConfig
+                        ? (syncProgress ?? 'يرجى الانتظار...')
+                        : 'جلب أحدث النماذج والاستمارات',
+                    style: const TextStyle(
                       fontFamily: 'Tajawal',
                       fontSize: 11,
                       color: AppTheme.textHint,

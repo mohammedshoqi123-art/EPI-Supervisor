@@ -94,7 +94,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     ref.invalidate(submissionsProvider(SubmissionsFilter(
       campaignType: ref.read(campaignProvider).value,
       campaignRound: ref.read(campaignRoundProvider),
-      limit: 5000,
+      limit: 2000,
       lean: true,  // ═══ P0: Match the lean query used in _getFilteredSubmissions
     )));
     ref.invalidate(governoratesProvider);
@@ -153,12 +153,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
   List<Map<String, dynamic>> _getFilteredSubmissions() {
     // ═══ P0-1: Memoize — was called 5x per build, each doing 25,000 filter ops
     // Now: compute once, cache, return cached on subsequent calls in same build cycle
-    final campaign = ref.watch(campaignProvider).value;
+    // ═══ PERFORMANCE: Use .select() for campaign to minimize rebuild scope ═══
+    final campaign = ref.watch(campaignProvider.select((c) => c.value));
     final round = ref.watch(campaignRoundProvider);
     final allSubsAsync = ref.watch(submissionsProvider(SubmissionsFilter(
       campaignType: campaign,
       campaignRound: round,
-      limit: 5000,
+      limit: 2000,
       lean: true,  // ═══ P0: Skip 'data' column — 5.5MB→0.86MB (84% reduction)
     )));
     final allSubs = allSubsAsync.valueOrNull ?? [];
@@ -464,11 +465,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
   Widget _buildFilterBar() {
     // ═══ FIX #2: Load all submissions for map filters ═══
     // ═══ FIX #3: Use ref.watch instead of ref.read so map updates on campaign/round change ═══
+    // ═══ PERFORMANCE: Use .select() for campaign to minimize rebuild scope ═══
+    final campaignValue = ref.watch(campaignProvider.select((c) => c.value));
+    final round = ref.watch(campaignRoundProvider);
     final allSubs = ref
             .watch(submissionsProvider(SubmissionsFilter(
-              campaignType: ref.watch(campaignProvider).value,
-              campaignRound: ref.watch(campaignRoundProvider),
-              limit: 5000,
+              campaignType: campaignValue,
+              campaignRound: round,
+              limit: 2000,
               lean: true,  // ═══ P0: Skip 'data' column — filter bar only needs metadata
             )))
             .valueOrNull ??

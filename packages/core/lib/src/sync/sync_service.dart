@@ -74,14 +74,24 @@ class SyncService {
   /// بدء المزامنة التلقائية
   void startAutoSync() {
     _syncTimer?.cancel();
-    // ═══ FIX: فترة أطول (5 دقائق) — تقليل الضغط على السيرفر والبطارية ═══
+    // ═══ PERFORMANCE: Only sync when there are pending items ═══
+    // Previously: synced every 5 min even when queue was empty
+    // Now: checks queue first, skips if empty
     _syncTimer = Timer.periodic(
       const Duration(minutes: 5),
-      (_) => _attemptSync('timer'),
+      (_) {
+        if (_offline.pendingCount > 0) {
+          _attemptSync('timer');
+        }
+      },
     );
     // ═══ FIX: لا تبدأ محاولة أولى فوراً — انتظر 15s حتى لا تتصادم مع init ═══
-    Timer(const Duration(seconds: 15), () => _attemptSync('initial'));
-    if (kDebugMode) print('[SyncService] Auto-sync started (every 5 min)');
+    Timer(const Duration(seconds: 15), () {
+      if (_offline.pendingCount > 0) {
+        _attemptSync('initial');
+      }
+    });
+    if (kDebugMode) print('[SyncService] Auto-sync started (every 5 min, smart)');
   }
 
   void stopAutoSync() {
@@ -334,21 +344,18 @@ class SyncService {
         await Future.delayed(Duration.zero);
       }
 
-      // ═══ FIX: Invalidate submissions + analytics caches after successful sync ═══
-      // Without this, the UI shows stale data for up to 2 hours (cache maxAge).
-      // ═══ FIX: Use invalidateByPrefix() to clear BOTH memory AND Hive persistent cache.
-      // Previous approach used getDebugInfo()['keys'] which only returned memory cache keys,
-      // missing entries evicted by LRU but still persisted in Hive.
-      // This caused the Numbers/Visitors tab to show stale data after sync.
+      // ═══ FIX: Invalidate ONLY submission-related caches after successful sync ═══
+      // Previously: ALL caches were invalidated (governorates, districts, forms, etc.)
+      // This caused unnecessary re-fetches of data that didn't change.
+      // Now: only invalidate caches affected by the sync (submissions + analytics).
+      // Reference data (governorates, districts, forms, facilities, references)
+      // is refreshed by the user via the drawer's sync button, not automatically.
       if (result.synced > 0 || result.duplicates > 0) {
         _offline.updateConnectivity(true);
 
         final cache = _dataCache;
         if (cache != null) {
-          // ═══ FIX: Invalidate ALL caches — not just submissions ═══
-          // Previously: only submissions + analytics + shortages caches were cleared.
-          // Now: also governorates, districts, forms, facilities, references
-          // This ensures new data from other users is visible after sync.
+          // Only invalidate submission-dependent caches
           const prefixes = [
             'submissions',
             'dashboard_analytics',
@@ -357,11 +364,6 @@ class SyncService {
             'governorate_ranking',
             'readiness_subs',
             'supervision_subs',
-            'governorates',
-            'districts',
-            'facilities',
-            'forms',
-            'references',
           ];
 
           int invalidated = 0;
@@ -372,7 +374,7 @@ class SyncService {
 
           if (kDebugMode)
             debugPrint(
-              '[SyncService] Invalidated $invalidated cache prefixes (all data)',
+              '[SyncService] Invalidated $invalidated cache prefixes (submissions only)',
             );
         }
       }

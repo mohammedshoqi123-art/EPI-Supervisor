@@ -918,15 +918,35 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   int _autoSaveFailCount = 0;
   // ═══ FIX: Track last saved data hash to avoid redundant saves ═══
-  String? _lastSavedDataHash;
+  // ═══ PERFORMANCE: Use length-based hash instead of .toString() (expensive for large maps with base64 photos)
+  int _lastSavedDataHash = 0;
+
+  /// Fast hash for change detection — avoids expensive .toString() on large maps
+  int _computeDataHash() {
+    int hash = _formData.length;
+    for (final entry in _formData.entries) {
+      // Use key length + value type as hash — fast, no string conversion
+      hash = (hash * 31 + entry.key.length) & 0x7FFFFFFF;
+      if (entry.value is String) {
+        hash = (hash * 31 + (entry.value as String).length) & 0x7FFFFFFF;
+      } else if (entry.value is num) {
+        hash = (hash * 31 + (entry.value as num).toInt()) & 0x7FFFFFFF;
+      } else if (entry.value is List) {
+        hash = (hash * 31 + (entry.value as List).length) & 0x7FFFFFFF;
+      } else if (entry.value is Map) {
+        hash = (hash * 31 + (entry.value as Map).length) & 0x7FFFFFFF;
+      }
+    }
+    return hash;
+  }
 
   Future<void> _autoSave({bool showFeedback = false}) async {
     _syncControllersToFormData();
     if (_formData.isEmpty) return;
 
     // ═══ FIX: Skip save if data hasn't changed ═══
-    // Prevents unnecessary encryption/Hive writes every 60 seconds
-    final currentHash = _formData.toString();
+    // ═══ PERFORMANCE: Fast hash instead of .toString() — O(n) vs O(n²) for large maps
+    final currentHash = _computeDataHash();
     if (currentHash == _lastSavedDataHash) return;
 
     if (!mounted) return;
@@ -945,7 +965,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         Map<String, dynamic>.from(_formData),
       );
       _hasUnsavedChanges = false;
-      _lastSavedDataHash = _formData.toString(); // Track saved state
+      _lastSavedDataHash = currentHash; // Track saved state (already computed)
       _autoSaveFailCount = 0; // Reset on success
       if (showFeedback && mounted) {
         context.showSuccess('تم الحفظ التلقائي');

@@ -49,8 +49,8 @@ class ConnectivityUtils {
   static const Duration _minEmitInterval = Duration(seconds: 2);
 
   /// How often to recheck when "online" (catches captive portal / wifi-no-internet)
-  /// ═══ PERFORMANCE: 60s (was 120s) — faster detection of connectivity loss ═══
-  static const Duration _onlineRecheckInterval = Duration(seconds: 60);
+  /// ═══ PERFORMANCE: 120s (was 60s) — reduce battery/CPU drain on mobile ═══
+  static const Duration _onlineRecheckInterval = Duration(seconds: 120);
 
   /// Call once at app startup to start monitoring.
   /// On web: assumes online and skips connectivity_plus listeners (they can hang).
@@ -137,7 +137,7 @@ class ConnectivityUtils {
   /// Probe internet by trying HTTP HEAD to known reliable endpoints.
   /// ═══ PERFORMANCE: PARALLEL probes — all URLs tried simultaneously ═══
   /// Previously: sequential probes = 4 URLs × 4s timeout = 16s worst case
-  /// Now: parallel probes = 4s worst case regardless of URL count
+  /// Now: parallel probes = 3s worst case regardless of URL count
   static Future<bool> _probeInternet() async {
     if (_probing) return _isOnline;
 

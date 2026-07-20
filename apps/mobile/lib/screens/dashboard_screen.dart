@@ -12,6 +12,26 @@ import 'dashboard_header.dart';
 import 'dashboard_charts.dart';
 import 'dashboard_widgets.dart';
 
+// ═══ PERFORMANCE: Riverpod provider for governorate ranking ═══
+// Replaces FutureBuilder to prevent re-fetching on every rebuild
+final _governorateRankingProvider = FutureProvider.family
+    .autoDispose<List<Map<String, dynamic>>, String>((
+  ref,
+  cacheKey,
+) async {
+  try {
+    final analyticsService = ref.read(analyticsServiceProvider);
+    final campaign = ref.read(campaignProvider);
+    final round = ref.read(campaignRoundProvider);
+    return await analyticsService.getGovernorateRanking(
+      campaignRound: campaign.value == 'integrated_activity' ? round : null,
+    ).timeout(const Duration(seconds: 15));
+  } catch (e) {
+    debugPrint('[Dashboard] Gov ranking failed: $e');
+    return [];
+  }
+});
+
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -118,10 +138,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     // ═══ PERFORMANCE: Use .select() to minimize rebuild scope ═══
-    // Only watch the specific fields we need from analytics
+    // Watch campaign values ONCE, reuse throughout build
+    final campaignValue = ref.watch(campaignProvider.select((c) => c.value));
+    final campaignDisplayLabel = ref.watch(campaignProvider.select((c) => c.displayLabel));
+    final campaignRound = ref.watch(campaignRoundProvider);
+    final showRoundFilter = campaignValue == 'integrated_activity';
+
     final analytics = ref.watch(
       dashboardAnalyticsProvider(
-        AnalyticsFilter(campaignType: ref.watch(campaignProvider).value, campaignRound: ref.watch(campaignRoundProvider)),
+        AnalyticsFilter(campaignType: campaignValue, campaignRound: campaignRound),
       ),
     );
     // ═══ FIX: Only watch specific fields from authState to minimize rebuilds ═══
@@ -182,9 +207,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             // ═══ P1-1: Filter bar — campaign + round filter chips ═══
             SliverToBoxAdapter(
               child: DashboardFilterBar(
-                campaignLabel: ref.watch(campaignProvider).displayLabel,
-                campaignRound: ref.watch(campaignRoundProvider),
-                showRoundFilter: ref.watch(campaignProvider).value == 'integrated_activity',
+                campaignLabel: campaignDisplayLabel,
+                campaignRound: campaignRound,
+                showRoundFilter: showRoundFilter,
                 onCampaignTap: () => _showCampaignSelector(),
                 onRoundTap: () => _showRoundSelector(),
                 onRefresh: () {
@@ -206,8 +231,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ref.invalidate(
                     dashboardAnalyticsProvider(
                       AnalyticsFilter(
-                        campaignType: ref.watch(campaignProvider).value,
-                        campaignRound: ref.watch(campaignRoundProvider),
+                        campaignType: campaignValue,
+                        campaignRound: campaignRound,
                       ),
                     ),
                   );
@@ -217,7 +242,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             SliverToBoxAdapter(
               child: DashboardHeroHeader(
                 userName: userName,
-                campaignLabel: ref.watch(campaignProvider).displayLabel,
+                campaignLabel: campaignDisplayLabel,
                 unreadNotifications: unreadNotifs,
                 unreadCommunication: _computeUnreadCommunication(ref),
                 headerAnim: _headerAnim,
@@ -283,7 +308,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       onRetry: () => ref.invalidate(
                         dashboardAnalyticsProvider(
                           AnalyticsFilter(
-                            campaignType: ref.watch(campaignProvider).value,
+                            campaignType: campaignValue,
                           ),
                         ),
                       ),
@@ -304,19 +329,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   /// ═══ PERFORMANCE: Uses .select() to minimize rebuild scope ═══
   /// Previously: watched full memos + tickets lists → rebuild on ANY change
   /// Now: watches only the count → rebuild only when count changes
+  /// Compute unread communication count (memos + feedback tickets)
+  /// ═══ PERFORMANCE: Uses .select() to minimize rebuild scope ═══
+  /// Previously: watched full memos + tickets lists → rebuild on ANY change
+  /// Now: watches only the count → rebuild only when count changes
   int _computeUnreadCommunication(WidgetRef ref) {
     int count = 0;
-    // Unread memos (need acknowledgment) — watch only what we need
-    final memosAsync = ref.watch(memosProvider);
-    final memos = memosAsync.valueOrNull ?? [];
-    count += memos.where((m) => m.needsUrgentAcknowledgment).length;
+    // Unread memos (need acknowledgment) — watch only the filtered count
+    final memosCount = ref.watch(memosProvider.select((v) {
+      final memos = v.valueOrNull ?? [];
+      return memos.where((m) => m.needsUrgentAcknowledgment).length;
+    }));
+    count += memosCount;
 
-    // Pending feedback tickets — watch only what we need
-    final ticketsAsync = ref.watch(feedbackTicketsProvider('all'));
-    final tickets = ticketsAsync.valueOrNull ?? [];
-    count += tickets
-        .where((t) => t.status != 'resolved' && t.status != 'closed')
-        .length;
+    // Pending feedback tickets — watch only the filtered count
+    final ticketsCount = ref.watch(feedbackTicketsProvider('all').select((v) {
+      final tickets = v.valueOrNull ?? [];
+      return tickets.where((t) => t.status != 'resolved' && t.status != 'closed').length;
+    }));
+    count += ticketsCount;
 
     return count;
   }
@@ -362,20 +393,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   /// Fetch governorate ranking independently (not from analytics data)
   Widget _buildGovernorateRanking() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _getGovernorateRanking(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Container(
-            height: 180,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+    final rankingAsync = ref.watch(_governorateRankingProvider(
+      '${ref.read(campaignProvider).value}_${ref.read(campaignRoundProvider)}',
+    ));
+
+    return rankingAsync.when(
+      loading: () => Container(
+        height: 180,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Container(
+        height: 100,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Center(
+          child: Text('لا توجد بيانات للمحافظات', style: TextStyle(
+            fontFamily: 'Tajawal', fontSize: 13,
+            color: AppTheme.textHint.withValues(alpha: 0.5),
+          )),
+        ),
+      ),
+      data: (data) {
+        if (data.isEmpty) {
           return Container(
             height: 100,
             padding: const EdgeInsets.all(16),
@@ -393,7 +439,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         }
 
         final govCounts = <String, int>{};
-        for (final g in snapshot.data!) {
+        for (final g in data) {
           final name = g['name_ar'] as String? ?? 'غير محدد';
           final count = (g['count'] as num?)?.toInt() ?? 0;
           if (count > 0) govCounts[name] = count;
@@ -404,40 +450,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         return GovernorateRankingChart(governorateData: sortedGovs);
       },
     );
-  }
-
-  /// ═══ PERFORMANCE FIX: Cache the future to prevent re-fetching on every build ═══
-  /// Previously: FutureBuilder called _getGovernorateRanking() on every rebuild,
-  /// creating a NEW future each time → constant network calls + spinner flicker.
-  /// Now: future is created once and reused until campaign/round changes.
-  Future<List<Map<String, dynamic>>>? _govRankingFuture;
-  String? _govRankingCacheKey;
-
-  Future<List<Map<String, dynamic>>> _getGovernorateRanking() async {
-    final currentKey = '${ref.read(campaignProvider).value}_${ref.read(campaignRoundProvider)}';
-    if (_govRankingFuture != null && _govRankingCacheKey == currentKey) {
-      try {
-        return await _govRankingFuture!;
-      } catch (_) {
-        _govRankingFuture = null;
-      }
-    }
-    _govRankingCacheKey = currentKey;
-    _govRankingFuture = _fetchGovernorateRanking();
-    return _govRankingFuture!;
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchGovernorateRanking() async {
-    try {
-      final analyticsService = ref.read(analyticsServiceProvider);
-      final round = ref.read(campaignRoundProvider);
-      return await analyticsService.getGovernorateRanking(
-        campaignRound: ref.read(campaignProvider).value == 'integrated_activity' ? round : null,
-      ).timeout(const Duration(seconds: 15));
-    } catch (e) {
-      debugPrint('[Dashboard] Gov ranking failed: $e');
-      return [];
-    }
   }
 
   void _showCampaignSelector() {

@@ -67,11 +67,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       return;
     }
 
+    // ═══ PERFORMANCE: Check connectivity FIRST — if offline, don't wait for Supabase ═══
+    // Previously: waited 10s even when offline (useless)
+    // Now: if offline, proceed to dashboard immediately (offline mode)
+    if (!ConnectivityUtils.isOnline) {
+      debugPrint('[Splash] Offline — proceeding to dashboard immediately');
+      _hasNavigated = true;
+      _waitTimer?.cancel();
+      context.go('/dashboard');
+      return;
+    }
+
     // ═══ FIX: انتظر Supabase.initialize ينتهي (في الخلفية) ═══
     // main.dart يبدأ Supabase في الخلفية، نحن ننتظره هنا
-    // ═══ FIX: انتظار أقصر — 10 ثوانٍ كافية، بعدها ن proceed offline ═══
+    // ═══ FIX: انتظار أقصر — 5 ثوانٍ كافية ═══
     bool supabaseReady = false;
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 5; i++) {
       if (supabaseInitialized) {
         supabaseReady = true;
         break;
@@ -82,11 +93,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
 
     if (!supabaseReady) {
-      // ═══ FIX: Supabase لم يتهيأ بعد (اوفلاين مثلاً) — proceed immediately ═══
-      debugPrint('[Splash] Supabase not ready after 10s — proceeding offline');
+      // ═══ FIX: Supabase لم يتهيأ بعد — proceed immediately ═══
+      debugPrint('[Splash] Supabase not ready after 5s — proceeding offline');
       _hasNavigated = true;
       _waitTimer?.cancel();
-      // الروتينج سيتعامل مع الـ auth state، إذهب لـ /dashboard واترك الـ redirect يشتغل
       context.go('/dashboard');
       return;
     }

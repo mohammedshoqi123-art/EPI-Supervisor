@@ -278,13 +278,12 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     try {
       final campaign = ref.read(campaignProvider);
       final round = ref.read(campaignRoundProvider);
-      // ═══ PROPOSAL 4: Reverted to 500 — the encryption fix (Proposal 1+2)
-      // makes 500 items fast to process. For actual count, use getSubmissionsCount.
-      // Loading 5000 items was causing memory pressure + slow filtering.
+      // ═══ PERFORMANCE: Use 2000 limit (was 5000) — reduces memory pressure ═══
+      // Actual count comes from getSubmissionsCount, not from loading all rows
       final filter = SubmissionsFilter(
         campaignType: campaign.value,
         campaignRound: round,
-        limit: 5000,
+        limit: 2000,
         offset: 0,
       );
       final data = await ref.read(submissionsProvider(filter).future);

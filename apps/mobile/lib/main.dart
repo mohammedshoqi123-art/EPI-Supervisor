@@ -387,10 +387,7 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
       builder: (ctx) => AlertDialog(
         title: const Text('تم تعطيل حسابك', style: TextStyle(fontFamily: 'Cairo')),
         content: const Text(
-          'تم تعطيل حسابك من قبل المدير. سيتم تسجيل الخروج تلقائياً.
-
-'\
-              'سيتم حفظ مسوداتك محلياً قبل الخروج.',
+          'تم تعطيل حسابك من قبل المدير. سيتم تسجيل الخروج تلقائياً.\n\nسيتم حفظ مسوداتك محلياً قبل الخروج.',
           style: TextStyle(fontFamily: 'Tajawal'),
         ),
         actions: [

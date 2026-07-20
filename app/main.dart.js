@@ -78407,7 +78407,7 @@ return A.m($.AS().QI(),$async$rQ)
 case 7:m=a3
 if(!m){e=n.c
 if(e!=null)A.ju(e,"\u062e\u062f\u0645\u0629 \u0627\u0644\u0645\u0648\u0642\u0639 \u063a\u064a\u0631 \u0645\u0641\u0639\u0651\u0644\u0629")
-n.D(new A.boo(n))
+if(n.c!=null)n.D(new A.boo(n))
 s=1
 break}s=8
 return A.m($.AS().tj(),$async$rQ)
@@ -78419,12 +78419,11 @@ return A.m($.AS().u0(0),$async$rQ)
 case 11:l=a3
 if(l===B.k3){e=n.c
 if(e!=null)A.ju(e,"\u062a\u0645 \u0631\u0641\u0636 \u0625\u0630\u0646 \u0627\u0644\u0645\u0648\u0642\u0639")
-n.D(new A.bop(n))
+if(n.c!=null)n.D(new A.bop(n))
 s=1
 break}case 10:if(l===B.o0){e=n.c
-if(e!=null)A.ju(e,"\u062a\u0645 \u0631\u0641\u0636 \u0625\u0630\u0646 \u0627\u0644\u0645\u0648\u0642\u0639 \u0646\u0647\u0627\u0626\u064a\u0627\u064b. \u064a\u0631\u062c\u0649 \u062a\u0641\u0639\u064a\u0644\u0647 \u0645\u0646 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a")
-n.D(new A.boq(n))
-s=1
+if(e!=null){A.ju(e,"\u062a\u0645 \u0631\u0641\u0636 \u0625\u0630\u0646 \u0627\u0644\u0645\u0648\u0642\u0639 \u0646\u0647\u0627\u0626\u064a\u0627\u064b. \u064a\u0631\u062c\u0649 \u062a\u0641\u0639\u064a\u0644\u0647 \u0645\u0646 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a")
+n.D(new A.boq(n))}s=1
 break}k=null
 p=13
 s=16
@@ -78452,11 +78451,11 @@ case 12:s=4
 break
 case 15:if(k==null){e=n.c
 if(e!=null)A.ju(e,u.a4)
-n.D(new A.bos(n))
+if(n.c!=null)n.D(new A.bos(n))
 s=1
 break}j=k.a
 i=k.b
-n.D(new A.bot(n,j,i))
+if(n.c!=null)n.D(new A.bot(n,j,i))
 for(e=n.fx,c=e.length,b=n.x,a=0;a<e.length;e.length===c||(0,A.M)(e),++a){h=e[a]
 if(J.h(J.f(h,"type"),"gps")){g=A.b_(J.f(h,"key"))
 b.k(0,g,J.aAE(j,6)+", "+J.aAE(i,6))}}n.acn()
@@ -78468,7 +78467,7 @@ break
 case 4:p=3
 a1=o
 f=A.U(a1)
-n.D(new A.bou(n))
+if(n.c!=null)n.D(new A.bou(n))
 e=n.c
 if(e!=null)A.ju(e,"\u0641\u0634\u0644 \u0627\u0644\u062d\u0635\u0648\u0644 \u0639\u0644\u0649 \u0627\u0644\u0645\u0648\u0642\u0639: "+J.aX(f))
 s=6

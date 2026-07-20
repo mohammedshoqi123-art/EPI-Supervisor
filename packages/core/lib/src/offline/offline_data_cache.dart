@@ -637,6 +637,21 @@ class OfflineDataCache {
     return null;
   }
 
+  /// Find cached list by key prefix — returns first match
+  /// Used as fallback when specific cache key is empty
+  List<Map<String, dynamic>>? findCachedListByPrefix(String prefix) {
+    try {
+      final allKeys = _offline.getCacheKeys();
+      for (final key in allKeys) {
+        if (key.startsWith(prefix)) {
+          final result = getCachedDataList(key);
+          if (result != null && result.isNotEmpty) return result;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   /// Get cache status for debugging
   Map<String, dynamic> getDebugInfo() {
     return {

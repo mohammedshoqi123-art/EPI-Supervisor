@@ -421,26 +421,45 @@ String campaignRoundLabel(int round) {
 final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final campaign = ref.watch(campaignProvider);
   final cache = await ref.watch(offlineDataCacheProvider.future);
-  final allForms = await cache.getList(
-    'forms_${campaign.value}',
-    () => ref
-        .read(databaseServiceProvider)
-        .getForms(campaignType: campaign.value),
-    maxAge:
-        const Duration(hours: 24), // ═══ Cache 7 days — sync button refreshes ═══
-  );
-  // ═══ FIX: Filter out inactive forms client-side as extra safety ═══
-  // RLS should handle this, but cache might have stale data
-  // ═══ OFFLINE FIX: When offline, include ALL cached forms (even inactive) ═══
-  // Previously: filtered out is_active != true → forms disappeared offline
-  // Now: only filter when online (server data is authoritative)
+  final campaignKey = 'forms_' + campaign.value;
+
+  // OFFLINE-FIRST: Always try cache first, never lose forms
+  List<Map<String, dynamic>>? allForms;
+
+  // 1. Try campaign-specific cache (works online and offline)
+  try {
+    allForms = await cache.getList(
+      campaignKey,
+      () => ref.read(databaseServiceProvider).getForms(campaignType: campaign.value),
+      maxAge: const Duration(hours: 24),
+    );
+  } catch (_) {}
+
+  // 2. Fallback: try forms_all cache (cached by sync service warmup)
+  if (allForms == null || allForms.isEmpty) {
+    try {
+      final fallback = cache.getCachedDataList('forms_all');
+      if (fallback != null && fallback.isNotEmpty) allForms = fallback;
+    } catch (_) {}
+  }
+
+  // 3. Fallback: try any forms_* key in persistent cache
+  if (allForms == null || allForms.isEmpty) {
+    try {
+      final anyForms = cache.findCachedListByPrefix('forms_');
+      if (anyForms != null && anyForms.isNotEmpty) allForms = anyForms;
+    } catch (_) {}
+  }
+
+  if (allForms == null || allForms.isEmpty) {
+    throw Exception('No forms cached — check connection');
+  }
+
+  // Filter inactive only when online
   if (ConnectivityUtils.isOnline) {
     return allForms.where((f) => f['is_active'] == true).toList();
-  } else {
-    // Offline: return ALL forms from cache — don't filter
-    // The user needs access to all forms they previously had
-    return allForms;
   }
+  return allForms;
 });
 
 /// ═══ PERFORMANCE: AutoDispose family — cleans up unused filter instances ═══

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/memos_feedback_service.dart';
+import '../providers/app_providers.dart';
 
 /// ═══════════════════════════════════════════════════════════
 /// DailyBriefWidget — موجز الصباح الذكي
@@ -370,8 +371,8 @@ class AchievementBoard extends ConsumerWidget {
               return _achievementItem(
                 icon: '🥇',
                 title: 'أعلى محافظة في الإرساليات',
-                value: topGov['name_ar'] || topGov['governorate_name'] || 'غير محدد',
-                metric: '${topGov['total'] || 0} إرسالية',
+                value: topGov['name_ar'] ?? topGov['governorate_name'] ?? 'غير محدد',
+                metric: '${topGov['total'] ?? 0} إرسالية',
                 color: const Color(0xFFFFD700),
               );
             },
@@ -382,7 +383,7 @@ class AchievementBoard extends ConsumerWidget {
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
             data: (data) {
-              final totalSubs = data['submissions']?['total'] || 0;
+              final totalSubs = data['submissions']?['total'] ?? 0;
               return Column(
                 children: [
                   _achievementItem(

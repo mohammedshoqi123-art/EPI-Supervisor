@@ -36,7 +36,7 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
   // On mobile, initialize Hive with timeout + graceful fallback
   try {
     await manager.init().timeout(
-      const Duration(seconds: 15),
+      const Duration(seconds: 5),  // ═══ FIX: 5s (was 15s) — don't block UI too long ═══
       onTimeout: () {
         debugPrint('[offlineManagerProvider] Hive timeout — degraded mode');
       },

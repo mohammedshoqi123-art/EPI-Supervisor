@@ -348,7 +348,7 @@ class ApiClient {
         functionName,
         params: params,
       ).timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 15),  // ═══ FIX: 15s (was 30s) — don't block UI too long ═══
         onTimeout: () => throw TimeoutException(
           'RPC $functionName timed out',
         ),
@@ -762,7 +762,7 @@ class ApiClient {
 
   // ═══ FIX A2: Reduced timeout from 90s to 30s — 90s was too long for mobile users ═══
   // Edge Function cold starts are typically ≤10s. 30s gives headroom without freezing UI.
-  static const _functionTimeout = Duration(seconds: 30);
+  static const _functionTimeout = Duration(seconds: 20);  // ═══ FIX: 20s (was 30s) ═══
 
   // ═══ FIX A1: Retry logic for network errors ═══
   // Retries 3 times with exponential backoff (1s, 2s, 4s) for transient failures.

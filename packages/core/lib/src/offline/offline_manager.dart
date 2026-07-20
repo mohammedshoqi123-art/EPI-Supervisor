@@ -23,6 +23,7 @@ class OfflineManager {
   static const String _draftsKey = 'drafts';
   static const String _cacheKey = 'cache';
   static const String _conflictsKey = 'sync_conflicts';
+  static const String _failedSubmissionsKey = 'failed_submissions';  // ═══ FIX 2.1: Store failed sync items ═══
 
   static const int _maxRetries = 3;
   // ═══ FIX O3: Increased from 1MB to 5MB — 1MB was rejecting submissions with 2+ photos ═══
@@ -515,6 +516,133 @@ class OfflineManager {
       debugPrint(
         'Sync summary: $success ok, $duplicates dup, $conflicts conflict, $errors error',
       );
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FAILED SUBMISSIONS — FIX 2.1: Store failed sync items for recovery
+  // ═══════════════════════════════════════════════════════════════════════
+  // Instead of permanently deleting items after max retries,
+  // move them to a separate storage so users can retry later.
+
+  /// Save a failed submission (moved from sync queue after max retries)
+  Future<void> saveFailedSubmission(Map<String, dynamic> item, String error) async {
+    return _withWriteLock(() async {
+      try {
+        final failed = _getFailedSubmissions();
+        final offlineId = item['offline_id'] as String? ?? 'unknown';
+        failed[offlineId] = {
+          'data': item,
+          'error': error,
+          'failed_at': DateTime.now().toIso8601String(),
+          'retry_count': item['retry_count'] ?? 0,
+        };
+        final encrypted = _encryption.encrypt(jsonEncode(failed));
+        await _safeBox?.put(_failedSubmissionsKey, encrypted);
+        if (kDebugMode) debugPrint('[OfflineManager] Saved failed submission: $offlineId');
+      } catch (e) {
+        if (kDebugMode) debugPrint('[OfflineManager] Failed to save failed submission: $e');
+      }
+    });
+  }
+
+  /// Get all failed submissions
+  List<Map<String, dynamic>> getFailedSubmissions() {
+    final failed = _getFailedSubmissions();
+    return failed.entries.map((e) {
+      final data = Map<String, dynamic>.from(e.value['data'] ?? {});
+      data['_failed_at'] = e.value['failed_at'];
+      data['_error'] = e.value['error'];
+      data['_retry_count'] = e.value['retry_count'];
+      return data;
+    }).toList();
+  }
+
+  /// Get count of failed submissions
+  int get failedSubmissionCount => _getFailedSubmissions().length;
+
+  /// Retry a failed submission — moves it back to sync queue
+  Future<void> retryFailedSubmission(String offlineId) async {
+    return _withWriteLock(() async {
+      try {
+        final failed = _getFailedSubmissions();
+        if (!failed.containsKey(offlineId)) return;
+
+        final item = failed[offlineId]['data'] as Map<String, dynamic>;
+        item['retry_count'] = 0;  // Reset retry count
+        item.remove('_failed_at');
+        item.remove('_error');
+
+        // Add back to sync queue
+        final queue = _getQueue();
+        queue.add(item);
+        await _saveQueue(queue);
+
+        // Remove from failed
+        failed.remove(offlineId);
+        final encrypted = _encryption.encrypt(jsonEncode(failed));
+        await _safeBox?.put(_failedSubmissionsKey, encrypted);
+
+        _invalidatePendingCount();
+        if (kDebugMode) debugPrint('[OfflineManager] Retried failed submission: $offlineId');
+      } catch (e) {
+        if (kDebugMode) debugPrint('[OfflineManager] Failed to retry submission: $e');
+      }
+    });
+  }
+
+  /// Retry ALL failed submissions
+  Future<int> retryAllFailedSubmissions() async {
+    return _withWriteLock(() async {
+      try {
+        final failed = _getFailedSubmissions();
+        if (failed.isEmpty) return 0;
+
+        final queue = _getQueue();
+        int count = 0;
+        for (final entry in failed.entries) {
+          final item = Map<String, dynamic>.from(entry.value['data'] ?? {});
+          item['retry_count'] = 0;
+          item.remove('_failed_at');
+          item.remove('_error');
+          queue.add(item);
+          count++;
+        }
+        await _saveQueue(queue);
+
+        // Clear all failed
+        await _safeBox?.delete(_failedSubmissionsKey);
+        _invalidatePendingCount();
+        if (kDebugMode) debugPrint('[OfflineManager] Retried $count failed submissions');
+        return count;
+      } catch (e) {
+        if (kDebugMode) debugPrint('[OfflineManager] Failed to retry all: $e');
+        return 0;
+      }
+    });
+  }
+
+  /// Delete a specific failed submission (user chose to discard)
+  Future<void> deleteFailedSubmission(String offlineId) async {
+    return _withWriteLock(() async {
+      try {
+        final failed = _getFailedSubmissions();
+        failed.remove(offlineId);
+        final encrypted = _encryption.encrypt(jsonEncode(failed));
+        await _safeBox?.put(_failedSubmissionsKey, encrypted);
+      } catch (e) {
+        if (kDebugMode) debugPrint('[OfflineManager] Failed to delete failed submission: $e');
+      }
+    });
+  }
+
+  Map<String, dynamic> _getFailedSubmissions() {
+    final data = _safeBox?.get(_failedSubmissionsKey);
+    if (data == null || data.isEmpty) return {};
+    try {
+      return Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
+    } catch (_) {
+      return {};
     }
   }
 

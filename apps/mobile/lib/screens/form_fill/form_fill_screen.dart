@@ -727,6 +727,38 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     }
 
     // ═══ MOBILE: Use offline storage + sync queue ═══
+
+    // ═══ FIX: Check if campaign round is locked before submitting ═══
+    final campaignRound = ref.read(campaignRoundProvider);
+    final campaignType = ref.read(campaignProvider).value;
+    if (ConnectivityUtils.isOnline) {
+      try {
+        final db = ref.read(databaseServiceProvider);
+        final isLocked = await db.isRoundLocked(campaignType, campaignRound).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => false,
+        );
+        if (isLocked && mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'الجولة $campaignRound مغلقة — لا يمكن إدخال بيانات. يرجى اختيار الجولة التالية.',
+                style: const TextStyle(fontFamily: 'Tajawal'),
+              ),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+          return;
+        }
+      } catch (e) {
+        // If check fails, allow submission (don't block user)
+        debugPrint('[Submit] Round lock check failed: $e — allowing submission');
+      }
+    }
+
     final OfflineManager offline;
     try {
       offline = await ref.read(offlineManagerProvider.future).timeout(
@@ -951,39 +983,50 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
     if (!mounted) return;
 
-    try {
-      final offline = await ref.read(offlineManagerProvider.future).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException('Offline storage not ready for auto-save');
-        },
-      );
-      if (!mounted) return;
-      await offline.saveDraft(
-        _draftId,
-        widget.formId,
-        Map<String, dynamic>.from(_formData),
-      );
-      _hasUnsavedChanges = false;
-      _lastSavedDataHash = currentHash; // Track saved state (already computed)
-      _autoSaveFailCount = 0; // Reset on success
-      if (showFeedback && mounted) {
-        context.showSuccess('تم الحفظ التلقائي');
-      }
-    } on TimeoutException {
-      _autoSaveFailCount++;
-      // Show warning after 3 consecutive failures
-      if (_autoSaveFailCount >= 3 && mounted) {
-        context.showError('⚠️ الحفظ التلقائي يفشل — تحقق من التخزين المحلي');
-        _autoSaveFailCount = 0;
-      }
-    } catch (e) {
-      _autoSaveFailCount++;
-      debugPrint('[AutoSave] Failed: $e');
-      // Show warning after 3 consecutive failures
-      if (_autoSaveFailCount >= 3 && mounted) {
-        context.showError('⚠️ الحفظ التلقائي يفشل: ${e.toString()}');
-        _autoSaveFailCount = 0;
+    // ═══ FIX 2.2: Retry logic — 3 attempts with exponential backoff ═══
+    // Previously: single attempt, silent failure
+    // Now: 3 attempts (immediate, 1s, 3s), then show warning
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (attempt > 0) {
+          // Exponential backoff: 1s, 3s
+          await Future.delayed(Duration(seconds: attempt == 1 ? 1 : 3));
+          if (!mounted) return;
+        }
+
+        final offline = await ref.read(offlineManagerProvider.future).timeout(
+          const Duration(seconds: 5),  // ═══ FIX: 5s (was 10s) ═══
+          onTimeout: () {
+            throw TimeoutException('Offline storage not ready for auto-save');
+          },
+        );
+        if (!mounted) return;
+        await offline.saveDraft(
+          _draftId,
+          widget.formId,
+          Map<String, dynamic>.from(_formData),
+        );
+        _hasUnsavedChanges = false;
+        _lastSavedDataHash = currentHash; // Track saved state (already computed)
+        _autoSaveFailCount = 0; // Reset on success
+        if (showFeedback && mounted) {
+          context.showSuccess('تم الحفظ التلقائي');
+        }
+        return; // Success — exit retry loop
+      } on TimeoutException {
+        _autoSaveFailCount++;
+        debugPrint('[AutoSave] Attempt ${attempt + 1}/3 timed out');
+        if (attempt == 2 && _autoSaveFailCount >= 3 && mounted) {
+          context.showError('⚠️ الحفظ التلقائي يفشل — تحقق من التخزين المحلي');
+          _autoSaveFailCount = 0;
+        }
+      } catch (e) {
+        _autoSaveFailCount++;
+        debugPrint('[AutoSave] Attempt ${attempt + 1}/3 failed: $e');
+        if (attempt == 2 && _autoSaveFailCount >= 3 && mounted) {
+          context.showError('⚠️ الحفظ التلقائي يفشل: ${e.toString()}');
+          _autoSaveFailCount = 0;
+        }
       }
     }
   }

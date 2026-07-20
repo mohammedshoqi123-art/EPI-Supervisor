@@ -103,6 +103,7 @@ const navSections: NavSection[] = [
       { icon: Users, label: 'المستخدمون', href: '/users', roles: ['admin', 'central'] },
       { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
       { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
+      { icon: Calendar, label: 'إدارة الجولات', href: '/campaign-rounds', roles: ['admin', 'central'] },
     ],
   },
   {

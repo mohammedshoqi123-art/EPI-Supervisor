@@ -184,7 +184,7 @@ final _readinessSubsProvider = FutureProvider.family
           campaignType: params.campaignType,
           campaignRound: params.campaignRound,
           limit: 2000, // ═══ FIX: Accurate analytics ═══
-          lean: true, // ═══ PERFORMANCE: Skip 'data' column — 84% less bandwidth ═══
+          lean: false, // ═══ FIX: Analytics NEEDS 'data' column — lean was causing empty analytics ═══
         ),
     maxAge: const Duration(hours: 2),
   );
@@ -202,7 +202,7 @@ final _supervisionSubsProvider = FutureProvider.family
           campaignType: params.campaignType,
           campaignRound: params.campaignRound,
           limit: 2000, // ═══ FIX: Accurate analytics ═══
-          lean: true, // ═══ PERFORMANCE: Skip 'data' column — 84% less bandwidth ═══
+          lean: false, // ═══ FIX: Analytics NEEDS 'data' column — lean was causing empty analytics ═══
         ),
     maxAge: const Duration(hours: 2),
   );
@@ -492,7 +492,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         formId: _readinessFormId,
         campaignRound: round,
         limit: 2000,
-      lean: true, // ═══ PERFORMANCE: Skip data column ═══
+      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
       );
       if (readinessSubs.isNotEmpty) {
         readinessData = _processReadinessData(readinessSubs);
@@ -502,7 +502,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         formId: _supervisionFormId,
         campaignRound: round,
         limit: 2000,
-      lean: true, // ═══ PERFORMANCE: Skip data column ═══
+      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
       );
       if (supervisionSubs.isNotEmpty) {
         complianceData = _processComplianceData(supervisionSubs);
@@ -555,7 +555,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignType: campaign,
         campaignRound: round,
         limit: 2000,
-      lean: true, // ═══ PERFORMANCE: Skip data column ═══
+      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
       );
 
       // Aggregate by user
@@ -625,7 +625,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignType: campaign,
         campaignRound: round,
         limit: 2000,
-      lean: true, // ═══ PERFORMANCE: Skip data column ═══
+      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
       );
 
       if (subs.isEmpty) {
@@ -758,7 +758,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignType: campaign,
         campaignRound: currentRound,
         limit: 2000,
-      lean: true, // ═══ PERFORMANCE: Skip data column ═══
+      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
       );
 
       final prevRound = currentRound > 1 ? currentRound - 1 : 1;
@@ -766,7 +766,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         campaignType: campaign,
         campaignRound: prevRound,
         limit: 2000,
-      lean: true, // ═══ PERFORMANCE: Skip data column ═══
+      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
       );
 
       if (mounted) {
@@ -2585,7 +2585,7 @@ final _assessmentSubsProvider = FutureProvider.family
             campaignType: params.campaignType,
             campaignRound: params.campaignRound,
             limit: 2000,
-            lean: true, // ═══ PERFORMANCE: Skip 'data' column ═══
+            lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
           ),
       maxAge: const Duration(hours: 2),
     );

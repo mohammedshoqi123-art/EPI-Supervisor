@@ -291,6 +291,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 },
               ),
             ),
+            // ═══ Communication Center Quick Access Card ═══
+            SliverToBoxAdapter(
+              child: _CommunicationQuickCard(
+                unreadCommunication: _computeUnreadCommunication(ref),
+                onTap: () => context.go('/chat'),
+              ),
+            ),
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: analytics.when(
@@ -569,6 +576,126 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           ),
         ),
       ],
+    );
+  }
+}
+
+// ═══ Communication Quick Access Card — بارز في الصفحة الرئيسية ═══
+class _CommunicationQuickCard extends StatelessWidget {
+  final int unreadCommunication;
+  final VoidCallback onTap;
+
+  const _CommunicationQuickCard({
+    required this.unreadCommunication,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: unreadCommunication > 0
+                    ? [const Color(0xFFFF8F00), const Color(0xFFFF6D00)]
+                    : [const Color(0xFF6366F1), const Color(0xFF4F46E5)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: (unreadCommunication > 0
+                          ? const Color(0xFFFF8F00)
+                          : const Color(0xFF6366F1))
+                      .withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    unreadCommunication > 0
+                        ? Icons.mark_unread_chat_alt_rounded
+                        : Icons.forum_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'مركز الاتصال',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        unreadCommunication > 0
+                            ? '$unreadCommunication تذاكر/تعاميم جديدة بانتظارك'
+                            : 'التذاكر، التعاميم، التغذية الراجعة، والمحادثات',
+                        style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (unreadCommunication > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$unreadCommunication',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFFFF6D00),
+                      ),
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white.withValues(alpha: 0.7),
+                    size: 18,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

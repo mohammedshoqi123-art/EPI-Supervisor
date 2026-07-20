@@ -35,6 +35,7 @@ const PublicDashboardPage = lazy(() => import('@/pages/PublicDashboardPage'))
 const MemosPage = lazy(() => import('@/pages/MemosPage'))
 const FeedbackPage = lazy(() => import('@/pages/FeedbackPage'))
 const BotKnowledgePage = lazy(() => import('@/pages/BotKnowledgePage'))
+const CampaignRoundsPage = lazy(() => import('@/pages/CampaignRoundsPage'))
 
 // ═══ Page Loader ═══
 function PageLoader() {
@@ -160,6 +161,7 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRoles={['admin', 'central']} />}>
             <Route element={<AppLayout />}>
               <Route path="users" element={<LazyPage name="المستخدمون"><UsersPage /></LazyPage>} />
+              <Route path="campaign-rounds" element={<LazyPage name="إدارة الجولات"><CampaignRoundsPage /></LazyPage>} />
             </Route>
           </Route>
 

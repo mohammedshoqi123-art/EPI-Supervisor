@@ -167,11 +167,22 @@ class ChatStore {
   static const _box = 'ai_chat_v3';
   static const _key = 'msgs';
 
+  // ═══ FIX 3.2: Cache box — don't reopen on every save/load ═══
+  // Previously: Hive.openBox() called on every save/load/count = slow I/O
+  // Now: open once, reuse cached instance
+  static Box<String>? _cachedBox;
+
+  static Future<Box<String>> _getBox() async {
+    if (_cachedBox != null && _cachedBox!.isOpen) return _cachedBox!;
+    _cachedBox = await Hive.openBox<String>(_box);
+    return _cachedBox!;
+  }
+
   /// Load all messages from local storage.
   /// Returns empty list on error or if no messages are stored.
   static Future<List<ChatMsg>> load() async {
     try {
-      final box = await Hive.openBox<String>(_box);
+      final box = await _getBox();
       final raw = box.get(_key);
       if (raw == null || raw.isEmpty) return [];
       return (jsonDecode(raw) as List)
@@ -188,7 +199,7 @@ class ChatStore {
   static Future<void> save(List<ChatMsg> msgs) async {
     try {
       final trimmed = msgs.length > 60 ? msgs.sublist(msgs.length - 60) : msgs;
-      final box = await Hive.openBox<String>(_box);
+      final box = await _getBox();
       await box.put(_key, jsonEncode(trimmed.map((m) => m.toJson()).toList()));
     } catch (e) {
       if (kDebugMode) debugPrint('[ChatStore] save error: $e');
@@ -198,9 +209,9 @@ class ChatStore {
   /// Clear all stored messages.
   static Future<void> clear() async {
     try {
-      final box = await Hive.openBox<String>(_box);
+      final box = await _getBox();
       await box.delete(_key);
-      unawaited(box.close());
+      // Don't close — let it stay cached for next use
     } catch (e) {
       if (kDebugMode) debugPrint('[ChatStore] clear error: $e');
     }
@@ -209,7 +220,7 @@ class ChatStore {
   /// Get the count of stored messages without loading them all.
   static Future<int> count() async {
     try {
-      final box = await Hive.openBox<String>(_box);
+      final box = await _getBox();
       final raw = box.get(_key);
       if (raw == null || raw.isEmpty) return 0;
       return (jsonDecode(raw) as List).length;

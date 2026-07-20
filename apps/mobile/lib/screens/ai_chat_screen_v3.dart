@@ -48,6 +48,15 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   FlutterTts? _tts;
   bool _isSpeaking = false;
 
+  // ═══ Debounce for ChatStore.save() — prevents JSON serialization on every message ═══
+  Timer? _saveDebounce;
+  void _debouncedSave() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 2), () {
+      if (_mounted) ChatStore.save(_msgs);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -84,6 +93,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   @override
   void dispose() {
     _mounted = false;
+    _saveDebounce?.cancel();
     _tts?.stop();
     _ctrl.dispose();
     _scroll.dispose();
@@ -133,7 +143,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     // Start typing animation only during loading
     _typingAnimCtrl.repeat();
     _scrollDown();
-    unawaited(ChatStore.save(_msgs));
+    _debouncedSave();
 
     // Save user message to thread
     unawaited(_saveMessageToThread(role: 'user', content: text));
@@ -151,7 +161,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
             _loading = false;
             _typingAnimCtrl.stop();
           });
-          unawaited(ChatStore.save(_msgs));
+          _debouncedSave();
         }
         return;
       }
@@ -184,7 +194,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 _loading = false;
       _typingAnimCtrl.stop();
               });
-              unawaited(ChatStore.save(_msgs));
+              _debouncedSave();
             }
             return;
           } catch (_) {
@@ -210,7 +220,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 _loading = false;
       _typingAnimCtrl.stop();
               });
-              unawaited(ChatStore.save(_msgs));
+              _debouncedSave();
             }
             return;
           } catch (_) {
@@ -299,7 +309,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           _typingAnimCtrl.stop();
         });
       }
-      unawaited(ChatStore.save(_msgs));
+      _debouncedSave();
 
       // Save assistant response to thread
       if (_msgs.isNotEmpty && _msgs.last.role == 'assistant') {
@@ -326,7 +336,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         _loading = false;
       _typingAnimCtrl.stop();
       });
-      unawaited(ChatStore.save(_msgs));
+      _debouncedSave();
     } catch (e) {
       if (!_mounted) return;
       final errorMsg = e.toString();
@@ -347,7 +357,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           _loading = false;
           _typingAnimCtrl.stop();
         });
-        unawaited(ChatStore.save(_msgs));
+        _debouncedSave();
         _scrollDown();
         return;
       }
@@ -373,7 +383,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         _loading = false;
       _typingAnimCtrl.stop();
       });
-      unawaited(ChatStore.save(_msgs));
+      _debouncedSave();
     }
     _scrollDown();
   }
@@ -820,7 +830,7 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
       _showWelcome = true;
       _currentThreadId = null;
     });
-    unawaited(ChatStore.save(_msgs));
+    _debouncedSave();
 
     // Create new thread in DB
     try {
@@ -1819,7 +1829,7 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
                         _msgs.clear();
                         _showWelcome = true;
                       });
-                      unawaited(ChatStore.save(_msgs));
+                      _debouncedSave();
                     },
                     enabled: true,
                   ),

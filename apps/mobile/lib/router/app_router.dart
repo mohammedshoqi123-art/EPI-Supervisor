@@ -222,6 +222,7 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  DateTime? _lastNavTap;
 
   @override
   Widget build(BuildContext context) {
@@ -303,6 +304,11 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 
   void _onItemTapped(BuildContext context, int index) {
+    // ═══ Debounce: prevent rapid navigation taps ═══
+    final now = DateTime.now();
+    if (_lastNavTap != null && now.difference(_lastNavTap!) < const Duration(milliseconds: 400)) return;
+    _lastNavTap = now;
+
     switch (index) {
       case 0:
         context.go('/dashboard');
@@ -333,6 +339,7 @@ class AppDrawer extends ConsumerStatefulWidget {
 class _AppDrawerState extends ConsumerState<AppDrawer> {
   bool _isSyncingConfig = false;
   String _syncProgress = '';
+  DateTime? _lastNavTap;
 
   /// مزامنة ذكية — تستخدم full_sync_provider
   Future<void> _syncConfig() async {
@@ -437,7 +444,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       userName: authState?.fullName ?? 'مستخدم',
       userRole: authState?.role?.nameAr,
       userRoleLevel: authState?.role?.hierarchyLevel ?? 1,
-      onNavigate: (route) => context.go(route),
+      onNavigate: (route) {
+        // ═══ Debounce: prevent rapid drawer navigation ═══
+        final now = DateTime.now();
+        if (_lastNavTap != null && now.difference(_lastNavTap!) < const Duration(milliseconds: 400)) return;
+        _lastNavTap = now;
+        context.go(route);
+      },
       onLogout: () async {
         await ref.read(authRepositoryProvider).signOut();
       },

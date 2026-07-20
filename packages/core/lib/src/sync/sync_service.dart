@@ -214,23 +214,29 @@ class SyncService {
           }
         }
 
-        // أرشف العناصر الفاشلة نهائياً (إزالة من الطابور + تسجيل في السجل)
-        // ═══ PROPOSAL 3: Batch remove — collect IDs, remove once ═══
+        // ═══ FIX 2.1: Save failed items for recovery instead of permanent deletion ═══
+        // Previously: items were permanently deleted after max retries
+        // Now: items are saved to failed_submissions storage for user recovery
         final archivedIds = <String>[];
         for (final item in toArchive) {
           final offlineId = item['offline_id'] as String? ?? '';
           archivedIds.add(offlineId);
+          // Save to failed submissions storage (not permanent deletion)
+          await _offline.saveFailedSubmission(
+            item,
+            'Max retries ($_maxRetries) exceeded',
+          );
           if (kDebugMode)
-            debugPrint('[SyncService] Archived failed item: $offlineId');
+            debugPrint('[SyncService] Saved failed item for recovery: $offlineId');
           result.archived++;
           result.errors.add(
             SyncError(
               offlineId: offlineId,
-              error: 'Max retries ($_maxRetries) exceeded — removed from queue',
+              error: 'Max retries ($_maxRetries) exceeded — saved for recovery',
             ),
           );
         }
-        // Batch remove all archived items at once
+        // Batch remove all archived items from sync queue
         if (archivedIds.isNotEmpty) {
           await _offline.removeFromQueueBatch(archivedIds);
         }

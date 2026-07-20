@@ -63,10 +63,11 @@ class ConnectivityUtils {
       return;
     }
 
-    // ═══ FIX: Start offline — don't assume connectivity ═══
-    // Previously: _isOnline = true → API calls fail after 30s timeout
-    // Now: start offline, probe immediately, update within seconds
-    _isOnline = false;
+    // ═══ FIX: Start online — assume connectivity until proven otherwise ═══
+    // Previously: _isOnline = false → offline banner flashes on every app start
+    // Now: start online, probe in background, update if actually offline
+    // This eliminates the "offline flash" that confuses users
+    _isOnline = true;
 
     try {
       final result = await _connectivity.checkConnectivity().timeout(
@@ -92,9 +93,8 @@ class ConnectivityUtils {
     _startRecheckTimer();
 
     // ═══ PERFORMANCE: Run initial probe in background — don't block initialize() ═══
-    if (_isOnline) {
-      _probeAndEmit();
-    }
+    // Always probe to verify actual connectivity (regardless of initial state)
+    _probeAndEmit();
   }
 
   static void _handleLinkChange(bool linkUp) {

@@ -410,6 +410,65 @@ class DatabaseService {
     return _api.callFunction(SupabaseConfig.fnSubmitForm, data);
   }
 
+  // ═══ ROUND LOCK — Check if a campaign round is locked ═══
+  Future<bool> isRoundLocked(String campaignType, int roundNumber) async {
+    try {
+      final result = await _api.rpc(
+        'is_round_locked',
+        params: {
+          'p_campaign_type': campaignType,
+          'p_round_number': roundNumber,
+        },
+      );
+      if (result.isNotEmpty) {
+        return result.first['is_round_locked'] as bool? ?? false;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[DatabaseService] isRoundLocked error: $e');
+      return false; // Default to not locked on error
+    }
+  }
+
+  // ═══ ROUND LOCK — Get all rounds for a campaign ═══
+  Future<List<Map<String, dynamic>>> getCampaignRounds(String campaignType) async {
+    try {
+      return await _api.select(
+        'campaign_rounds',
+        filters: {'campaign_type': campaignType},
+        orderBy: 'round_number',
+        ascending: true,
+      );
+    } catch (e) {
+      debugPrint('[DatabaseService] getCampaignRounds error: $e');
+      return [];
+    }
+  }
+
+  // ═══ ROUND LOCK — Toggle round lock (admin only) ═══
+  Future<bool> toggleRoundLock(
+    String campaignType,
+    int roundNumber,
+    bool locked, {
+    String? reason,
+  }) async {
+    try {
+      final result = await _api.rpc(
+        'toggle_round_lock',
+        params: {
+          'p_campaign_type': campaignType,
+          'p_round_number': roundNumber,
+          'p_locked': locked,
+          'p_reason': reason,
+        },
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[DatabaseService] toggleRoundLock error: $e');
+      return false;
+    }
+  }
+
   Future<Map<String, dynamic>> updateSubmissionStatus(
     String id,
     String status, {

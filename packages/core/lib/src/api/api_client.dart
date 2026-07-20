@@ -81,11 +81,18 @@ class ApiClient {
         finalQuery = finalQuery.limit(effectiveLimit);
       }
 
-      return List<Map<String, dynamic>>.from(await finalQuery);
+      return List<Map<String, dynamic>>.from(
+        await finalQuery.timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Query timeout for $table'),
+        ),
+      );
     } on PostgrestException catch (e) {
       throw _mapPostgrestException(e);
     } on FunctionException catch (e) {
       throw _mapFunctionException(e);
+    } on TimeoutException {
+      throw NetworkException('انتهت مهلة الاتصال لجدول $table');
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'select($table)');
       if (_isNetworkError(e)) throw const NetworkException();
@@ -137,9 +144,16 @@ class ApiClient {
         finalQuery = finalQuery.limit(effectiveLimit);
       }
 
-      return List<Map<String, dynamic>>.from(await finalQuery);
+      return List<Map<String, dynamic>>.from(
+        await finalQuery.timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Query timeout for $table'),
+        ),
+      );
     } on PostgrestException catch (e) {
       throw _mapPostgrestException(e);
+    } on TimeoutException {
+      throw NetworkException('انتهت مهلة الاتصال لجدول $table');
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'selectIn($table)');
       if (_isNetworkError(e)) throw const NetworkException();
@@ -174,8 +188,14 @@ class ApiClient {
           }
         }
       }
-      final result = await query.limit(10000);
+      final result = await query.limit(10000).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Count timeout for $table'),
+      );
       return result.length;
+    } on TimeoutException {
+      debugPrint('[ApiClient] count($table) timeout');
+      throw NetworkException('انتهت مهلة العد لجدول $table');
     } catch (e) {
       debugPrint('[ApiClient] count($table) error: $e');
       // ═══ FIX A4: Don't silently return 0 — rethrow network errors ═══
@@ -198,13 +218,18 @@ class ApiClient {
           query = query.eq(key, value);
         }
       });
-      final result = await query.maybeSingle();
+      final result = await query.maybeSingle().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Query timeout for $table'),
+      );
       if (result == null) throw NotFoundException('Record not found in $table');
       return result;
     } on AppException {
       rethrow;
     } on PostgrestException catch (e) {
       throw _mapPostgrestException(e);
+    } on TimeoutException {
+      throw NetworkException('انتهت مهلة الاتصال لجدول $table');
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'selectOne($table)');
       if (_isNetworkError(e)) throw const NetworkException();
@@ -221,11 +246,20 @@ class ApiClient {
     String select = '*',
   }) async {
     try {
-      final result =
-          await _safeClient.from(table).insert(data).select(select).single();
+      final result = await _safeClient
+          .from(table)
+          .insert(data)
+          .select(select)
+          .single()
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw TimeoutException('Insert timeout for $table'),
+          );
       return result;
     } on PostgrestException catch (e) {
       throw _mapPostgrestException(e);
+    } on TimeoutException {
+      throw NetworkException('انتهت مهلة الإدراج لجدول $table');
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'insert($table)');
       if (_isNetworkError(e)) throw const NetworkException();
@@ -247,10 +281,15 @@ class ApiClient {
       filters.forEach((key, value) {
         query = query.eq(key, value);
       });
-      final result = await query.select(select).single();
+      final result = await query.select(select).single().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Update timeout for $table'),
+      );
       return result;
     } on PostgrestException catch (e) {
       throw _mapPostgrestException(e);
+    } on TimeoutException {
+      throw NetworkException('انتهت مهلة التحديث لجدول $table');
     } catch (e, stack) {
       _reportUnexpectedError(e, stack, context: 'update($table)');
       if (_isNetworkError(e)) throw const NetworkException();

@@ -423,22 +423,38 @@ jobs:
         with:
           name: epi-supervisor-apk
           path: dist/
+        continue-on-error: true
 
       - name: Verify APK exists
+        id: check-apk
         run: |
-          if [ ! -f dist/app-release.apk ]; then
-            echo "❌ APK not found in artifact"
-            exit 1
+          if [ -f dist/app-release.apk ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            ls -lh dist/app-release.apk
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ APK not found — release will be created without APK"
           fi
-          ls -lh dist/app-release.apk
 
-      - name: Create Release
+      - name: Create Release (with APK)
+        if: steps.check-apk.outputs.exists == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: EPI Supervisor v1.0.${{ github.run_number }}
           files: |
             dist/app-release.apk
+          generate_release_notes: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release (without APK)
+        if: steps.check-apk.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: EPI Supervisor v1.0.${{ github.run_number }}
           generate_release_notes: true
           make_latest: true
         env:

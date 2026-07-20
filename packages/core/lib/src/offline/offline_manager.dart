@@ -571,29 +571,29 @@ class OfflineManager {
         'saved_at': DateTime.now().toIso8601String(),
       };
 
-      // ═══ PERFORMANCE: For large data (>50KB), use Isolate for JSON encoding ═══
-      // Small data: encode on UI thread (fast enough)
-      // Large data (with photos): encode in background isolate
-      final jsonString = jsonEncode(draftData);
+      // ═══ PERFORMANCE: Use Isolate for JSON encoding + encryption ═══
+      // Previously: jsonEncode + encrypt on UI thread → freeze with large data
+      // Now: all heavy work in background Isolate
       String encrypted;
 
-      if (jsonString.length > 50 * 1024) {
-        // Large payload — encrypt in background isolate
-        try {
-          encrypted = await compute(_encryptInIsolate, _EncryptParams(
-            jsonString,
-            _encryption,
-          )).timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => _encryption.encrypt(jsonString),
-          );
-        } catch (e) {
-          // Fallback to main thread
-          encrypted = _encryption.encrypt(jsonString);
-        }
-      } else {
-        // Small payload — encrypt on UI thread (<1ms)
-        encrypted = _encryption.encrypt(jsonString);
+      try {
+        // Use Isolate for ALL drafts (not just large ones)
+        // This ensures UI never freezes during auto-save
+        encrypted = await compute(_encodeAndEncryptInIsolate, _EncodeParams(
+          draftData,
+          _encryption,
+        )).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            // Fallback to main thread on timeout
+            final json = jsonEncode(draftData);
+            return _encryption.encrypt(json);
+          },
+        );
+      } catch (e) {
+        // Fallback to main thread on error
+        final json = jsonEncode(draftData);
+        encrypted = _encryption.encrypt(json);
       }
 
       await _box?.put('drafts/$draftId', encrypted);
@@ -825,4 +825,16 @@ class _EncryptParams {
 /// Top-level function for compute() — encrypts JSON string in background isolate
 String _encryptInIsolate(_EncryptParams params) {
   return params.encryption.encrypt(params.jsonString);
+}
+
+class _EncodeParams {
+  final Map<String, dynamic> data;
+  final EncryptionService encryption;
+  const _EncodeParams(this.data, this.encryption);
+}
+
+/// Top-level function for compute() — encodes + encrypts in background isolate
+String _encodeAndEncryptInIsolate(_EncodeParams params) {
+  final json = jsonEncode(params.data);
+  return params.encryption.encrypt(json);
 }

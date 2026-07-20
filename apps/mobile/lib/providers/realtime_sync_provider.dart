@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_core/epi_core.dart';
-import 'package:epi_core/src/utils/connectivity_utils.dart';
 import 'app_providers.dart' show formStatsProvider;
 
 /// ═══════════════════════════════════════════════════════════════════════

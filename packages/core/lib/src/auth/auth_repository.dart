@@ -14,6 +14,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../config/supabase_config.dart';
+import '../errors/app_exceptions.dart';
 import 'auth_state.dart' as app_auth;
 
 class AuthRepository {

@@ -339,7 +339,20 @@ class SyncService {
             await _offline.removeFromQueueBatch(syncedIds);
           }
         } on TimeoutException {
-          _applyBackoffToBatch(toRetry, result, 'Timeout');
+          // ═══ FIX: Save timed-out items to failed_submissions immediately ═══
+          // Previously: applied backoff → retried 5 times over ~1 hour → then saved
+          // Now: save immediately so user can see and retry manually
+          for (final item in toRetry) {
+            final offlineId = item['offline_id'] as String? ?? '';
+            await _offline.saveFailedSubmission(item, 'Batch sync timeout');
+            result.failed++;
+            result.errors.add(
+              SyncError(offlineId: offlineId, error: 'Timeout — saved for manual retry'),
+            );
+          }
+          // Remove from sync queue
+          final timeoutIds = toRetry.map((i) => i['offline_id'] as String).toList();
+          await _offline.removeFromQueueBatch(timeoutIds);
         } catch (e) {
           if (kDebugMode) print('[SyncService] Batch error: $e');
           _applyBackoffToBatch(toRetry, result, e.toString());

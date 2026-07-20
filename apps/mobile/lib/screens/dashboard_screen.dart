@@ -45,6 +45,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   late AnimationController _cardsAnim;
   late AnimationController _pulseAnim;
   int _selectedQuickAction = -1;
+  StreamSubscription<String>? _realtimeSub; // ═══ FIX: Save subscription to cancel in dispose ═══
 
   @override
   void initState() {
@@ -74,11 +75,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     });
 
     // ═══ FIX: Realtime Sync — refresh Dashboard when data changes on server ═══
-    // Previously: changes by other users required manual refresh
+    // Previously: listener was never saved → memory leak on widget recreation
+    // Now: saved as StreamSubscription → cancelled in dispose()
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         final realtimeSync = ref.read(realtimeSyncProvider);
-        realtimeSync.onChange.listen((table) {
+        _realtimeSub = realtimeSync.onChange.listen((table) {
           if (!mounted) return;
           if (table == 'form_submissions' || table == 'feedback_tickets' || table == 'official_memos') {
             final campaign = ref.read(campaignProvider);
@@ -129,6 +131,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   @override
   void dispose() {
+    _realtimeSub?.cancel(); // ═══ FIX: Cancel realtime listener to prevent memory leak ═══
     _headerAnim.dispose();
     _cardsAnim.dispose();
     _pulseAnim.dispose();

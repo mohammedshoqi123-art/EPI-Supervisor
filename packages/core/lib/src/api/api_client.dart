@@ -56,57 +56,63 @@ class ApiClient {
     int? limit,
     int? offset,
   }) async {
-    try {
-      var query = _safeClient.from(table).select(select);
+    // ═══ FIX: Wrap with retry for transient network errors ═══
+    // Previously: _withRetry was defined but never called
+    // Now: retries 3 times on NetworkException, TimeoutException, ServerException
+    return _withRetry('select($table)', () async {
+      try {
+        var query = _safeClient.from(table).select(select);
 
-      if (filters != null) {
-        for (final key in filters.keys) {
-          if (filters[key] is _NullFilterSentinel) {
-            query = query.isFilter(key, null);
-          } else if (filters[key] is _InFilterSentinel) {
-            query = query.inFilter(key, (filters[key] as _InFilterSentinel).values);
-          } else if (filters[key] is _GtFilterSentinel) {
-            query = query.gt(key, (filters[key] as _GtFilterSentinel).value);
-          } else if (filters[key] != null) {
-            query = query.eq(key, filters[key]);
+        if (filters != null) {
+          for (final key in filters.keys) {
+            if (filters[key] is _NullFilterSentinel) {
+              query = query.isFilter(key, null);
+            } else if (filters[key] is _InFilterSentinel) {
+              query = query.inFilter(key, (filters[key] as _InFilterSentinel).values);
+            } else if (filters[key] is _GtFilterSentinel) {
+              query = query.gt(key, (filters[key] as _GtFilterSentinel).value);
+            } else if (filters[key] != null) {
+              query = query.eq(key, filters[key]);
+            }
           }
         }
+
+        dynamic finalQuery = query;
+
+        if (orderBy != null) {
+          finalQuery = finalQuery.order(orderBy, ascending: ascending);
+        }
+
+        // ═══ FIX: Always apply a limit — Supabase default is 1000 which silently truncates ═══
+        final effectiveLimit = limit ?? _defaultLimit;
+        if (offset != null) {
+          finalQuery = finalQuery.range(offset, offset + effectiveLimit - 1);
+        } else {
+          finalQuery = finalQuery.limit(effectiveLimit);
+        }
+
+        return List<Map<String, dynamic>>.from(
+          await finalQuery.timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw TimeoutException('Query timeout for $table'),
+          ),
+        );
+      } on PostgrestException catch (e) {
+        throw _mapPostgrestException(e);
+      } on FunctionException catch (e) {
+        throw _mapFunctionException(e);
+      } on TimeoutException {
+        // Rethrow as-is so _withRetry can catch it
+        rethrow;
+      } catch (e, stack) {
+        _reportUnexpectedError(e, stack, context: 'select($table)');
+        if (_isNetworkError(e)) throw const NetworkException();
+        throw ApiException(
+          'Unexpected error in select: ${e.runtimeType}',
+          code: 'unknown',
+        );
       }
-
-      dynamic finalQuery = query;
-
-      if (orderBy != null) {
-        finalQuery = finalQuery.order(orderBy, ascending: ascending);
-      }
-
-      // ═══ FIX: Always apply a limit — Supabase default is 1000 which silently truncates ═══
-      final effectiveLimit = limit ?? _defaultLimit;
-      if (offset != null) {
-        finalQuery = finalQuery.range(offset, offset + effectiveLimit - 1);
-      } else {
-        finalQuery = finalQuery.limit(effectiveLimit);
-      }
-
-      return List<Map<String, dynamic>>.from(
-        await finalQuery.timeout(
-          const Duration(seconds: 15),
-          onTimeout: () => throw TimeoutException('Query timeout for $table'),
-        ),
-      );
-    } on PostgrestException catch (e) {
-      throw _mapPostgrestException(e);
-    } on FunctionException catch (e) {
-      throw _mapFunctionException(e);
-    } on TimeoutException {
-      throw NetworkException('انتهت مهلة الاتصال لجدول $table');
-    } catch (e, stack) {
-      _reportUnexpectedError(e, stack, context: 'select($table)');
-      if (_isNetworkError(e)) throw const NetworkException();
-      throw ApiException(
-        'Unexpected error in select: ${e.runtimeType}',
-        code: 'unknown',
-      );
-    }
+    });
   }
 
   /// ═══ PERFORMANCE: Select with IN filter — single query instead of N loops ═══
@@ -206,9 +212,15 @@ class ApiClient {
       throw NetworkException('انتهت مهلة العد لجدول $table');
     } catch (e) {
       debugPrint('[ApiClient] count($table) error: $e');
-      // ═══ FIX A4: Don't silently return 0 — rethrow network errors ═══
+      // ═══ FIX: Don't silently return 0 — rethrow ALL errors ═══
+      // Previously: returned 0 for non-network errors → Dashboard showed 0 submissions
+      // Now: throws so callers can distinguish "no data" from "error"
       if (_isNetworkError(e)) throw const NetworkException();
-      return 0; // For non-network errors (RLS, permissions), 0 is still acceptable
+      // Rethrow as ApiException so callers know it's an error, not a real 0 count
+      throw ApiException(
+        'Count failed for $table: ${e.runtimeType}',
+        code: 'count_error',
+      );
     }
   }
 
@@ -350,34 +362,37 @@ class ApiClient {
     String functionName, {
     Map<String, dynamic>? params,
   }) async {
-    try {
-      await _ensureFreshSession();
-      final response = await _safeClient.rpc(
-        functionName,
-        params: params,
-      ).timeout(
-        const Duration(seconds: 15),  // ═══ FIX: 15s (was 30s) — don't block UI too long ═══
-        onTimeout: () => throw TimeoutException(
-          'RPC $functionName timed out',
-        ),
-      );
+    // ═══ FIX: Wrap with retry for transient network errors ═══
+    return _withRetry('rpc($functionName)', () async {
+      try {
+        await _ensureFreshSession();
+        final response = await _safeClient.rpc(
+          functionName,
+          params: params,
+        ).timeout(
+          const Duration(seconds: 15),  // ═══ FIX: 15s (was 30s) — don't block UI too long ═══
+          onTimeout: () => throw TimeoutException(
+            'RPC $functionName timed out',
+          ),
+        );
 
-      if (response == null) return [];
-      if (response is List) {
-        return response.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        if (response == null) return [];
+        if (response is List) {
+          return response.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+        if (response is Map) {
+          return [Map<String, dynamic>.from(response)];
+        }
+        return [];
+      } on TimeoutException {
+        rethrow; // Let _withRetry handle it
+      } catch (e, stack) {
+        _reportUnexpectedError(e, stack, context: 'rpc($functionName)');
+        if (_isNetworkError(e)) throw const NetworkException();
+        debugPrint('[ApiClient] rpc($functionName) error: $e');
+        return [];
       }
-      if (response is Map) {
-        return [Map<String, dynamic>.from(response)];
-      }
-      return [];
-    } on TimeoutException {
-      throw NetworkException('انتهت مهلة الطلب RPC');
-    } catch (e, stack) {
-      _reportUnexpectedError(e, stack, context: 'rpc($functionName)');
-      if (_isNetworkError(e)) throw const NetworkException();
-      debugPrint('[ApiClient] rpc($functionName) error: $e');
-      return [];
-    }
+    });
   }
 
   /// Call RPC and return a single integer (for count functions)
@@ -411,59 +426,61 @@ class ApiClient {
     Map<String, dynamic> body, {
     Duration? timeout,
   }) async {
-    try {
-      // Ensure token is fresh before calling the function
-      // ✅ This has its own 8s timeout and never blocks indefinitely
-      await _ensureFreshSession();
+    // ═══ FIX: Wrap with retry for transient network errors ═══
+    // Previously: _withRetry was defined but never called
+    // Now: retries 3 times on NetworkException, TimeoutException, ServerException
+    return _withRetry('callFunction($functionName)', () async {
+      try {
+        // Ensure token is fresh before calling the function
+        // ✅ This has its own 8s timeout and never blocks indefinitely
+        await _ensureFreshSession();
 
-      // ═══ FIX: Timeout قابل للتعديل — الافتراضي 30s، يمكن زيادته للدوان الثقيلة ═══
-      final effectiveTimeout = timeout ?? _functionTimeout;
-      final response =
-          await _safeClient.functions.invoke(functionName, body: body).timeout(
-                effectiveTimeout,
-                onTimeout: () => throw TimeoutException(
-                  'Function $functionName timed out after ${effectiveTimeout.inSeconds}s',
-                ),
-              );
+        // ═══ FIX: Timeout قابل للتعديل — الافتراضي 30s، يمكن زيادته للدوان الثقيلة ═══
+        final effectiveTimeout = timeout ?? _functionTimeout;
+        final response =
+            await _safeClient.functions.invoke(functionName, body: body).timeout(
+                  effectiveTimeout,
+                  onTimeout: () => throw TimeoutException(
+                    'Function $functionName timed out after ${effectiveTimeout.inSeconds}s',
+                  ),
+                );
 
-      // ✅ FIX: Safe response parsing — handle all possible response types
-      return _parseFunctionResponse(response.data, functionName);
-    } on TimeoutException {
-      throw NetworkException(
-        'انتهت مهلة الطلب. تحقق من اتصالك بالإنترنت وأعد المحاولة.',
-      );
-    } on FunctionException catch (e) {
-      // If 401, try refreshing the token ONCE and retry
-      if (e.status == 401) {
-        debugPrint('[ApiClient] Got 401, refreshing token and retrying...');
-        try {
-          await _forceRefreshSession();
-          final response = await _safeClient.functions
-              .invoke(functionName, body: body)
-              .timeout(
-                _functionTimeout,
-                onTimeout: () => throw TimeoutException(
-                  'Function $functionName timed out (retry)',
-                ),
-              );
-          return _parseFunctionResponse(response.data, functionName);
-        } on TimeoutException {
-          throw NetworkException(
-            'انتهت مهلة الطلب حتى بعد إعادة المحاولة. تحقق من اتصالك بالإنترنت وأعد المحاولة.',
-          );
-        } on FunctionException catch (retryError) {
-          throw _mapFunctionException(retryError);
-        } catch (retryError) {
-          debugPrint('[ApiClient] Retry after 401 failed: $retryError');
-          throw const UnauthorizedException();
+        // ✅ FIX: Safe response parsing — handle all possible response types
+        return _parseFunctionResponse(response.data, functionName);
+      } on TimeoutException {
+        // Rethrow as-is so _withRetry can catch it
+        rethrow;
+      } on FunctionException catch (e) {
+        // If 401, try refreshing the token ONCE and retry
+        if (e.status == 401) {
+          debugPrint('[ApiClient] Got 401, refreshing token and retrying...');
+          try {
+            await _forceRefreshSession();
+            final response = await _safeClient.functions
+                .invoke(functionName, body: body)
+                .timeout(
+                  _functionTimeout,
+                  onTimeout: () => throw TimeoutException(
+                    'Function $functionName timed out (retry)',
+                  ),
+                );
+            return _parseFunctionResponse(response.data, functionName);
+          } on TimeoutException {
+            rethrow; // Let _withRetry handle it
+          } on FunctionException catch (retryError) {
+            throw _mapFunctionException(retryError);
+          } catch (retryError) {
+            debugPrint('[ApiClient] Retry after 401 failed: $retryError');
+            throw const UnauthorizedException();
+          }
         }
+        throw _mapFunctionException(e);
+      } catch (e, stack) {
+        _reportUnexpectedError(e, stack, context: 'callFunction($functionName)');
+        if (_isNetworkError(e)) throw const NetworkException();
+        throw ApiException('خطأ غير متوقع: ${e.runtimeType}', code: 'unknown');
       }
-      throw _mapFunctionException(e);
-    } catch (e, stack) {
-      _reportUnexpectedError(e, stack, context: 'callFunction($functionName)');
-      if (_isNetworkError(e)) throw const NetworkException();
-      throw ApiException('خطأ غير متوقع: ${e.runtimeType}', code: 'unknown');
-    }
+    });
   }
 
   /// Safely parse function response into a Map.

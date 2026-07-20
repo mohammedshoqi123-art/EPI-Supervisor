@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 // ═══ PERFORMANCE: Use compute() for background JSON encoding ═══
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../config/app_config.dart';
 import '../security/encryption_service.dart';
@@ -26,10 +27,11 @@ class OfflineManager {
   static const String _failedSubmissionsKey = 'failed_submissions';  // ═══ FIX 2.1: Store failed sync items ═══
 
   static const int _maxRetries = 3;
-  // ═══ FIX O3: Increased from 1MB to 5MB — 1MB was rejecting submissions with 2+ photos ═══
-  // A single compressed photo (quality 70%, maxWidth 1280) is ~300-800KB base64.
-  // Two photos + form data easily exceeds 1MB, causing silent submission failure.
-  static const int _maxPayloadSize = 5 * 1024 * 1024; // 5MB
+  // ═══ FIX O3: Reduced from 5MB to 2MB — 5MB caused OOM on weak devices ═══
+  // A single compressed photo (quality 60%, maxWidth 1024) is ~200-500KB base64.
+  // Two photos + form data fits in 2MB comfortably.
+  // On devices with 1-2GB RAM, 5MB + encryption = 10MB+ temp → OOM crash.
+  static const int _maxPayloadSize = 2 * 1024 * 1024; // 2MB
 
   Box<String>? _box;
   final EncryptionService _encryption;
@@ -89,17 +91,20 @@ class OfflineManager {
         try {
           // ═══ IMPROVEMENT: Backup corrupted file before deleting ═══
           // This allows post-mortem diagnostics of data corruption.
+          // ═══ FIX: Use path_provider instead of _box?.path (which is null when open fails) ═══
           try {
-            // Try to get box path from the box object itself
-            final boxPath = _box?.path;
-            if (boxPath != null) {
+            final appDir = await getApplicationDocumentsDirectory().timeout(
+              const Duration(seconds: 3),
+              onTimeout: () => throw TimeoutException('path_provider timeout'),
+            );
+            // Hive stores boxes as .hive files in the app documents directory
+            final boxPath = '${appDir.path}/$_boxName.hive';
+            final boxFile = File(boxPath);
+            if (await boxFile.exists()) {
               final backupPath = '$boxPath.corrupted.${DateTime.now().millisecondsSinceEpoch}';
-              final file = File(boxPath);
-              if (await file.exists()) {
-                await file.copy(backupPath);
-                if (kDebugMode) {
-                  debugPrint('[OfflineManager] Corrupted box backed up to: $backupPath');
-                }
+              await boxFile.copy(backupPath);
+              if (kDebugMode) {
+                debugPrint('[OfflineManager] Corrupted box backed up to: $backupPath');
               }
             }
           } catch (backupError) {
@@ -225,6 +230,14 @@ class OfflineManager {
   }
 
   // ===== SUBMISSIONS QUEUE =====
+  // ═══ FIX O(n): Sharded storage — each item in its own Hive key ═══
+  // Previously: entire queue = single encrypted blob → O(n) decrypt+encrypt per operation
+  // Now: each item = `sync_queue/$offlineId` (encrypted individually)
+  //       index = `sync_queue_index` (plain JSON list of IDs)
+  // addToSyncQueue = O(1): encrypt 1 item + append to index
+  // removeFromQueue = O(1): delete 1 key + remove from index
+  // _getQueue = O(n): read index + decrypt each item (only when needed)
+  static const String _syncQueueIndexKey = 'sync_queue_index';
 
   /// Add a submission to the offline sync queue with a unique idempotency key.
   Future<String> addToSyncQueue(Map<String, dynamic> submission) async {
@@ -244,9 +257,14 @@ class OfflineManager {
         );
       }
 
-      final queue = _getQueue();
-      queue.add(submission);
-      await _saveQueue(queue);
+      // ═══ O(1): Encrypt single item + append to index ═══
+      final encrypted = _encryption.encrypt(jsonEncode(submission));
+      await _safeBox?.put('sync_queue/$offlineId', encrypted);
+
+      // Update index
+      final index = _getQueueIndex();
+      index.add(offlineId);
+      await _safeBox?.put(_syncQueueIndexKey, jsonEncode(index));
       _invalidatePendingCount();
 
       return offlineId;
@@ -260,23 +278,96 @@ class OfflineManager {
     return b;
   }
 
+  /// Get the queue index (list of offline IDs)
+  List<String> _getQueueIndex() {
+    final data = _safeBox?.get(_syncQueueIndexKey);
+    if (data == null || data.isEmpty) return [];
+    try {
+      return List<String>.from(jsonDecode(data));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Read all queue items — decrypts each individually
   List<Map<String, dynamic>> _getQueue() {
+    // ═══ FIX: Try sharded format first, fall back to legacy blob ═══
+    final index = _getQueueIndex();
+    if (index.isNotEmpty) {
+      final items = <Map<String, dynamic>>[];
+      for (final id in index) {
+        final data = _safeBox?.get('sync_queue/$id');
+        if (data == null || data.isEmpty) continue;
+        try {
+          final decrypted = _encryption.decrypt(data);
+          items.add(Map<String, dynamic>.from(jsonDecode(decrypted)));
+        } catch (e) {
+          if (kDebugMode) print('[OfflineManager] Queue item decrypt error ($id): $e');
+        }
+      }
+      return items;
+    }
+
+    // Legacy fallback: single blob format
     final data = _safeBox?.get(_syncQueueKey);
     if (data == null || data.isEmpty) return [];
     try {
-      // ═══ PERFORMANCE: Decrypt + decode in one step ═══
       final decoded = jsonDecode(_encryption.decrypt(data));
-      return List<Map<String, dynamic>>.from(decoded);
+      final items = List<Map<String, dynamic>>.from(decoded);
+      // Migrate to sharded format
+      _migrateQueueToSharded(items);
+      return items;
     } catch (e) {
       if (kDebugMode) print('[OfflineManager] Queue decrypt error: $e');
       return [];
     }
   }
 
+  /// Migrate legacy blob queue to sharded format
+  Future<void> _migrateQueueToSharded(List<Map<String, dynamic>> items) async {
+    try {
+      if (kDebugMode) debugPrint('[OfflineManager] Migrating ${items.length} queue items to sharded format');
+      final index = <String>[];
+      for (final item in items) {
+        final id = item['offline_id'] as String? ?? _uuid.v4();
+        item['offline_id'] = id;
+        final encrypted = _encryption.encrypt(jsonEncode(item));
+        await _safeBox?.put('sync_queue/$id', encrypted);
+        index.add(id);
+      }
+      await _safeBox?.put(_syncQueueIndexKey, jsonEncode(index));
+      await _safeBox?.delete(_syncQueueKey); // Delete old blob
+      if (kDebugMode) debugPrint('[OfflineManager] ✅ Queue migration complete');
+    } catch (e) {
+      if (kDebugMode) debugPrint('[OfflineManager] Queue migration failed: $e');
+    }
+  }
+
   Future<void> _saveQueue(List<Map<String, dynamic>> queue) async {
-    // ═══ PERFORMANCE: Encode + encrypt in one step ═══
-    final encrypted = _encryption.encrypt(jsonEncode(queue));
-    await _safeBox?.put(_syncQueueKey, encrypted);
+    // ═══ FIX: Rebuild sharded storage from scratch ═══
+    // Delete old keys, write new ones
+    final oldIndex = _getQueueIndex();
+    final newIndex = <String>[];
+
+    for (final item in queue) {
+      final id = item['offline_id'] as String? ?? _uuid.v4();
+      item['offline_id'] = id;
+      final encrypted = _encryption.encrypt(jsonEncode(item));
+      await _safeBox?.put('sync_queue/$id', encrypted);
+      newIndex.add(id);
+    }
+
+    // Delete keys that are no longer in the queue
+    final newSet = newIndex.toSet();
+    for (final oldId in oldIndex) {
+      if (!newSet.contains(oldId)) {
+        await _safeBox?.delete('sync_queue/$oldId');
+      }
+    }
+
+    await _safeBox?.put(_syncQueueIndexKey, jsonEncode(newIndex));
+    // Delete legacy blob if it still exists
+    await _safeBox?.delete(_syncQueueKey);
   }
 
   Future<List<Map<String, dynamic>>> getPendingItems() async {
@@ -332,6 +423,10 @@ class OfflineManager {
   Future<List<OfflineSyncResult>> syncPendingItems(
     Future<Map<String, dynamic>> Function(Map<String, dynamic>) submitFn,
   ) async {
+    // ═══ FIX: Wrap with _withWriteLock to prevent race condition ═══
+    // Previously: _getQueue() + _saveQueue() without lock
+    // Now: protected by same mutex as addToSyncQueue/removeFromQueue
+    return _withWriteLock(() async {
     final pending = _getQueue();
     if (pending.isEmpty) return [];
 
@@ -428,6 +523,7 @@ class OfflineManager {
 
     _logSyncSummary(results);
     return results;
+    }); // Close _withWriteLock
   }
 
   bool _isRetryableError(ApiException e) {
@@ -678,7 +774,7 @@ class OfflineManager {
       }
 
       // Store the index (unencrypted — just a list of IDs)
-      await _box?.put(_draftsIndexKey, jsonEncode(draftIds));
+      await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftIds)));
 
       // Delete old blob
       await _box?.delete(_draftsKey);
@@ -702,26 +798,40 @@ class OfflineManager {
       // ═══ PERFORMANCE: Use Isolate for JSON encoding + encryption ═══
       // Previously: jsonEncode + encrypt on UI thread → freeze with large data
       // Now: all heavy work in background Isolate
+      // ═══ FIX: Retry Isolate once before giving up — don't fall back to UI thread ═══
+      // Previously: on timeout/error, ran jsonEncode + encrypt on main thread → UI freeze
+      // Now: retry Isolate with longer timeout, throw if still fails
       String encrypted;
 
       try {
-        // Use Isolate for ALL drafts (not just large ones)
-        // This ensures UI never freezes during auto-save
+        // First attempt: 5s timeout
         encrypted = await compute(_encodeAndEncryptInIsolate, _EncodeParams(
           draftData,
           _encryption,
         )).timeout(
           const Duration(seconds: 5),
-          onTimeout: () {
-            // Fallback to main thread on timeout
-            final json = jsonEncode(draftData);
-            return _encryption.encrypt(json);
-          },
+          onTimeout: () => throw TimeoutException('Isolate timeout (attempt 1)'),
         );
+      } on TimeoutException {
+        // Retry once with longer timeout (8s)
+        debugPrint('[OfflineManager] Isolate timeout — retrying with 8s');
+        try {
+          encrypted = await compute(_encodeAndEncryptInIsolate, _EncodeParams(
+            draftData,
+            _encryption,
+          )).timeout(
+            const Duration(seconds: 8),
+            onTimeout: () => throw TimeoutException('Isolate timeout (attempt 2)'),
+          );
+        } catch (retryError) {
+          // Both attempts failed — rethrow so caller can handle
+          debugPrint('[OfflineManager] Isolate failed after retry: $retryError');
+          rethrow;
+        }
       } catch (e) {
-        // Fallback to main thread on error
-        final json = jsonEncode(draftData);
-        encrypted = _encryption.encrypt(json);
+        // Non-timeout error — rethrow so caller can handle
+        debugPrint('[OfflineManager] Isolate error: $e');
+        rethrow;
       }
 
       await _box?.put('drafts/$draftId', encrypted);
@@ -731,7 +841,7 @@ class OfflineManager {
       final index = List<String>.from(jsonDecode(indexStr));
       if (!index.contains(draftId)) {
         index.add(draftId);
-        await _box?.put(_draftsIndexKey, jsonEncode(index));
+        await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(index)));
       }
     });
   }
@@ -769,7 +879,7 @@ class OfflineManager {
         debugPrint('[OfflineManager] ⚠️ Index empty but found ${draftKeys.length} draft keys — rebuilding index');
         index = draftKeys;
         // Rebuild index for future fast reads
-        _box!.put(_draftsIndexKey, jsonEncode(draftKeys));
+        _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftKeys)));
       }
     }
 
@@ -806,16 +916,22 @@ class OfflineManager {
     return result;
   }
 
-  /// Get draft form IDs — reads index ONLY (NO decryption!)
-  /// This was the #5 performance killer: previously decrypted ALL drafts
-  /// just to count the keys. Now: reads a plain JSON list = <1ms.
+  /// Get draft form IDs — reads index (encrypted for security)
+  /// ═══ FIX: Index is now encrypted (was plain JSON) ═══
   Set<String> getDraftFormIds() {
     final indexStr = _box?.get(_draftsIndexKey);
     if (indexStr == null || indexStr.isEmpty) return {};
     try {
-      return (jsonDecode(indexStr) as List).cast<String>().toSet();
+      // Try decrypting first (new format)
+      final decrypted = _encryption.decrypt(indexStr);
+      return (jsonDecode(decrypted) as List).cast<String>().toSet();
     } catch (_) {
-      return {};
+      // Fallback: try reading as plain JSON (old format — migration)
+      try {
+        return (jsonDecode(indexStr) as List).cast<String>().toSet();
+      } catch (_) {
+        return {};
+      }
     }
   }
 
@@ -828,7 +944,7 @@ class OfflineManager {
       final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
       final index = List<String>.from(jsonDecode(indexStr));
       index.remove(draftId);
-      await _box?.put(_draftsIndexKey, jsonEncode(index));
+      await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(index)));
     });
   }
 

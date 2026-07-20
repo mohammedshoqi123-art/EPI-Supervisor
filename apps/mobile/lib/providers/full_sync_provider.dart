@@ -99,13 +99,22 @@ typedef SyncProgressCallback = void Function(String step, int current, int total
 
 class FullSyncNotifier extends StateNotifier<FullSyncState> {
   final Ref _ref;
+  Completer<FullSyncResult>? _activeCompleter; // ═══ FIX: Track active sync ═══
 
   FullSyncNotifier(this._ref) : super(FullSyncState.idle);
 
   /// مزامنة ذكية — تتحقق من الكاش أولاً
   Future<FullSyncResult> syncAll({SyncProgressCallback? onProgress}) async {
+    // ═══ FIX: If sync is already running, wait for it instead of returning empty ═══
+    // Previously: returned empty result → caller didn't know sync was running
+    // Now: returns same result as the running sync
     if (state == FullSyncState.syncing) {
-      return const FullSyncResult();
+      if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
+        debugPrint('[FullSync] Sync already in progress — waiting for it');
+        return _activeCompleter!.future;
+      }
+      // Stale state — reset
+      state = FullSyncState.idle;
     }
 
     if (!ConnectivityUtils.isOnline) {
@@ -114,6 +123,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
     }
 
     state = FullSyncState.syncing;
+    _activeCompleter = Completer<FullSyncResult>();
     int forms = 0, submissions = 0, govs = 0, dists = 0, refs = 0, facs = 0;
     int pendingSynced = 0;
     final steps = <SyncStepResult>[];
@@ -326,7 +336,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         _log('✅ Complete: $forms forms, $submissions subs, $govs govs, $dists dists, $pendingSynced pending');
       }
 
-      return FullSyncResult(
+      final result = FullSyncResult(
         forms: forms,
         submissions: submissions,
         governorates: govs,
@@ -336,13 +346,21 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         stepResults: steps,
         pendingSynced: pendingSynced,
       );
+      if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
+        _activeCompleter!.complete(result);
+      }
+      return result;
     } catch (e) {
       state = FullSyncState.error;
       _log('❌ Fatal error: $e');
-      return FullSyncResult(
+      final result = FullSyncResult(
         error: e.toString(),
         stepResults: steps,
       );
+      if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
+        _activeCompleter!.complete(result);
+      }
+      return result;
     }
   }
 

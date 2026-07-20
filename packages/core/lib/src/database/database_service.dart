@@ -271,10 +271,12 @@ class DatabaseService {
       debugPrint('[DatabaseService] getSubmissions RPC error, falling back: $e');
       // ═══ FIX: Fallback with pagination — avoids 1000-row PostgREST cap ═══
       // Previously: single selectIn call capped at 1000 rows silently
-      // Now: paginate through all data with 1000-row batches
-      const fallbackPageSize = 1000;
+      // Now: paginate through all data with 500-row batches + 45s timeout
+      const fallbackPageSize = 500; // ═══ FIX: 500 (was 1000) — faster per-page response ═══
       final effectiveLimit = limit ?? 10000;
       final effectiveOffset = offset ?? 0;
+      final paginationStart = DateTime.now(); // ═══ FIX: Track total pagination time ═══
+      const paginationTimeout = Duration(seconds: 45); // ═══ FIX: Max 45s for pagination ═══
 
       if (campaignType != null && formId == null) {
         final campaignForms = await getForms(campaignType: campaignType);
@@ -293,6 +295,11 @@ class DatabaseService {
         int currentOffset = effectiveOffset;
         bool hasMore = true;
         while (hasMore && allResults.length < effectiveLimit) {
+          // ═══ FIX: Check total pagination time ═══
+          if (DateTime.now().difference(paginationStart) > paginationTimeout) {
+            debugPrint('[DatabaseService] Pagination timeout at ${allResults.length} rows');
+            break;
+          }
           final batch = await _api.selectIn(
             'form_submissions',
             'form_id',
@@ -310,6 +317,8 @@ class DatabaseService {
           }
           allResults.addAll(batch);
           currentOffset += fallbackPageSize;
+          // ═══ FIX: Yield to UI thread between pages ═══
+          await Future.delayed(Duration.zero);
         }
         debugPrint('[DatabaseService] Fallback pagination: ${allResults.length} rows fetched');
         return allResults;
@@ -328,6 +337,11 @@ class DatabaseService {
       int currentOffset = effectiveOffset;
       bool hasMore = true;
       while (hasMore && allResults.length < effectiveLimit) {
+        // ═══ FIX: Check total pagination time ═══
+        if (DateTime.now().difference(paginationStart) > paginationTimeout) {
+          debugPrint('[DatabaseService] Pagination timeout at ${allResults.length} rows');
+          break;
+        }
         final batch = await _api.select(
           'form_submissions',
           select:
@@ -343,6 +357,8 @@ class DatabaseService {
         }
         allResults.addAll(batch);
         currentOffset += fallbackPageSize;
+        // ═══ FIX: Yield to UI thread between pages ═══
+        await Future.delayed(Duration.zero);
       }
       debugPrint('[DatabaseService] Fallback pagination: ${allResults.length} rows fetched');
       return allResults;

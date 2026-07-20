@@ -10,6 +10,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../config/supabase_config.dart';
@@ -57,27 +58,42 @@ class AuthRepository {
       );
       _authStateController.add(_currentState);
 
-      // حاول مرة ثانية بعد ثانيتين
-      Future.delayed(const Duration(seconds: 2), () {
-        try {
-          _client = Supabase.instance.client;
-          _isConfigured = true;
-          _currentState = const app_auth.AuthState();
-          _authStateController.add(_currentState);
-          _tryRestoreSession();
-          _startRefreshTimer();
-          _listenToAuthChanges();
-          debugPrint('[Auth] ✅ Client retry succeeded');
-        } catch (retryErr) {
-          debugPrint('[Auth] Client retry failed: $retryErr');
-        }
-      });
+      // ═══ FIX: Retry with exponential backoff — 2s, 5s, 10s ═══
+      // Previously: single retry after 2s — not enough for slow devices
+      // Now: 3 retries with increasing delays
+      _retryInitWithBackoff(0);
       return;
     }
 
     _listenToAuthChanges();
     _tryRestoreSession();
     _startRefreshTimer();
+  }
+
+  /// ═══ FIX: Retry initialization with exponential backoff ═══
+  static const _retryDelays = [2, 5, 10]; // seconds
+
+  void _retryInitWithBackoff(int attempt) {
+    if (attempt >= _retryDelays.length) {
+      debugPrint('[Auth] Max retry attempts reached — will try on next app launch');
+      return;
+    }
+
+    Future.delayed(Duration(seconds: _retryDelays[attempt]), () {
+      try {
+        _client = Supabase.instance.client;
+        _isConfigured = true;
+        _currentState = const app_auth.AuthState();
+        _authStateController.add(_currentState);
+        _tryRestoreSession();
+        _startRefreshTimer();
+        _listenToAuthChanges();
+        debugPrint('[Auth] ✅ Client retry succeeded (attempt ${attempt + 1})');
+      } catch (retryErr) {
+        debugPrint('[Auth] Client retry ${attempt + 1}/${_retryDelays.length} failed: $retryErr');
+        _retryInitWithBackoff(attempt + 1);
+      }
+    });
   }
 
   /// ═══ مراقبة تغييرات المصادقة ═══
@@ -156,6 +172,19 @@ class AuthRepository {
 
   /// ═══ تجديد استباقي مع إعادة محاولة تدريجية ═══
   Future<void> _proactiveRefresh() async {
+    // ═══ FIX: Skip refresh when offline — saves battery and CPU ═══
+    // Previously: tried to refresh every 3min even when offline → 5 failed attempts
+    // Now: check connectivity first, skip if offline
+    try {
+      final isOnline = await _checkConnectivityQuick();
+      if (!isOnline) {
+        if (kDebugMode) debugPrint('[Auth] Offline — skipping proactive refresh');
+        return;
+      }
+    } catch (_) {
+      // Can't check connectivity — proceed with refresh attempt
+    }
+
     try {
       final session = _client?.auth.currentSession;
       if (session == null) return;
@@ -402,11 +431,30 @@ class AuthRepository {
       await updateProfile(avatarUrl: publicUrl);
       return publicUrl;
     } catch (e) {
-      // ═══ FIX #3: Fallback — store as base64 data URL in profile ═══
-      debugPrint('[Auth] Storage upload failed, using base64 fallback: $e');
-      final base64Image = 'data:image/$ext;base64,${base64Encode(fileBytes)}';
-      await updateProfile(avatarUrl: base64Image);
-      return base64Image;
+      // ═══ FIX: No base64 fallback — throw clear error ═══
+      // Previously: stored base64 data URL in profiles table → bloated every query
+      // Now: throw error so user knows upload failed
+      debugPrint('[Auth] Storage upload failed: $e');
+      throw FileStorageException(
+        'فشل رفع الصورة. تحقق من اتصالك بالإنترنت وأعد المحاولة. '
+        'خطأ: ${e.runtimeType}',
+      );
+    }
+  }
+
+  /// Quick connectivity check — uses cached state from ConnectivityUtils
+  Future<bool> _checkConnectivityQuick() async {
+    // Use the cached state from ConnectivityUtils (no HTTP probe)
+    // This is fast (< 1ms) and doesn't drain battery
+    try {
+      final connectivity = Connectivity();
+      final result = await connectivity.checkConnectivity().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => <ConnectivityResult>[],
+      );
+      return result.isNotEmpty && result.any((r) => r != ConnectivityResult.none);
+    } catch (_) {
+      return true; // Assume online if check fails
     }
   }
 

@@ -23,11 +23,12 @@ class PhotoPickerField extends StatelessWidget {
     final picker = ImagePicker();
     try {
       // ═══ FIX F4: Better image compression — smaller files, prevents payload rejection ═══
+      // ═══ FIX: Reduced quality (75%) and size (1024px) for 2MB payload limit ═══
       final picked = await picker.pickImage(
         source: source,
-        maxWidth: 1280,  // Was 1920 — 1280 is sufficient for field documentation
-        maxHeight: 1280, // Was 1080 — square max for consistent compression
-        imageQuality: 85, // Was 95 — 85% is visually identical but much smaller
+        maxWidth: 1024,  // Was 1280 — 1024 is sufficient for field documentation
+        maxHeight: 1024, // Was 1280 — smaller = faster upload on slow networks
+        imageQuality: 75, // Was 85 — 75% saves ~40% size with minimal quality loss
       );
       if (picked == null) return;
 

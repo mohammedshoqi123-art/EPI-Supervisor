@@ -4,6 +4,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.14.0] — 2026-07-21
+
+### Fixed — 27 إصلاح شامل (4 مراحل)
+
+#### P0 — إصلاحات حرجة (8):
+- Encryption decrypt: لم يعد يُرجع فارغ للـ format القديم (كان يُمسح كل البيانات المخزنة)
+- _withRetry: الآن يُطبق على select, callFunction, rpc (كان معرّف لكن لا يُستخدم)
+- count(): الآن يُرمي exception بدل إرجاع 0 صامت (كان Dashboard يُظهر 0)
+- ConnectivityUtils: الآن ينتظر أول probe (كان يبدأ offline رغم وجود إنترنت)
+- RealtimeSync: الآن يُحفظ drafts + dialog قبل force logout (كان يمسح كل شيء فوراً)
+- syncPendingItems: الآن محمي بـ _withWriteLock (كان فيه race condition)
+- Auto-save: الآن ي.retry Isolate بدل fallback على UI thread (كان يُجمد UI)
+- Hive corruption: الآن يستخدم path_provider لتحديد المسار (كان الـ backup يفشل دائماً)
+
+#### P1 — إصلاحات متوسطة (12):
+- Dashboard: حفظ StreamSubscription + إلغاء في dispose (كان فيه listener leak)
+- Sync queue: Hive keys منفصلة لكل عنصر O(1) (كان O(n) يُشفّر كامل الطابور)
+- Session refresh: فحص connectivity قبل التجديد (كان يعمل حتى offline)
+- Realtime reconnect: فحص connectivity قبل إعادة الاتصال (كان يعمل حتى offline)
+- Pagination fallback: timeout 45s + page size 500 (كان 1000 صف بدون timeout)
+- SyncService timeout: حفظ فوري في failed_submissions (كان يُحاولة 5 مرات)
+- _findRelatedCache: prefix matching أكثر دقة (كان يُرجع بيانات حملة مختلفة)
+- _prefetchCriticalData: انتظار supabaseInitialized (كان يُنشئ instance جديد)
+- FullSync: Completer بدلاً من إرجاع empty (كان يُخفي أن sync يعمل)
+- authRepositoryProvider: 3 محاولات مع exponential backoff (كان ينتظر 2s فقط)
+- EncryptionService: retry Isolate بدل fallback على UI thread (كان يُجمد UI)
+- Incremental sync: تقليل إلى 3 (كان 5) لكشف أسرع للمحذوفات
+
+#### P2 — إصلاحات أمان (5):
+- Encryption key: flutter_secure_storage بدلاً من binary embedding
+- Payload size: تقليل إلى 2MB + صور 1024px/75% (كان 5MB + 1280px/85%)
+- Avatar fallback: إزالة base64 fallback (كان يُبطئ profiles table)
+- Drafts index: تشفير قبل الكتابة (كان plain JSON)
+- Cairo-Variable.ttf: حذف (600KB توفير)
+
+#### P3 — تحسينات (2):
+- AdvancedCacheManager: حذف dead code
+- SplashScreen: Completer بدلاً من polling
+
+### Added:
+- DEVELOPER_GUIDE.md — دليل المطور الشامل
+- flutter_secure_storage — مفتاح تشفير فريد لكل جهاز
+- awaitSupabaseReady() — Completer لانتظار Supabase
+- onUserDeactivated stream — إشعار تعطيل الحساب
+
+### Changed:
+- Auto-save interval: 60s → 120s
+- Photo compression: 1280px/85% → 1024px/75%
+- Max payload: 5MB → 2MB
+- Pagination page size: 1000 → 500
+- Connectivity recheck: 60s → 120s
+- Incremental sync full refresh: every 5 → every 3
+
+### Removed:
+- AdvancedCacheManager (dead code)
+- Cairo-Variable.ttf (unused font, 600KB)
+- 21 old audit reports → docs/archive/
+- 2 old PDF reports → deleted
+
+### Project Structure:
+- Reorganized docs/ directory
+- Moved SQL files to docs/
+- Created docs/archive/ for old reports
+- Created docs/fixes-2026-07/ for new reports
+
 ## [Unreleased]
 
 ### Added — Dark Mode + Settings + Coverage 25% + Theme Tests (Phase 9)

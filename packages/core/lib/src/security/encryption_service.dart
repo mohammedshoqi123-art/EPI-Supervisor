@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// ═══════════════════════════════════════════════════════════════
 /// Encryption Service — Key Pinning Architecture (OFFLOAD to Isolate)
@@ -57,12 +58,25 @@ class EncryptionService {
   /// ═══ Initialize — call ONCE at app startup (now async, offloads to isolate) ═══
   /// Derives the key using PBKDF2 (600k iterations) IN A BACKGROUND ISOLATE
   /// so the UI thread is not blocked.
+  /// ═══ FIX: Uses secure storage for production builds ═══
   static Future<void> initialize({
-    required String encryptionKey,
+    String? encryptionKey,
     required Uint8List? Function() saltSource,
     required void Function(Uint8List salt) onSaltCreated,
   }) async {
     if (_pinnedKey != null) return; // Already initialized
+
+    // ═══ FIX: Get key from secure storage if not provided ═══
+    final effectiveKey = encryptionKey?.isNotEmpty == true
+        ? encryptionKey!
+        : await getOrCreateSecureKey();
+
+    if (effectiveKey.isEmpty || effectiveKey.length < 32) {
+      throw StateError(
+        'Encryption key is too short or empty. '
+        'Provide --dart-define=ENCRYPTION_KEY=<32+ chars> or let secure storage generate one.',
+      );
+    }
 
     // Get existing salt or create new one
     final existingSalt = saltSource();
@@ -79,23 +93,45 @@ class EncryptionService {
     // ═══ FIX: PBKDF2 في Isolate منفصل — لا نحظر UI thread ═══
     // السابق: 600k PBKDF2 على UI thread → 1-3s تجميد
     // الجديد: compute() ينفذها في خيط خلفي → UI طليق
+    // ═══ FIX: Retry Isolate once before giving up — don't fall back to UI thread ═══
+    // Previously: on timeout/error, ran PBKDF2 on main thread → 1-3s UI freeze
+    // Now: retry Isolate with longer timeout, throw if still fails
     try {
       final keyBytes = await compute(
         _pbkdf2InIsolate,
-        _Pbkdf2Params(encryptionKey, salt),
+        _Pbkdf2Params(effectiveKey, salt),
       ).timeout(
         const Duration(seconds: 10),
-        onTimeout: () {
-          debugPrint('[EncryptionService] Isolate PBKDF2 timed out, falling back to sync');
-          return _deriveKeySync(utf8.encode(encryptionKey), salt);
-        },
+        onTimeout: () => throw TimeoutException('Isolate PBKDF2 timeout (attempt 1)'),
       );
       _pinnedKey = enc.Key(keyBytes);
+    } on TimeoutException {
+      // Retry once with longer timeout (15s)
+      debugPrint('[EncryptionService] Isolate PBKDF2 timed out — retrying with 15s');
+      try {
+        final keyBytes = await compute(
+          _pbkdf2InIsolate,
+          _Pbkdf2Params(effectiveKey, salt),
+        ).timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Isolate PBKDF2 timeout (attempt 2)'),
+        );
+        _pinnedKey = enc.Key(keyBytes);
+      } catch (retryError) {
+        // Both attempts failed — throw so app knows encryption is not available
+        debugPrint('[EncryptionService] ❌ Isolate PBKDF2 failed after retry: $retryError');
+        throw StateError(
+          'Encryption initialization failed. PBKDF2 could not run in Isolate. '
+          'This may happen on devices with limited resources. '
+          'Error: $retryError',
+        );
+      }
     } catch (e) {
-      // Fallback: run on UI thread (still works, just slower)
-      debugPrint('[EncryptionService] Isolate failed ($e), running sync');
-      final keyBytes = _deriveKeySync(utf8.encode(encryptionKey), salt);
-      _pinnedKey = enc.Key(keyBytes);
+      // Non-timeout error — throw so app knows encryption is not available
+      debugPrint('[EncryptionService] ❌ Isolate PBKDF2 failed: $e');
+      throw StateError(
+        'Encryption initialization failed. Error: $e',
+      );
     }
 
     if (kDebugMode) {
@@ -115,14 +151,77 @@ class EncryptionService {
   /// Check if salt exists in storage (called by OfflineManager)
   static bool get isInitialized => _pinnedKey != null;
 
+  /// ═══ FIX: Secure key storage — per-device key in flutter_secure_storage ═══
+  /// Previously: key was embedded in APK binary via --dart-define (extractable)
+  /// Now: key is generated per-device and stored in Android Keystore / iOS Keychain
+  /// --dart-define key is kept as fallback for development builds only
+  static const _secureStorageKey = 'epi_encryption_key_v1';
+  static const _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
+  /// Get or create encryption key using secure storage.
+  /// Priority:
+  ///   1. --dart-define=ENCRYPTION_KEY (development builds)
+  ///   2. flutter_secure_storage (production — per-device key)
+  ///   3. Generate new key and store it
+  static Future<String> getOrCreateSecureKey() async {
+    // 1. Check --dart-define first (development builds)
+    if (_envKey.isNotEmpty && _envKey.length >= 32) {
+      if (kDebugMode) {
+        debugPrint('[EncryptionService] Using --dart-define key (development)');
+      }
+      return _envKey;
+    }
+
+    // 2. Check flutter_secure_storage (production)
+    try {
+      final storedKey = await _secureStorage.read(key: _secureStorageKey)
+          .timeout(const Duration(seconds: 5));
+      if (storedKey != null && storedKey.length >= 32) {
+        if (kDebugMode) {
+          debugPrint('[EncryptionService] Using stored secure key');
+        }
+        return storedKey;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[EncryptionService] Secure storage read failed: $e');
+      }
+    }
+
+    // 3. Generate new key and store it
+    final newKey = base64Encode(_generateRandomBytes(32));
+    try {
+      await _secureStorage.write(key: _secureStorageKey, value: newKey)
+          .timeout(const Duration(seconds: 5));
+      if (kDebugMode) {
+        debugPrint('[EncryptionService] Generated and stored new secure key');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[EncryptionService] Secure storage write failed: $e');
+      }
+      // If storage fails, use the key in memory (will be lost on app restart)
+      // This is still better than embedding in APK
+    }
+
+    return newKey;
+  }
+
   /// ═══ CONSTRUCTOR — uses pinned key, NO PBKDF2 ═══
+  /// ═══ FIX: Allow empty _envKey — key will be loaded from secure storage ═══
+  /// Previously: threw StateError if _envKey was empty
+  /// Now: accepts empty key (will be set via getOrCreateSecureKey before use)
   EncryptionService({String? overrideKey})
       : _activeKey = overrideKey ?? _envKey {
     if (_activeKey.isEmpty) {
-      throw StateError(
-        'ENCRYPTION_KEY is not set. '
-        'Pass --dart-define=ENCRYPTION_KEY=<your-key> when building.',
-      );
+      // Key not set yet — will be loaded from secure storage in initialize()
+      // This is normal for production builds that don't use --dart-define
+      if (kDebugMode) {
+        debugPrint('[EncryptionService] No --dart-define key — will use secure storage');
+      }
+      return;
     }
     if (_activeKey.length < 32) {
       throw StateError(
@@ -224,13 +323,56 @@ class EncryptionService {
       }
 
       // ═══ OLD FORMAT: [salt(16)][iv(12)][ciphertext+tag] ═══
-      // ═══ FIX: Old format triggers PBKDF2 per-call which freezes UI ═══
-      // Instead of throwing (which causes cascading failures), return empty string
-      // so callers can handle gracefully (cache will be cleared and re-synced)
+      // ═══ FIX: Old format cannot be decrypted with pinned key ═══
+      // Previously: returned '' which caused jsonDecode('') failure → silent data loss
+      // Now: try pinned key first (in case salt matches), then throw clear error
+      //
+      // Migration strategy:
+      //   1. Try decrypt with pinned key (fast, <1ms)
+      //   2. If fails → throw FormatException
+      //   3. Caller catches → clears old cache → re-syncs from server
+      //
+      // PBKDF2 re-derivation is NOT attempted here because it would freeze UI
+      // for 1-3 seconds per entry. With 100+ cached entries, that's 2-5 minutes
+      // of UI freeze. Re-syncing from server is faster and more reliable.
       if (kDebugMode) {
-        debugPrint('[EncryptionService] Old format detected — returning empty (will re-sync)');
+        debugPrint('[EncryptionService] Old format detected — attempting pinned key decrypt');
       }
-      return '';
+
+      // Try pinned key (might work if salt happens to match, unlikely but free to try)
+      if (_pinnedKey != null) {
+        try {
+          final salt = Uint8List.fromList(bytes.sublist(0, _saltLength));
+          final iv = enc.IV(
+            Uint8List.fromList(bytes.sublist(_saltLength, _saltLength + _ivLength)),
+          );
+          final encrypted = enc.Encrypted(
+            Uint8List.fromList(bytes.sublist(_saltLength + _ivLength)),
+          );
+          final encrypter = enc.Encrypter(enc.AES(_pinnedKey!, mode: enc.AESMode.gcm));
+          final result = encrypter.decrypt(encrypted, iv: iv);
+          if (kDebugMode) {
+            debugPrint('[EncryptionService] Old format decrypted with pinned key (salt matched)');
+          }
+          return result;
+        } catch (_) {
+          // Pinned key didn't work — expected, salts are different
+        }
+      }
+
+      // Cannot decrypt old format without expensive PBKDF2 re-derivation.
+      // Throw FormatException so callers can handle gracefully:
+      // - OfflineDataCache catches it → clears cache → re-syncs from server
+      // - OfflineManager catches it → clears queue → user retries
+      // - Draft loads catch it → shows "draft corrupted" message
+      //
+      // Previously returned '' which caused:
+      //   jsonDecode('') → FormatException → silent data loss
+      // Now throws clearly so the error is visible and recoverable.
+      throw FormatException(
+        'Old encryption format detected. Data must be re-synced from server. '
+        'This happens after an app update that changed the encryption format.',
+      );
     } catch (e) {
       if (kDebugMode) print('EncryptionService.decrypt error: $e');
       rethrow;

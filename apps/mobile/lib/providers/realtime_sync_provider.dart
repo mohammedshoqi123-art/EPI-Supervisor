@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_core/epi_core.dart';
+import 'package:epi_core/src/utils/connectivity_utils.dart';
 import 'app_providers.dart' show formStatsProvider;
 
 /// ═══════════════════════════════════════════════════════════════════════
@@ -26,6 +27,12 @@ class RealtimeSyncService {
   /// Stream of change events — UI can listen to show "data changed" indicator
   final _changeController = StreamController<String>.broadcast();
   Stream<String> get onChange => _changeController.stream;
+
+  /// ═══ FIX: Stream for user deactivation — UI listens to show dialog before logout ═══
+  /// Previously: signOut() was called immediately → user lost all drafts
+  /// Now: emits event → UI shows dialog → saves drafts → then signs out
+  final _deactivationController = StreamController<void>.broadcast();
+  Stream<void> get onUserDeactivated => _deactivationController.stream;
 
   RealtimeSyncService(this._ref);
 
@@ -117,6 +124,13 @@ class RealtimeSyncService {
     debugPrint('[RealtimeSync] 🔄 Reconnect in ${delay}s (#$_reconnectAttempts)');
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(Duration(seconds: delay), () {
+      // ═══ FIX: Skip reconnect when offline — saves battery and CPU ═══
+      // Previously: tried to reconnect even when offline → 10 failed attempts
+      // Now: check connectivity first, skip if offline
+      if (!ConnectivityUtils.isOnline) {
+        debugPrint('[RealtimeSync] Offline — skipping reconnect');
+        return;
+      }
       if (!_isListening) {
         _channel?.unsubscribe();
         _channel = null;
@@ -137,8 +151,13 @@ class RealtimeSyncService {
       final isActive = record['is_active'] as bool? ?? true;
       if (!isActive) {
         debugPrint(
-            '[RealtimeSync] ⚠️ Current user deactivated — forcing logout');
-        Supabase.instance.client.auth.signOut();
+            '[RealtimeSync] ⚠️ Current user deactivated — notifying UI');
+        // ═══ FIX: Don't signOut directly — let UI save drafts first ═══
+        // Previously: Supabase.instance.client.auth.signOut() → immediate data loss
+        // Now: emit event → UI shows dialog → saves drafts → signs out
+        if (!_deactivationController.isClosed) {
+          _deactivationController.add(null);
+        }
       }
     } catch (e) {
       debugPrint('[RealtimeSync] Active check error: $e');
@@ -165,6 +184,7 @@ class RealtimeSyncService {
     _reconnectTimer?.cancel();
     _channel?.unsubscribe();
     _changeController.close();
+    _deactivationController.close();
     _isListening = false;
     _reconnectAttempts = 0;
     debugPrint('[RealtimeSync] Stopped listening');

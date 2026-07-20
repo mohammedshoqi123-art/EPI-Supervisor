@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 
-import '../main.dart' show supabaseInitialized;
+import '../main.dart' show supabaseInitialized, awaitSupabaseReady;
 import '../providers/app_providers.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -80,21 +80,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
     // ═══ FIX: انتظر Supabase.initialize ينتهي (في الخلفية) ═══
     // main.dart يبدأ Supabase في الخلفية، نحن ننتظره هنا
-    // ═══ FIX: انتظار أقصر — 5 ثوانٍ كافية ═══
-    bool supabaseReady = false;
-    for (int i = 0; i < 5; i++) {
-      if (supabaseInitialized) {
-        supabaseReady = true;
-        break;
-      }
-      // انتظر ثانية وحاول مرة أخرى
-      await Future.delayed(const Duration(seconds: 1));
-      if (!mounted || _hasNavigated) return;
-    }
+    // ═══ FIX: Await Supabase using Completer — no polling ═══
+    // Previously: polled supabaseInitialized bool every 1s (wasteful)
+    // Now: awaits Completer (instant notification when ready)
+    final supabaseReady = await awaitSupabaseReady(
+      timeout: const Duration(seconds: 10),
+    );
+
+    if (!mounted || _hasNavigated) return;
 
     if (!supabaseReady) {
       // ═══ FIX: Supabase لم يتهيأ بعد — proceed immediately ═══
-      debugPrint('[Splash] Supabase not ready after 5s — proceeding offline');
+      debugPrint('[Splash] Supabase not ready after 10s — proceeding offline');
       _hasNavigated = true;
       _waitTimer?.cancel();
       context.go('/dashboard');

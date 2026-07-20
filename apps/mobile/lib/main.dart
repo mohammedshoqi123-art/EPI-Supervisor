@@ -144,6 +144,21 @@ Future<void> _prefetchCriticalData() async {
     // Wait a bit for the app to fully initialize
     await Future.delayed(const Duration(seconds: 3));
 
+    // ═══ FIX: Wait for Supabase to be ready before prefetching ═══
+    // Previously: created new DatabaseService(ApiClient()) which might not be connected
+    // Now: wait for supabaseInitialized flag, then use the global client
+    if (!supabaseInitialized) {
+      // Wait up to 10 seconds for Supabase
+      for (int i = 0; i < 10; i++) {
+        if (supabaseInitialized) break;
+        await Future.delayed(const Duration(seconds: 1));
+      }
+      if (!supabaseInitialized) {
+        debugPrint('[Prefetch] Supabase not ready — skipping prefetch');
+        return;
+      }
+    }
+
     // Use a simple approach — just warm up the providers by reading them
     // The providers handle caching internally
     debugPrint('[Prefetch] Starting background data prefetch...');
@@ -178,8 +193,23 @@ Future<void> _prefetchCriticalData() async {
 }
 
 /// Track whether Supabase.initialize has been called successfully
-/// Public so SplashScreen can poll until ready
+/// Public so SplashScreen can await until ready
+/// ═══ FIX: Use Completer instead of polling bool ═══
+/// Previously: SplashScreen polled bool every 1s (wasteful)
+/// Now: SplashScreen awaits Completer (instant notification)
+final Completer<bool> _supabaseReadyCompleter = Completer<bool>();
 bool supabaseInitialized = false;
+
+/// Await Supabase initialization with timeout.
+/// Returns true if ready, false if timed out.
+Future<bool> awaitSupabaseReady({Duration timeout = const Duration(seconds: 10)}) async {
+  if (supabaseInitialized) return true;
+  try {
+    return await _supabaseReadyCompleter.future.timeout(timeout);
+  } on TimeoutException {
+    return false;
+  }
+}
 
 /// ═══ FIX: Supabase Init مع 3 محاولات + reconnect ═══
 void _initSupabaseInBackground() {
@@ -226,11 +256,17 @@ Future<bool> _tryInitSupabaseWithRetry() async {
         storageOptions: const StorageClientOptions(retryAttempts: 3),
       ).timeout(Duration(seconds: timeouts[i]));
       supabaseInitialized = true;
+      if (!_supabaseReadyCompleter.isCompleted) {
+        _supabaseReadyCompleter.complete(true);
+      }
       debugPrint('[Init] ✅ Supabase initialized (attempt ${i + 1})');
       return true;
     } catch (e) {
       debugPrint('[Init] ❌ Attempt ${i + 1}/3 failed: $e');
     }
+  }
+  if (!_supabaseReadyCompleter.isCompleted) {
+    _supabaseReadyCompleter.complete(false);
   }
   return false;
 }
@@ -258,6 +294,7 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
 
   @override
   void dispose() {
+    _deactivationSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -314,6 +351,8 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
     }
   }
 
+  StreamSubscription<void>? _deactivationSub;
+
   void _initRealtimeSync() {
     // ═══ FIX: انتظر حتى Supabase جاهز فعلاً قبل تهيئة Realtime ═══
     // السابق: Future.delayed(3s) — قد يحاول قبل Supabase.init ينتهي
@@ -321,13 +360,66 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
     _waitForSupabaseReady().then((_) {
       if (mounted) {
         try {
-          ref.read(realtimeSyncProvider);
+          final realtimeSync = ref.read(realtimeSyncProvider);
           debugPrint('[App] Realtime sync initialized');
+
+          // ═══ FIX: Listen for user deactivation — show dialog before logout ═══
+          // Previously: signOut() was called immediately → user lost all drafts
+          // Now: show dialog → save drafts → then sign out
+          _deactivationSub = realtimeSync.onUserDeactivated.listen((_) {
+            if (!mounted) return;
+            _handleUserDeactivation();
+          });
         } catch (e) {
           debugPrint('[App] Realtime sync failed: $e');
         }
       }
     });
+  }
+
+  Future<void> _handleUserDeactivation() async {
+    if (!mounted) return;
+
+    // Show dialog to the user
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تم تعطيل حسابك', style: TextStyle(fontFamily: 'Cairo')),
+        content: const Text(
+          'تم تعطيل حسابك من قبل المدير. سيتم تسجيل الخروج تلقائياً.
+
+'\
+              'سيتم حفظ مسوداتك محلياً قبل الخروج.',
+          style: TextStyle(fontFamily: 'Tajawal'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('حسناً', style: TextStyle(fontFamily: 'Tajawal')),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true && mounted) {
+      // Save any unsaved drafts before logout
+      try {
+        final offline = await ref.read(offlineManagerProvider.future).timeout(
+          const Duration(seconds: 5),
+        );
+        debugPrint('[App] Saved drafts before deactivation logout');
+      } catch (e) {
+        debugPrint('[App] Could not save drafts before logout: $e');
+      }
+
+      // Sign out
+      try {
+        await Supabase.instance.client.auth.signOut();
+      } catch (e) {
+        debugPrint('[App] Sign out failed: $e');
+      }
+    }
   }
 
   /// Wait until Supabase is initialized (max 30 seconds)

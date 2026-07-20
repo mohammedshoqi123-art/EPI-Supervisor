@@ -21,7 +21,7 @@ class OfflineDataCache {
 
   // ═══ INCREMENTAL SYNC: Counter for periodic full refresh ═══
   // Every N incremental syncs, force a full refresh to catch updates/deletes
-  static const int _incrementalSyncsBeforeFullRefresh = 5;
+  static const int _incrementalSyncsBeforeFullRefresh = 3; // ═══ FIX: 3 (was 5) — faster detection of deleted records ═══
   final Map<String, int> _incrementalSyncCounts = {};
 
   final OfflineManager _offline;
@@ -420,18 +420,30 @@ class OfflineDataCache {
   /// Example: 'submissions_camp_polio_campaign_round_1' → try 'submissions_camp_polio_campaign'
   /// ═══ FIX: Filter by campaign type to avoid returning wrong data ═══
   dynamic _findRelatedCache(String cacheKey) {
-    // Extract prefix (first part before campaign/round filters)
-    final parts = cacheKey.split('_');
-    if (parts.length < 2) return null;
-    final prefix = parts.first;
+    // ═══ FIX: Better prefix matching — use everything before _camp_ or _round_ ═══
+    // Previously: parts.first = just first word (e.g., 'submissions')
+    // → matched ANY submissions key, even for different campaigns
+    // Now: use prefix before _camp_ to be more specific
+    String prefix;
+    if (cacheKey.contains('_camp_')) {
+      prefix = cacheKey.substring(0, cacheKey.indexOf('_camp_'));
+    } else if (cacheKey.contains('_round_')) {
+      prefix = cacheKey.substring(0, cacheKey.indexOf('_round_'));
+    } else {
+      // No campaign/round filter — use first two parts
+      final parts = cacheKey.split('_');
+      prefix = parts.length >= 2 ? '${parts[0]}_${parts[1]}' : parts.first;
+    }
+
+    if (prefix.length < 3) return null;
 
     // ═══ FIX: Extract campaign type from the requested key to filter matches ═══
     String? campaignFilter;
     if (cacheKey.contains('_camp_')) {
-      final campIdx = parts.indexOf('camp');
-      if (campIdx >= 0 && campIdx + 1 < parts.length) {
-        campaignFilter = parts[campIdx + 1];
-      }
+      final campIdx = cacheKey.indexOf('_camp_');
+      final afterCamp = cacheKey.substring(campIdx + 6);
+      final nextUnderscore = afterCamp.indexOf('_');
+      campaignFilter = nextUnderscore >= 0 ? afterCamp.substring(0, nextUnderscore) : afterCamp;
     }
 
     // Try to find in memory cache with same prefix AND same campaign

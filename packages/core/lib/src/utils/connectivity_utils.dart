@@ -77,8 +77,21 @@ class ConnectivityUtils {
           );
       final linkUp = _isConnected(result);
       if (linkUp) {
-        // Link is up — probe to verify real internet
-        _probeAndEmit();
+        // ═══ FIX: Await first probe with 3s timeout ═══
+        // Previously: _probeAndEmit() was fire-and-forget → SplashScreen read isOnline before probe completed
+        // Now: await first probe so SplashScreen gets accurate connectivity state
+        try {
+          final online = await _probeInternet().timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => false,
+          );
+          if (online) {
+            _isOnline = true;
+            _throttledEmit(true);
+          }
+        } catch (_) {
+          // Probe failed — stay offline, background probe will retry
+        }
       }
     } catch (_) {
       // Can't check — stay offline
@@ -93,9 +106,10 @@ class ConnectivityUtils {
     // Periodic recheck when online
     _startRecheckTimer();
 
-    // ═══ PERFORMANCE: Run initial probe in background — don't block initialize() ═══
-    // Always probe to verify actual connectivity (regardless of initial state)
-    _probeAndEmit();
+    // ═══ Always probe in background too (handles edge cases) ═══
+    if (!_isOnline) {
+      _probeAndEmit();
+    }
   }
 
   static void _handleLinkChange(bool linkUp) {

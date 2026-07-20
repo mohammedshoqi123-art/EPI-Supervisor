@@ -501,7 +501,8 @@ class FormStats {
   final int drafts;
   final int pending;
   final int submitted;
-  const FormStats({this.drafts = 0, this.pending = 0, this.submitted = 0});
+  final bool submittedLoadError; // ═══ FIX: true if count() failed — UI shows error instead of 0 ═══
+  const FormStats({this.drafts = 0, this.pending = 0, this.submitted = 0, this.submittedLoadError = false});
 }
 
 final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
@@ -532,10 +533,16 @@ final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
         status: 'submitted',
       );
       submitted = count;
-    } catch (_) {}
+    } catch (e) {
+      // ═══ FIX: Don't silently swallow — track error so UI can show it ═══
+      // Previously: catch (_) {} → Dashboard showed 0 submissions on any error
+      // Now: submittedLoadError = true → UI shows "خطأ في التحميل" instead of "0"
+      debugPrint('[FormStats] getSubmissionsCount failed: $e');
+      submitted = -1; // Sentinel: -1 means "error", not "0 submissions"
+    }
   } catch (_) {}
 
-  return FormStats(drafts: drafts, pending: pending, submitted: submitted);
+  return FormStats(drafts: drafts, pending: pending, submitted: submitted == -1 ? 0 : submitted, submittedLoadError: submitted == -1);
 });
 
 /// Analytics filter for passing governorate/district/date/form filters to the provider.

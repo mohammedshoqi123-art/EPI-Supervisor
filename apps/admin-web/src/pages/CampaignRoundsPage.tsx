@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuth } from '@/hooks/useApi'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
-import { useToast } from '@/components/ui/use-toast'
 import {
   Dialog,
   DialogContent,
@@ -48,7 +46,6 @@ const CAMPAIGN_LABELS: Record<string, string> = {
 
 export default function CampaignRoundsPage() {
   const { user } = useAuth()
-  const { toast } = useToast()
   const [rounds, setRounds] = useState<CampaignRound[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedCampaign, setSelectedCampaign] = useState('integrated_activity')
@@ -77,11 +74,7 @@ export default function CampaignRoundsPage() {
       if (error) throw error
       setRounds(data || [])
     } catch (error: any) {
-      toast({
-        title: 'خطأ',
-        description: error.message || 'فشل تحميل الجولات',
-        variant: 'destructive',
-      })
+      alert(error.message || 'فشل تحميل الجولات')
     } finally {
       setLoading(false)
     }
@@ -92,7 +85,7 @@ export default function CampaignRoundsPage() {
     setToggling(true)
 
     try {
-      const { data, error } = await supabase.rpc('toggle_round_lock', {
+      const { error } = await supabase.rpc('toggle_round_lock', {
         p_campaign_type: selectedCampaign,
         p_round_number: lockDialog.round.round_number,
         p_locked: lockDialog.locking,
@@ -101,22 +94,17 @@ export default function CampaignRoundsPage() {
 
       if (error) throw error
 
-      toast({
-        title: lockDialog.locking ? 'تم قفل الجولة' : 'تم فتح الجولة',
-        description: lockDialog.locking
-          ? `الجولة ${lockDialog.round.round_number} مقفلة الآن — لا يمكن إدخال بيانات`
-          : `الجولة ${lockDialog.round.round_number} مفتوحة الآن — يمكن إدخال البيانات`,
-      })
+      alert(
+        lockDialog.locking
+          ? `تم قفل الجولة ${lockDialog.round.round_number} — لا يمكن إدخال بيانات`
+          : `تم فتح الجولة ${lockDialog.round.round_number} — يمكن إدخال البيانات`
+      )
 
       setLockDialog({ open: false, round: null, locking: true })
       setLockReason('')
       fetchRounds()
     } catch (error: any) {
-      toast({
-        title: 'خطأ',
-        description: error.message || 'فشل تغيير حالة الجولة',
-        variant: 'destructive',
-      })
+      alert(error.message || 'فشل تغيير حالة الجولة')
     } finally {
       setToggling(false)
     }
@@ -299,11 +287,12 @@ export default function CampaignRoundsPage() {
                 <label className="text-sm font-medium">
                   سبب القفل (اختياري)
                 </label>
-                <Textarea
+                <textarea
                   value={lockReason}
                   onChange={(e) => setLockReason(e.target.value)}
                   placeholder="مثال: انتهت الجولة، تم الانتقال للجولة التالية"
-                  className="mt-1"
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  rows={3}
                 />
               </div>
             )}

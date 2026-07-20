@@ -63,11 +63,11 @@ class ConnectivityUtils {
       return;
     }
 
-    // ═══ FIX: Start online — assume connectivity until proven otherwise ═══
-    // Previously: _isOnline = false → offline banner flashes on every app start
-    // Now: start online, probe in background, update if actually offline
-    // This eliminates the "offline flash" that confuses users
-    _isOnline = true;
+    // ═══ FIX: Start offline — use cached data immediately ═══
+    // Previously: _isOnline = true → app thinks it's online → waits for network → 60-90s loading
+    // Now: start offline → use cached data instantly → probe in background → update when online
+    // This eliminates the "loading forever" issue
+    _isOnline = false;
 
     try {
       final result = await _connectivity.checkConnectivity().timeout(

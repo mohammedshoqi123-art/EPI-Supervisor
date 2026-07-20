@@ -285,6 +285,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
         campaignRound: round,
         limit: 2000,
         offset: 0,
+        lean: true,  // Skip 'data' column — SubmittedCard only needs joins (form title, gov, profile)
       );
       final data = await ref.read(submissionsProvider(filter).future);
 

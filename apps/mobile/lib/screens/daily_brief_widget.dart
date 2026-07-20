@@ -295,7 +295,20 @@ class AchievementBoard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // For now, show a placeholder until achievements table is populated by cron
+    // Fetch real data from providers
+    final analytics = ref.watch(
+      dashboardAnalyticsProvider(
+        AnalyticsFilter(
+          campaignType: ref.read(campaignProvider).value,
+          campaignRound: ref.read(campaignRoundProvider),
+        ),
+      ),
+    );
+
+    final govRankingAsync = ref.watch(
+      governorateRankingProvider(ref.read(campaignRoundProvider)),
+    );
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       padding: const EdgeInsets.all(14),
@@ -333,34 +346,61 @@ class AchievementBoard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // Achievement items
-          _achievementItem(
-            icon: '🥇',
-            title: 'أعلى محافظة في نسبة الالتزام',
-            value: 'عدن',
-            metric: '94%',
-            color: const Color(0xFFFFD700),
+          // Real data from governorate ranking
+          govRankingAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, __) => _achievementItem(
+              icon: '📊',
+              title: 'أعلى محافظة في الإرساليات',
+              value: 'جاري التحميل...',
+              metric: '-',
+              color: const Color(0xFFFFD700),
+            ),
+            data: (ranking) {
+              if (ranking.isEmpty) {
+                return _achievementItem(
+                  icon: '📊',
+                  title: 'أعلى محافظة في الإرساليات',
+                  value: 'لا توجد بيانات',
+                  metric: '-',
+                  color: const Color(0xFFFFD700),
+                );
+              }
+              final topGov = ranking.first;
+              return _achievementItem(
+                icon: '🥇',
+                title: 'أعلى محافظة في الإرساليات',
+                value: topGov['name_ar'] || topGov['governorate_name'] || 'غير محدد',
+                metric: '${topGov['total'] || 0} إرسالية',
+                color: const Color(0xFFFFD700),
+              );
+            },
           ),
           const SizedBox(height: 8),
-          _achievementItem(
-            icon: '⚡',
-            title: 'أسرع رد على التغذية الراجعة',
-            value: 'أ. سالم',
-            metric: '2 ساعة',
-            color: const Color(0xFF42A5F5),
-          ),
-          const SizedBox(height: 8),
-          _achievementItem(
-            icon: '🎯',
-            title: 'أعلى عدد إرساليات',
-            value: 'مديرية المعلا',
-            metric: '38 إرسالية',
-            color: const Color(0xFF66BB6A),
+          // Analytics-based achievements
+          analytics.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (data) {
+              final totalSubs = data['submissions']?['total'] || 0;
+              return Column(
+                children: [
+                  _achievementItem(
+                    icon: '⚡',
+                    title: 'إجمالي الإرساليات هذا الأسبوع',
+                    value: '$totalSubs',
+                    metric: 'إرسالية',
+                    color: const Color(0xFF42A5F5),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 10),
           Center(
             child: Text(
-              'يتم التحديث كل يوم أحد',
+              'يتم التحديث تلقائياً',
               style: TextStyle(
                 fontFamily: 'Tajawal',
                 fontSize: 10,

@@ -276,8 +276,52 @@ function MemoComposerDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [targetRoles, setTargetRoles] = useState<string[]>(ALL_ROLES)
   const [requiresAck, setRequiresAck] = useState(true)
   const [validUntil, setValidUntil] = useState<string>('')
+  const [attachments, setAttachments] = useState<Array<{name: string, url: string, type: string, size: number}>>([])
+  const [uploading, setUploading] = useState(false)
 
   const createMutation = useCreateMemo()
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setUploading(true)
+    const newAttachments: Array<{name: string, url: string, type: string, size: number}> = []
+
+    for (const file of Array.from(files)) {
+      try {
+        // Upload to Supabase Storage
+        const filePath = `memos/${Date.now()}_${file.name}`
+        const { data, error } = await supabase.storage
+          .from('attachments')
+          .upload(filePath, file)
+
+        if (error) throw error
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('attachments')
+          .getPublicUrl(filePath)
+
+        newAttachments.push({
+          name: file.name,
+          url: urlData.publicUrl,
+          type: file.type,
+          size: file.size,
+        })
+      } catch (err) {
+        console.error('Upload failed:', err)
+        alert(`فشل رفع ${file.name}`)
+      }
+    }
+
+    setAttachments(prev => [...prev, ...newAttachments])
+    setUploading(false)
+  }
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+  }
 
   const handleSubmit = async () => {
     if (!title.trim() || !body.trim()) return
@@ -289,6 +333,7 @@ function MemoComposerDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       target_roles: targetRoles,
       requires_acknowledgment: requiresAck,
       valid_until: validUntil || null,
+      attachments,
     })
 
     // Reset form
@@ -298,6 +343,7 @@ function MemoComposerDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setTargetRoles(ALL_ROLES)
     setRequiresAck(true)
     setValidUntil('')
+    setAttachments([])
     onOpenChange(false)
   }
 
@@ -384,6 +430,51 @@ function MemoComposerDialog({ open, onOpenChange }: { open: boolean; onOpenChang
               </p>
             </div>
             <Switch checked={requiresAck} onCheckedChange={setRequiresAck} />
+          </div>
+
+          {/* File attachments */}
+          <div className="space-y-2">
+            <Label>مرفقات (اختياري)</Label>
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.zip"
+                />
+                <div className="flex items-center gap-2 rounded-md border border-dashed border-input bg-background px-4 py-2 text-sm hover:bg-accent">
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  <span>{uploading ? 'جاري الرفع...' : 'إرفاق ملف'}</span>
+                </div>
+              </label>
+            </div>
+            {attachments.length > 0 && (
+              <div className="space-y-2">
+                {attachments.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between rounded-lg bg-muted p-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">📎</span>
+                      <span className="text-sm font-medium">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({(file.size / 1024).toFixed(1)} KB)
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => removeAttachment(index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Valid until */}

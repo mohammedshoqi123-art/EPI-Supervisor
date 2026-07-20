@@ -111,6 +111,7 @@ export function useCreateMemo() {
       target_roles: string[]
       requires_acknowledgment: boolean
       valid_until?: string | null
+      attachments?: Array<{name: string, url: string, type: string, size: number}>
     }): Promise<string | null> => {
       const { data: userData } = await supabase.auth.getUser()
       if (!userData.user) throw new Error('Not authenticated')
@@ -134,6 +135,7 @@ export function useCreateMemo() {
           target_roles: input.target_roles,
           requires_acknowledgment: input.requires_acknowledgment,
           valid_until: input.valid_until,
+          attachments: input.attachments || [],
           is_active: true,
         })
         .select('id')

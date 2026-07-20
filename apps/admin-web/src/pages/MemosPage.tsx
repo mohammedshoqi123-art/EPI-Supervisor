@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   ScrollText, Plus, CheckCircle2, Clock, AlertTriangle,
   Send, Loader2, Users, Calendar, Shield,
-  RefreshCw, Trash2, CheckCheck, Pencil,
+  RefreshCw, Trash2, CheckCheck, Pencil, XCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'

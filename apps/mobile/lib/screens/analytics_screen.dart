@@ -768,19 +768,20 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       final supervisionSubs = ref.read(_supervisionSubsProvider(params)).valueOrNull ?? [];
       final allCurrentSubs = [...currentSubs, ...supervisionSubs];
 
+      final currentRound = params.campaignRound ?? 1;
       final prevRound = currentRound > 1 ? currentRound - 1 : 1;
-      final prevSubs = await db.getSubmissions(
-        campaignType: campaign,
-        campaignRound: prevRound,
-        limit: 2000,
-      lean: false, // ═══ FIX: Analytics NEEDS 'data' column ═══
-      );
+
+      // Use cached data for previous round too
+      final prevParams = (campaignType: params.campaignType, campaignRound: prevRound);
+      final prevReadiness = ref.read(_readinessSubsProvider(prevParams)).valueOrNull ?? [];
+      final prevSupervision = ref.read(_supervisionSubsProvider(prevParams)).valueOrNull ?? [];
+      final allPrevSubs = [...prevReadiness, ...prevSupervision];
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                '🔄 مقارنة الجولة $currentRound مع الجولة $prevRound: ${currentSubs.length} vs ${prevSubs.length}'),
+                '🔄 مقارنة الجولة $currentRound مع الجولة $prevRound: ${allCurrentSubs.length} vs ${allPrevSubs.length}'),
             backgroundColor: AppTheme.primaryColor,
           ),
         );

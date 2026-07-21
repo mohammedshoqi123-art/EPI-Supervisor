@@ -36,36 +36,37 @@ DECLARE
   by_governorate JSONB := '[]'::jsonb;
   gov_record RECORD;
 BEGIN
-  -- Get readiness submissions
+  -- Get readiness submissions (form_id = readiness form UUID)
   FOR gov_record IN
     SELECT
       s.governorate_id,
       g.name_ar as governorate_name,
       COUNT(*) as submission_count,
-      COUNT(*) FILTER (WHERE (s.data->>'has_defaulter_list')::boolean = true
+      COUNT(*) FILTER (WHERE s.data->>'has_defaulter_list' = 'true'
                         OR s.data->>'has_defaulter_list' = 'yes') as defaulter_count,
-      COUNT(*) FILTER (WHERE (s.data->>'has_village_list')::boolean = true
+      COUNT(*) FILTER (WHERE s.data->>'has_village_list' = 'true'
                         OR s.data->>'has_village_list' = 'yes') as village_count,
-      COUNT(*) FILTER (WHERE (s.data->>'has_updated_plan')::boolean = true
+      COUNT(*) FILTER (WHERE s.data->>'has_updated_plan' = 'true'
                         OR s.data->>'has_updated_plan' = 'yes') as plan_count,
-      COUNT(*) FILTER (WHERE (s.data->>'has_population_data')::boolean = true
+      COUNT(*) FILTER (WHERE s.data->>'has_population_data' = 'true'
                         OR s.data->>'has_population_data' = 'yes') as population_count,
-      COUNT(*) FILTER (WHERE (s.data->>'has_coverage_plan')::boolean = true
+      COUNT(*) FILTER (WHERE s.data->>'has_coverage_plan' = 'true'
                         OR s.data->>'has_coverage_plan' = 'yes') as coverage_count,
-      COUNT(*) FILTER (WHERE (s.data->>'plan_reviewed_by_higher_level')::boolean = true
+      COUNT(*) FILTER (WHERE s.data->>'plan_reviewed_by_higher_level' = 'true'
                         OR s.data->>'plan_reviewed_by_higher_level' = 'yes') as reviewed_count,
-      COUNT(*) FILTER (WHERE (s.data->>'has_reverse_coverage')::boolean = true
+      COUNT(*) FILTER (WHERE s.data->>'has_reverse_coverage' = 'true'
                         OR s.data->>'has_reverse_coverage' = 'yes') as reverse_count,
-      COUNT(*) FILTER (WHERE (s.data->>'has_higher_level_visit')::boolean = true
+      COUNT(*) FILTER (WHERE s.data->>'has_higher_level_visit' = 'true'
                         OR s.data->>'has_higher_level_visit' = 'yes') as visit_count,
-      COUNT(*) FILTER (WHERE (s.data->>'routine_coverage_above_85')::boolean = true
+      COUNT(*) FILTER (WHERE s.data->>'routine_coverage_above_85' = 'true'
                         OR s.data->>'routine_coverage_above_85' = 'yes') as coverage_85_count
     FROM form_submissions s
-    JOIN forms f ON s.form_id = f.id
     LEFT JOIN governorates g ON s.governorate_id = g.id
     WHERE s.deleted_at IS NULL
-      AND f.form_type = 'readiness'
-      AND (p_campaign_type IS NULL OR f.campaign_type = p_campaign_type)
+      AND s.form_id = '8aa0f3d5-7ab0-430f-85fd-4488c0c129bb'::uuid
+      AND (p_campaign_type IS NULL OR EXISTS (
+        SELECT 1 FROM forms f WHERE f.id = s.form_id AND f.campaign_type = p_campaign_type
+      ))
       AND (p_campaign_round IS NULL OR s.campaign_round = p_campaign_round)
     GROUP BY s.governorate_id, g.name_ar
     ORDER BY g.name_ar
@@ -139,11 +140,12 @@ BEGIN
       g.name_ar as governorate_name,
       COUNT(*) as submission_count
     FROM form_submissions s
-    JOIN forms f ON s.form_id = f.id
     LEFT JOIN governorates g ON s.governorate_id = g.id
     WHERE s.deleted_at IS NULL
-      AND f.form_type = 'supervision'
-      AND (p_campaign_type IS NULL OR f.campaign_type = p_campaign_type)
+      AND s.form_id = '97a4f2b3-c573-4812-b58c-5b0acf814e24'::uuid
+      AND (p_campaign_type IS NULL OR EXISTS (
+        SELECT 1 FROM forms f WHERE f.id = s.form_id AND f.campaign_type = p_campaign_type
+      ))
       AND (p_campaign_round IS NULL OR s.campaign_round = p_campaign_round)
     GROUP BY s.governorate_id, g.name_ar
     ORDER BY g.name_ar

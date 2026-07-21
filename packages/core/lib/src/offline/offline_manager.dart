@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-// ═══ PERFORMANCE: Use compute() for background JSON encoding ═══
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -1600,16 +1599,4 @@ class OfflineManager {
   }
 }
 
-// ═══ PERFORMANCE: Isolate helpers for background encryption ═══
-// These must be top-level functions for compute() to work
 
-class _EncryptParams {
-  final String jsonString;
-  final EncryptionService encryption;
-  const _EncryptParams(this.jsonString, this.encryption);
-}
-
-/// Top-level function for compute() — encrypts JSON string in background isolate
-String _encryptInIsolate(_EncryptParams params) {
-  return params.encryption.encrypt(params.jsonString);
-}

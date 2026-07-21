@@ -48,7 +48,7 @@ class AppNotification {
       category: json['category'] as String? ?? 'general',
       createdAt: DateTime.parse(json['created_at'] as String),
       read: json['is_read'] as bool? ?? false,
-      data: json['data'] as Map<String, dynamic>?,
+      data: json['data'] is Map<String, dynamic> ? json['data'] as Map<String, dynamic> : null,
     );
   }
 

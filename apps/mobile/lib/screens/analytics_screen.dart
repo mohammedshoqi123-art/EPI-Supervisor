@@ -175,6 +175,46 @@ const _serviceNumberFields = {
 final _readinessSubsProvider = FutureProvider.family
     .autoDispose<List<Map<String, dynamic>>, ({String? campaignType, int? campaignRound})>(
   (ref, params) async {
+  // ═══ FIX: Use server-side RPC function instead of fetching 2000 raw submissions ═══
+  // Previously: fetched 2000 submissions with 'data' column → 3-5MB → UI freeze
+  // Now: RPC function computes readiness metrics on server → returns ~5KB JSON
+  try {
+    final api = ref.read(apiClientProvider);
+    final result = await api.rpc(
+      'get_readiness_metrics',
+      params: {
+        if (params.campaignType != null) 'p_campaign_type': params.campaignType,
+        if (params.campaignRound != null) 'p_campaign_round': params.campaignRound,
+      },
+    );
+    if (result.isNotEmpty) {
+      // Convert RPC result to format expected by _ReadinessTab
+      final metrics = result.first;
+      final byGov = metrics['by_governorate'] as List? ?? [];
+      return byGov.map((g) => {
+        'id': g['governorate_id'] ?? '',
+        'governorate_id': g['governorate_id'] ?? '',
+        'name_ar': g['name_ar'] ?? '',
+        'data': {
+          'has_defaulter_list': (g['defaulter_list'] ?? 0) > 0,
+          'has_village_list': (g['village_list'] ?? 0) > 0,
+          'has_updated_plan': (g['updated_plan'] ?? 0) > 0,
+          'has_population_data': (g['population_data'] ?? 0) > 0,
+          'has_coverage_plan': (g['coverage_plan'] ?? 0) > 0,
+          'plan_reviewed_by_higher_level': (g['plan_reviewed'] ?? 0) > 0,
+          'has_reverse_coverage': (g['reverse_coverage'] ?? 0) > 0,
+          'has_higher_level_visit': (g['higher_visit'] ?? 0) > 0,
+          'routine_coverage_above_85': (g['routine_coverage_85'] ?? 0) > 0,
+          'governorate_id': g['governorate_id'] ?? '',
+        },
+        'created_at': DateTime.now().toIso8601String(),
+      }).toList();
+    }
+  } catch (e) {
+    if (kDebugMode) debugPrint('[Analytics] Readiness RPC failed, falling back: $e');
+  }
+
+  // ═══ FALLBACK: Old method (fetch raw data) — only if RPC fails ═══
   final cache = await ref.watch(offlineDataCacheProvider.future);
   final cacheKey = 'readiness_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
   return cache.incrementalGetList(
@@ -185,7 +225,7 @@ final _readinessSubsProvider = FutureProvider.family
             campaignType: params.campaignType,
             campaignRound: params.campaignRound,
             limit: 2000,
-            lean: false, // ═══ NEEDS 'data' column for field-level analysis ═══
+            lean: false,
             createdAfter: createdAfter,
           );
     },

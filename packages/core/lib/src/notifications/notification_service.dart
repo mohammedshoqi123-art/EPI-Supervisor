@@ -15,6 +15,7 @@ class AppNotification {
   final String category;
   final DateTime createdAt;
   final bool read;
+  final Map<String, dynamic>? data; // ═══ FIX: Add data field for deduplication ═══
 
   AppNotification({
     required this.id,
@@ -24,6 +25,7 @@ class AppNotification {
     this.category = 'general',
     DateTime? createdAt,
     this.read = false,
+    this.data,
   }) : createdAt = createdAt ?? DateTime.now();
 
   AppNotification markAsRead() => AppNotification(
@@ -34,6 +36,7 @@ class AppNotification {
         category: category,
         createdAt: createdAt,
         read: true,
+        data: data,
       );
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
@@ -45,6 +48,7 @@ class AppNotification {
       category: json['category'] as String? ?? 'general',
       createdAt: DateTime.parse(json['created_at'] as String),
       read: json['is_read'] as bool? ?? false,
+      data: json['data'] as Map<String, dynamic>?,
     );
   }
 

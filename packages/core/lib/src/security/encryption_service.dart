@@ -484,8 +484,18 @@ class PersistentEncryptionIsolate {
 
   Future<String> encodeAndEncrypt(Map<String, dynamic> draftData, String encryptionKey, Uint8List salt) async {
     if (!_initialized) {
-      // Fallback: use compute()
-      return compute(_encodeAndEncryptInIsolate, _EncodeParams(draftData, EncryptionService()));
+      // Fallback: inline encode+encrypt (no access to offline_manager's private functions)
+      final json = jsonEncode(draftData);
+      final keyBytes = _deriveKeySync(utf8.encode(encryptionKey), salt);
+      final key = enc.Key(keyBytes);
+      final iv = enc.IV.fromSecureRandom(12);
+      final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.gcm));
+      final encrypted = encrypter.encrypt(json, iv: iv);
+      final resultBytes = Uint8List(4 + 12 + encrypted.bytes.length);
+      resultBytes[0] = 0x45; resultBytes[1] = 0x50; resultBytes[2] = 0x49; resultBytes[3] = 0x32;
+      resultBytes.setAll(4, iv.bytes);
+      resultBytes.setAll(16, encrypted.bytes);
+      return base64Encode(resultBytes);
     }
     return _sendRequest<String>('encode_encrypt', _EncodeEncryptData(draftData, encryptionKey, salt));
   }

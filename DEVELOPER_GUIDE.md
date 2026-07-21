@@ -1,8 +1,8 @@
 # 📖 دليل المطور الشامل — EPI Supervisor
 ## الواجهة الرئيسية للمطور والمبرمج
 
-**الإصدار:** v3.15.0 (بعد إصلاحات جولة 22 يوليو)
-**آخر تحديث:** 2026-07-22
+**الإصدار:** v3.16.0 (إصلاحات مراجعة مقارنة — 22 يوليو)
+**آخر تحديث:** 2026-07-22 (15 إصلاح حرج — مراجعة مقارنة مع تقرير خبير)
 **المنصة:** Flutter 3.27+ | Supabase Backend
 
 ---
@@ -507,6 +507,64 @@ enum UserRole { admin, central, governorate, district, data_entry }
 | — | Deploy workflow: تخطي migrations المُطبّقة | `deploy-functions.yml` | لا فشل في CI/CD |
 | — | csv-worker.ts: TypeScript catch(error: any) | `csv-worker.ts` | لا خطأ في البناء |
 | — | PersistentEncryptionIsolate: إصلاح cross-file reference | `encryption_service.dart` | لا خطأ compilation |
+
+#### إصلاحات حرجة — مراجعة مقارنة مع تقرير الخبير (22 يوليو 2026):
+
+بعد مقارنة تقييم مستقل مع تقييم خبير مُرفق، تم تنفيذ 15 إصلاح حرج في 19 ملف (+928 سطر / -155 سطر).
+
+##### إصلاحات منع ضياع البيانات (الأولوية القصوى):
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| R-C1 | **PBKDF2 migration للمسودات القديمة** — عند تحديث التطبيق، المسودات المشفرة بالصيغة القديمة تُهاجر تلقائياً عبر Isolate خلفي. إذا فشلت، تُحفظ في `_recovered_drafts` بدل الحذف | `encryption_service.dart` + `offline_manager.dart` | لا ضياع مسودات |
+| R-C2 | **"حفظ وخروج" يتحقق من نجاح الحفظ** — `_saveDraft()` يُرجع bool. الصفحة لا تُغلق إلا إذا نجح الحفظ أو اختار المستخدم الخروج بدون حفظ | `form_fill_screen.dart` | لا ضياع بيانات |
+| R-C11 | **useBulkUpdateSubmissionStatus** — `Promise.allSettled` بدل `for...of await`. جميع المحاولات تتم حتى لو فشل البعض. يُرجع `{ updated, total, failed }` | `submissions.ts` | تحديث جزئي مرئي |
+
+##### إصلاحات الأداء:
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| R-C3 | **DashboardPage deferredReady** — 5 استعلامات مؤجلة تنتظر 800ms قبل الإطلاق (كانوا 8 متزامعين) | `DashboardPage.tsx` + 5 hooks | تحميل أسرع |
+| R-C4 | **CSV export يستخدم Web Worker** — التصدير لا يجمد UI. fallback على main thread لو فشل Worker | `SubmissionsPage.tsx` | UI متجاوب |
+| R-C5 | **sync-offline inserts متوازية** — `Promise.allSettled` ب chunks من 5 بدل تسلسلي | `sync-offline/index.ts` | **5× أسرع** |
+| R-C9 | **AbortController لـ 5/5 مزودين LLM** — timeout 15s على Groq/NVIDIA/HuggingFace/OpenRouter (Pollinations كانت موجودة) | `providers.ts` | لا تسريب اتصالات |
+
+##### إصلاحات الوظائف:
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| R-C6 | **manage-notifications limit** — `.limit(10000)` على استعلام byType + upsert بدل insert | `manage-notifications/index.ts` | لا OOM + لا تكرار |
+| R-C7 | **useConversationHistory** — debounce 2000ms + progressive cleanup (يحذف 20 رسالة بدل الكل) | `useConversationHistory.ts` | لا فقدان محادثات |
+| R-C8 | **CommunicationCenterPage realtime** — `queryClient.invalidateQueries()` في callback (كان فارغاً) | `CommunicationCenterPage.tsx` | رسائل فورية |
+| Race | **removeFromQueue write lock** — يمنع race condition مع `addToSyncQueue` | `offline_manager.dart` | لا فقدان إرساليات |
+
+##### إصلاحات الإشعارات والمسودات:
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| Notif | **تكرار الإشعارات** — migration 067: حذف جميع الإشعارات القديمة + NOT EXISTS dedup + 5-min dedup للتحديثات | `067_fix_notification_dedup_cleanup.sql` | لا تكرار |
+| Draft | **عرض بيانات المسودة كاملة** — `DraftTile` يعرض أول 5 حقول من بيانات المسودة (اسم + قيمة) | `forms_status_widgets.dart` | معلومات أكثر |
+
+##### إصلاحات تقنية:
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| Dead | إزالة `failedIds` الميت | `submissions.ts` | كود نظيف |
+| Lock | تحذير non-reentrant على `_withWriteLock` | `offline_manager.dart` | منع deadlock |
+| Max | حد أقصى 5 محاولات PBKDF2 في `_cleanupOldData` | `offline_manager.dart` | لا تأخير طويل |
+
+##### الإحصائيات:
+- **19 ملف** مُعدّل + **1 ملف** جديد (migration 067)
+- **+928 سطر** مُضاف + **-155 سطر** محذوف
+- **4 كوميتات**
+- **فحص الأقواس:** 8/8 ملفات متوازنة ✅
+
+##### سيناريوهات الاختبار:
+1. **مسودات قديمة:** تثبيت نسخة قديمة → حفظ مسودات → تحديث → المسودات تظهر
+2. **حفظ وخروج:** ملء استمارة → ملء الذاكرة → "حفظ وخروج" → الصفحة تبقى
+3. **Dashboard:** فتح لوحة التحكم → Network tab → 3 فورية + 5 بعد 800ms
+4. **إشعارات:** تقديم استمارة أوفلاين → مزامنة → إشعار واحد فقط
+5. **CSV:** تصدير 2000 إرسالية → UI يبقى متجاوب
 
 #### الإحصائيات النهائية:
 - **18 ملف** مُعدّل + **3 ملفات** جديدة

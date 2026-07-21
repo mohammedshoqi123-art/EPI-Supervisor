@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.16.0] — 2026-07-22
+
+### Fixed — 15 إصلاح حرج (مراجعة مقارنة مع تقرير خبير)
+
+#### منع ضياع البيانات (الأولوية القصوى):
+- R-C1: PBKDF2 migration للمسودات القديمة — لا ضياع مسودات عند التحديث
+- R-C2: "حفظ وخروج" يتحقق من نجاح الحفظ — الصفحة لا تُغلق عند الفشل
+- R-C11: useBulkUpdateSubmissionStatus — Promise.allSettled + onError
+
+#### الأداء:
+- R-C3: DashboardPage deferredReady — 5 استعلامات مؤجلة بعد 800ms
+- R-C4: CSV export يستخدم Web Worker — UI يبقى متجاوب
+- R-C5: sync-offline inserts متوازية — 5× أسرع
+- R-C9: AbortController لـ 5/5 مزودين LLM — timeout 15s
+
+#### الوظائف:
+- R-C6: manage-notifications limit 10000 + upsert
+- R-C7: useConversationHistory debounce 2s + progressive cleanup
+- R-C8: CommunicationCenterPage realtime callback يعمل
+- Race: removeFromQueue write lock — لا فقدان إرساليات
+
+#### الإشعارات والمسودات:
+- Notif: تكرار الإشعارات — migration 067 + NOT EXISTS dedup
+- Draft: عرض بيانات المسودة كاملة (5 حقول)
+
+#### تقنية:
+- Dead: إزالة failedIds الميت
+- Lock: تحذير non-reentrant على _withWriteLock
+- Max: حد أقصى 5 محاولات PBKDF2 في cleanup
+
+#### الملفات:
+- 19 ملف مُعدّل + 1 ملف جديد (migration 067)
+- +928 سطر / -155 سطر
+
 ## [v3.15.0] — 2026-07-22
 
 ### Fixed — 20 إصلاح + إصلاح Storage + إصلاحات إضافية

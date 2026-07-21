@@ -9,7 +9,7 @@
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.27-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Backend-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)
-![Version](https://img.shields.io/badge/Version-3.14.0-brightgreen?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-3.16.0-brightgreen?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge)
 
 [📖 دليل المطور](DEVELOPER_GUIDE.md) · [📱 تحميل APK](https://github.com/mohammedshoqi123-art/EPI-Supervisor/releases) · [🐛 الإبلاغ عن مشكلة](https://github.com/mohammedshoqi123-art/EPI-Supervisor/issues)
@@ -152,6 +152,15 @@ melos bootstrap          # تثبيت dependencies (monorepo)
 ---
 
 ## 📝 سجل التغييرات
+
+### v3.16.0 (2026-07-22)
+- ✅ 15 إصلاح حرج (مراجعة مقارنة مع تقرير خبير)
+- ✅ PBKDF2 migration — لا ضياع مسودات عند التحديث
+- ✅ sync-offline متوازي — 5× أسرع
+- ✅ تكرار الإشعارات — dedup على مستوى قاعدة البيانات
+- ✅ DashboardPage deferredReady — تحميل أسرع
+- ✅ CSV Web Worker — UI متجاوب
+- ✅ AbortController لـ 5/5 مزودين LLM
 
 ### v3.14.0 (2026-07-21)
 - ✅ 27 إصلاح (P0 حرجة + P1 متوسطة + P2 أمان + P3 تحسينات)

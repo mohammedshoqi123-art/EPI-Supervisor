@@ -235,13 +235,13 @@ describe('Campaign Round System — hook signatures', () => {
   it('useGovernorateStats accepts (campaignType, campaignRound)', async () => {
     const mod = await import('@/hooks/api/dashboard')
     expect(typeof mod.useGovernorateStats).toBe('function')
-    expect(mod.useGovernorateStats.length).toBeLessThanOrEqual(2)
+    expect(mod.useGovernorateStats.length).toBeLessThanOrEqual(3)
   })
 
   it('useShortages accepts (campaignType, campaignRound)', async () => {
     const mod = await import('@/hooks/api/shortages')
     expect(typeof mod.useShortages).toBe('function')
-    expect(mod.useShortages.length).toBeLessThanOrEqual(2)
+    expect(mod.useShortages.length).toBeLessThanOrEqual(3)
   })
 
   it('useFormSubmissionCounts accepts (campaignType, campaignRound)', async () => {

@@ -454,7 +454,10 @@ class DatabaseService {
     try {
       return await _api.select(
         'campaign_rounds',
-        filters: {'campaign_type': campaignType},
+        filters: {
+          'campaign_type': campaignType,
+          'is_visible': true, // ═══ FIX: Only return visible rounds ═══
+        },
         orderBy: 'round_number',
         ascending: true,
       );

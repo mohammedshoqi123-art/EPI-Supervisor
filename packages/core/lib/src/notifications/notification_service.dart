@@ -141,7 +141,34 @@ class NotificationService {
       final loaded = results.map((j) => AppNotification.fromJson(j)).toList();
 
       if (loaded.length < _pageSize) _hasMore = false;
-      _notifications.addAll(loaded);
+
+      // ═══ FIX: Deduplicate notifications by submission_id + type ═══
+      // Previously: added all notifications without checking duplicates
+      // Now: skip notifications with same submission_id + type (prevents 30+ duplicates)
+      final existingIds = _notifications.map((n) => n.id).toSet();
+      final existingSubmissionKeys = <String>{};
+      for (final n in _notifications) {
+        final subId = n.data?['submission_id']?.toString();
+        if (subId != null) {
+          existingSubmissionKeys.add('${subId}_${n.type}');
+        }
+      }
+
+      final deduped = <AppNotification>[];
+      for (final n in loaded) {
+        // Skip exact ID duplicates
+        if (existingIds.contains(n.id)) continue;
+        // Skip same submission_id + type duplicates
+        final subId = n.data?['submission_id']?.toString();
+        if (subId != null) {
+          final key = '${subId}_${n.type}';
+          if (existingSubmissionKeys.contains(key)) continue;
+          existingSubmissionKeys.add(key);
+        }
+        deduped.add(n);
+      }
+
+      _notifications.addAll(deduped);
       _currentPage++;
     } catch (e) {
       if (kDebugMode) print('Failed to load notifications from DB: $e');

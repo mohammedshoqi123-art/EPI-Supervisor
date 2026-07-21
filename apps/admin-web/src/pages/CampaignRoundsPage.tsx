@@ -20,6 +20,8 @@ import {
   CheckCircle,
   Clock,
   RefreshCw,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 
 interface CampaignRound {
@@ -30,6 +32,7 @@ interface CampaignRound {
   start_date: string | null
   end_date: string | null
   is_locked: boolean
+  is_visible: boolean
   locked_at: string | null
   locked_by: string | null
   lock_reason: string | null
@@ -114,6 +117,27 @@ export default function CampaignRoundsPage() {
   function openLockDialog(round: CampaignRound, locking: boolean) {
     setLockDialog({ open: true, round, locking })
     setLockReason('')
+  }
+
+  async function handleToggleVisibility(round: CampaignRound) {
+    try {
+      const { error } = await supabase
+        .from('campaign_rounds')
+        .update({ is_visible: !round.is_visible })
+        .eq('id', round.id)
+
+      if (error) throw error
+
+      alert(
+        round.is_visible
+          ? `تم إخفاء الجولة ${round.round_number} من الفلاتر`
+          : `تم إظهار الجولة ${round.round_number} في الفلاتر`
+      )
+
+      fetchRounds()
+    } catch (error: any) {
+      alert(error.message || 'فشل تغيير حالة الظهور')
+    }
   }
 
   const isAdmin = user?.role === 'admin' || user?.role === 'central'
@@ -231,6 +255,26 @@ export default function CampaignRoundsPage() {
 
                   {isAdmin && (
                     <div className="flex items-center gap-3">
+                      {/* Visibility toggle */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">
+                          {round.is_visible ? 'ظاهر في الفلاتر' : 'مختفي من الفلاتر'}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleVisibility(round)}
+                          title={round.is_visible ? 'إخفاء من الفلاتر' : 'إظهار في الفلاتر'}
+                        >
+                          {round.is_visible ? (
+                            <Eye className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <EyeOff className="h-4 w-4 text-gray-400" />
+                          )}
+                        </Button>
+                      </div>
+
+                      {/* Lock toggle */}
                       <span className="text-sm text-muted-foreground">
                         {round.is_locked ? 'فتح الجولة' : 'قفل الجولة'}
                       </span>

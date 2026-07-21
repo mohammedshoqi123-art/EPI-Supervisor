@@ -306,7 +306,7 @@ flutter build ios --release
 | `submit-form` | إرسال نموذج |
 | `sync-offline` | مزامنة بيانات اوفلاين |
 | `get-forms` | جلب النماذج |
-| `get-analytics` | جلب التحليلات |
+| `get-analytics` | جلب التحليلات (server-side aggregation — لا يُحمّل raw data) |
 | `ai-chat-v3` | المحادثة الذكية |
 | `get-dashboard-stats` | إحصائيات Dashboard |
 | `get-governorate-report` | تقرير المحافظات |

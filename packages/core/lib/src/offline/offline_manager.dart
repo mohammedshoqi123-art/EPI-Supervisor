@@ -76,7 +76,7 @@ class OfflineManager {
     try {
       try {
         _box = await Hive.openBox<String>(_boxName).timeout(
-          const Duration(seconds: 5),
+          const Duration(seconds: 3), // ═══ FIX: 3s (was 5s) — faster startup ═══
           onTimeout: () {
             throw TimeoutException('Hive box open timed out');
           },
@@ -839,9 +839,19 @@ class OfflineManager {
 
       await _box?.put('drafts/$draftId', encrypted);
 
-      // Update index (unencrypted — just IDs, no decrypt needed)
+      // Update index
       final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
-      final index = List<String>.from(jsonDecode(indexStr));
+      List<String> index;
+      try {
+        // Try encrypted first, then plain JSON
+        try {
+          index = List<String>.from(jsonDecode(_encryption.decrypt(indexStr)));
+        } catch (_) {
+          index = List<String>.from(jsonDecode(indexStr));
+        }
+      } catch (_) {
+        index = [];
+      }
       if (!index.contains(draftId)) {
         index.add(draftId);
         await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(index)));
@@ -866,7 +876,14 @@ class OfflineManager {
     final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
     List<String> index;
     try {
-      index = List<String>.from(jsonDecode(indexStr));
+      // ═══ FIX: Try encrypted first, then plain JSON ═══
+      // Previously: only tried jsonDecode → failed on encrypted index → no drafts shown
+      try {
+        final decrypted = _encryption.decrypt(indexStr);
+        index = List<String>.from(jsonDecode(decrypted));
+      } catch (_) {
+        index = List<String>.from(jsonDecode(indexStr));
+      }
     } catch (_) {
       index = [];
     }
@@ -948,7 +965,17 @@ class OfflineManager {
 
       // Update index
       final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
-      final index = List<String>.from(jsonDecode(indexStr));
+      List<String> index;
+      try {
+        // Try encrypted first, then plain JSON
+        try {
+          index = List<String>.from(jsonDecode(_encryption.decrypt(indexStr)));
+        } catch (_) {
+          index = List<String>.from(jsonDecode(indexStr));
+        }
+      } catch (_) {
+        index = [];
+      }
       index.remove(draftId);
       await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(index)));
     });
@@ -969,8 +996,11 @@ class OfflineManager {
     return _withWriteLock(() async {
       final cache = _getCache();
 
+      // ═══ FIX: Remove old entry for same key first ═══
+      cache.remove(key);
+
       // LRU eviction: remove oldest if over limit
-      if (cache.length >= _maxCacheMemoryEntries && !cache.containsKey(key)) {
+      while (cache.length >= _maxCacheMemoryEntries) {
         String? oldestKey;
         DateTime? oldestTime;
         for (final e in cache.entries) {
@@ -980,13 +1010,44 @@ class OfflineManager {
             oldestKey = e.key;
           }
         }
-        if (oldestKey != null) cache.remove(oldestKey);
+        if (oldestKey != null) {
+          cache.remove(oldestKey);
+        } else {
+          break;
+        }
       }
 
       cache[key] = {
         'data': data,
         'cached_at': DateTime.now().toIso8601String(),
       };
+
+      final jsonStr = jsonEncode(cache);
+
+      // ═══ FIX: Check blob size — if > 5MB, remove oldest entries ═══
+      if (jsonStr.length > 5 * 1024 * 1024) {
+        if (kDebugMode) {
+          debugPrint('[OfflineManager] Cache blob too large (${jsonStr.length ~/ 1024}KB) — evicting');
+        }
+        // Remove oldest entries until under 3MB
+        while (cache.length > 10) {
+          String? oldestKey;
+          DateTime? oldestTime;
+          for (final e in cache.entries) {
+            final t = DateTime.tryParse(e.value['cached_at'] ?? '');
+            if (t != null && (oldestTime == null || t.isBefore(oldestTime))) {
+              oldestTime = t;
+              oldestKey = e.key;
+            }
+          }
+          if (oldestKey != null) {
+            cache.remove(oldestKey);
+          } else {
+            break;
+          }
+          if (jsonEncode(cache).length < 3 * 1024 * 1024) break;
+        }
+      }
 
       final encrypted = _encryption.encrypt(jsonEncode(cache));
       await _safeBox?.put(_cacheKey, encrypted);

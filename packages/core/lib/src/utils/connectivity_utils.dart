@@ -72,7 +72,7 @@ class ConnectivityUtils {
 
     try {
       final result = await _connectivity.checkConnectivity().timeout(
-            const Duration(seconds: 3),
+            const Duration(seconds: 1), // ═══ FIX: 1s (was 3s) — faster offline detection ═══
             onTimeout: () => <ConnectivityResult>[],
           );
       final linkUp = _isConnected(result);

@@ -1613,15 +1613,3 @@ class _EncryptParams {
 String _encryptInIsolate(_EncryptParams params) {
   return params.encryption.encrypt(params.jsonString);
 }
-
-class _EncodeParams {
-  final Map<String, dynamic> data;
-  final EncryptionService encryption;
-  const _EncodeParams(this.data, this.encryption);
-}
-
-/// Top-level function for compute() — encodes + encrypts in background isolate
-String _encodeAndEncryptInIsolate(_EncodeParams params) {
-  final json = jsonEncode(params.data);
-  return params.encryption.encrypt(json);
-}

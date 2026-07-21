@@ -59,7 +59,10 @@ class _SubmissionsScreenState extends ConsumerState<SubmissionsScreen> {
         status: _statusFilter,
         campaignType: campaign.value,
         campaignRound: campaign.value == 'integrated_activity' ? round : null,
-        limit: 2000, // ═══ Was 5000 — 2000 is sufficient, reduces memory pressure ═══
+        // ═══ FIX #20: 500 (was 2000) — تقليل استهلاك الذاكرة + sort أسرع ═══
+        // Previously: 2000 → sort() على UI thread = ~200,000 مقارنة
+        // Now: 500 → sort() أسرع 4×، pagination server-side لاحقاً
+        limit: 500,
         offset: 0,
       );
 

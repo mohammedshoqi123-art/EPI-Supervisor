@@ -32,6 +32,9 @@ class ConnectivityUtils {
   static DateTime? _lastProbe;
   static bool _probing = false;
 
+  // ═══ FIX #16: Completer لانتظار أول probe قبل إكمال initialize ═══
+  static Completer<void>? _firstProbeCompleter;
+
   /// Probe targets — tried in PARALLEL, first success wins.
   /// ═══ PERFORMANCE: 3 URLs — includes Supabase for networks that block Google/Cloudflare ═══
   static const List<String> _probeUrls = [
@@ -64,26 +67,31 @@ class ConnectivityUtils {
       return;
     }
 
-    // ═══ FIX: Start offline — use cached data immediately ═══
-    // Previously: _isOnline = true → app thinks it's online → waits for network → 60-90s loading
-    // Now: start offline → use cached data instantly → probe in background → update when online
-    // This eliminates the "loading forever" issue
+    // ═══ FIX #16: انتظار أول probe واحد على الأقل (مع timeout 3s) ═══
+    // Previously: fire-and-forget → isOnline يبقى false حتى ينتهي probe
+    // Now: ننتظر أول probe (max 3s) ثم نُرجع النتيجة الفعلية
     _isOnline = false;
+    _firstProbeCompleter = Completer<void>();
 
     try {
       final result = await _connectivity.checkConnectivity().timeout(
-            const Duration(seconds: 1), // ═══ FIX: 1s (was 3s) — faster offline detection ═══
+            const Duration(seconds: 1),
             onTimeout: () => <ConnectivityResult>[],
           );
       final linkUp = _isConnected(result);
       if (linkUp) {
-        // ═══ FIX: Run probe in background — don't block initialize() ═══
-        // Previously: awaited _probeInternet() with 3s timeout → blocked app startup
-        // Now: fire-and-forget → SplashScreen uses Completer to wait
+        // انتظار أول probe مع timeout 3 ثوانٍ
         _probeAndEmit();
+        await _firstProbeCompleter!.future.timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {}, // لا نرمي error — نكمل offline
+        );
       }
     } catch (_) {
       // Can't check — stay offline
+    } finally {
+      _firstProbeCompleter?.complete();
+      _firstProbeCompleter = null;
     }
 
     // Listen for link changes (e.g., user toggles airplane mode)
@@ -190,12 +198,22 @@ class ConnectivityUtils {
     try {
       _probeInternet().then((online) {
         _emitIfChanged(online);
+        // ═══ FIX #16: إكمال Completer بعد أول probe ═══
+        if (_firstProbeCompleter != null && !_firstProbeCompleter!.isCompleted) {
+          _firstProbeCompleter!.complete();
+        }
       }).catchError((e) {
-        // ═══ FIX: Don't crash on probe errors ═══
         debugPrint('[ConnectivityUtils] _probeAndEmit error: $e');
+        // ═══ FIX #16: إكمال Completer حتى عند الخطأ ═══
+        if (_firstProbeCompleter != null && !_firstProbeCompleter!.isCompleted) {
+          _firstProbeCompleter!.complete();
+        }
       });
     } catch (e) {
       debugPrint('[ConnectivityUtils] _probeAndEmit sync error: $e');
+      if (_firstProbeCompleter != null && !_firstProbeCompleter!.isCompleted) {
+        _firstProbeCompleter!.complete();
+      }
     }
   }
 

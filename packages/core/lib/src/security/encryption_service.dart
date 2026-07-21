@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
@@ -93,21 +94,34 @@ class EncryptionService {
     // ═══ FIX: PBKDF2 في Isolate منفصل — لا نحظر UI thread ═══
     // السابق: 600k PBKDF2 على UI thread → 1-3s تجميد
     // الجديد: compute() ينفذها في خيط خلفي → UI طليق
-    // ═══ FIX: Keep UI thread fallback — Isolate may fail on weak devices ═══
+    // ═══ FIX #1: NO UI thread fallback — PBKDF2 600k on UI = 1-3s freeze ═══
+    // Previously: fell back to _deriveKeySync() on UI thread → freeze on weak devices
+    // Now: retry Isolate with longer timeout, throw if still failing
+    // The caller (OfflineManager.init) has its own timeout + graceful degradation
     try {
       final keyBytes = await compute(
         _pbkdf2InIsolate,
         _Pbkdf2Params(effectiveKey, salt),
       ).timeout(
         const Duration(seconds: 10),
-        onTimeout: () => throw TimeoutException('Isolate PBKDF2 timeout'),
+        onTimeout: () => throw TimeoutException('Isolate PBKDF2 timeout (attempt 1)'),
+      );
+      _pinnedKey = enc.Key(keyBytes);
+    } on TimeoutException {
+      // Retry once with 15s timeout
+      debugPrint('[EncryptionService] Isolate timeout — retrying with 15s');
+      final keyBytes = await compute(
+        _pbkdf2InIsolate,
+        _Pbkdf2Params(effectiveKey, salt),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Isolate PBKDF2 timeout (final)'),
       );
       _pinnedKey = enc.Key(keyBytes);
     } catch (e) {
-      // ═══ FIX: Fall back to UI thread — don't throw ═══
-      debugPrint('[EncryptionService] Isolate failed ($e) — falling back to UI thread');
-      final keyBytes = _deriveKeySync(utf8.encode(effectiveKey), salt);
-      _pinnedKey = enc.Key(keyBytes);
+      // ═══ FIX #1: NO UI thread fallback — throw so caller can degrade gracefully ═══
+      debugPrint('[EncryptionService] Isolate failed ($e) — NOT falling back to UI thread');
+      rethrow;
     }
 
     if (kDebugMode) {
@@ -401,4 +415,144 @@ Uint8List _pbkdf2InIsolate(_Pbkdf2Params params) {
     utf8.encode(params.encryptionKey),
     params.salt,
   );
+}
+
+/// ═══════════════════════════════════════════════════════════════
+/// Persistent Isolate Worker — يبقى طوال عمر التطبيق
+/// ═══════════════════════════════════════════════════════════════
+///
+/// PROBLEM: compute() يُنشئ Isolate جديد كل مرة (تكلفة 50-100ms)
+/// SOLUTION: Isolate واحد يبقى ويتلقى رسائل عبر SendPort
+///
+/// يُستخدم لـ:
+/// 1. PBKDF2 key derivation (عند بدء التطبيق)
+/// 2. JSON encode + encrypt (عند حفظ المسودات)
+/// ═══════════════════════════════════════════════════════════════
+
+class _PersistentIsolateRequest {
+  final int id;
+  final String type; // 'pbkdf2' or 'encode_encrypt'
+  final dynamic data;
+  _PersistentIsolateRequest(this.id, this.type, this.data);
+}
+
+class _PersistentIsolateResponse {
+  final int id;
+  final dynamic result;
+  final String? error;
+  _PersistentIsolateResponse(this.id, this.result, this.error);
+}
+
+class _EncodeEncryptData {
+  final Map<String, dynamic> draftData;
+  final String encryptionKey;
+  final Uint8List salt;
+  _EncodeEncryptData(this.draftData, this.encryptionKey, this.salt);
+}
+
+class PersistentEncryptionIsolate {
+  Isolate? _isolate;
+  SendPort? _sendPort;
+  final _receivePort = ReceivePort();
+  final _pending = <int, Completer<dynamic>>{};
+  int _nextId = 0;
+  bool _initialized = false;
+
+  static final PersistentEncryptionIsolate instance = PersistentEncryptionIsolate._();
+  PersistentEncryptionIsolate._();
+
+  Future<void> initialize() async {
+    if (_initialized) return;
+    try {
+      _isolate = await Isolate.spawn(_isolateEntryPoint, _receivePort.sendPort);
+      _sendPort = await _receivePort.first as SendPort;
+      _initialized = true;
+      if (kDebugMode) debugPrint('[PersistentIsolate] ✅ Initialized');
+    } catch (e) {
+      if (kDebugMode) debugPrint('[PersistentIsolate] ❌ Failed to initialize: $e');
+      _initialized = false;
+    }
+  }
+
+  Future<Uint8List> deriveKey(String encryptionKey, Uint8List salt) async {
+    if (!_initialized) {
+      // Fallback: use compute()
+      return compute(_pbkdf2InIsolate, _Pbkdf2Params(encryptionKey, salt));
+    }
+    return _sendRequest<Uint8List>('pbkdf2', _Pbkdf2Params(encryptionKey, salt));
+  }
+
+  Future<String> encodeAndEncrypt(Map<String, dynamic> draftData, String encryptionKey, Uint8List salt) async {
+    if (!_initialized) {
+      // Fallback: use compute()
+      return compute(_encodeAndEncryptInIsolate, _EncodeParams(draftData, EncryptionService()));
+    }
+    return _sendRequest<String>('encode_encrypt', _EncodeEncryptData(draftData, encryptionKey, salt));
+  }
+
+  Future<T> _sendRequest<T>(String type, dynamic data) async {
+    final id = _nextId++;
+    final completer = Completer<dynamic>();
+    _pending[id] = completer;
+    _sendPort!.send(_PersistentIsolateRequest(id, type, data));
+    return completer.future.timeout(
+      const Duration(seconds: 30),
+      onTimeout: () {
+        _pending.remove(id);
+        throw TimeoutException('PersistentIsolate timeout for $type');
+      },
+    ) as Future<T>;
+  }
+
+  void dispose() {
+    _receivePort.close();
+    _isolate?.kill(priority: Isolate.immediate);
+    _isolate = null;
+    _initialized = false;
+  }
+}
+
+void _isolateEntryPoint(SendPort mainSendPort) {
+  final receivePort = ReceivePort();
+  mainSendPort.send(receivePort.sendPort);
+
+  receivePort.listen((message) {
+    if (message is _PersistentIsolateRequest) {
+      try {
+        dynamic result;
+        switch (message.type) {
+          case 'pbkdf2':
+            final params = message.data as _Pbkdf2Params;
+            result = EncryptionService._deriveKeySync(
+              utf8.encode(params.encryptionKey),
+              params.salt,
+            );
+            break;
+          case 'encode_encrypt':
+            final params = message.data as _EncodeEncryptData;
+            final json = jsonEncode(params.draftData);
+            // Derive key from params
+            final keyBytes = EncryptionService._deriveKeySync(
+              utf8.encode(params.encryptionKey),
+              params.salt,
+            );
+            final key = enc.Key(keyBytes);
+            final iv = enc.IV.fromSecureRandom(12);
+            final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.gcm));
+            final encrypted = encrypter.encrypt(json, iv: iv);
+            final resultBytes = Uint8List(4 + 12 + encrypted.bytes.length);
+            resultBytes[0] = 0x45; resultBytes[1] = 0x50; resultBytes[2] = 0x49; resultBytes[3] = 0x32;
+            resultBytes.setAll(4, iv.bytes);
+            resultBytes.setAll(16, encrypted.bytes);
+            result = base64Encode(resultBytes);
+            break;
+          default:
+            throw Exception('Unknown request type: ${message.type}');
+        }
+        mainSendPort.send(_PersistentIsolateResponse(message.id, result, null));
+      } catch (e) {
+        mainSendPort.send(_PersistentIsolateResponse(message.id, null, e.toString()));
+      }
+    }
+  });
 }

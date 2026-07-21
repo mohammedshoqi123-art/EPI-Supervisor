@@ -70,8 +70,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     _draftId = widget.draftId ?? const Uuid().v4();
     _pageController = PageController();
     _loadForm();
-    // ⚠️ PERF: 60 ثانية — PBKDF2 encryption مكلف، 30s تسبب تجميد
-    _autoSaveTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+    // ═══ FIX #2: 240 ثانية (4 دقائق) — تقليل تجميد UI ═══
+    // Previously: 60s → PBKDF2 encryption كل دقيقة = freeze 1-3s
+    // Now: 240s → 4× أقل تجميد، مع حفظ عند كل تغيير مهم أيضاً
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 240), (_) {
       if (_hasUnsavedChanges && _formData.isNotEmpty) {
         _autoSave(showFeedback: false);
       }

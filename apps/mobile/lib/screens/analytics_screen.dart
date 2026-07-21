@@ -467,6 +467,75 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     // ═══ P0-4: Use precomputed KPI provider — was 250,000 iterations per build
     // Now: 0 iterations in build(), computed once in provider and cached
     final params = _getAnalyticsParams(ref);
+
+    // ═══ FIX #30: فحص حالة التحميل والخطأ قبل عرض KPI ═══
+    // Previously: _analyticsKpiProvider يُخفي أخطاء providers بـ .valueOrNull ?? []
+    // Now: نعرض loading shimmer أو error message قبل حساب KPI
+    final readinessAsync = ref.watch(_readinessSubsProvider(params));
+    final supervisionAsync = ref.watch(_supervisionSubsProvider(params));
+
+    // حالة التحميل — shimmer indicator
+    final isLoading = readinessAsync.isLoading || supervisionAsync.isLoading;
+    if (isLoading && !readinessAsync.hasValue && !supervisionAsync.hasValue) {
+      return Container(
+        height: 80,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 24, height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    // حالة الخطأ — رسالة مع إعادة المحاولة
+    final hasError = readinessAsync.hasError || supervisionAsync.hasError;
+    if (hasError && !readinessAsync.hasValue && !supervisionAsync.hasValue) {
+      return Container(
+        height: 80,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 18, color: Colors.orange[700]),
+              const SizedBox(width: 8),
+              Text(
+                'خطأ في تحميل التحليلات',
+                style: TextStyle(
+                  fontFamily: 'Tajawal', fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () {
+                  ref.invalidate(_readinessSubsProvider(params));
+                  ref.invalidate(_supervisionSubsProvider(params));
+                },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('إعادة المحاولة', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // الحالة العادية — عرض KPI
     final kpi = ref.watch(_analyticsKpiProvider(params));
 
     return AnalyticsKPIBar(

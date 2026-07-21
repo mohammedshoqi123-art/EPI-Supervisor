@@ -420,7 +420,10 @@ serve(async (req) => {
     }
 
     // 1. Fetch the scheduled report config
-    const { data: report, error: reportError } = db
+    // ═══ FIX #6: await مفقود — بدونه data/error يكونان undefined ═══
+    // Previously: بدون await → reportError دائماً truthy (undefined) → 404 دائماً
+    // Now: await يُنتظر الاستعلام فعلياً
+    const { data: report, error: reportError } = await db
       .from('scheduled_reports')
       .select('*')
       .eq('id', scheduled_report_id)

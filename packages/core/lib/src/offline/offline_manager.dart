@@ -814,27 +814,23 @@ class OfflineManager {
           onTimeout: () => throw TimeoutException('Isolate timeout (attempt 1)'),
         );
       } on TimeoutException {
-        // Retry once with longer timeout (8s)
-        debugPrint('[OfflineManager] Isolate timeout — retrying with 8s');
-        try {
-          encrypted = await compute(_encodeAndEncryptInIsolate, _EncodeParams(
-            draftData,
-            _encryption,
-          )).timeout(
-            const Duration(seconds: 8),
-            onTimeout: () => throw TimeoutException('Isolate timeout (attempt 2)'),
-          );
-        } catch (retryError) {
-          // ═══ FIX: Fall back to UI thread — don't throw ═══
-          debugPrint('[OfflineManager] Isolate failed — falling back to UI thread');
-          final json = jsonEncode(draftData);
-          encrypted = _encryption.encrypt(json);
-        }
+        // ═══ FIX #1: NO UI thread fallback — retry with 10s timeout ═══
+        // Previously: PBKDF2 600k on UI thread → freeze 1-3s
+        // Now: retry Isolate with longer timeout, then throw if still failing
+        debugPrint('[OfflineManager] Isolate timeout — retrying with 10s');
+        encrypted = await compute(_encodeAndEncryptInIsolate, _EncodeParams(
+          draftData,
+          _encryption,
+        )).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => throw TimeoutException('Isolate timeout (final) — draft not saved'),
+        );
       } catch (e) {
-        // ═══ FIX: Fall back to UI thread — don't throw ═══
-        debugPrint('[OfflineManager] Isolate error — falling back to UI thread: $e');
-        final json = jsonEncode(draftData);
-        encrypted = _encryption.encrypt(json);
+        // ═══ FIX #1: NO UI thread fallback — log and rethrow ═══
+        // Previously: _encryption.encrypt(json) on UI thread → freeze
+        // Now: draft will be saved on next auto-save attempt
+        debugPrint('[OfflineManager] Isolate error — draft NOT saved (will retry): $e');
+        rethrow;
       }
 
       await _box?.put('drafts/$draftId', encrypted);
@@ -937,10 +933,19 @@ class OfflineManager {
   }
 
   /// Get draft form IDs — reads index
-  /// ═══ FIX: Try both encrypted and plain JSON format ═══
+  /// ═══ FIX: Try both encrypted and plain JSON format + Hive key scan fallback ═══
   Set<String> getDraftFormIds() {
+    // ═══ FIX #29: فحص أن Hive box مفتوح أولاً ═══
+    if (_box == null || !_box!.isOpen) {
+      debugPrint('[OfflineManager] getDraftFormIds: box not open — returning empty');
+      return {};
+    }
+
     final indexStr = _box?.get(_draftsIndexKey);
-    if (indexStr == null || indexStr.isEmpty) return {};
+    if (indexStr == null || indexStr.isEmpty) {
+      // ═══ FIX #29: Index فارغ — محاولة إعادة بناء من Hive keys ═══
+      return _rebuildDraftsIndexFromKeys();
+    }
     try {
       // Try decrypting first (new encrypted format)
       final decrypted = _encryption.decrypt(indexStr);
@@ -953,9 +958,31 @@ class OfflineManager {
     // Fallback: try reading as plain JSON (old format)
     try {
       return (jsonDecode(indexStr) as List).cast<String>().toSet();
-    } catch (_) {
-      return {};
+    } catch (e) {
+      // ═══ FIX #29: كلا التنسيقين فشلا — إعادة بناء من Hive keys ═══
+      debugPrint('[OfflineManager] getDraftFormIds: index corrupted ($e) — rebuilding from keys');
+      return _rebuildDraftsIndexFromKeys();
     }
+  }
+
+  /// ═══ FIX #29: إعادة بناء drafts_index من Hive keys الفعلية ═══
+  /// يُستدعى عندما يكون الـ index تالفاً أو فارغاً لكن توجد مسودات فعلية
+  Set<String> _rebuildDraftsIndexFromKeys() {
+    if (_box == null || !_box!.isOpen) return {};
+    final draftKeys = _box!.keys
+        .where((k) => k.toString().startsWith('drafts/'))
+        .map((k) => k.toString().replaceFirst('drafts/', ''))
+        .toList();
+    if (draftKeys.isNotEmpty) {
+      debugPrint('[OfflineManager] ⚠️ Rebuilt drafts index from ${draftKeys.length} Hive keys');
+      // حفظ الـ index المُعاد بناؤه (مشفر)
+      try {
+        _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftKeys)));
+      } catch (e) {
+        debugPrint('[OfflineManager] Could not save rebuilt index: $e');
+      }
+    }
+    return draftKeys.toSet();
   }
 
   /// Remove a draft — deletes ONLY this key (no decrypt + encrypt of all!)
@@ -988,13 +1015,25 @@ class OfflineManager {
   /// Now: decrypt once, cache in memory, only re-decrypt when data changes
   Map<String, dynamic>? _cacheMemory;
   String? _cacheRawSignature;
-  static const int _maxCacheMemoryEntries = 50; // LRU limit
-
-  // ═══ No cache size limit — let Hive handle storage ═══
+  // ═══ FIX Storage: تقليل حد الكاش لمنع نمو المساحة ═══
+  // Previously: 50 entries × 200KB average = 10MB+ في Hive
+  // Now: 20 entries + حد 500KB لكل entry + حد 2MB للكل
+  static const int _maxCacheMemoryEntries = 20; // LRU limit
+  static const int _maxSingleEntrySize = 500 * 1024; // 500KB per entry
+  static const int _maxTotalCacheSize = 2 * 1024 * 1024; // 2MB total
 
   Future<void> cacheData(String key, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
       final cache = _getCache();
+
+      // ═══ FIX Storage: فحص حجم entry الواحد ═══
+      final entryJson = jsonEncode(data);
+      if (entryJson.length > _maxSingleEntrySize) {
+        if (kDebugMode) {
+          debugPrint('[OfflineManager] Cache entry too large ($key: ${entryJson.length ~/ 1024}KB > ${_maxSingleEntrySize ~/ 1024}KB) — skipping');
+        }
+        return; // لا نخزن entries ضخمة
+      }
 
       // ═══ FIX: Remove old entry for same key first ═══
       cache.remove(key);
@@ -1024,13 +1063,13 @@ class OfflineManager {
 
       final jsonStr = jsonEncode(cache);
 
-      // ═══ FIX: Check blob size — if > 5MB, remove oldest entries ═══
-      if (jsonStr.length > 5 * 1024 * 1024) {
+      // ═══ FIX Storage: حد 2MB للكل بدلاً من 5MB ═══
+      if (jsonStr.length > _maxTotalCacheSize) {
         if (kDebugMode) {
-          debugPrint('[OfflineManager] Cache blob too large (${jsonStr.length ~/ 1024}KB) — evicting');
+          debugPrint('[OfflineManager] Cache blob too large (${jsonStr.length ~/ 1024}KB) — evicting to 1MB');
         }
-        // Remove oldest entries until under 3MB
-        while (cache.length > 10) {
+        // Remove oldest entries until under 1MB
+        while (cache.length > 5) {
           String? oldestKey;
           DateTime? oldestTime;
           for (final e in cache.entries) {
@@ -1045,7 +1084,7 @@ class OfflineManager {
           } else {
             break;
           }
-          if (jsonEncode(cache).length < 3 * 1024 * 1024) break;
+          if (jsonEncode(cache).length < 1024 * 1024) break;
         }
       }
 
@@ -1241,12 +1280,15 @@ class OfflineManager {
         await _safeBox?.put(_failedSubmissionsKey, encrypted);
       }
 
-      // 3. Clean old cache entries (older than 30 days)
+      // 3. Clean old cache entries (older than 7 days — was 30)
+      // ═══ FIX Storage: تقليل مدة الاحتفاظ من 30 إلى 7 أيام ═══
+      // Previously: 30 days → cache يحتفظ ببيانات قديمة ضخمة
+      // Now: 7 days → بيانات أحدث فقط، مساحة أقل
       final cache = _getCache();
       final cacheToRemove = <String>[];
       for (final entry in cache.entries) {
         final cachedAt = DateTime.tryParse(entry.value['cached_at'] ?? '');
-        if (cachedAt != null && now.difference(cachedAt).inDays > 30) {
+        if (cachedAt != null && now.difference(cachedAt).inDays > 7) {
           cacheToRemove.add(entry.key);
         }
       }
@@ -1311,6 +1353,19 @@ class OfflineManager {
         }
       } catch (_) {
         // Can't check size — skip
+      }
+
+      // ═══ FIX Storage: Hive compaction — يُزيل البيانات الميتة من الملف ═══
+      // بدون compaction، الملف يبقى يكبر حتى مع الحذف
+      if (removedCount > 0) {
+        try {
+          await _box!.compact();
+          if (kDebugMode) {
+            debugPrint('[OfflineManager] ✅ Hive compacted after removing $removedCount items');
+          }
+        } catch (e) {
+          if (kDebugMode) debugPrint('[OfflineManager] Compact failed: $e');
+        }
       }
 
       if (kDebugMode && removedCount > 0) {

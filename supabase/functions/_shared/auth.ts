@@ -37,7 +37,11 @@ export async function authenticateRequest(
   if (!authHeader) return null
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser()
+    // ═══ FIX #19: timeout 8s على getUser — بدونه قد يعلّق الـ Edge Function ═══
+    const { data: { user }, error } = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('auth timeout')), 8000)),
+    ]) as any
     if (error || !user) return null
 
     return {

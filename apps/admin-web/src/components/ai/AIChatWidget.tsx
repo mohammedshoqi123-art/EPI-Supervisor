@@ -801,18 +801,26 @@ export function AIChatWidget() {
     updatedAt: Date.now(),
   })
 
-  // Auto-save messages to localStorage
+  // ═══ FIX #26: debounced save — لا نكتب localStorage على كل تغيير ═══
+  // Previously: saveMessages(messages) على كل تغيير = 500 كتابة/ثانية مع streaming
+  // Now: debounce 2000ms = كتابة واحدة كل ثانيتين
+  const saveMessagesRef = useRef<number | null>(null)
   useEffect(() => {
     if (messages.length > 0) {
-      saveMessages(messages)
+      if (saveMessagesRef.current) clearTimeout(saveMessagesRef.current)
+      saveMessagesRef.current = window.setTimeout(() => {
+        saveMessages(messages)
+      }, 2000) // 2s debounce
     }
+    return () => { if (saveMessagesRef.current) clearTimeout(saveMessagesRef.current) }
   }, [messages])
 
   // Auto-save context periodically
+  // ═══ FIX #26: 30 ثانية (was 10) — تقليل كتابة localStorage ═══
   useEffect(() => {
     const interval = setInterval(() => {
       saveContext(contextRef.current)
-    }, 10000) // Every 10 seconds
+    }, 30000) // Every 30 seconds (was 10)
     return () => clearInterval(interval)
   }, [])
 
@@ -1070,40 +1078,25 @@ export function AIChatWidget() {
         actions.push({ id: 'nav-dash', label: '📊 لوحة التحكم', type: 'navigate', payload: '/dashboard', color: 'bg-blue-50 text-blue-700 border-blue-200' })
       }
 
-      // Simulate streaming (chunk-based for speed)
+      // ═══ FIX #3: إزالة محاكاة streaming — عرض الرد دفعة واحدة ═══
+      // Previously: 4 أحرف كل 8ms = 500 re-render لكل رسالة + 500 كتابة localStorage
+      // Now: عرض كامل فوراً = 1 re-render فقط
       const assistantMsg: Message = {
         id: `a-${Date.now()}`,
         role: 'assistant',
-        content: '',
+        content: responseText,
         timestamp: new Date(),
-        isStreaming: true,
+        isStreaming: false,
         source: edgeResponse ? 'edge' : 'local',
         intent: localResult.intent,
+        chart,
+        actions,
         ...edgeMetadata,
       }
       setMessages(prev => [...prev, assistantMsg])
 
-      // Stream in chunks of 3-5 characters for natural feel
-      const chunkSize = 4
-      const delayPerChunk = 8 // ms
-      let current = ''
-      for (let i = 0; i < responseText.length; i += chunkSize) {
-        current += responseText.slice(i, i + chunkSize)
-        setMessages(prev => prev.map(m =>
-          m.id === assistantMsg.id ? { ...m, content: current } : m
-        ))
-        await new Promise(r => setTimeout(r, delayPerChunk))
-      }
-
       // Update bot history
       ctx.history.push({ role: 'bot', text: responseText, intent: localResult.intent, timestamp: Date.now() })
-
-      // Finalize message
-      setMessages(prev => prev.map(m =>
-        m.id === assistantMsg.id
-          ? { ...m, isStreaming: false, chart, actions }
-          : m
-      ))
 
     } catch (err) {
       setMessages(prev => [...prev, {

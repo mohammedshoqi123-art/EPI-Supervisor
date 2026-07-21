@@ -40,6 +40,9 @@ serve(async (req) => {
     if (endDate) query = query.lte('created_at', endDate)
     if (campaignRound) query = query.eq('campaign_round', campaignRound)
 
+    // ═══ FIX #5: إضافة limit — بدونه قد يُرجع 100K صف ═══
+    query = query.limit(5000)
+
     const { data: subs, error: subsError } = await query
 
     if (subsError) {

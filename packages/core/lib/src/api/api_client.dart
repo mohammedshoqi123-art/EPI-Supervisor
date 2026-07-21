@@ -45,7 +45,10 @@ class ApiClient {
 
   /// Default safety limit — Supabase REST API returns max 1000 rows by default
   /// when no .limit() is applied. We override to 10000 to prevent silent truncation.
-  static const int _defaultLimit = 10000;
+  // ═══ FIX #14: 1000 (was 10000) — منع جلب بيانات ضخمة بدون قصد ═══
+  // Previously: 10000 → أي استعلام بدون limit قد يُرجع 10MB+ بيانات
+  // Now: 1000 → آمن للأجهزة الضعيفة، يمكن تجاوزه بـ limit: صريح
+  static const int _defaultLimit = 1000;
 
   Future<List<Map<String, dynamic>>> select(
     String table, {

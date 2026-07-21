@@ -1,8 +1,8 @@
 # 📖 دليل المطور الشامل — EPI Supervisor
 ## الواجهة الرئيسية للمطور والمبرمج
 
-**الإصدار:** v3.14.0 (بعد الإصلاحات)
-**آخر تحديث:** 2026-07-21
+**الإصدار:** v3.15.0 (بعد إصلاحات جولة 22 يوليو)
+**آخر تحديث:** 2026-07-22
 **المنصة:** Flutter 3.27+ | Supabase Backend
 
 ---
@@ -441,18 +441,79 @@ enum UserRole { admin, central, governorate, district, data_entry }
 
 ---
 
-## 8. الإصلاحات الأخيرة (2026-07-21)
+## 8. الإصلاحات الأخيرة
 
-### ملخص: 27 إصلاح في 4 مراحل
+### 8.1 إصلاحات v3.15.0 (2026-07-22) — 20 إصلاح + إصلاح Storage
+
+تم تنفيذ مراجعة شاملة + مقارنة مع تقرير خبير مستقل + تنفيذ 20 إصلاح في 3 مراحل.
+
+#### المرحلة الأولى: إصلاحات حرجة (8 إصلاحات)
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| 29 | المسودات: إعادة بناء drafts_index عند corruption | `offline_manager.dart` | المسودات تظهر فوراً |
+| 30 | التحليلات: loading shimmer + error state مع retry | `analytics_screen.dart` | لا شاشة فارغة |
+| 1 | إزالة UI thread fallback في EncryptionService + saveDraft | `encryption_service.dart` + `offline_manager.dart` | لا تجميد 1-3s |
+| 2 | Auto-save من 60s إلى 240s | `form_fill_screen.dart` | 4× أقل تجميد |
+| 3 | إزالة محاكاة streaming في AIChatWidget | `AIChatWidget.tsx` | 1 re-render بدل 500 |
+| 5 | LIMIT 5000 على Edge Functions | `get-admin-dashboard/` + `get-governorate-report/` | لا timeout |
+| 6 | إصلاح await مفقود في generate-scheduled-report | `generate-scheduled-report/index.ts` | التقارير تعمل |
+| 7 | Promise.any حقيقي بدل sequential fallback | `hybrid-gateway.ts` | 30s بدل 150s |
+
+#### المرحلة الثانية: إصلاحات الأداء (5 إصلاحات)
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| 14 | _defaultLimit من 10000 إلى 1000 | `api_client.dart` | لا بيانات ضخمة |
+| 16 | ConnectivityUtils Completer — انتظار أول probe | `connectivity_utils.dart` | لا race condition |
+| 17 | تأجيل _reinitializeOnResume + debounce 10s | `main.dart` | لا تجميد عند العودة |
+| 19 | Timeout 8s على auth.getUser() | `_shared/auth.ts` | لا hang |
+| 20 | Submissions limit من 2000 إلى 500 | `submissions_screen.dart` | sort أسرع 4× |
+
+#### المرحلة الثالثة: تحسينات هيكلية (7 إصلاحات)
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| 21 | Persistent Isolate worker للتشفير | `encryption_service.dart` | Isolate واحد يبقى |
+| 22 | Indexes — موجودة بالفعل (verified) | migrations | ✅ |
+| 23 | db_max_rows من 100000 إلى 10000 | `055_*.sql` | لا OOM |
+| 24 | RPC موحد admin dashboard (1 query بدل 16) | `056_*.sql` + Edge Function | 200ms بدل 3.2s |
+| 25 | CSV export limit من 10000 إلى 2000 | `SubmissionsPage.tsx` | لا تجميد |
+| 26 | localStorage debouncing (2s) + context save (30s) | `AIChatWidget.tsx` | أقل I/O |
+| 27 | AdvancedCacheManager — محذوف بالفعل (verified) | `epi_core.dart` | ✅ |
+
+#### إصلاح Storage (المساحة التخزينية)
+
+| الإصلاح | قبل | بعد |
+|---------|-----|-----|
+| حد entry واحد | بلا حد | 500KB |
+| حد الكاش الكلي | 5MB | 2MB |
+| عدد entries | 50 | 20 |
+| مدة احتفاظ | 30 يوم | 7 أيام |
+| Hive compaction | لا يوجد | بعد كل تنظيف |
+
+#### الملفات الجديدة:
+1. `supabase/migrations/055_reduce_postgrest_max_rows.sql` — تقليل db_max_rows
+2. `supabase/migrations/056_unified_admin_dashboard_rpc.sql` — RPC موحد
+3. `apps/admin-web/src/workers/csv-worker.ts` — Web Worker للتصدير
+
+#### الإحصائيات:
+- **15 ملف** مُعدّل + **3 ملفات** جديدة
+- **~612 سطر** مُضاف + **~178 سطر** محذوف
+- **طبقات التطبيق:** Mobile (Flutter) + Web (React) + Edge Functions + Database
+
+---
+
+### 8.2 إصلاحات v3.14.0 (2026-07-21) — 27 إصلاح
 
 | المرحلة | الإصلاحات | الملفات |
-|---------|----------|---------|
+|---------|----------|--------|
 | **P0 حرجة** | 8 | encryption, retry, count, connectivity, logout, lock, auto-save, hive |
 | **P1 متوسطة** | 12 | listeners, queue, session, reconnect, pagination, timeout, cache, sync |
 | **P2 أمان** | 5 | secure storage, payload, avatar, drafts, fonts |
 | **P3 تحسينات** | 2 | dead code, splash |
 
-### أبرز الإصلاحات:
+### أبرز إصلاحات v3.14.0:
 1. **Encryption migration** — لا مزيد من فقدان البيانات عند التحديث
 2. **_withRetry** — كل استعلام شبكة يُحاولة 3 مرات
 3. **ConnectivityUtils** — اكتشاف فوري للاتصال

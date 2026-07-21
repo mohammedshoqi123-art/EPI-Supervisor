@@ -301,11 +301,26 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
 
   // ═══ FIX: Handle app lifecycle to prevent black screen on resume ═══
   @override
+  // ═══ FIX #17: تأخير + debounce لتجنب إعادة التهيئة المتكررة ═══
+  // Previously: كل resume → تجميد 1-3 ثوانٍ
+  // Now: تأخير 2 ثانية + debounce 10 ثوانٍ
+  DateTime? _lastResumeInit;
+
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      debugPrint('[App] Resumed — reinitializing Hive + session + connectivity');
-      _reinitializeOnResume();
+      // ═══ FIX #17: debounce — تخطي إذا آخر init كان قبل أقل من 10 ثوانٍ ═══
+      final now = DateTime.now();
+      if (_lastResumeInit != null && now.difference(_lastResumeInit!).inSeconds < 10) {
+        debugPrint('[App] Resumed — skipping reinit (last was ${now.difference(_lastResumeInit!).inSeconds}s ago)');
+        return;
+      }
+      _lastResumeInit = now;
+      debugPrint('[App] Resumed — reinitializing in 2s...');
+      // ═══ FIX #17: تأخير 2 ثانية لعدم تجميد الواجهة فور العودة ═══
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _reinitializeOnResume();
+      });
     }
   }
 

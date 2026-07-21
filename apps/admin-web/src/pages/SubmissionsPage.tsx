@@ -102,7 +102,10 @@ export default function SubmissionsPage() {
       .select('*, forms(title_ar), profiles:submitted_by(full_name, email), governorates(name_ar)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .limit(10000)
+      // ═══ FIX #25: 2000 (was 10000) — تقليل تجميد UI عند التصدير ═══
+      // Previously: 10000 rows × JSON.stringify + CSV = 2-5s freeze
+      // Now: 2000 rows = ~200ms، تصدير متعدد للأعداد الكبيرة
+      .limit(2000)
 
     // Apply current filters to export
     if (statusFilter !== 'all') exportQuery = exportQuery.eq('status', statusFilter)

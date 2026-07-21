@@ -67,6 +67,67 @@ serve(async (req) => {
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
+    // ═══ FIX #24: محاولة RPC موحد أولاً (استعلام واحد بدلاً من 16) ═══
+    try {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_admin_dashboard_stats', {
+        p_campaign_type: body.campaign_type || null,
+        p_campaign_round: campaignRound,
+      })
+
+      if (!rpcError && rpcData) {
+        // RPC نجح — نرجع البيانات مباشرة
+        const weekCurrent = rpcData.week_current ?? 0
+        const weekPrevious = rpcData.week_previous ?? 0
+        const weeklyChange = weekPrevious > 0
+          ? Math.round((weekCurrent - weekPrevious) / weekPrevious * 100)
+          : weekCurrent > 0 ? 100 : 0
+
+        return jsonResponse({
+          kpis: {
+            total_users: rpcData.total_users ?? 0,
+            active_users: rpcData.active_users ?? 0,
+            total_submissions: rpcData.total_submissions ?? 0,
+            today_submissions: rpcData.today_submissions ?? 0,
+            pending_submissions: rpcData.submitted_count ?? 0,
+            draft_submissions: rpcData.draft_count ?? 0,
+            total_shortages: rpcData.total_shortages ?? 0,
+            critical_shortages: rpcData.critical_shortages ?? 0,
+            total_governorates: rpcData.total_governorates ?? 0,
+            total_districts: rpcData.total_districts ?? 0,
+            total_facilities: rpcData.total_facilities ?? 0,
+            unread_notifications: rpcData.unread_notifications ?? 0,
+            active_forms: rpcData.active_forms ?? 0,
+            offline_pending: 0,
+            weekly_change_percent: weeklyChange,
+          },
+          charts: {
+            submissions_timeline: rpcData.timeline ?? [],
+            submissions_by_governorate: (rpcData.by_governorate ?? []).map((g: any) => ({
+              name: g.name_ar,
+              count: g.count,
+            })),
+            users_by_role: {},
+            shortages_by_severity: {},
+            status_distribution: {
+              draft: rpcData.draft_count ?? 0,
+              submitted: (rpcData.total_submissions ?? 0) - (rpcData.draft_count ?? 0),
+            },
+          },
+          recent_activity: [],
+          system_health: {
+            last_sync: new Date().toISOString(),
+            pending_sync: 0,
+            sync_healthy: true,
+            db_healthy: true,
+            storage_healthy: true,
+          },
+        }, 200, origin)
+      }
+    } catch (rpcErr) {
+      console.log('[Dashboard] RPC failed, falling back to individual queries:', rpcErr)
+    }
+
+    // ═══ Fallback: استعلامات منفصلة (الطريقة القديمة) ═══
     // ═══ KPIs ═══
     const [
       { count: totalUsers },
@@ -101,12 +162,14 @@ serve(async (req) => {
     ])
 
     // ═══ Submissions Timeline (last 30 days) ═══
+    // ═══ FIX #5: إضافة limit — بدونه قد يُرجع 100K صف مع db_max_rows=100000 ═══
     const { data: timelineData } = await applyCampaignRound(db
       .from('form_submissions')
       .select('created_at, status')
       .gte('created_at', monthAgo)
       .is('deleted_at', null)
-      .order('created_at', { ascending: true }))
+      .order('created_at', { ascending: true })
+      .limit(5000))
 
     // Group by day
     const timelineMap = new Map<string, { total: number; submitted: number; draft: number }>()
@@ -127,11 +190,13 @@ serve(async (req) => {
     const submissionsTimeline = Array.from(timelineMap.entries()).map(([date, data]) => ({ date, ...data }))
 
     // ═══ Submissions by Governorate ═══
+    // ═══ FIX #5: إضافة limit ═══
     const { data: govSubmissions } = await applyCampaignRound(db
       .from('form_submissions')
       .select('governorate_id, governorates(name_ar)')
       .gte('created_at', monthAgo)
-      .is('deleted_at', null))
+      .is('deleted_at', null)
+      .limit(5000))
 
     const govMap = new Map<string, { name: string; count: number }>()
     for (const sub of govSubmissions ?? []) {

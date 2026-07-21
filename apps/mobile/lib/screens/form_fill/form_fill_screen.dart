@@ -898,7 +898,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     }
   }
 
-  Future<void> _saveDraft() async {
+  /// ═══ FIX R-C2: Returns true if save succeeded, false otherwise ═══
+  /// Previously: returned void → caller couldn't know if save failed
+  /// Now: returns bool → PopScope can prevent page close on failure
+  Future<bool> _saveDraft() async {
     _syncControllersToFormData();
 
     if (_formData.isEmpty) {
@@ -908,7 +911,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-      return;
+      return false;
     }
 
     // ═══ WEB: لا يمكن حفظ مسودة على الويب (لا Hive) ═══
@@ -920,7 +923,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           duration: Duration(seconds: 3),
         ),
       );
-      return;
+      return false;
     }
 
     setState(() => _isSavingDraft = true);
@@ -938,8 +941,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       );
       _hasUnsavedChanges = false;
       if (mounted) context.showSuccess(AppStrings.draftSaved);
+      return true;
     } on TimeoutException {
       if (mounted) context.showError('التخزين المحلي غير جاهز. حاول مرة أخرى.');
+      return false;
     } catch (e) {
       final errorMsg = e.toString();
       if (mounted) {
@@ -950,6 +955,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           context.showError('فشل حفظ المسودة: $errorMsg');
         }
       }
+      return false;
     } finally {
       if (mounted) setState(() => _isSavingDraft = false);
     }
@@ -1354,9 +1360,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
               ),
               FilledButton.icon(
                 onPressed: () async {
-                  // ⚠️ FIX: احفظ أولاً ثم أغلق (كان يغلق قبل الحفظ)
-                  await _saveDraft();
-                  if (ctx.mounted) Navigator.of(ctx).pop(true);
+                  // ⚠️ FIX R-C2: Check if save succeeded before closing
+                  // Previously: await _saveDraft(); Navigator.pop(true) — always closed
+                  // Now: only pop with true if save actually succeeded
+                  final saved = await _saveDraft();
+                  if (ctx.mounted) Navigator.of(ctx).pop(saved);
                 },
                 icon: const Icon(Icons.save, size: 18),
                 label: const Text('حفظ وخروج', style: TextStyle(fontFamily: 'Tajawal')),
@@ -1365,11 +1373,18 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           ),
         );
 
+        // ⚠️ FIX R-C2: Only close page if save succeeded or user chose to exit without saving
+        // Previously: shouldSave == true always closed the page (even on save failure)
+        // Now: shouldSave == true means save succeeded; shouldSave == false means user chose to exit without saving
         if (shouldSave == true && mounted) {
-          // ⚠️ CRITICAL: اضبط _hasUnsavedChanges = false قبل pop لمنع التكرار
+          _hasUnsavedChanges = false;
+          Navigator.of(context).pop();
+        } else if (shouldSave == false && mounted) {
+          // User explicitly chose 'exit without saving'
           _hasUnsavedChanges = false;
           Navigator.of(context).pop();
         }
+        // shouldSave == null means user pressed 'cancel' — stay on page
       },
       child: Scaffold(
       appBar: EpiAppBar(

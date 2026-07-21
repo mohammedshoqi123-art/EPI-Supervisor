@@ -137,6 +137,16 @@ class OfflineManager {
       rethrow;
     }
 
+    // ═══ FIX R-C1: Store encryption key for old format migration ═══
+    _encryptionKeyForMigration = const String.fromEnvironment('ENCRYPTION_KEY', defaultValue: '');
+    if (_encryptionKeyForMigration.isEmpty) {
+      try {
+        _encryptionKeyForMigration = await EncryptionService.getOrCreateSecureKey();
+      } catch (e) {
+        if (kDebugMode) debugPrint('[OfflineManager] Could not get key for migration: $e');
+      }
+    }
+
     // ═══ PROPOSAL 1: Initialize EncryptionService with stable salt ═══
     // PBKDF2 (600k iterations) runs ONCE here, in a BACKGROUND ISOLATE
     // so the UI thread is not blocked. Then all encrypt/decrypt use the
@@ -377,11 +387,18 @@ class OfflineManager {
     return _getQueue();
   }
 
+  /// ═══ FIX: removeFromQueue with write lock to prevent race conditions ═══
+  /// Previously: no lock → race condition with addToSyncQueue
+  ///   Thread A reads queue (5 items), Thread B adds item (6),
+  ///   Thread A saves (4 items) → new item lost!
+  /// Now: protected by same mutex as addToSyncQueue/syncPendingItems
   Future<void> removeFromQueue(String offlineId) async {
-    final queue = _getQueue();
-    queue.removeWhere((item) => item['offline_id'] == offlineId);
-    await _saveQueue(queue);
-    _invalidatePendingCount();
+    return _withWriteLock(() async {
+      final queue = _getQueue();
+      queue.removeWhere((item) => item['offline_id'] == offlineId);
+      await _saveQueue(queue);
+      _invalidatePendingCount();
+    });
   }
 
   // ═══ PROPOSAL 3: Batch remove — 1× decrypt + 1× encrypt instead of N× ═══
@@ -391,11 +408,13 @@ class OfflineManager {
   /// Now: 1× (decrypt + encrypt) regardless of batch size.
   Future<void> removeFromQueueBatch(List<String> offlineIds) async {
     if (offlineIds.isEmpty) return;
-    final queue = _getQueue();
-    final idSet = offlineIds.toSet();
-    queue.removeWhere((item) => idSet.contains(item['offline_id']));
-    await _saveQueue(queue);
-    _invalidatePendingCount();
+    return _withWriteLock(() async {
+      final queue = _getQueue();
+      final idSet = offlineIds.toSet();
+      queue.removeWhere((item) => idSet.contains(item['offline_id']));
+      await _saveQueue(queue);
+      _invalidatePendingCount();
+    });
   }
 
   Future<void> clearQueue() async {
@@ -755,6 +774,11 @@ class OfflineManager {
   static const String _draftsIndexKey = 'drafts_index';
 
   /// Migrate old blob-format drafts to sharded storage (called once on init)
+  // ═══ FIX R-C1: Key source for old format migration ═══
+  // The encryption key is needed for PBKDF2 re-derivation of old format data.
+  // This is set during init() and used by _migrateDraftsToSharded().
+  String _encryptionKeyForMigration = '';
+
   Future<void> _migrateDraftsToSharded() async {
     final oldBlob = _box?.get(_draftsKey);
     if (oldBlob == null || oldBlob.isEmpty) return; // No old data
@@ -765,7 +789,38 @@ class OfflineManager {
 
     try {
       if (kDebugMode) debugPrint('[OfflineManager] Migrating drafts to sharded storage...');
-      final drafts = Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(oldBlob)));
+
+      // ═══ FIX R-C1: Try normal decrypt first, then old format migration ═══
+      // Previously: _encryption.decrypt(oldBlob) threw FormatException for old format
+      //   → catch block swallowed error → migration silently failed → drafts lost
+      // Now: attempt PBKDF2 re-derivation for old format data in background Isolate
+      String decryptedBlob;
+      try {
+        decryptedBlob = _encryption.decrypt(oldBlob);
+      } catch (e) {
+        // ═══ Old format detected — try PBKDF2 re-derivation ═══
+        if (kDebugMode) debugPrint('[OfflineManager] Old format blob — attempting PBKDF2 migration...');
+        final migrated = await EncryptionService.migrateOldFormatToNew(
+          oldBlob,
+          _encryptionKeyForMigration,
+          _encryption,
+        );
+        if (migrated != null) {
+          // Successfully migrated — decrypt with new format
+          decryptedBlob = _encryption.decrypt(migrated);
+          if (kDebugMode) debugPrint('[OfflineManager] ✅ Old format blob migrated via PBKDF2');
+        } else {
+          // ═══ FIX R-C1: Don't delete — preserve for manual recovery ═══
+          // Previously: silently failed → old blob deleted → data lost forever
+          // Now: keep old blob in separate key for recovery
+          if (kDebugMode) debugPrint('[OfflineManager] ⚠️ Could not migrate old blob — preserving for recovery');
+          await _box?.put('_unmigrated_drafts_blob', oldBlob);
+          await _box?.delete(_draftsKey);
+          return;
+        }
+      }
+
+      final drafts = Map<String, dynamic>.from(jsonDecode(decryptedBlob));
       final draftIds = <String>[];
 
       for (final entry in drafts.entries) {
@@ -847,24 +902,93 @@ class OfflineManager {
   }
 
   /// Get a single draft — decrypts ONLY this draft (not all)
+  /// ═══ FIX R-C1: Attempts old format migration if decrypt fails ═══
   Map<String, dynamic>? getDraft(String draftId) {
     final data = _box?.get('drafts/$draftId');
     if (data == null || data.isEmpty) return null;
     try {
       return Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
     } catch (e) {
-      // ═══ FIX: محاولة plain JSON عند فشل فك التشفير ═══
+      // ═══ FIX R-C1: Try plain JSON first ═══
       try {
         return Map<String, dynamic>.from(jsonDecode(data));
       } catch (_) {
-        // ═══ FIX: إرجاع بيانات محدودة بدل null ═══
-        debugPrint('[OfflineManager] Draft $draftId decrypt error — returning limited data: $e');
-        return {
-          'form_id': draftId,
-          'data': <String, dynamic>{},
-          'saved_at': null,
-        };
+        // ═══ FIX R-C1: Try old format migration (sync attempt) ═══
+        // If it's old format, we can't do PBKDF2 here (would block UI).
+        // But we can check if it's old format and log it.
+        if (EncryptionService.isOldFormat(data)) {
+          debugPrint('[OfflineManager] Draft $draftId is old format — needs background migration');
+          // Return a placeholder that indicates migration is needed
+          // The UI should show this as "migrating..." and call migrateDraft() async
+          return {
+            '_needs_migration': true,
+            'form_id': draftId,
+            'data': <String, dynamic>{},
+            'saved_at': null,
+          };
+        }
+        debugPrint('[OfflineManager] Draft $draftId decrypt error: $e');
+        return null;
       }
+    }
+  }
+
+  /// ═══ FIX R-C1: Migrate a single old-format draft in background Isolate ═══
+  /// Call this when getDraft() returns {_needs_migration: true}.
+  /// Returns the migrated draft data, or null if migration fails.
+  Future<Map<String, dynamic>?> migrateDraft(String draftId) async {
+    final data = _box?.get('drafts/$draftId');
+    if (data == null || data.isEmpty) return null;
+    if (_encryptionKeyForMigration.isEmpty) return null;
+
+    try {
+      final plaintext = await EncryptionService.decryptOldFormat(data, _encryptionKeyForMigration);
+      if (plaintext == null) return null;
+
+      // Re-encrypt with new format
+      final reEncrypted = _encryption.encrypt(plaintext);
+      await _box?.put('drafts/$draftId', reEncrypted);
+
+      if (kDebugMode) debugPrint('[OfflineManager] ✅ Draft $draftId migrated to new format');
+      return Map<String, dynamic>.from(jsonDecode(plaintext));
+    } catch (e) {
+      if (kDebugMode) debugPrint('[OfflineManager] Draft $draftId migration failed: $e');
+      return null;
+    }
+  }
+
+  /// ═══ FIX R-C1: Get count of drafts that need migration ═══
+  int getDraftsNeedingMigrationCount() {
+    final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
+    List<String> index;
+    try {
+      try {
+        index = List<String>.from(jsonDecode(_encryption.decrypt(indexStr)));
+      } catch (_) {
+        index = List<String>.from(jsonDecode(indexStr));
+      }
+    } catch (_) {
+      return 0;
+    }
+
+    int count = 0;
+    for (final draftId in index) {
+      final data = _box?.get('drafts/$draftId');
+      if (data != null && EncryptionService.isOldFormat(data)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /// ═══ FIX R-C1: Get recovered (unmigrated) drafts ═══
+  Map<String, dynamic> getRecoveredDrafts() {
+    final data = _box?.get('_recovered_drafts');
+    if (data == null) return {};
+    try {
+      return Map<String, dynamic>.from(jsonDecode(data));
+    } catch (_) {
+      return {};
     }
   }
 
@@ -1236,6 +1360,7 @@ class OfflineManager {
       }
 
       final draftsToRemove = <String>[];
+      final draftsToPreserve = <String, String>{}; // id → raw data (for recovery)
       for (final draftId in draftIndex) {
         final data = _box!.get('drafts/$draftId');
         if (data == null || data.isEmpty) {
@@ -1247,7 +1372,35 @@ class OfflineManager {
           try {
             decrypted = _encryption.decrypt(data);
           } catch (_) {
-            decrypted = data; // plain JSON
+            // ═══ FIX R-C1: Try old format migration before giving up ═══
+            // Previously: catch → add to draftsToRemove → delete → DATA LOST
+            // Now: attempt PBKDF2 migration → if fails, preserve for recovery
+            if (EncryptionService.isOldFormat(data) && _encryptionKeyForMigration.isNotEmpty) {
+              if (kDebugMode) debugPrint('[OfflineManager] Draft $draftId is old format — attempting migration...');
+              final migrated = await EncryptionService.decryptOldFormat(data, _encryptionKeyForMigration);
+              if (migrated != null) {
+                decrypted = migrated;
+                // Re-encrypt with new format for future use
+                try {
+                  final reEncrypted = _encryption.encrypt(migrated);
+                  await _box!.put('drafts/$draftId', reEncrypted);
+                  if (kDebugMode) debugPrint('[OfflineManager] ✅ Draft $draftId migrated to new format');
+                } catch (_) {
+                  // Re-encryption failed, but we have the plaintext
+                }
+              } else {
+                // ═══ FIX R-C1: Don't delete — preserve for manual recovery ═══
+                if (kDebugMode) debugPrint('[OfflineManager] ⚠️ Draft $draftId old format migration failed — preserving');
+                draftsToPreserve[draftId] = data;
+                draftsToRemove.add(draftId); // Remove from active index
+                continue;
+              }
+            } else {
+              // Not old format or no key — preserve for recovery
+              draftsToPreserve[draftId] = data;
+              draftsToRemove.add(draftId);
+              continue;
+            }
           }
           final draft = jsonDecode(decrypted);
           final savedAt = DateTime.tryParse(draft['saved_at'] ?? '');
@@ -1255,7 +1408,27 @@ class OfflineManager {
             draftsToRemove.add(draftId);
           }
         } catch (_) {
-          draftsToRemove.add(draftId); // corrupted draft
+          // ═══ FIX R-C1: Don't delete corrupted drafts — preserve for recovery ═══
+          // Previously: draftsToRemove.add(draftId) → deleted forever
+          // Now: preserve raw data in recovery storage
+          draftsToPreserve[draftId] = data;
+          draftsToRemove.add(draftId); // Remove from active index
+        }
+      }
+
+      // ═══ FIX R-C1: Preserve unmigrated/corrupted drafts for manual recovery ═══
+      if (draftsToPreserve.isNotEmpty) {
+        final existingRecovery = _box!.get('_recovered_drafts') ?? '{}';
+        Map<String, dynamic> recoveryMap;
+        try {
+          recoveryMap = Map<String, dynamic>.from(jsonDecode(existingRecovery));
+        } catch (_) {
+          recoveryMap = {};
+        }
+        recoveryMap.addAll(draftsToPreserve);
+        await _box!.put('_recovered_drafts', jsonEncode(recoveryMap));
+        if (kDebugMode) {
+          debugPrint('[OfflineManager] 📦 Preserved ${draftsToPreserve.length} drafts for recovery');
         }
       }
 

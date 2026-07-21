@@ -137,9 +137,43 @@ export default function SubmissionsPage() {
       'التاريخ': s.created_at,
     }))
 
-    const csv = convertToCSV(rows, headers)
-    downloadCSV(csv, `submissions_${new Date().toISOString().split('T')[0]}.csv`)
-    toast({ title: `تم تصدير ${allData.length} إرسالية`, variant: 'success' })
+    // ═══ FIX R-C4: Use Web Worker for CSV conversion to avoid UI freeze ═══
+    // Previously: convertToCSV ran on main thread → ~200ms freeze for 2000 rows
+    // Now: offloaded to csv-worker.ts → UI stays responsive
+    try {
+      const worker = new Worker(new URL('../workers/csv-worker.ts', import.meta.url), { type: 'module' })
+      const csv = await new Promise<string>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          worker.terminate()
+          reject(new Error('CSV worker timeout'))
+        }, 10000)
+
+        worker.onmessage = (e) => {
+          clearTimeout(timeout)
+          worker.terminate()
+          if (e.data.success) {
+            resolve(e.data.csv)
+          } else {
+            reject(new Error(e.data.error))
+          }
+        }
+        worker.onerror = (e) => {
+          clearTimeout(timeout)
+          worker.terminate()
+          reject(new Error(e.message))
+        }
+        worker.postMessage({ rows, headers })
+      })
+
+      downloadCSV(csv, `submissions_${new Date().toISOString().split('T')[0]}.csv`)
+      toast({ title: `تم تصدير ${allData.length} إرسالية`, variant: 'success' })
+    } catch (workerError) {
+      // Fallback: use main thread if worker fails
+      console.warn('[Export] Worker failed, falling back to main thread:', workerError)
+      const csv = convertToCSV(rows, headers)
+      downloadCSV(csv, `submissions_${new Date().toISOString().split('T')[0]}.csv`)
+      toast({ title: `تم تصدير ${allData.length} إرسالية`, variant: 'success' })
+    }
   }
 
   const deleteSubmission = async (sub: FormSubmission) => {

@@ -162,9 +162,14 @@ serve(async (req) => {
             .gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
         ])
 
+        // ═══ FIX R-C6: Add limit to prevent OOM on large notification tables ═══
+        // Previously: no limit → fetched ALL rows → OOM on 100K+ notifications
+        // Now: limit 10000 → safe for V8 heap (~128MB)
+        // Better: use RPC GROUP BY for exact counts without loading all rows
         const { data: byType } = await adminClient
           .from('notifications')
           .select('type')
+          .limit(10000)
 
         const typeDistribution: Record<string, number> = {}
         for (const n of byType ?? []) {

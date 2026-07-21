@@ -349,18 +349,11 @@ class EncryptionService {
         }
       }
 
-      // Cannot decrypt old format without expensive PBKDF2 re-derivation.
-      // Throw FormatException so callers can handle gracefully:
-      // - OfflineDataCache catches it → clears cache → re-syncs from server
-      // - OfflineManager catches it → clears queue → user retries
-      // - Draft loads catch it → shows "draft corrupted" message
-      //
-      // Previously returned '' which caused:
-      //   jsonDecode('') → FormatException → silent data loss
-      // Now throws clearly so the error is visible and recoverable.
+      // ═══ FIX R-C1: Cannot decrypt old format with pinned key ═══
+      // Throw FormatException so callers can handle gracefully.
+      // Callers should use decryptOldFormat() for migration attempts.
       throw FormatException(
-        'Old encryption format detected. Data must be re-synced from server. '
-        'This happens after an app update that changed the encryption format.',
+        'Old encryption format detected. Use decryptOldFormat() for migration.',
       );
     } catch (e) {
       if (kDebugMode) print('EncryptionService.decrypt error: $e');
@@ -397,6 +390,127 @@ class EncryptionService {
   static void clearPinnedKey() {
     _pinnedKey = null;
     _pinnedSalt = null;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // R-C1 FIX: Old Format Migration — PBKDF2 re-derivation in Isolate
+  // ═══════════════════════════════════════════════════════════════
+  //
+  // PROBLEM: Old format drafts use a different salt → different key.
+  // decrypt() throws FormatException → _cleanupOldData deletes them.
+  // Drafts are LOCAL ONLY → "re-sync from server" is impossible.
+  //
+  // SOLUTION:
+  // 1. Extract old salt from the ciphertext itself
+  // 2. Re-derive key using PBKDF2 in background Isolate
+  // 3. Decrypt with the re-derived key
+  // 4. Re-encrypt with the new pinned key
+  //
+  // This is called ONCE per old-format entry during migration.
+  // The Isolate ensures UI thread is not blocked.
+
+  /// Decrypt old format data by re-deriving the key from the salt embedded
+  /// in the ciphertext. Returns null if decryption fails.
+  ///
+  /// Old format: [salt(16)][iv(12)][ciphertext+tag]
+  /// The salt is extracted from the first 16 bytes, then PBKDF2 is run
+  /// in a background Isolate to derive the old key.
+  static Future<String?> decryptOldFormat(
+    String ciphertext,
+    String encryptionKey,
+  ) async {
+    try {
+      final bytes = base64Decode(ciphertext);
+      if (bytes.length < _saltLength + _ivLength + 16) {
+        return null; // Too short
+      }
+
+      // Check it's actually old format (no magic bytes)
+      if (bytes.length >= 4 &&
+          bytes[0] == _magicNew[0] &&
+          bytes[1] == _magicNew[1] &&
+          bytes[2] == _magicNew[2] &&
+          bytes[3] == _magicNew[3]) {
+        return null; // It's new format, use decrypt() instead
+      }
+
+      // Extract salt from ciphertext
+      final oldSalt = Uint8List.fromList(bytes.sublist(0, _saltLength));
+
+      // Re-derive key using PBKDF2 in background Isolate
+      final keyBytes = await compute(
+        _pbkdf2InIsolate,
+        _Pbkdf2Params(encryptionKey, oldSalt),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('PBKDF2 migration timeout'),
+      );
+
+      final derivedKey = enc.Key(keyBytes);
+
+      // Decrypt with the re-derived key
+      final iv = enc.IV(
+        Uint8List.fromList(bytes.sublist(_saltLength, _saltLength + _ivLength)),
+      );
+      final encrypted = enc.Encrypted(
+        Uint8List.fromList(bytes.sublist(_saltLength + _ivLength)),
+      );
+      final encrypter = enc.Encrypter(enc.AES(derivedKey, mode: enc.AESMode.gcm));
+      final result = encrypter.decrypt(encrypted, iv: iv);
+
+      if (kDebugMode) {
+        debugPrint('[EncryptionService] Old format decrypted successfully via PBKDF2 re-derivation');
+      }
+      return result;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[EncryptionService] Old format migration failed: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Re-encrypt data from old format to new format (pinned key).
+  /// Returns the new format ciphertext, or null if migration fails.
+  ///
+  /// Use this after decryptOldFormat() succeeds:
+  /// ```dart
+  /// final plain = await EncryptionService.decryptOldFormat(oldCipher, key);
+  /// if (plain != null) {
+  ///   final newCipher = encryptionService.encrypt(plain);
+  ///   // Store newCipher, delete old entry
+  /// }
+  /// ```
+  static Future<String?> migrateOldFormatToNew(
+    String oldCiphertext,
+    String encryptionKey,
+    EncryptionService instance,
+  ) async {
+    final plaintext = await decryptOldFormat(oldCiphertext, encryptionKey);
+    if (plaintext == null) return null;
+    try {
+      return instance.encrypt(plaintext);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[EncryptionService] Re-encryption after migration failed: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Check if a ciphertext is in old format (no magic bytes).
+  /// Returns true if the data needs migration.
+  static bool isOldFormat(String ciphertext) {
+    try {
+      final bytes = base64Decode(ciphertext);
+      if (bytes.length < 4) return false;
+      return !(bytes[0] == _magicNew[0] &&
+               bytes[1] == _magicNew[1] &&
+               bytes[2] == _magicNew[2] &&
+               bytes[3] == _magicNew[3]);
+    } catch (_) {
+      return false;
+    }
   }
 }
 

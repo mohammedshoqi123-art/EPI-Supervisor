@@ -134,88 +134,123 @@ serve(async (req) => {
       }
     }
 
-    // Process items
+    // ═══ FIX R-C5: Process items in parallel chunks instead of sequential ═══
+    // Previously: for (const item of items) { await insert(item) } = N sequential queries
+    //   50 items × 200ms network = 10 seconds per batch
+    // Now: Promise.all with chunks of 5 concurrent inserts
+    //   50 items ÷ 5 parallel × 200ms = 2 seconds per batch (5× faster)
     const results: SyncResult[] = []
     const errors: SyncResult[] = []
 
-    for (const item of items) {
+    // Separate items into duplicate vs new
+    const itemsToInsert: { item: SyncItem; index: number; offlineId: string; itemId: string }[] = []
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
       const offlineId = item.offline_id ?? ''
-      const itemId = offlineId || `item-${items.indexOf(item)}`
+      const itemId = offlineId || `item-${i}`
 
-      try {
-        // Check for duplicate
-        if (offlineId && existingMap.has(offlineId)) {
-          const existing = existingMap.get(offlineId)!
-          results.push({ offline_id: offlineId, status: 'duplicate', submission_id: existing.id })
-          continue
-        }
+      // Check for duplicate
+      if (offlineId && existingMap.has(offlineId)) {
+        const existing = existingMap.get(offlineId)!
+        results.push({ offline_id: offlineId, status: 'duplicate', submission_id: existing.id })
+        continue
+      }
 
-        // Validate required fields
-        if (!item.form_id) {
-          errors.push({ offline_id: itemId, status: 'error', error: 'Missing form_id' })
-          continue
-        }
+      // Validate required fields
+      if (!item.form_id) {
+        errors.push({ offline_id: itemId, status: 'error', error: 'Missing form_id' })
+        continue
+      }
 
-        const submissionData: Record<string, unknown> = {
-          form_id: item.form_id,
-          submitted_by: auth.userId,
-          governorate_id: item.governorate_id || profile?.governorate_id || null,
-          district_id: item.district_id || profile?.district_id || null,
-          status: 'submitted',
-          data: item.data || {},
-          gps_lat: item.gps_lat || null,
-          gps_lng: item.gps_lng || null,
-          gps_accuracy: item.gps_accuracy || null,
-          photos: item.photos || [],
-          notes: item.notes || null,
-          offline_id: offlineId || null,
-          device_id: item.device_id || null,
-          app_version: item.app_version || null,
-          is_offline: true,
-          campaign_round: item.campaign_round || 1,
-          submitted_at: item.created_at || new Date().toISOString(),
-          synced_at: new Date().toISOString(),
-        }
+      itemsToInsert.push({ item, index: i, offlineId, itemId })
+    }
 
-        const { data: submission, error: insertError } = await admin
-          .from('form_submissions')
-          .insert(submissionData)
-          .select('id, updated_at, campaign_round')
-          .single()
+    // Process inserts in parallel chunks of 5
+    const CHUNK_SIZE = 5
+    for (let chunkStart = 0; chunkStart < itemsToInsert.length; chunkStart += CHUNK_SIZE) {
+      const chunk = itemsToInsert.slice(chunkStart, chunkStart + CHUNK_SIZE)
 
-        if (insertError) {
-          if (insertError.code === '23505') {
-            results.push({ offline_id: offlineId, status: 'duplicate', error: 'Already exists' })
-            continue
+      const chunkResults = await Promise.allSettled(
+        chunk.map(async ({ item, offlineId, itemId }) => {
+          const submissionData: Record<string, unknown> = {
+            form_id: item.form_id,
+            submitted_by: auth.userId,
+            governorate_id: item.governorate_id || profile?.governorate_id || null,
+            district_id: item.district_id || profile?.district_id || null,
+            status: 'submitted',
+            data: item.data || {},
+            gps_lat: item.gps_lat || null,
+            gps_lng: item.gps_lng || null,
+            gps_accuracy: item.gps_accuracy || null,
+            photos: item.photos || [],
+            notes: item.notes || null,
+            offline_id: offlineId || null,
+            device_id: item.device_id || null,
+            app_version: item.app_version || null,
+            is_offline: true,
+            campaign_round: item.campaign_round || 1,
+            submitted_at: item.created_at || new Date().toISOString(),
+            synced_at: new Date().toISOString(),
           }
-          errors.push({ offline_id: itemId, status: 'error', error: insertError.message })
-          continue
+
+          const { data: submission, error: insertError } = await admin
+            .from('form_submissions')
+            .insert(submissionData)
+            .select('id, updated_at, campaign_round')
+            .single()
+
+          if (insertError) {
+            if (insertError.code === '23505') {
+              return { type: 'duplicate' as const, offlineId, submissionId: undefined }
+            }
+            throw new Error(insertError.message)
+          }
+
+          // Audit log (fire-and-forget)
+          try {
+            admin.from('audit_logs').insert({
+              user_id: auth.userId,
+              action: 'create',
+              table_name: 'form_submissions',
+              record_id: submission.id,
+              metadata: { offline_sync: true, offline_id: offlineId, device_id: item.device_id },
+            }).then(() => {}, () => {})
+          } catch (_) { /* audit is best-effort */ }
+
+          return {
+            type: 'synced' as const,
+            offlineId,
+            submissionId: submission.id,
+            campaignRound: submission.campaign_round ?? 1,
+          }
+        })
+      )
+
+      // Collect results from this chunk
+      for (let j = 0; j < chunkResults.length; j++) {
+        const result = chunkResults[j]
+        const { offlineId, itemId } = chunk[j]
+
+        if (result.status === 'fulfilled') {
+          const value = result.value
+          if (value.type === 'duplicate') {
+            results.push({ offline_id: offlineId, status: 'duplicate', error: 'Already exists' })
+          } else {
+            results.push({
+              offline_id: offlineId,
+              status: 'synced',
+              submission_id: value.submissionId,
+              server_data: { campaign_round: value.campaignRound },
+            })
+          }
+        } else {
+          errors.push({
+            offline_id: itemId,
+            status: 'error',
+            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          })
         }
-
-        results.push({
-          offline_id: offlineId,
-          status: 'synced',
-          submission_id: submission.id,
-          server_data: { campaign_round: submission.campaign_round ?? 1 },
-        })
-
-        // Audit log (fire-and-forget)
-        try {
-          admin.from('audit_logs').insert({
-            user_id: auth.userId,
-            action: 'create',
-            table_name: 'form_submissions',
-            record_id: submission.id,
-            metadata: { offline_sync: true, offline_id: offlineId, device_id: item.device_id },
-          }).then(() => {}, () => {})
-        } catch (_) { /* audit is best-effort */ }
-
-      } catch (err) {
-        errors.push({
-          offline_id: itemId,
-          status: 'error',
-          error: err instanceof Error ? err.message : String(err),
-        })
       }
     }
 

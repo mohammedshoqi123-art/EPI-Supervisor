@@ -4,7 +4,7 @@ import { supabase, isConfigured } from '@/lib/supabase'
 
 // ==================== NOTIFICATIONS ====================
 
-export function useNotifications() {
+export function useNotifications(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
@@ -18,7 +18,7 @@ export function useNotifications() {
       if (error) throw error
       return data
     },
-    enabled: isConfigured,
+    enabled: isConfigured && (options?.enabled !== false),
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     staleTime: 10000,

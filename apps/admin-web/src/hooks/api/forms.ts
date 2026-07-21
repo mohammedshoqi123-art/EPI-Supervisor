@@ -5,7 +5,7 @@ import { getCampaignFormIds } from './campaign'
 
 // ==================== FORMS ====================
 
-export function useForms(filters?: { search?: string; page?: number; pageSize?: number; campaignType?: string }) {
+export function useForms(filters?: { search?: string; page?: number; pageSize?: number; campaignType?: string; enabled?: boolean }) {
   return useQuery({
     queryKey: ['forms', filters],
     queryFn: async () => {
@@ -30,7 +30,7 @@ export function useForms(filters?: { search?: string; page?: number; pageSize?: 
       if (error) throw error
       return { data: data || [], count: count || 0 }
     },
-    enabled: isConfigured,
+    enabled: isConfigured && (filters?.enabled !== false),
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     staleTime: 30000,

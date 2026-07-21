@@ -41,16 +41,33 @@ function loadConversation(): StoredMessage[] {
 
 /**
  * Save conversation to localStorage
+ * ═══ FIX R-C7: Progressive cleanup instead of full deletion ═══
+ * Previously: localStorage.removeItem(STORAGE_KEY) on QuotaExceededError
+ *   → entire conversation history deleted
+ * Now: remove oldest 20 messages, then retry
  */
 function saveConversation(messages: StoredMessage[]): void {
   try {
     const toSave = messages.slice(-MAX_MESSAGES)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
-  } catch {
-    // Storage full — clear old data
-    try {
-      localStorage.removeItem(STORAGE_KEY)
-    } catch { /* ignore */ }
+  } catch (e: any) {
+    if (e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014) {
+      // Storage full — try progressive cleanup
+      try {
+        // Remove oldest 20 messages and retry
+        const reduced = messages.slice(-Math.max(20, messages.length - 20))
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(reduced))
+      } catch {
+        // Still failing — try with just last 10 messages
+        try {
+          const minimal = messages.slice(-10)
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(minimal))
+        } catch {
+          // Nothing we can do — but DON'T delete the key
+          console.warn('[ConversationHistory] Could not save — storage full')
+        }
+      }
+    }
   }
 }
 
@@ -61,10 +78,15 @@ export function useConversationHistory() {
   const [messages, setMessages] = useState<StoredMessage[]>(loadConversation)
 
   // Save whenever messages change
+  // ═══ FIX R-C7: Debounce saves to avoid excessive localStorage writes ═══
+  // Previously: saved on EVERY message change → slow on rapid conversations
+  // Now: debounced 2000ms → saves once after user stops typing
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length === 0) return
+    const timer = setTimeout(() => {
       saveConversation(messages)
-    }
+    }, 2000)
+    return () => clearTimeout(timer)
   }, [messages])
 
   const addMessage = useCallback((msg: Omit<StoredMessage, 'timestamp'> & { timestamp?: number }) => {

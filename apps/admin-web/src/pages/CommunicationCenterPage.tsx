@@ -28,6 +28,7 @@ import {
   type ChatChannel, type ChatMessage
 } from '@/hooks/api/communication'
 import { useToast } from '@/hooks/useToast'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { formatRelativeTime, cn } from '@/lib/utils'
 
@@ -293,6 +294,7 @@ function ChatArea({ channel, onEdit }: { channel: ChatChannel; onEdit: () => voi
   const sendMessage = useSendMessage()
   const deleteMessage = useDeleteMessage()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
 
   // Auto-scroll
   useEffect(() => {
@@ -302,6 +304,11 @@ function ChatArea({ channel, onEdit }: { channel: ChatChannel; onEdit: () => voi
   }, [messages])
 
   // Realtime subscription
+  // ═══ FIX R-C8: Actually invalidate queries on new messages ═══
+  // Previously: empty callback with wrong comment "Refetch will happen automatically"
+  //   React Query does NOT auto-refetch on realtime events
+  //   → new messages didn't appear for 10+ seconds
+  // Now: explicitly invalidate channel messages query
   useEffect(() => {
     if (!channel.code) return
     const ch = supabase
@@ -310,7 +317,7 @@ function ChatArea({ channel, onEdit }: { channel: ChatChannel; onEdit: () => voi
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room=eq.${channel.code}` },
         () => {
-          // Refetch will happen automatically via React Query
+          queryClient.invalidateQueries({ queryKey: ['channel-messages', channel.code] })
         }
       )
       .subscribe()

@@ -104,6 +104,9 @@ export async function groqChat(
   if (opts.stream) body.stream = true
 
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15_000)
+
     const r = await fetch(GROQ_API, {
       method: 'POST',
       headers: {
@@ -111,7 +114,10 @@ export async function groqChat(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     if (!r.ok) {
       console.error(`[GROQ] ${r.status}: ${await r.text().catch(() => '')}`)
@@ -208,6 +214,9 @@ export async function nvidiaChat(
   if (!key) return null
 
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15_000)
+
     const r = await fetch(NVIDIA_API, {
       method: 'POST',
       headers: {
@@ -220,7 +229,10 @@ export async function nvidiaChat(
         max_tokens: maxTokens,
         temperature: 0.4,
       }),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     if (!r.ok) {
       console.error(`[NVIDIA] ${r.status}`)
@@ -242,6 +254,9 @@ export async function huggingfaceChat(
 ): Promise<string | null> {
   try {
     const model = 'meta-llama/Meta-Llama-3-8B-Instruct'
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15_000)
+
     const r = await fetch(`${HF_API}/${model}`, {
       method: 'POST',
       headers: {
@@ -252,7 +267,10 @@ export async function huggingfaceChat(
         inputs: messages.map((m: any) => `<|${m.role}|>\n${m.content}`).join('\n'),
         parameters: { max_new_tokens: 500, temperature: 0.4 },
       }),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     if (!r.ok) return null
     const json = await r.json()
@@ -269,6 +287,9 @@ export async function openrouterChat(
   maxTokens = 2000,
 ): Promise<string | null> {
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15_000)
+
     const r = await fetch(OPENROUTER_API, {
       method: 'POST',
       headers: {
@@ -282,7 +303,10 @@ export async function openrouterChat(
         max_tokens: maxTokens,
         temperature: 0.4,
       }),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     if (!r.ok) return null
     const json = await r.json()

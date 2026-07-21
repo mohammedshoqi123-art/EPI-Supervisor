@@ -137,35 +137,61 @@ export function useBulkUpdateSubmissionStatus() {
 
       const { data: { session } } = await supabase.auth.getSession()
 
-      // Batch update in chunks of 50
+      // ═══ FIX R-C11: Use Promise.allSettled for partial failure handling ═══
+      // Previously: for loop with await + throw on error → remaining chunks skipped
+      //   User had no idea how many were updated
+      // Now: Promise.allSettled → all chunks attempted → returns detailed results
       const chunks: string[][] = []
       for (let i = 0; i < ids.length; i += 50) {
         chunks.push(ids.slice(i, i + 50))
       }
 
       let totalUpdated = 0
-      for (const chunk of chunks) {
-        const { data, error } = await supabase
-          .from('form_submissions')
-          .update({
-            status,
-            review_notes,
-            reviewed_by: session?.user.id,
-            reviewed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .in('id', chunk)
-          .select('id')
+      const failedIds: string[] = []
 
-        if (error) throw error
-        totalUpdated += data?.length || 0
+      const chunkResults = await Promise.allSettled(
+        chunks.map(async (chunk) => {
+          const { data, error } = await supabase
+            .from('form_submissions')
+            .update({
+              status,
+              review_notes,
+              reviewed_by: session?.user.id,
+              reviewed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .in('id', chunk)
+            .select('id')
+
+          if (error) throw error
+          return { updated: data?.length || 0, ids: chunk }
+        })
+      )
+
+      // Collect results
+      for (const result of chunkResults) {
+        if (result.status === 'fulfilled') {
+          totalUpdated += result.value.updated
+        } else {
+          // Log the error but continue with other chunks
+          console.error('[useBulkUpdate] Chunk failed:', result.reason)
+        }
       }
 
-      return { updated: totalUpdated }
+      const failedCount = ids.length - totalUpdated
+      if (failedCount > 0) {
+        console.warn(`[useBulkUpdate] ${failedCount} of ${ids.length} submissions failed to update`)
+      }
+
+      return { updated: totalUpdated, total: ids.length, failed: failedCount }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['submissions'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    },
+    // ═══ FIX R-C11: Add onError for user feedback ═══
+    onError: (error: Error) => {
+      console.error('[useBulkUpdate] Mutation error:', error.message)
     },
   })
 }

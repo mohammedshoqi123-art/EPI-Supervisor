@@ -4,7 +4,7 @@ import { applyShortageCampaignFilter } from './campaign'
 
 // ==================== SHORTAGES ====================
 
-export function useShortages(campaignType?: string, campaignRound?: number) {
+export function useShortages(campaignType?: string, campaignRound?: number, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['shortages', campaignType, campaignRound],
     queryFn: async () => {
@@ -51,7 +51,7 @@ export function useShortages(campaignType?: string, campaignRound?: number) {
       if (error) throw error
       return data
     },
-    enabled: isConfigured,
+    enabled: isConfigured && (options?.enabled !== false),
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     staleTime: 30000,

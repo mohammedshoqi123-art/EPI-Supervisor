@@ -4,7 +4,7 @@ import type { UserRole } from '@/types/database'
 
 // ==================== USERS ====================
 
-export function useUsers(filters?: { role?: UserRole; search?: string }) {
+export function useUsers(filters?: { role?: UserRole; search?: string; enabled?: boolean }) {
   return useQuery({
     queryKey: ['users', filters],
     queryFn: async () => {
@@ -47,7 +47,7 @@ export function useUsers(filters?: { role?: UserRole; search?: string }) {
       if (error) throw error
       return (data as any[]) || []
     },
-    enabled: isConfigured,
+    enabled: isConfigured && (filters?.enabled !== false),
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     staleTime: 60000,

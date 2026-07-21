@@ -205,11 +205,14 @@ export default function DashboardPage() {
   const { data: recentData } = useSubmissions({ pageSize: 10, campaignType: campaign, campaignRound: showRoundFilter ? campaignRound : undefined })
 
   // Deferred queries — load after initial render (governorate stats, users, shortages, forms, notifications)
-  const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign, showRoundFilter ? campaignRound : undefined)
-  const { data: notifications } = useNotifications()
-  const { data: formsResult } = useForms({ pageSize: 100 })
-  const { data: users } = useUsers()
-  const { data: shortages } = useShortages(campaign, showRoundFilter ? campaignRound : undefined)
+  // ═══ FIX R-C3: enabled: deferredReady ensures these fire only after 800ms ═══
+  // Previously: all 8 queries fired simultaneously → browser connection overflow (max 6)
+  // Now: 3 critical queries fire immediately, 5 deferred queries wait 800ms
+  const { data: govStats, isLoading: govLoading } = useGovernorateStats(campaign, showRoundFilter ? campaignRound : undefined, { enabled: deferredReady })
+  const { data: notifications } = useNotifications({ enabled: deferredReady })
+  const { data: formsResult } = useForms({ pageSize: 100, enabled: deferredReady })
+  const { data: users } = useUsers({ enabled: deferredReady })
+  const { data: shortages } = useShortages(campaign, showRoundFilter ? campaignRound : undefined, { enabled: deferredReady })
   const { alerts: smartAlerts, criticalCount: smartCritical, warningCount: smartWarning } = useSmartAlerts()
 
   // Real-time updates — dashboard auto-refreshes when data changes

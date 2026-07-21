@@ -202,7 +202,7 @@ export function useSubmissionsChart(campaignType?: string, campaignRound?: numbe
 }
 
 // ═══ FIX: Use RPC instead of fetching 20,000 rows and counting in JS ═══
-export function useGovernorateStats(campaignType?: string, campaignRound?: number) {
+export function useGovernorateStats(campaignType?: string, campaignRound?: number, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['governorate-stats', campaignType, campaignRound],
     queryFn: async () => {
@@ -259,7 +259,7 @@ export function useGovernorateStats(campaignType?: string, campaignRound?: numbe
         }))
         .sort((a, b) => b.submissions - a.submissions)
     },
-    enabled: isConfigured,
+    enabled: isConfigured && (options?.enabled !== false),
     staleTime: 60000,
   })
 }

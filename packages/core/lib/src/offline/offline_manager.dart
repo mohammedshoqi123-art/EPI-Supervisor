@@ -862,8 +862,18 @@ class OfflineManager {
     try {
       return Map<String, dynamic>.from(jsonDecode(_encryption.decrypt(data)));
     } catch (e) {
-      if (kDebugMode) print('[OfflineManager] Draft decrypt error: $e');
-      return null;
+      // ═══ FIX: محاولة plain JSON عند فشل فك التشفير ═══
+      try {
+        return Map<String, dynamic>.from(jsonDecode(data));
+      } catch (_) {
+        // ═══ FIX: إرجاع بيانات محدودة بدل null ═══
+        debugPrint('[OfflineManager] Draft $draftId decrypt error — returning limited data: $e');
+        return {
+          'form_id': draftId,
+          'data': <String, dynamic>{},
+          'saved_at': null,
+        };
+      }
     }
   }
 
@@ -925,7 +935,16 @@ class OfflineManager {
           });
           debugPrint('[OfflineManager] Draft $draftId read as plain JSON (not encrypted)');
         } catch (_) {
-          debugPrint('[OfflineManager] ⚠️ Draft $draftId failed to decrypt AND parse: $decryptError');
+          // ═══ FIX: لا نتخطى المسودة — نُضيفها مع بيانات محدودة ═══
+          // Previously: skipped silently → user sees empty list
+          // Now: add with limited info so user can see the draft exists
+          debugPrint('[OfflineManager] ⚠️ Draft $draftId failed to decrypt — showing limited info');
+          result.add({
+            'draft_id': draftId,
+            'form_id': draftId,
+            'data': <String, dynamic>{},
+            'saved_at': null,
+          });
         }
       }
     }

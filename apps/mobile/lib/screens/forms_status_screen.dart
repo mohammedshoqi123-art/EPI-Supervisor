@@ -182,10 +182,12 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     setState(() => _draftLoading = true);
     try {
       final offline = await ref.read(offlineManagerProvider.future).timeout(
-            const Duration(seconds: 5),
+            const Duration(seconds: 10),
             onTimeout: () => throw Exception('timeout'),
           );
       final allDrafts = offline.getAllDrafts();
+
+      debugPrint('[FormsStatusScreen] Loaded ${allDrafts.length} drafts from Hive');
 
       // Enrich drafts with form titles from forms provider
       // ═══ FIX: تحميل النماذج من multiple sources لضمان ظهور الأسماء ═══

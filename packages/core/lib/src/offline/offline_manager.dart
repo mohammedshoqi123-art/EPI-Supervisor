@@ -798,39 +798,23 @@ class OfflineManager {
         'saved_at': DateTime.now().toIso8601String(),
       };
 
-      // ═══ PERFORMANCE: Use Isolate for JSON encoding + encryption ═══
-      // Previously: jsonEncode + encrypt on UI thread → freeze with large data
-      // Now: all heavy work in background Isolate
-      // ═══ FIX: Keep UI thread fallback — Isolate may fail on weak devices ═══
+      // ═══ FIX: محاولة الحفظ بـ Isolate، fallback على plain JSON ═══
+      // Previously: Isolate failure → rethrow → draft NOT saved
+      // Now: Isolate failure → save as plain JSON → draft always saved
       String encrypted;
 
       try {
-        // First attempt: 5s timeout
-        encrypted = await compute(_encodeAndEncryptInIsolate, _EncodeParams(
-          draftData,
-          _encryption,
-        )).timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => throw TimeoutException('Isolate timeout (attempt 1)'),
-        );
-      } on TimeoutException {
-        // ═══ FIX #1: NO UI thread fallback — retry with 10s timeout ═══
-        // Previously: PBKDF2 600k on UI thread → freeze 1-3s
-        // Now: retry Isolate with longer timeout, then throw if still failing
-        debugPrint('[OfflineManager] Isolate timeout — retrying with 10s');
         encrypted = await compute(_encodeAndEncryptInIsolate, _EncodeParams(
           draftData,
           _encryption,
         )).timeout(
           const Duration(seconds: 10),
-          onTimeout: () => throw TimeoutException('Isolate timeout (final) — draft not saved'),
+          onTimeout: () => throw TimeoutException('Isolate timeout'),
         );
       } catch (e) {
-        // ═══ FIX #1: NO UI thread fallback — log and rethrow ═══
-        // Previously: _encryption.encrypt(json) on UI thread → freeze
-        // Now: draft will be saved on next auto-save attempt
-        debugPrint('[OfflineManager] Isolate error — draft NOT saved (will retry): $e');
-        rethrow;
+        // ═══ FIX: لا نرمي الخطأ — نحفظ كـ plain JSON ═══
+        debugPrint('[OfflineManager] Isolate failed — saving draft as plain JSON: $e');
+        encrypted = jsonEncode(draftData); // Plain JSON fallback
       }
 
       await _box?.put('drafts/$draftId', encrypted);
@@ -850,7 +834,14 @@ class OfflineManager {
       }
       if (!index.contains(draftId)) {
         index.add(draftId);
-        await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(index)));
+        // ═══ FIX: حفظ الـ index مع fallback ═══
+        try {
+          await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(index)));
+        } catch (e) {
+          // Fallback: plain JSON index
+          debugPrint('[OfflineManager] Index encrypt failed — saving as plain JSON: $e');
+          await _box?.put(_draftsIndexKey, jsonEncode(index));
+        }
       }
     });
   }

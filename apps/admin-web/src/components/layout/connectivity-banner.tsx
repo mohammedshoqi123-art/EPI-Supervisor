@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -11,13 +11,16 @@ export function ConnectivityBanner() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [showBanner, setShowBanner] = useState(false)
   const [checking, setChecking] = useState(false)
+  // ⚠️ FIX M7: Track setTimeout for cleanup — prevents memory leak
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true)
       setShowBanner(true)
       // Auto-hide "back online" banner after 3 seconds
-      setTimeout(() => setShowBanner(false), 3000)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = setTimeout(() => setShowBanner(false), 3000)
     }
 
     const handleOffline = () => {
@@ -36,6 +39,7 @@ export function ConnectivityBanner() {
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
     }
   }, [])
 
@@ -54,7 +58,8 @@ export function ConnectivityBanner() {
       }
       setIsOnline(true)
       setShowBanner(true)
-      setTimeout(() => setShowBanner(false), 3000)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = setTimeout(() => setShowBanner(false), 3000)
     } catch {
       setIsOnline(false)
       setShowBanner(true)

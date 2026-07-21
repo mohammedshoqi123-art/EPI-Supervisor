@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
@@ -893,41 +894,136 @@ class _MapScreenState extends ConsumerState<MapScreen>
         .where((s) => s['gps_lat'] != null && s['gps_lng'] != null)
         .toList();
 
-    // ═══ PERFORMANCE: All markers visible — lightweight widget to prevent freeze ═══
+    // ═══ CLUSTERING: Group nearby markers — solves the 2000+ GestureDetector freeze ═══
+    // Previously: simple MarkerLayer with no tap → no details on press
+    // Now: MarkerClusterLayer groups markers by proximity, tap shows details
+    // Zoom in → clusters split into individual tappable markers
+
     final markers = subs.map((sub) {
       final lat = (sub['gps_lat'] as num).toDouble();
       final lng = (sub['gps_lng'] as num).toDouble();
-      final status = sub['status'] as String? ?? 'draft';
-      final role =
-          (sub['profiles']?['role'] ?? sub['submitter_role'] ?? '').toString();
-      // ═══ Color by mode: level (default), status, or role ═══
-      final color = _colorMode == MapColorMode.level
-          ? MapHelpers.levelColor(role)
-          : _colorMode == MapColorMode.role
-              ? MapHelpers.roleColor(role)
-              : MapHelpers.statusColor(status);
-      final isSelected = _selectedSubmission?['id'] == sub['id'];
 
-      // ═══ LIGHTWEIGHT marker — no boxShadow, no GestureDetector per marker ═══
-      // GestureDetector on 2000+ markers causes freeze. Use simple Container.
       return Marker(
         point: LatLng(lat, lng),
-        width: isSelected ? 24 : 12,
-        height: isSelected ? 24 : 12,
-        child: Container(
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 1.5),
-          ),
-          child: isSelected
-              ? const Icon(Icons.place, color: Colors.white, size: 12)
-              : null,
+        width: 36,
+        height: 36,
+        child: GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            setState(() {
+              _selectedSubmission = sub;
+              _selectedCluster = null;
+            });
+          },
+          child: _buildMarkerDot(sub),
         ),
       );
     }).toList();
 
-    return MarkerLayer(markers: markers);
+    return MarkerClusterLayerWidget(
+      markers: markers,
+      maxClusterRadius: 45,
+      size: const Size(40, 40),
+      builder: (context, clusterMarkers) {
+        final count = clusterMarkers.length;
+        return GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            // Build cluster data from the grouped markers
+            final clusterSubs = clusterMarkers.map((m) {
+              // Find the matching submission by coordinates
+              return subs.firstWhere(
+                (s) =>
+                    (s['gps_lat'] as num).toDouble() == m.point.latitude &&
+                    (s['gps_lng'] as num).toDouble() == m.point.longitude,
+                orElse: () => {},
+              );
+            }).where((s) => s.isNotEmpty).toList();
+
+            // Zoom in on cluster tap
+            final lat = clusterMarkers
+                .map((m) => m.point.latitude)
+                .reduce((a, b) => a + b) /
+                clusterMarkers.length;
+            final lng = clusterMarkers
+                .map((m) => m.point.longitude)
+                .reduce((a, b) => a + b) /
+                clusterMarkers.length;
+            _mapController.move(
+                LatLng(lat, lng), (_currentZoom + 2).clamp(4.0, 18.0));
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: MapHelpers.clusterColor(count),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2.5),
+              boxShadow: [
+                BoxShadow(
+                  color: MapHelpers.clusterColor(count).withValues(alpha: 0.4),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                )
+              ],
+            ),
+            child: Center(
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Build a single marker dot based on color mode
+  Widget _buildMarkerDot(Map<String, dynamic> sub) {
+    final status = sub['status'] as String? ?? 'draft';
+    final role =
+        (sub['profiles']?['role'] ?? sub['submitter_role'] ?? '').toString();
+    final color = _colorMode == MapColorMode.level
+        ? MapHelpers.levelColor(role)
+        : _colorMode == MapColorMode.role
+            ? MapHelpers.roleColor(role)
+            : MapHelpers.statusColor(status);
+    final isSelected = _selectedSubmission?['id'] == sub['id'];
+
+    return Container(
+      width: isSelected ? 32 : 24,
+      height: isSelected ? 32 : 24,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: isSelected ? Colors.yellow : Colors.white,
+          width: isSelected ? 3 : 2,
+        ),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.6),
+                  blurRadius: 12,
+                  spreadRadius: 3,
+                )
+              ]
+            : [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.3),
+                  blurRadius: 4,
+                  spreadRadius: 1,
+                )
+              ],
+      ),
+      child: isSelected
+          ? const Icon(Icons.place, color: Colors.white, size: 14)
+          : null,
+    );
   }
 
   // ─── Selected Submission Panel ───────────────────────────────

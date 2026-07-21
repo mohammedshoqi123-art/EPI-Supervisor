@@ -480,17 +480,26 @@ export async function generateSummary(key: string, messages: any[]): Promise<str
     ...messages.slice(-8).map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 300) })),
   ]
 
+  // ⚠️ FIX M6: Add timeout to prevent hanging if API is unresponsive
+  // Previously: no timeout → fetch could hang indefinitely
+  // Now: 15s timeout via AbortController
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15_000)
+
   try {
     const resp = await fetch(GROQ_API, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: summaryMessages, max_tokens: 200, temperature: 0.3 }),
+      signal: controller.signal,
     })
     if (!resp.ok) return null
     const json = await resp.json()
     return json.choices?.[0]?.message?.content?.trim() || null
   } catch {
     return null
+  } finally {
+    clearTimeout(timeout)
   }
 }
 

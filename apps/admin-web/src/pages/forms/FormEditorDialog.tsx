@@ -61,6 +61,38 @@ export function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
 
   const saving = createForm.isPending || updateForm.isPending
 
+  // ⚠️ FIX M4: Track dirty state to prevent accidental data loss
+  // Previously: clicking "إلغاء" closed dialog without confirmation
+  // Now: warn user if there are unsaved changes
+  const [initialState] = useState(() => ({
+    titleAr: form?.title_ar || '',
+    titleEn: form?.title_en || '',
+    descriptionAr: form?.description_ar || '',
+    isActive: form?.is_active ?? true,
+    campaignType: form?.campaign_type || 'polio_campaign',
+    requiresGps: form?.requires_gps || false,
+    requiresPhoto: form?.requires_photo || false,
+    sections: JSON.parse(JSON.stringify(initialSchema.sections.length > 0 ? initialSchema.sections : [
+      { id: generateId(), title_ar: 'المعلومات العامة', order: 1, fields: [] }
+    ])),
+  }))
+
+  const isDirty = titleAr !== initialState.titleAr ||
+    titleEn !== initialState.titleEn ||
+    descriptionAr !== initialState.descriptionAr ||
+    isActive !== initialState.isActive ||
+    campaignType !== initialState.campaignType ||
+    requiresGps !== initialState.requiresGps ||
+    requiresPhoto !== initialState.requiresPhoto ||
+    JSON.stringify(sections) !== JSON.stringify(initialState.sections)
+
+  const handleCancel = () => {
+    if (isDirty) {
+      if (!confirm('لديك تغييرات غير محفوظة. هل تريد الإغلاق بدون حفظ؟')) return
+    }
+    onOpenChange(false)
+  }
+
   const handleSave = async () => {
     if (!titleAr.trim()) {
       toast({ title: 'خطأ', description: 'عنوان النموذج مطلوب', variant: 'destructive' })
@@ -158,7 +190,7 @@ export function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
   const currentSection = sections[activeSection]
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(newOpen) => { if (!newOpen) { handleCancel() } else { onOpenChange(true) } }}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col w-[calc(100vw-2rem)] sm:w-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'تعديل النموذج' : 'إنشاء نموذج جديد'}</DialogTitle>
@@ -304,7 +336,7 @@ export function FormEditorDialog({ open, onOpenChange, form, onSuccess }: {
         </div>
 
         <DialogFooter className="pt-4 border-t">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button variant="outline" onClick={handleCancel}>إلغاء</Button>
           <Button onClick={handleSave} disabled={saving} className="gap-2">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             {isEdit ? 'حفظ التعديلات' : 'إنشاء النموذج'}

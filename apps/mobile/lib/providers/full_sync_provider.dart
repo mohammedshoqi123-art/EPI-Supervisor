@@ -291,7 +291,7 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
             allSubs.addAll(batch);
             offset += pageSize;
             await Future.delayed(Duration.zero);
-            if (allSubs.length >= 5000) break;
+            if (allSubs.length >= 2000) break;
             if (DateTime.now().difference(subStart) > const Duration(seconds: 45)) {
               _log('⚠️ Submissions timeout at ${allSubs.length}');
               hasMore = false;

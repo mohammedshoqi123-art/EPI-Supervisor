@@ -289,6 +289,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
             if (lat != null && lng != null) {
               _gpsLat = lat;
               _gpsLng = lng;
+              _draftLoadedWithGps = true; // Prevent async auto-detect from overwriting
             }
           }
         }
@@ -407,8 +408,18 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       }
 
       // GPS — auto-detect current location
+      // ⚠️ FIX: Skip auto-detect if draft already has GPS data
+      // Previously: auto-detect would fire async, then _loadDraft restores saved GPS,
+      // then auto-detect completes and OVERWRITES the saved GPS with current location.
+      // Now: check if _formData already has GPS data (from draft) before auto-detecting.
       if (type == 'gps' && (field['auto_detect'] == true || autoFill == 'current_location')) {
-        _getCurrentLocationForField(key);
+        final existingGps = _formData[key];
+        final hasDraftGps = existingGps != null &&
+            ((existingGps is String && existingGps.contains(',')) ||
+             (existingGps is Map));
+        if (!hasDraftGps) {
+          _getCurrentLocationForField(key);
+        }
       }
 
       // Time — auto-fill with current time
@@ -434,7 +445,18 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     return roundLabel;
   }
 
+  /// Flag to prevent async GPS auto-detect from overwriting draft GPS data
+  /// Set to true after _loadDraft() restores GPS coordinates from a saved draft
+  bool _draftLoadedWithGps = false;
+
   Future<void> _getCurrentLocationForField(String fieldKey) async {
+    // ⚠️ FIX: Skip if draft already loaded with GPS data
+    // Previously: async auto-detect would complete AFTER draft load and overwrite saved GPS
+    // Now: check flag before overwriting
+    if (_draftLoadedWithGps) {
+      debugPrint('[GPS] Skipping auto-detect — draft already has GPS data');
+      return;
+    }
     try {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -843,6 +865,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       final Map<String, dynamic> dataWithPhotos =
           Map<String, dynamic>.from(_formData);
 
+      // ⚠️ FIX NEW-2: Track total failed photos across all fields
+      int totalFailedPhotos = 0;
+
       // Find photo fields and convert XFile paths to base64
       // Fix: use compute() to offload base64 encoding to a background isolate
       // to prevent UI jank when encoding multiple large photos.
@@ -854,16 +879,16 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           if (paths != null && paths.isNotEmpty) {
             // Encode photos in background isolate
             final pathList = paths.map((p) => p.toString()).toList();
+            final expectedCount = pathList.length;
+            List<String> base64Photos = [];
             try {
-              final base64Photos = await compute(
+              base64Photos = await compute(
                 _encodePhotosToBase64,
                 pathList,
               );
-              dataWithPhotos[key] = base64Photos;
             } catch (e) {
               debugPrint('[Submit] Photo encode (isolate) failed: $e');
               // Fallback: encode on main thread
-              final List<String> base64Photos = [];
               for (final path in pathList) {
                 try {
                   final file = XFile(path);
@@ -873,9 +898,49 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                   debugPrint('[Submit] Photo encode (fallback) failed: $e2');
                 }
               }
-              dataWithPhotos[key] = base64Photos;
             }
+            // ⚠️ FIX NEW-2: Track failed photos and warn user
+            final failedCount = expectedCount - base64Photos.length;
+            if (failedCount > 0) {
+              totalFailedPhotos += failedCount;
+              debugPrint('[Submit] $failedCount/$expectedCount photos failed for field $key');
+            }
+            dataWithPhotos[key] = base64Photos;
           }
+        }
+      }
+
+      // ⚠️ FIX NEW-2: Warn user if photos failed before submitting
+      if (totalFailedPhotos > 0 && mounted) {
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                SizedBox(width: 8),
+                Text('صور فاشلة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Text(
+              '$totalFailedPhotos صورة فشلت في التحضير ولن تُرفق مع الإرسالية.\n\nهل تريد المتابعة بدونها؟',
+              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('متابعة بدونها', style: TextStyle(fontFamily: 'Tajawal')),
+              ),
+            ],
+          ),
+        );
+        if (proceed != true) {
+          if (mounted) setState(() => _isLoading = false);
+          return;
         }
       }
 
@@ -886,6 +951,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         if (_gpsLat != null) 'gps_lat': _gpsLat,
         if (_gpsLng != null) 'gps_lng': _gpsLng,
         'photos_count': _photosByField.values.fold(0, (sum, list) => sum + list.length),
+        'failed_photos': totalFailedPhotos,
         'campaign_round': campaignRound,
         'created_at': DateTime.now().toIso8601String(),
       };
@@ -1391,7 +1457,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         if (didPop) return;
 
         // ⚠️ إظهار رسالة تحذيرية عند محاولة الخروج ببيانات غير محفوظة
-        final shouldSave = await showDialog<bool>(
+        final shouldSave = await showDialog<String>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Row(

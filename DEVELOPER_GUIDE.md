@@ -1,8 +1,8 @@
 # 📖 دليل المطور الشامل — EPI Supervisor
 ## الواجهة الرئيسية للمطور والمبرمج
 
-**الإصدار:** v3.16.0 (إصلاحات مراجعة مقارنة — 22 يوليو)
-**آخر تحديث:** 2026-07-22 (15 إصلاح حرج — مراجعة مقارنة مع تقرير خبير)
+**الإصدار:** v3.17.0 (إصلاحات التقرير + تحسينات الأداء + تحسين الخريطة — 22 يوليو)
+**آخر تحديث:** 2026-07-22 (17 إصلاح + Marker Clustering + 2 migrations)
 **المنصة:** Flutter 3.27+ | Supabase Backend
 
 ---
@@ -443,7 +443,87 @@ enum UserRole { admin, central, governorate, district, data_entry }
 
 ## 8. الإصلاحات الأخيرة
 
-### 8.1 إصلاحات v3.15.0 (2026-07-22) — 20 إصلاح + إصلاح Storage
+### 8.1 إصلاحات v3.17.0 (2026-07-22) — 17 إصلاح + تحسين الخريطة
+
+تم تنفيذ مراجعة شاملة لمشاكل التقرير المُرفق + إصلاحات أداء + تحسين تفاعلية الخريطة.
+
+#### إصلاحات حرجة (منع ضياع البيانات):
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| NEW-1 | **salt storage بدون await** — `onSaltCreated` كان fire-and-forget. لو التطبيق crash قبل حفظ الـ salt، كل البيانات المشفرة تضيع | `offline_manager.dart` | لا ضياع بيانات عند crash |
+| NEW-2 | **الصور الفاشلة تُسكَت** — صورة تفشل في التشفير → التطبيق يقول “تم الإرسال ✅” بدون ما المستخدم يعرف. الآن تتبع + تحذير قبل الإرسال | `form_fill_screen.dart` | بيانات ناقصة في السيرفر |
+| GPS | **auto-detect يكتب فوق GPS المحفوظ** — لما تفتح مسودة فيها موقع، الـ async auto-detect يشتغل ويستبدل الموقع المحفوظ بالموقع الحالي | `form_fill_screen.dart` | الموقع الجغرافي يحفوظ من المسودة |
+| PopScope | **showDialog<bool> والزرار ترجع String** — type mismatch → كراش + شاشة سوداء لما تضغط أي زر في رسالة “تغييرات غير محفوظة” | `form_fill_screen.dart` | لا كراش عند الخروج |
+
+#### إصلاحات متوسطة (الأداء والاستقرار):
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| M1 | **useChannelStats N+1** — كان يسوي 51 استعلام (1 + 50 قناة). الآن RPC `get_channel_message_counts()` — استعلامين فقط | `communication.ts` + migration | بطء UI + ضغط شبكة |
+| M2 | **export-data users بدون limit** — كان يجلب كل المستخدمين. الآن `.limit(5000)` | `export-data/index.ts` | OOM على Edge Function |
+| M3 | **grounding.ts `.limit(50000)` متناقض** — PostgREST يقطع عند 1000 فعلياً. الآن `.limit(1000)` يطابق السلوك الحقيقي | `grounding.ts` (4 أماكن) | بيانات ناقصة بدون تحذير |
+| M4 | **FormEditorDialog بدون dirty state** — “إلغاء” يقفل بدون تأكيد. الآن `isDirty` + `confirm()` + deep clone | `FormEditorDialog.tsx` | ضياع تعديلات admin |
+| M5 | **notifications byType يجيب 10K** — كان يجلب 10000 صف ويعد يدوياً. الآن RPC `get_notification_type_counts()` — GROUP BY في PostgreSQL | `manage-notifications/index.ts` + migration | إحصائيات غير دقيقة |
+| M6 | **generateSummary بدون timeout** — لو الـ API hang، الدالة تعلق للأبد. الآن `AbortController` + 15s | `providers.ts` | تعليق محتمل |
+| M7 | **connectivity-banner setTimeout بدون cleanup** — memory leak عند unmount. الآن `useRef` + cleanup في useEffect | `connectivity-banner.tsx` | memory leak |
+| M8 | **clearQueue لا يمسح sharded** — كان يمسح blob القديم بس. الآن يمسح index + كل sharded items + blob | `offline_manager.dart` | bug نائم |
+
+#### إصلاحات منخفضة (الأداء والكود):
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| L1 | **pendingCount يفك تشفير الكل** — كان ي_decrypt كل العناصر لعدّها. الآن `_getQueueIndex().length` — O(1) | `offline_manager.dart` | أداء بطيء |
+| L2 | **_getCache يحذف تالف بدون backup** — الآن يحفظ في `_corrupted_backup` قبل الحذف | `offline_manager.dart` | فقدان كاش مكلف |
+| L3 | **_rebuildDraftsIndexFromKeys بدون await** — race condition محتمل. الآن `await` | `offline_manager.dart` | race محتمل |
+| L4 | **full_sync_provider حد 5000** — OOM على أجهزة ضعيفة. الآن 2000 | `full_sync_provider.dart` | OOM |
+| L5 | **PersistentEncryptionIsolate dead code** — 115 سطر كود ميت (لم يُستخدم قط). الآن محذوف | `encryption_service.dart` | كود ميت |
+
+#### تحسينات الخريطة:
+
+| التحسين | قبل | بعد |
+|---------|-----|-----|
+| Marker Clustering | 2000 نقطة منفصلة بدون ت grouping | `MarkerClusterLayer` — تجميع حسب القرب، zoom يفصّلها |
+| Tap على نقطة | لا تفاعل — مجرد نقاط ملونة | تضغط → panel تفاصيل → bottom sheet كامل |
+| حجم الدبوس | 12px بدون ظل | 24px مع ظل + حدود أوضح |
+| الدبوس المحدد | مجرد نقطة أكبر | حد أصفر + ظل قوي + أيقونة 📍 |
+| الألوان | محفوظة (مستوى/حالة) | محفوظة — `_buildMarkerDot()` يحترم `_colorMode` |
+
+#### قاعدة البيانات (Migrations جديدة):
+
+```sql
+-- 20260722000000: notification type counts
+CREATE OR REPLACE FUNCTION get_notification_type_counts()
+RETURNS TABLE(type text, count bigint) ...
+
+-- 20260722000001: channel message counts
+CREATE OR REPLACE FUNCTION get_channel_message_counts()
+RETURNS TABLE(room text, count bigint) ...
+```
+
+#### الملفات المُعدّلة:
+| الملف | الإصلاحات |
+|-------|----------|
+| `form_fill_screen.dart` | NEW-1, NEW-2, GPS, PopScope |
+| `offline_manager.dart` | NEW-1, M8, L1, L2, L3 |
+| `map_screen.dart` | Clustering + tap |
+| `communication.ts` | M1 (N+1 → RPC) |
+| `FormEditorDialog.tsx` | M4 (dirty state) |
+| `connectivity-banner.tsx` | M7 (setTimeout cleanup) |
+| `grounding.ts` | M3 (limit fix) |
+| `providers.ts` | M6 (AbortController) |
+| `export-data/index.ts` | M2 (limit) |
+| `manage-notifications/index.ts` | M5 (RPC) |
+| `full_sync_provider.dart` | L4 (limit 2000) |
+| `encryption_service.dart` | L5 (dead code removal) |
+
+---
+
+### 8.2 إصلاحات v3.16.0 (2026-07-22) — 15 إصلاح حرج (مراجعة مقارنة مع تقرير خبير)
+
+تم تنفيذ مراجعة شاملة + مقارنة مع تقرير خبير مستقل + تنفيذ 15 إصلاح حرج في 19 ملف (+928 سطر / -155 سطر).
+
+### 8.3 إصلاحات v3.15.0 (2026-07-22) — 20 إصلاح + إصلاح Storage
 
 تم تنفيذ مراجعة شاملة + مقارنة مع تقرير خبير مستقل + تنفيذ 20 إصلاح في 3 مراحل.
 

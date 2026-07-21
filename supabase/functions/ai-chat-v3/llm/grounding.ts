@@ -273,7 +273,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
       if (filters.form_id) q = q.eq('form_id', filters.form_id)
       if (effectiveRound && effectiveRound > 0) q = q.eq('campaign_round', effectiveRound)
 
-      const { data: fallbackData, error: fallbackErr } = await withTimeout(q.limit(50000), 15_000) ?? {}
+      const { data: fallbackData, error: fallbackErr } = await withTimeout(q.limit(1000), 15_000) ?? {}
       if (fallbackErr || !fallbackData || fallbackData.length === 0) return []
       
       // Process fallback data (same format as before)
@@ -666,7 +666,8 @@ async function fetchGovernoratesData(supa: any, plan: QueryPlan, campaignRound: 
     q = q.eq('campaign_round', effectiveRound)
   }
 
-  const { data, error } = await withTimeout(q.limit(50000), 15_000) ?? {}
+  // ⚠️ FIX M3: Use 1000 instead of 50000 — PostgREST caps at 1000 anyway
+  const { data, error } = await withTimeout(q.limit(1000), 15_000) ?? {}
 
   if (error || !data) return []
 
@@ -858,7 +859,8 @@ async function fetchTrendsData(supa: any, plan: QueryPlan, campaignRound: number
     q = q.eq('campaign_round', effectiveRound)
   }
 
-  const { data, error } = await withTimeout(q.limit(50000), 15_000) ?? {}
+  // ⚠️ FIX M3: Use 1000 instead of 50000 — PostgREST caps at 1000 anyway
+  const { data, error } = await withTimeout(q.limit(1000), 15_000) ?? {}
 
   if (error || !data) return []
 
@@ -1455,7 +1457,7 @@ async function fetchAnalyticsPageData(supa: any, plan: QueryPlan, campaignRound:
   }
 
   const { data: subs, error: subsErr } = await withTimeout(
-    subsQuery.order('created_at', { ascending: true }).limit(50000),
+    subsQuery.order('created_at', { ascending: true }).limit(1000),
     10_000,
   ) ?? {}
 

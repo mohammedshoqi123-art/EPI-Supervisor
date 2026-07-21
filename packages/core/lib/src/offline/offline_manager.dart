@@ -158,8 +158,12 @@ class OfflineManager {
           if (saltStr == null) return null;
           return Uint8List.fromList(base64Decode(saltStr));
         },
-        onSaltCreated: (salt) {
-          _box?.put(EncryptionService.saltStorageKey, base64Encode(salt));
+        onSaltCreated: (salt) async {
+          // ⚠️ FIX NEW-1: await salt storage — prevent data loss on crash
+          // Previously: fire-and-forget → if app crashes before write completes,
+          // salt is lost → new salt on restart → all encrypted data unreadable.
+          // Now: await ensures salt is persisted before continuing.
+          await _box?.put(EncryptionService.saltStorageKey, base64Encode(salt));
         },
       ).timeout(
         const Duration(seconds: 8),
@@ -420,15 +424,26 @@ class OfflineManager {
   }
 
   Future<void> clearQueue() async {
+    // ⚠️ FIX M8: Clear sharded storage too, not just legacy blob
+    // Previously: only deleted _syncQueueKey (old blob) — sharded items remained orphaned
+    // Now: delete index + all sharded items + legacy blob
+    final index = _getQueueIndex();
+    for (final id in index) {
+      await _safeBox?.delete('sync_queue/$id');
+    }
+    await _safeBox?.delete(_syncQueueIndexKey);
     await _safeBox?.delete(_syncQueueKey);
     _invalidatePendingCount();
   }
 
   // ✅ FIX: Cache pending count to avoid decrypting queue on every access
+  // ⚠️ FIX L1: Use index length instead of decrypting all items
+  // Previously: _getQueue().length → decrypts every item → slow for large queues
+  // Now: _getQueueIndex().length → reads index only → O(1)
   int _cachedPendingCount = -1;
   int get pendingCount {
     if (_cachedPendingCount < 0) {
-      _cachedPendingCount = _getQueue().length;
+      _cachedPendingCount = _getQueueIndex().length;
     }
     return _cachedPendingCount;
   }
@@ -1131,7 +1146,7 @@ class OfflineManager {
       debugPrint('[OfflineManager] ⚠️ Rebuilt drafts index from ${draftKeys.length} Hive keys');
       // حفظ الـ index المُعاد بناؤه (مشفر)
       try {
-        _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftKeys)));
+        await _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftKeys)));
       } catch (e) {
         debugPrint('[OfflineManager] Could not save rebuilt index: $e');
       }
@@ -1271,12 +1286,18 @@ class OfflineManager {
         return cache;
       } catch (_) {
         // 3. Both failed — data is corrupted, key changed, OR old encryption format
+        // ⚠️ FIX L2: Backup corrupted cache before deleting
+        // Previously: deleted without backup → data lost forever
+        // Now: save to recovery key for potential later recovery
         if (kDebugMode) {
           debugPrint(
-            '[OfflineManager] ⚠️ Cache corrupted or old format — clearing',
+            '[OfflineManager] ⚠️ Cache corrupted or old format — backing up before clearing',
           );
         }
-        _safeBox?.delete(_cacheKey);
+        try {
+          await _safeBox?.put('${_cacheKey}_corrupted_backup', data);
+        } catch (_) {}
+        await _safeBox?.delete(_cacheKey);
         _cacheMemory = null;
         return {};
       }

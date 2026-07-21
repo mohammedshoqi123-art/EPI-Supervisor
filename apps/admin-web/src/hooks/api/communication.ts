@@ -224,27 +224,32 @@ export function useChannelStats() {
   return useQuery({
     queryKey: ['channel-stats'],
     queryFn: async () => {
-      // Get message counts per channel
-      const { data: channels, error: chError } = await supabase
-        .from('chat_channels')
-        .select('id, code, name, channel_type, is_active')
-        .eq('is_active', true)
-      if (chError) throw chError
+      // ⚠️ FIX M1: Use RPC for channel stats — no data transfer for counting
+      // Previously: N+1 queries (1 per channel for count)
+      // Wrong attempt: fetch all messages → worse for large datasets
+      // Now: RPC executes COUNT...GROUP BY in PostgreSQL → exact counts, minimal transfer
+      const [chResult, statsResult] = await Promise.all([
+        supabase
+          .from('chat_channels')
+          .select('id, code, name, channel_type, is_active')
+          .eq('is_active', true),
+        supabase.rpc('get_channel_message_counts'),
+      ])
 
-      const stats = await Promise.all(
-        (channels || []).map(async (ch) => {
-          const { count } = await supabase
-            .from('chat_messages')
-            .select('id', { count: 'exact', head: true })
-            .eq('room', ch.code)
-          return {
-            ...ch,
-            messageCount: count || 0,
-          }
-        })
-      )
+      if (chResult.error) throw chResult.error
 
-      return stats
+      // Build lookup from RPC result
+      const counts: Record<string, number> = {}
+      if (!statsResult.error && statsResult.data) {
+        for (const row of statsResult.data) {
+          counts[row.room] = Number(row.count)
+        }
+      }
+
+      return (chResult.data ?? []).map((ch) => ({
+        ...ch,
+        messageCount: counts[ch.code] ?? 0,
+      }))
     },
     enabled: isConfigured,
     refetchInterval: 60000,

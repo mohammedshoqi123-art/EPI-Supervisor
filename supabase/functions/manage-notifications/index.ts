@@ -166,18 +166,35 @@ serve(async (req) => {
             .gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
         ])
 
-        // ═══ FIX R-C6: Add limit to prevent OOM on large notification tables ═══
-        // Previously: no limit → fetched ALL rows → OOM on 100K+ notifications
-        // Now: limit 10000 → safe for V8 heap (~128MB)
-        // Better: use RPC GROUP BY for exact counts without loading all rows
-        const { data: byType } = await adminClient
-          .from('notifications')
-          .select('type')
-          .limit(10000)
-
-        const typeDistribution: Record<string, number> = {}
-        for (const n of byType ?? []) {
-          typeDistribution[n.type] = (typeDistribution[n.type] ?? 0) + 1
+        // ⚠️ FIX M5: Use RPC for accurate type distribution without loading all rows
+        // Previously: fetched up to 10000 rows → inaccurate counts + memory waste
+        // Now: RPC executes GROUP BY in PostgreSQL → exact counts, minimal data transfer
+        let typeDistribution: Record<string, number> = {}
+        try {
+          const { data: rpcData, error: rpcErr } = await adminClient.rpc('get_notification_type_counts')
+          if (!rpcErr && rpcData) {
+            for (const row of rpcData) {
+              typeDistribution[row.type] = Number(row.count)
+            }
+          } else {
+            // Fallback: fetch types only (small column) and count client-side
+            const { data: byType } = await adminClient
+              .from('notifications')
+              .select('type')
+              .limit(10000)
+            for (const n of byType ?? []) {
+              typeDistribution[n.type] = (typeDistribution[n.type] ?? 0) + 1
+            }
+          }
+        } catch {
+          // Fallback
+          const { data: byType } = await adminClient
+            .from('notifications')
+            .select('type')
+            .limit(10000)
+          for (const n of byType ?? []) {
+            typeDistribution[n.type] = (typeDistribution[n.type] ?? 0) + 1
+          }
         }
 
         return jsonResponse({

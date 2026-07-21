@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.17.0] — 2026-07-22
+
+### Fixed — 17 إصلاح (مشاكل التقرير + تحسينات الأداء + تحسين الخريطة)
+
+#### إصلاحات حرجة (الأولوية القصوى):
+- NEW-1: salt storage بدون await — ضياع كامل البيانات عند crash أولي (إصلاح بسطر واحد)
+- NEW-2: الصور الفاشلة تُسكَت بدون إشعار — الآن تتبع + تحذير قبل الإرسال
+- GPS: auto-detect يكتب فوق بيانات المسودة — الآن يحمي GPS المحفوظ
+- PopScope: showDialog<bool> والزرار ترجع String — كراش + شاشة سوداء
+
+#### إصلاحات متوسطة (الأداء والاستقرار):
+- M1: useChannelStats N+1 → RPC `get_channel_message_counts()` (استعلامين بدل 51)
+- M2: export-data users بدون limit → `.limit(5000)` (منع OOM)
+- M3: grounding.ts `.limit(50000)` متناقض → `.limit(1000)` (يطابق PostgREST cap)
+- M4: FormEditorDialog بدون dirty state → `isDirty` + `confirm()` قبل الإغلاق
+- M5: manage-notifications byType 10K → RPC `get_notification_type_counts()`
+- M6: generateSummary بدون timeout → `AbortController` + 15s
+- M7: connectivity-banner setTimeout بدون cleanup → `useRef` + cleanup
+- M8: clearQueue لا يمسح sharded → حذف index + sharded items + blob
+
+#### إصلاحات منخفضة (الأداء والكود):
+- L1: pendingCount يفك تشفير الكل → `_getQueueIndex().length` (O(1))
+- L2: _getCache يحذف تالف بدون backup → backup قبل delete
+- L3: _rebuildDraftsIndexFromKeys بدون await → إضافة await
+- L4: full_sync_provider حد 5000 → 2000 (منع OOM على أجهزة ضعيفة)
+- L5: PersistentEncryptionIsolate dead code → حذف 149 سطر
+
+#### تحسينات الخريطة:
+- Marker Clustering: تجميع النقاط القريبة (بدلاً من 2000 نقطة منفصلة)
+- Tap على أي نقطة → عرض تفاصيل الإرسالية (panel + bottom sheet)
+- ألوان حسب المستوى (مركزي/محافظة/imachinery) — محفوظة
+- دبابيس أكبر مع ظل — أسهل في الرؤية
+
+#### قاعدة البيانات:
+- migration: `get_channel_message_counts()` RPC
+- migration: `get_notification_type_counts()` RPC
+
+#### الملفات:
+- 12 ملف مُعدّل + 2 ملف migration جديد
+- +338 سطر / -230 سطر
+
+---
+
 ## [v3.16.0] — 2026-07-22
 
 ### Fixed — 15 إصلاح حرج (مراجعة مقارنة مع تقرير خبير)

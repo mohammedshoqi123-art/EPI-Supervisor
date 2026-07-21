@@ -132,6 +132,10 @@ serve(async (req) => {
           `)
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
+          // ⚠️ FIX M2: Add limit to prevent OOM on large user tables
+          // Previously: no limit → fetches ALL users → OOM on 10K+ users
+          // Now: limit 5000 → safe for Edge Function memory
+          .limit(5000)
 
         if (result.error) return jsonResponse({ error: result.error.message }, 400, origin)
 

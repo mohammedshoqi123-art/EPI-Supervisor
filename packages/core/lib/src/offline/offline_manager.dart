@@ -166,6 +166,9 @@ class OfflineManager {
     // ═══ FIX: Recover stuck items from previous crashes ═══
     await _recoverStuckSyncingItems();
 
+    // ═══ FIX: Cleanup old data to prevent storage bloat ═══
+    await _cleanupOldData();
+
     _initialized = true;
     if (kDebugMode)
       debugPrint(
@@ -1086,6 +1089,177 @@ class OfflineManager {
   List<String> getCacheKeys() {
     final cache = _getCache();
     return cache.keys.toList();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // STORAGE CLEANUP — prevent Hive from growing to 600MB+
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Max Hive box size — 100MB. If exceeded, oldest data is purged.
+  static const int _maxBoxSizeBytes = 100 * 1024 * 1024; // 100MB
+
+  /// Cleanup old data to prevent storage bloat.
+  /// Called once on init. Removes:
+  ///   1. Drafts older than 30 days
+  ///   2. Failed submissions older than 7 days
+  ///   3. Cache entries older than 30 days
+  ///   4. If total size > 100MB, removes oldest entries
+  Future<void> _cleanupOldData() async {
+    if (_box == null || !_box!.isOpen) return;
+
+    try {
+      int removedCount = 0;
+
+      // 1. Clean old drafts (older than 30 days)
+      final now = DateTime.now();
+      final indexStr = _box!.get(_draftsIndexKey) ?? '[]';
+      List<String> draftIndex;
+      try {
+        // Try encrypted first, then plain JSON
+        try {
+          draftIndex = List<String>.from(jsonDecode(_encryption.decrypt(indexStr)));
+        } catch (_) {
+          draftIndex = List<String>.from(jsonDecode(indexStr));
+        }
+      } catch (_) {
+        draftIndex = [];
+      }
+
+      final draftsToRemove = <String>[];
+      for (final draftId in draftIndex) {
+        final data = _box!.get('drafts/$draftId');
+        if (data == null || data.isEmpty) {
+          draftsToRemove.add(draftId);
+          continue;
+        }
+        try {
+          String decrypted;
+          try {
+            decrypted = _encryption.decrypt(data);
+          } catch (_) {
+            decrypted = data; // plain JSON
+          }
+          final draft = jsonDecode(decrypted);
+          final savedAt = DateTime.tryParse(draft['saved_at'] ?? '');
+          if (savedAt != null && now.difference(savedAt).inDays > 30) {
+            draftsToRemove.add(draftId);
+          }
+        } catch (_) {
+          draftsToRemove.add(draftId); // corrupted draft
+        }
+      }
+
+      for (final id in draftsToRemove) {
+        await _box!.delete('drafts/$id');
+        draftIndex.remove(id);
+        removedCount++;
+      }
+      if (draftsToRemove.isNotEmpty) {
+        try {
+          await _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftIndex)));
+        } catch (_) {
+          await _box!.put(_draftsIndexKey, jsonEncode(draftIndex));
+        }
+      }
+
+      // 2. Clean old failed submissions (older than 7 days)
+      final failed = _getFailedSubmissions();
+      final failedToRemove = <String>[];
+      for (final entry in failed.entries) {
+        final failedAt = DateTime.tryParse(entry.value['failed_at'] ?? '');
+        if (failedAt != null && now.difference(failedAt).inDays > 7) {
+          failedToRemove.add(entry.key);
+        }
+      }
+      for (final id in failedToRemove) {
+        failed.remove(id);
+        removedCount++;
+      }
+      if (failedToRemove.isNotEmpty) {
+        final encrypted = _encryption.encrypt(jsonEncode(failed));
+        await _safeBox?.put(_failedSubmissionsKey, encrypted);
+      }
+
+      // 3. Clean old cache entries (older than 30 days)
+      final cache = _getCache();
+      final cacheToRemove = <String>[];
+      for (final entry in cache.entries) {
+        final cachedAt = DateTime.tryParse(entry.value['cached_at'] ?? '');
+        if (cachedAt != null && now.difference(cachedAt).inDays > 30) {
+          cacheToRemove.add(entry.key);
+        }
+      }
+      for (final key in cacheToRemove) {
+        cache.remove(key);
+        removedCount++;
+      }
+      if (cacheToRemove.isNotEmpty) {
+        final encrypted = _encryption.encrypt(jsonEncode(cache));
+        await _safeBox?.put(_cacheKey, encrypted);
+        _cacheMemory = cache;
+      }
+
+      // 4. Clean old sync queue items (older than 7 days — stuck items)
+      final queueIndex = _getQueueIndex();
+      final queueToRemove = <String>[];
+      for (final id in queueIndex) {
+        final data = _safeBox?.get('sync_queue/$id');
+        if (data == null || data.isEmpty) {
+          queueToRemove.add(id);
+          continue;
+        }
+        try {
+          final decrypted = _encryption.decrypt(data);
+          final item = jsonDecode(decrypted);
+          final createdAt = DateTime.tryParse(item['created_at'] ?? '');
+          if (createdAt != null && now.difference(createdAt).inDays > 7) {
+            queueToRemove.add(id);
+            // Save to failed submissions before removing
+            await saveFailedSubmission(item, 'Auto-cleanup: older than 7 days');
+          }
+        } catch (_) {
+          queueToRemove.add(id); // corrupted item
+        }
+      }
+      for (final id in queueToRemove) {
+        await _safeBox?.delete('sync_queue/$id');
+        queueIndex.remove(id);
+        removedCount++;
+      }
+      if (queueToRemove.isNotEmpty) {
+        await _safeBox?.put(_syncQueueIndexKey, jsonEncode(queueIndex));
+        _invalidatePendingCount();
+      }
+
+      // 5. Check total box size — if > 100MB, log warning
+      try {
+        final appDir = await getApplicationDocumentsDirectory().timeout(
+          const Duration(seconds: 3),
+        );
+        final boxFile = File('${appDir.path}/$_boxName.hive');
+        if (await boxFile.exists()) {
+          final sizeBytes = await boxFile.length();
+          if (sizeBytes > _maxBoxSizeBytes) {
+            if (kDebugMode) {
+              debugPrint('[OfflineManager] ⚠️ Hive box is ${sizeBytes ~/ (1024*1024)}MB — clearing cache');
+            }
+            // Clear cache to reduce size
+            await clearCache();
+            removedCount++;
+          }
+        }
+      } catch (_) {
+        // Can't check size — skip
+      }
+
+      if (kDebugMode && removedCount > 0) {
+        debugPrint('[OfflineManager] 🧹 Cleanup: removed $removedCount old entries');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[OfflineManager] Cleanup failed: $e');
+      }
+    }
   }
 
   void dispose() {

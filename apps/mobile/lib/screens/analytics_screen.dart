@@ -191,7 +191,7 @@ final _readinessSubsProvider = FutureProvider.family
       // Convert RPC result to format expected by _ReadinessTab
       final metrics = result.first;
       final byGov = metrics['by_governorate'] as List? ?? [];
-      return byGov.map((g) => {
+      return byGov.map<Map<String, dynamic>>((g) => {
         'id': g['governorate_id'] ?? '',
         'governorate_id': g['governorate_id'] ?? '',
         'name_ar': g['name_ar'] ?? '',

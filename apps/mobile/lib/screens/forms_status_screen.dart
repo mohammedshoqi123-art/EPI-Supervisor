@@ -869,6 +869,7 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                   title: draft['form_title'] ?? 'مسودة',
                   formId: draft['formId'] ?? draft['form_id'] ?? '',
                   date: draft['saved_at'] ?? draft['created_at'],
+                  draftData: draft, // Pass full draft data for preview
                   onTap: () {
                     final draftId = draft['draft_id'];
                     final formId = draft['formId'] ?? draft['form_id'];

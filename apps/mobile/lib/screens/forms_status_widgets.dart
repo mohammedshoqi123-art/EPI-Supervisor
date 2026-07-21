@@ -671,6 +671,7 @@ class DraftTile extends StatelessWidget {
   final String title;
   final String formId;
   final String? date;
+  final Map<String, dynamic>? draftData;
   final VoidCallback onTap;
 
   const DraftTile({
@@ -678,8 +679,104 @@ class DraftTile extends StatelessWidget {
     required this.title,
     required this.formId,
     this.date,
+    this.draftData,
     required this.onTap,
   });
+
+  /// Build a preview of the draft data fields
+  List<Widget> _buildDataPreview() {
+    if (draftData == null || draftData!.isEmpty) return [];
+
+    final data = draftData!['data'] as Map<String, dynamic>? ?? draftData!;
+    if (data.isEmpty) return [];
+
+    final preview = <Widget>[];
+    int count = 0;
+    const maxFields = 5; // Show max 5 fields in preview
+
+    for (final entry in data.entries) {
+      if (count >= maxFields) break;
+      final key = entry.key;
+      final value = entry.value;
+
+      // Skip internal keys
+      if (key.startsWith('_') || key == 'form_id' || key == 'form_name') continue;
+
+      // Skip null/empty values
+      if (value == null || value == '' || value == 'null') continue;
+
+      // Format the value
+      String displayValue;
+      if (value is Map) {
+        displayValue = value.toString().length > 50 ? '${value.toString().substring(0, 50)}...' : value.toString();
+      } else if (value is List) {
+        displayValue = '${value.length} عنصر';
+      } else {
+        displayValue = value.toString();
+        if (displayValue.length > 60) displayValue = '${displayValue.substring(0, 60)}...';
+      }
+
+      // Format the key name
+      String displayKey = key.replaceAll('_', ' ');
+      if (displayKey.length > 25) displayKey = '${displayKey.substring(0, 25)}...';
+
+      preview.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 90,
+                child: Text(
+                  displayKey,
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 10,
+                    color: Colors.grey.shade500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  displayValue,
+                  style: const TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 10,
+                    color: Colors.black87,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      count++;
+    }
+
+    if (data.length > maxFields) {
+      preview.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(
+            '... و ${data.length - maxFields} حقل آخر',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontSize: 9,
+              color: Colors.grey.shade400,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return preview;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -753,6 +850,10 @@ class DraftTile extends StatelessWidget {
                           ],
                         ],
                       ),
+                      // ═══ FIX: Show draft data preview ═══
+                      // Previously: only showed title + date — no field data
+                      // Now: shows up to 5 form fields with their values
+                      ..._buildDataPreview(),
                     ],
                   ),
                 ),

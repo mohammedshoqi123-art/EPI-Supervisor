@@ -88,7 +88,7 @@ serve(async (req) => {
           return jsonResponse({ error: 'No recipients found' }, 400, origin)
         }
 
-        // Batch insert notifications
+        // Batch insert notifications with dedup
         const notifications = recipients.map(r => ({
           recipient_id: r.id,
           title,
@@ -98,12 +98,16 @@ serve(async (req) => {
           data: body.data ?? {},
         }))
 
-        // Insert in batches of 100
+        // Insert in batches of 100 with ON CONFLICT DO NOTHING
         for (let i = 0; i < notifications.length; i += 100) {
           const batch = notifications.slice(i, i + 100)
-          const { error: insertError } = await adminClient.from('notifications').insert(batch)
+          const { error: insertError } = await adminClient.from('notifications').upsert(batch, { onConflict: 'recipient_id,category,title', ignoreDuplicates: true })
           if (insertError) {
-            return jsonResponse({ error: insertError.message }, 400, origin)
+            // Fallback: try regular insert if upsert fails
+            const { error: fallbackError } = await adminClient.from('notifications').insert(batch)
+            if (fallbackError) {
+              return jsonResponse({ error: fallbackError.message }, 400, origin)
+            }
           }
         }
 

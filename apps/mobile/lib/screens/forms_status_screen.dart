@@ -216,13 +216,29 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
           (f) => f['id'] == formId,
           orElse: () => <String, dynamic>{},
         );
-        // ═══ FIX: عرض اسم النموذج أو "مسودة" مع تاريخ الحفظ ═══
-        String formTitle = 'مسودة';
+        // ═══ FIX: عرض اسم النموذج من multiple sources ═══
+        String formTitle = '';
         if (form.isNotEmpty) {
-          formTitle = form['title_ar'] ?? form['title'] ?? 'مسودة';
-        } else if (formId.isNotEmpty && formId.length > 10) {
-          // نموذج غير موجود في الكاش — نعرض "مسودة" بدل UUID
-          formTitle = 'مسودة';
+          formTitle = form['title_ar'] ?? form['title'] ?? '';
+        }
+        // Fallback: جلب الاسم من بيانات المسودة نفسها
+        if (formTitle.isEmpty) {
+          final draftData = draft['data'] as Map<String, dynamic>? ?? {};
+          formTitle = draftData['form_name'] ?? draftData['form_title'] ?? draftData['النموذج'] ?? '';
+        }
+        // Fallback أخير: "مسودة" + تاريخ الحفظ
+        if (formTitle.isEmpty) {
+          final savedAt = draft['saved_at'] ?? '';
+          if (savedAt.isNotEmpty) {
+            try {
+              final dt = DateTime.parse(savedAt);
+              formTitle = 'مسودة ${dt.day}/${dt.month}';
+            } catch (_) {
+              formTitle = 'مسودة';
+            }
+          } else {
+            formTitle = 'مسودة';
+          }
         }
         return {
           ...draft,

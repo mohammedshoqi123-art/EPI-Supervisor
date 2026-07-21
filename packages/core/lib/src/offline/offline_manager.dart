@@ -1392,7 +1392,7 @@ class OfflineManager {
           continue;
         }
         try {
-          String decrypted;
+          String? decrypted;
           try {
             decrypted = _encryption.decrypt(data);
           } catch (_) {
@@ -1433,6 +1433,12 @@ class OfflineManager {
               draftsToRemove.add(draftId);
               continue;
             }
+          }
+          if (decrypted == null) {
+            // All decryption attempts failed — preserve for recovery
+            draftsToPreserve[draftId] = data;
+            draftsToRemove.add(draftId);
+            continue;
           }
           final draft = jsonDecode(decrypted);
           final savedAt = DateTime.tryParse(draft['saved_at'] ?? '');

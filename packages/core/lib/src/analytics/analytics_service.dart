@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import '../api/api_client.dart';
 import '../config/supabase_config.dart';
 
@@ -163,11 +164,34 @@ class AnalyticsService {
   // ─── Detailed Analytics ───────────────────────────────────────────────────
 
   /// Get submission trends for chart (last N days)
+  /// ═══ FIX: Use get-analytics Edge Function instead of fetching 5000 rows ═══
+  /// Previously: fetched 5000 rows, grouped locally
+  /// Now: uses byDay from get-analytics Edge Function (server-side aggregation)
   Future<List<Map<String, dynamic>>> getSubmissionTrend({
     int days = 30,
     String? governorateId,
     int? campaignRound,
   }) async {
+    try {
+      // Use get-analytics Edge Function which already computes byDay
+      final result = await _api.callFunction(SupabaseConfig.fnGetAnalytics, {
+        'governorate_id': governorateId,
+        'campaign_round': campaignRound,
+      });
+
+      // Extract byDay from the response
+      final byDay = result['submissions']?['byDay'] as Map<String, dynamic>?;
+      if (byDay != null && byDay.isNotEmpty) {
+        return byDay.entries
+            .map((e) => {'date': e.key, 'count': e.value ?? 0})
+            .toList()
+          ..sort((a, b) => (a['date'] as String).compareTo(b['date'] as String));
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[AnalyticsService] getSubmissionTrend via Edge Function failed: $e');
+    }
+
+    // ═══ FALLBACK: Old method (fetch raw data) — only if Edge Function fails ═══
     final startDate = DateTime.now().subtract(Duration(days: days));
     final filters = <String, dynamic>{};
     if (governorateId != null) filters['governorate_id'] = governorateId;
@@ -180,7 +204,6 @@ class AnalyticsService {
       limit: 5000,
     );
 
-    // Group by date
     final grouped = <String, int>{};
     for (var i = 0; i < days; i++) {
       final date = startDate.add(Duration(days: i));
@@ -204,16 +227,45 @@ class AnalyticsService {
   }
 
   /// Get top governorates by submission count
-  /// ═══ PERFORMANCE: Fetch only governorate_id + count, resolve names separately ═══
-  /// Previously: fetched 5000 rows with JOIN (heavy) then grouped locally
-  /// Now: lightweight query + separate name lookup (only 18 governorates max)
+  /// ═══ FIX: Use get-analytics Edge Function instead of fetching 5000 rows ═══
+  /// Previously: fetched 5000 rows with only governorate_id, counted locally
+  /// Now: uses topGovernorates from get-analytics Edge Function (server-side aggregation)
   Future<List<Map<String, dynamic>>> getGovernorateRanking({
     int? campaignRound,
   }) async {
+    try {
+      // Use get-analytics Edge Function which already computes topGovernorates
+      final result = await _api.callFunction(SupabaseConfig.fnGetAnalytics, {
+        'campaign_round': campaignRound,
+      });
+
+      // Extract topGovernorates from the response
+      final topGovs = result['topGovernorates'] as List?;
+      if (topGovs != null && topGovs.isNotEmpty) {
+        return topGovs.map((g) => {
+          'governorate_id': g['id'] ?? '',
+          'name_ar': g['nameAr'] ?? g['name_ar'] ?? 'غير محدد',
+          'count': g['count'] ?? 0,
+        }).toList();
+      }
+
+      // Fallback: try governorateBreakdown
+      final breakdown = result['governorateBreakdown'] as List?;
+      if (breakdown != null && breakdown.isNotEmpty) {
+        return breakdown.map((g) => {
+          'governorate_id': g['id'] ?? '',
+          'name_ar': g['nameAr'] ?? g['name_ar'] ?? 'غير محدد',
+          'count': g['count'] ?? 0,
+        }).toList();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[AnalyticsService] getGovernorateRanking via Edge Function failed: $e');
+    }
+
+    // ═══ FALLBACK: Old method (fetch raw data) — only if Edge Function fails ═══
     final filters = <String, dynamic>{};
     if (campaignRound != null) filters['campaign_round'] = campaignRound;
 
-    // Step 1: Fetch only governorate_id (minimal data)
     final submissions = await _api.select(
       'form_submissions',
       select: 'governorate_id',
@@ -221,7 +273,6 @@ class AnalyticsService {
       limit: 5000,
     );
 
-    // Step 2: Count locally (fast — just counting strings)
     final counts = <String, int>{};
     for (final s in submissions) {
       final govId = s['governorate_id'] as String?;
@@ -231,8 +282,6 @@ class AnalyticsService {
 
     if (counts.isEmpty) return [];
 
-    // Step 3: Resolve governorate names (only for IDs that have submissions)
-    // This is a small query — max 18 governorates
     try {
       final govs = await _api.select(
         'governorates',
@@ -251,7 +300,6 @@ class AnalyticsService {
       }).toList()
         ..sort((a, b) => ((b['count'] as num?)?.toInt() ?? 0).compareTo((a['count'] as num?)?.toInt() ?? 0));
     } catch (_) {
-      // Fallback: return without names
       return counts.entries.map((e) => {
         'governorate_id': e.key,
         'name_ar': 'غير محدد',

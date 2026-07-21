@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.15.0] — 2026-07-22
+
+### Fixed — 20 إصلاح + إصلاح Storage + إصلاحات إضافية
+
+#### المرحلة الأولى: إصلاحات حرجة (8):
+- #29: المسودات: إعادة بناء drafts_index عند corruption من Hive keys
+- #30: التحليلات: loading shimmer + error state مع retry button
+- #1: إزالة UI thread fallback في EncryptionService + saveDraft (لا تجميد)
+- #2: Auto-save من 60s إلى 240s (4× أقل تجميد)
+- #3: إزالة محاكاة streaming في AIChatWidget (1 re-render بدل 500)
+- #5: LIMIT 5000 على Edge Functions (لا timeout)
+- #6: إصلاح await مفقود في generate-scheduled-report (التقارير تعمل)
+- #7: Promise.any حقيقي بدل sequential fallback (30s بدل 150s)
+
+#### المرحلة الثانية: إصلاحات الأداء (5):
+- #14: _defaultLimit من 10000 إلى 1000
+- #16: ConnectivityUtils Completer — انتظار أول probe
+- #17: تأجيل _reinitializeOnResume + debounce 10s
+- #19: Timeout 8s على auth.getUser()
+- #20: Submissions limit من 2000 إلى 500
+
+#### المرحلة الثالثة: تحسينات هيكلية (7):
+- #21: Persistent Isolate worker للتشفير
+- #22: Indexes — موجودة بالفعل (verified)
+- #23: db_max_rows من 100000 إلى 10000
+- #24: RPC موحد admin dashboard (1 query بدل 16)
+- #25: CSV export limit من 10000 إلى 2000
+- #26: localStorage debouncing (2s) + context save (30s)
+- #27: AdvancedCacheManager — محذوف بالفعل (verified)
+
+#### إصلاح Storage:
+- حد entry واحد: 500KB (كان بلا حد)
+- حد الكاش الكلي: 2MB (كان 5MB)
+- عدد entries: 20 (كان 50)
+- مدة احتفاظ: 7 أيام (كان 30)
+- Hive compaction بعد كل تنظيف
+
+#### إصلاحات إضافية (بعد v3.15.0):
+- المسودات: تحميل أسماء النماذج من cache fallback
+- الجاهزية: استخدام إرساليات فردية بدل RPC مُجمّع
+- Deploy workflow: تخطي migrations المُطبّقة
+- csv-worker.ts: TypeScript error fix
+- PersistentEncryptionIsolate: cross-file reference fix
+
+---
+
 ## [v3.14.0] — 2026-07-21
 
 ### Fixed — 27 إصلاح شامل (4 مراحل)

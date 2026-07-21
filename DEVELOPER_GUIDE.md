@@ -497,9 +497,21 @@ enum UserRole { admin, central, governorate, district, data_entry }
 2. `supabase/migrations/056_unified_admin_dashboard_rpc.sql` — RPC موحد
 3. `apps/admin-web/src/workers/csv-worker.ts` — Web Worker للتصدير
 
-#### الإحصائيات:
-- **15 ملف** مُعدّل + **3 ملفات** جديدة
-- **~612 سطر** مُضاف + **~178 سطر** محذوف
+#### إصلاحات إضافية (22 يوليو — بعد v3.15.0):
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| — | المسودات: تحميل أسماء النماذج من cache fallback | `forms_status_screen.dart` | المسودات تظهر بأسماء النماذج |
+| — | الجاهزية: استخدام إرساليات فردية بدل RPC مُجمّع | `analytics_screen.dart` | جدول جاهزية المحافظات يظهر |
+| — | الجاهزية: البحث عن governorate_id في كلا المكانين | `analytics_screen.dart` | بيانات صحيحة |
+| — | Deploy workflow: تخطي migrations المُطبّقة | `deploy-functions.yml` | لا فشل في CI/CD |
+| — | csv-worker.ts: TypeScript catch(error: any) | `csv-worker.ts` | لا خطأ في البناء |
+| — | PersistentEncryptionIsolate: إصلاح cross-file reference | `encryption_service.dart` | لا خطأ compilation |
+
+#### الإحصائيات النهائية:
+- **18 ملف** مُعدّل + **3 ملفات** جديدة
+- **~900 سطر** مُضاف + **~200 سطر** محذوف
+- **5 كوميتات** مرفوعة
 - **طبقات التطبيق:** Mobile (Flutter) + Web (React) + Edge Functions + Database
 
 ---

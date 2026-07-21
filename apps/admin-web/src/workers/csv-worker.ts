@@ -37,7 +37,7 @@ self.onmessage = function (e) {
     const csv = BOM + [headerRow, ...dataRows].join('\n')
 
     self.postMessage({ success: true, csv })
-  } catch (error) {
-    self.postMessage({ success: false, error: error.message })
+  } catch (error: any) {
+    self.postMessage({ success: false, error: error?.message || String(error) })
   }
 }

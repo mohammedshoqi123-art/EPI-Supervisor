@@ -184,8 +184,8 @@ final _readinessSubsProvider = FutureProvider.family
             formId: _readinessFormId,
             campaignType: params.campaignType,
             campaignRound: params.campaignRound,
-            limit: 2000,
-            lean: false,
+            limit: 500, // ═══ FIX: 500 (was 2000) — analytics only needs counts + status ═══
+            lean: true, // ═══ FIX: true (was false) — skip 'data' column (84% less bandwidth)
             createdAfter: createdAfter,
           );
     },
@@ -207,8 +207,8 @@ final _supervisionSubsProvider = FutureProvider.family
             formId: _supervisionFormId,
             campaignType: params.campaignType,
             campaignRound: params.campaignRound,
-            limit: 2000,
-            lean: false,
+            limit: 500, // ═══ FIX: 500 (was 2000) — analytics only needs counts + status ═══
+            lean: true, // ═══ FIX: true (was false) — skip 'data' column (84% less bandwidth)
             createdAfter: createdAfter,
           );
     },

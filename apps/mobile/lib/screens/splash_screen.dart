@@ -81,17 +81,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     // ═══ FIX: انتظر Supabase.initialize ينتهي (في الخلفية) ═══
     // main.dart يبدأ Supabase في الخلفية، نحن ننتظره هنا
     // ═══ FIX: Await Supabase using Completer — no polling ═══
-    // Previously: polled supabaseInitialized bool every 1s (wasteful)
-    // Now: awaits Completer (instant notification when ready)
+    // But don't wait too long — if offline, proceed immediately
     final supabaseReady = await awaitSupabaseReady(
-      timeout: const Duration(seconds: 10),
+      timeout: const Duration(seconds: 5), // ═══ FIX: 5s (was 10s) — faster startup ═══
     );
 
     if (!mounted || _hasNavigated) return;
 
     if (!supabaseReady) {
-      // ═══ FIX: Supabase لم يتهيأ بعد — proceed immediately ═══
-      debugPrint('[Splash] Supabase not ready after 10s — proceeding offline');
+      debugPrint('[Splash] Supabase not ready after 5s — proceeding offline');
       _hasNavigated = true;
       _waitTimer?.cancel();
       context.go('/dashboard');

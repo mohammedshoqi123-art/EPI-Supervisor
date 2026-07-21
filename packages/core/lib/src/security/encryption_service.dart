@@ -93,45 +93,21 @@ class EncryptionService {
     // ═══ FIX: PBKDF2 في Isolate منفصل — لا نحظر UI thread ═══
     // السابق: 600k PBKDF2 على UI thread → 1-3s تجميد
     // الجديد: compute() ينفذها في خيط خلفي → UI طليق
-    // ═══ FIX: Retry Isolate once before giving up — don't fall back to UI thread ═══
-    // Previously: on timeout/error, ran PBKDF2 on main thread → 1-3s UI freeze
-    // Now: retry Isolate with longer timeout, throw if still fails
+    // ═══ FIX: Keep UI thread fallback — Isolate may fail on weak devices ═══
     try {
       final keyBytes = await compute(
         _pbkdf2InIsolate,
         _Pbkdf2Params(effectiveKey, salt),
       ).timeout(
         const Duration(seconds: 10),
-        onTimeout: () => throw TimeoutException('Isolate PBKDF2 timeout (attempt 1)'),
+        onTimeout: () => throw TimeoutException('Isolate PBKDF2 timeout'),
       );
       _pinnedKey = enc.Key(keyBytes);
-    } on TimeoutException {
-      // Retry once with longer timeout (15s)
-      debugPrint('[EncryptionService] Isolate PBKDF2 timed out — retrying with 15s');
-      try {
-        final keyBytes = await compute(
-          _pbkdf2InIsolate,
-          _Pbkdf2Params(effectiveKey, salt),
-        ).timeout(
-          const Duration(seconds: 15),
-          onTimeout: () => throw TimeoutException('Isolate PBKDF2 timeout (attempt 2)'),
-        );
-        _pinnedKey = enc.Key(keyBytes);
-      } catch (retryError) {
-        // Both attempts failed — throw so app knows encryption is not available
-        debugPrint('[EncryptionService] ❌ Isolate PBKDF2 failed after retry: $retryError');
-        throw StateError(
-          'Encryption initialization failed. PBKDF2 could not run in Isolate. '
-          'This may happen on devices with limited resources. '
-          'Error: $retryError',
-        );
-      }
     } catch (e) {
-      // Non-timeout error — throw so app knows encryption is not available
-      debugPrint('[EncryptionService] ❌ Isolate PBKDF2 failed: $e');
-      throw StateError(
-        'Encryption initialization failed. Error: $e',
-      );
+      // ═══ FIX: Fall back to UI thread — don't throw ═══
+      debugPrint('[EncryptionService] Isolate failed ($e) — falling back to UI thread');
+      final keyBytes = _deriveKeySync(utf8.encode(effectiveKey), salt);
+      _pinnedKey = enc.Key(keyBytes);
     }
 
     if (kDebugMode) {
@@ -210,12 +186,11 @@ class EncryptionService {
   }
 
   /// ═══ CONSTRUCTOR — uses pinned key, NO PBKDF2 ═══
-  /// ═══ FIX: Allow empty _envKey — key will be loaded from secure storage ═══
-  /// Previously: threw StateError if _envKey was empty
-  /// Now: accepts empty key (will be set via getOrCreateSecureKey before use)
+  /// ═══ FIX: Support secure storage — don't throw if key is empty ═══
+  /// But DO throw if key is empty AND initialize() hasn't been called
   EncryptionService({String? overrideKey})
       : _activeKey = overrideKey ?? _envKey {
-    if (_activeKey.isEmpty) {
+    if (_activeKey.isEmpty && !isInitialized) {
       // Key not set yet — will be loaded from secure storage in initialize()
       // This is normal for production builds that don't use --dart-define
       if (kDebugMode) {

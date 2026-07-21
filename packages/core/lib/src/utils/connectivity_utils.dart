@@ -77,21 +77,10 @@ class ConnectivityUtils {
           );
       final linkUp = _isConnected(result);
       if (linkUp) {
-        // ═══ FIX: Await first probe with 3s timeout ═══
-        // Previously: _probeAndEmit() was fire-and-forget → SplashScreen read isOnline before probe completed
-        // Now: await first probe so SplashScreen gets accurate connectivity state
-        try {
-          final online = await _probeInternet().timeout(
-            const Duration(seconds: 3),
-            onTimeout: () => false,
-          );
-          if (online) {
-            _isOnline = true;
-            _throttledEmit(true);
-          }
-        } catch (_) {
-          // Probe failed — stay offline, background probe will retry
-        }
+        // ═══ FIX: Run probe in background — don't block initialize() ═══
+        // Previously: awaited _probeInternet() with 3s timeout → blocked app startup
+        // Now: fire-and-forget → SplashScreen uses Completer to wait
+        _probeAndEmit();
       }
     } catch (_) {
       // Can't check — stay offline

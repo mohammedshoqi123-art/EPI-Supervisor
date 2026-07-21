@@ -798,9 +798,7 @@ class OfflineManager {
       // ═══ PERFORMANCE: Use Isolate for JSON encoding + encryption ═══
       // Previously: jsonEncode + encrypt on UI thread → freeze with large data
       // Now: all heavy work in background Isolate
-      // ═══ FIX: Retry Isolate once before giving up — don't fall back to UI thread ═══
-      // Previously: on timeout/error, ran jsonEncode + encrypt on main thread → UI freeze
-      // Now: retry Isolate with longer timeout, throw if still fails
+      // ═══ FIX: Keep UI thread fallback — Isolate may fail on weak devices ═══
       String encrypted;
 
       try {
@@ -824,14 +822,16 @@ class OfflineManager {
             onTimeout: () => throw TimeoutException('Isolate timeout (attempt 2)'),
           );
         } catch (retryError) {
-          // Both attempts failed — rethrow so caller can handle
-          debugPrint('[OfflineManager] Isolate failed after retry: $retryError');
-          rethrow;
+          // ═══ FIX: Fall back to UI thread — don't throw ═══
+          debugPrint('[OfflineManager] Isolate failed — falling back to UI thread');
+          final json = jsonEncode(draftData);
+          encrypted = _encryption.encrypt(json);
         }
       } catch (e) {
-        // Non-timeout error — rethrow so caller can handle
-        debugPrint('[OfflineManager] Isolate error: $e');
-        rethrow;
+        // ═══ FIX: Fall back to UI thread — don't throw ═══
+        debugPrint('[OfflineManager] Isolate error — falling back to UI thread: $e');
+        final json = jsonEncode(draftData);
+        encrypted = _encryption.encrypt(json);
       }
 
       await _box?.put('drafts/$draftId', encrypted);
@@ -916,22 +916,25 @@ class OfflineManager {
     return result;
   }
 
-  /// Get draft form IDs — reads index (encrypted for security)
-  /// ═══ FIX: Index is now encrypted (was plain JSON) ═══
+  /// Get draft form IDs — reads index
+  /// ═══ FIX: Try both encrypted and plain JSON format ═══
   Set<String> getDraftFormIds() {
     final indexStr = _box?.get(_draftsIndexKey);
     if (indexStr == null || indexStr.isEmpty) return {};
     try {
-      // Try decrypting first (new format)
+      // Try decrypting first (new encrypted format)
       final decrypted = _encryption.decrypt(indexStr);
-      return (jsonDecode(decrypted) as List).cast<String>().toSet();
-    } catch (_) {
-      // Fallback: try reading as plain JSON (old format — migration)
-      try {
-        return (jsonDecode(indexStr) as List).cast<String>().toSet();
-      } catch (_) {
-        return {};
+      if (decrypted.isNotEmpty) {
+        return (jsonDecode(decrypted) as List).cast<String>().toSet();
       }
+    } catch (_) {
+      // Not encrypted or decryption failed — try plain JSON
+    }
+    // Fallback: try reading as plain JSON (old format)
+    try {
+      return (jsonDecode(indexStr) as List).cast<String>().toSet();
+    } catch (_) {
+      return {};
     }
   }
 

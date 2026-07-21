@@ -711,8 +711,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   Widget _buildStatsOverlay() {
     final subs = _getFilteredSubmissions();
-    final withGps =
-        subs.where((s) => s['gps_lat'] != null && s['gps_lng'] != null).length;
 
     // ═══ Show stats by admin level (مركزي/محافظة/مديرية) ═══
     final central = subs.where((s) {
@@ -921,6 +919,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     }).toList();
 
     return MarkerClusterLayerWidget(
+      options: MarkerClusterLayerOptions(
       markers: markers,
       maxClusterRadius: 45,
       size: const Size(40, 40),
@@ -929,17 +928,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
         return GestureDetector(
           onTap: () {
             HapticFeedback.lightImpact();
-            // Build cluster data from the grouped markers
-            final clusterSubs = clusterMarkers.map((m) {
-              // Find the matching submission by coordinates
-              return subs.firstWhere(
-                (s) =>
-                    (s['gps_lat'] as num).toDouble() == m.point.latitude &&
-                    (s['gps_lng'] as num).toDouble() == m.point.longitude,
-                orElse: () => {},
-              );
-            }).where((s) => s.isNotEmpty).toList();
-
             // Zoom in on cluster tap
             final lat = clusterMarkers
                 .map((m) => m.point.latitude)
@@ -979,6 +967,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
           ),
         );
       },
+      ),
     );
   }
 

@@ -30,7 +30,7 @@ def sentryDsn = System.getenv('SENTRY_DSN') ?: localProperties.getProperty('SENT
 android {
     namespace "com.epi.supervisor"
     compileSdkVersion 35
-    ndkVersion "25.1.8937393"
+    ndkVersion "27.0.12077973"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

@@ -1146,7 +1146,7 @@ class OfflineManager {
       debugPrint('[OfflineManager] ⚠️ Rebuilt drafts index from ${draftKeys.length} Hive keys');
       // حفظ الـ index المُعاد بناؤه (مشفر)
       try {
-        await _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftKeys)));
+        _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftKeys)));
       } catch (e) {
         debugPrint('[OfflineManager] Could not save rebuilt index: $e');
       }
@@ -1295,9 +1295,9 @@ class OfflineManager {
           );
         }
         try {
-          await _safeBox?.put('${_cacheKey}_corrupted_backup', data);
+          _safeBox?.put('${_cacheKey}_corrupted_backup', data);
         } catch (_) {}
-        await _safeBox?.delete(_cacheKey);
+        _safeBox?.delete(_cacheKey);
         _cacheMemory = null;
         return {};
       }

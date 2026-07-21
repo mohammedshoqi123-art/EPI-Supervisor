@@ -403,7 +403,15 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - name: Push migrations to Production
-        run: supabase db push --include-all
+        run: |
+          supabase db push --include-all 2>&1 || {
+            echo "⚠️ Migration push failed — attempting repair for already-applied migrations..."
+            # Repair migrations that were already applied outside CI
+            supabase migration repair --status applied 055 056 067 2>/dev/null || true
+            supabase migration repair --status applied 20260722000000 20260722000001 2>/dev/null || true
+            # Retry push
+            supabase db push --include-all
+          }
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 

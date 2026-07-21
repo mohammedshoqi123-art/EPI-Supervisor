@@ -186,6 +186,62 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         },
       );
       final draft = offline.getDraft(_draftId);
+
+      // ═══ FIX N-C3: فحص _needs_migration قبل تحميل البيانات ═══
+      // Previously: getDraft يُرجع placeholder بـ data:{} → UI يعرض استمارة فارغة
+      //   → المستخدم يحفظ → يُغطّي البيانات القديمة بـ {} → ضياع دائم!
+      // Now: نكتشف الـ placeholder ونُهاجر المسودة في الخلفية
+      if (draft != null && draft['_needs_migration'] == true) {
+        debugPrint('[FormFill] Draft needs migration — attempting background migration...');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('جاري ترحيل المسودة القديمة...', style: TextStyle(fontFamily: 'Tajawal')),
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        final migrated = await offline.migrateDraft(_draftId);
+        if (migrated != null && migrated['data'] != null) {
+          // Migration succeeded — use migrated data
+          final draftData = Map<String, dynamic>.from(migrated['data']);
+          setState(() {
+            _formData.addAll(draftData);
+            _hasUnsavedChanges = false;
+          });
+          for (final entry in draftData.entries) {
+            if (_textControllers.containsKey(entry.key)) {
+              _textControllers[entry.key]!.text = entry.value?.toString() ?? '';
+            }
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('تم ترحيل المسودة بنجاح ✅', style: TextStyle(fontFamily: 'Tajawal')),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+          return;
+        } else {
+          // Migration failed — show error and DON'T load empty form
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('فشل ترحيل المسودة القديمة — البيانات محفوظة ويمكن استعادتها لاحقاً', style: TextStyle(fontFamily: 'Tajawal')),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 5),
+              ),
+            );
+          }
+          // Don't load empty form — keep current state
+          return;
+        }
+      }
+
       if (draft != null && draft['data'] != null) {
         final draftData = Map<String, dynamic>.from(draft['data']);
         setState(() {
@@ -1351,20 +1407,20 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
+                onPressed: () => Navigator.of(ctx).pop(null),
                 child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
               ),
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
+                onPressed: () => Navigator.of(ctx).pop('exit_without_save'),
                 child: const Text('خروج بدون حفظ', style: TextStyle(fontFamily: 'Tajawal', color: Colors.red)),
               ),
               FilledButton.icon(
                 onPressed: () async {
-                  // ⚠️ FIX R-C2: Check if save succeeded before closing
-                  // Previously: await _saveDraft(); Navigator.pop(true) — always closed
-                  // Now: only pop with true if save actually succeeded
+                  // ⚠️ FIX N-C2: Check if save succeeded before closing
+                  // Previously: pop(saved) → false closes page (wrong!)
+                  // Now: pop('saved') on success, pop(null) on failure → stay on page
                   final saved = await _saveDraft();
-                  if (ctx.mounted) Navigator.of(ctx).pop(saved);
+                  if (ctx.mounted) Navigator.of(ctx).pop(saved ? 'saved' : null);
                 },
                 icon: const Icon(Icons.save, size: 18),
                 label: const Text('حفظ وخروج', style: TextStyle(fontFamily: 'Tajawal')),
@@ -1373,18 +1429,18 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           ),
         );
 
-        // ⚠️ FIX R-C2: Only close page if save succeeded or user chose to exit without saving
-        // Previously: shouldSave == true always closed the page (even on save failure)
-        // Now: shouldSave == true means save succeeded; shouldSave == false means user chose to exit without saving
-        if (shouldSave == true && mounted) {
+        // ⚠️ FIX N-C2: Correct logic for all 3 outcomes
+        // 'saved' → close page (save succeeded)
+        // 'exit_without_save' → close page (user chose to exit)
+        // null → stay on page (cancel or save failed)
+        if (shouldSave == 'saved' && mounted) {
           _hasUnsavedChanges = false;
           Navigator.of(context).pop();
-        } else if (shouldSave == false && mounted) {
-          // User explicitly chose 'exit without saving'
+        } else if (shouldSave == 'exit_without_save' && mounted) {
           _hasUnsavedChanges = false;
           Navigator.of(context).pop();
         }
-        // shouldSave == null means user pressed 'cancel' — stay on page
+        // null means cancel or save failed — stay on page
       },
       child: Scaffold(
       appBar: EpiAppBar(

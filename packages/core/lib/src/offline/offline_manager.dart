@@ -856,22 +856,17 @@ class OfflineManager {
         'saved_at': DateTime.now().toIso8601String(),
       };
 
-      // ═══ FIX: محاولة الحفظ بـ Isolate، fallback على plain JSON ═══
-      // Previously: Isolate failure → rethrow → draft NOT saved
-      // Now: Isolate failure → save as plain JSON → draft always saved
+      // ═══ FIX N-C1: شفّر على main isolate مباشرة ═══
+      // Previously: compute() يُنشئ Isolate جديد → _pinnedKey = null → مفتاح عشوائي
+      //   → المسودة تُشفّر بمفتاح مختلف → لا يمكن فكها → ضياع دائم!
+      // Now: شفّر على main isolate حيث _pinnedKey مضبوط → <1ms (migrated key)
       String encrypted;
-
       try {
-        encrypted = await compute(_encodeAndEncryptInIsolate, _EncodeParams(
-          draftData,
-          _encryption,
-        )).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () => throw TimeoutException('Isolate timeout'),
-        );
+        final json = jsonEncode(draftData);
+        encrypted = _encryption.encrypt(json);
       } catch (e) {
         // ═══ FIX: لا نرمي الخطأ — نحفظ كـ plain JSON ═══
-        debugPrint('[OfflineManager] Isolate failed — saving draft as plain JSON: $e');
+        debugPrint('[OfflineManager] Encrypt failed — saving draft as plain JSON: $e');
         encrypted = jsonEncode(draftData); // Plain JSON fallback
       }
 
@@ -1066,6 +1061,29 @@ class OfflineManager {
         }
       }
     }
+
+    // ═══ FALLBACK: افحص _recovered_drafts إذا لم نجد شيء ═══
+    if (result.isEmpty) {
+      final recoveredData = _box?.get('_recovered_drafts');
+      if (recoveredData != null) {
+        try {
+          final recoveredMap = Map<String, dynamic>.from(jsonDecode(recoveredData));
+          for (final entry in recoveredMap.entries) {
+            result.add({
+              'draft_id': entry.key,
+              'form_id': entry.key,
+              'data': <String, dynamic>{},
+              'saved_at': null,
+              '_recovered': true,
+            });
+          }
+          if (kDebugMode && result.isNotEmpty) {
+            debugPrint('[OfflineManager] Found ${result.length} recovered drafts');
+          }
+        } catch (_) {}
+      }
+    }
+
     return result;
   }
 
@@ -1379,10 +1397,17 @@ class OfflineManager {
           try {
             decrypted = _encryption.decrypt(data);
           } catch (_) {
-            // ═══ FIX R-C1: Try old format migration before giving up ═══
-            // Previously: catch → add to draftsToRemove → delete → DATA LOST
-            // Now: attempt PBKDF2 migration → if fails, preserve for recovery
-            if (EncryptionService.isOldFormat(data) && _encryptionKeyForMigration.isNotEmpty && migrationAttempts < maxMigrationAttempts) {
+            // ═══ محاولة 1: plain JSON (عند فشل Isolate في saveDraft) ═══
+            try {
+              final v = jsonDecode(data);
+              if (v is Map && v.containsKey('form_id') && v.containsKey('data')) {
+                decrypted = data;  // plain JSON صالح — لا تُحذف!
+                if (kDebugMode) debugPrint('[OfflineManager] Draft $draftId is plain JSON — keeping');
+              }
+            } catch (_) {}
+
+            // ═══ محاولة 2: old format migration ═══
+            if (decrypted == null && EncryptionService.isOldFormat(data) && _encryptionKeyForMigration.isNotEmpty && migrationAttempts < maxMigrationAttempts) {
               if (kDebugMode) debugPrint('[OfflineManager] Draft $draftId is old format — attempting migration...');
               migrationAttempts++;
               final migrated = await EncryptionService.decryptOldFormat(data, _encryptionKeyForMigration);

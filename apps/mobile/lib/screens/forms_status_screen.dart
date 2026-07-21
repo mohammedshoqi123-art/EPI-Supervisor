@@ -188,20 +188,45 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       final allDrafts = offline.getAllDrafts();
 
       // Enrich drafts with form titles from forms provider
+      // ═══ FIX: تحميل النماذج من multiple sources لضمان ظهور الأسماء ═══
+      // Previously: formsProvider فقط → فشل أوفلاين = أسماء فارغة
+      // Now: formsProvider → cache fallback → form_id كأسم مؤقت
       List<Map<String, dynamic>> forms = [];
       try {
-        forms = await ref.read(formsProvider.future);
+        forms = await ref.read(formsProvider.future).timeout(
+          const Duration(seconds: 5),
+        );
       } catch (_) {}
+
+      // Fallback: جلب من cache مباشرة إذا formsProvider فشل
+      if (forms.isEmpty) {
+        try {
+          final cache = await ref.read(offlineDataCacheProvider.future);
+          final campaign = ref.read(campaignProvider);
+          forms = cache.getCachedDataList('forms_${campaign.value}') ??
+                  cache.getCachedDataList('forms_all') ??
+                  cache.findCachedListByPrefix('forms_') ??
+                  [];
+        } catch (_) {}
+      }
 
       final enrichedDrafts = allDrafts.map((draft) {
         final formId = draft['form_id'] ?? '';
         final form = forms.firstWhere(
           (f) => f['id'] == formId,
-          orElse: () => {'title_ar': 'مسودة'},
+          orElse: () => <String, dynamic>{},
         );
+        // ═══ FIX: عرض اسم النموذج أو "مسودة" مع تاريخ الحفظ ═══
+        String formTitle = 'مسودة';
+        if (form.isNotEmpty) {
+          formTitle = form['title_ar'] ?? form['title'] ?? 'مسودة';
+        } else if (formId.isNotEmpty && formId.length > 10) {
+          // نموذج غير موجود في الكاش — نعرض "مسودة" بدل UUID
+          formTitle = 'مسودة';
+        }
         return {
           ...draft,
-          'form_title': form['title_ar'] ?? 'مسودة',
+          'form_title': formTitle,
           'formId': formId,
         };
       }).toList();

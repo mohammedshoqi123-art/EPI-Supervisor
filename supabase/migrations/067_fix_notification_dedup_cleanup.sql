@@ -14,8 +14,8 @@
 -- 1. Delete ALL existing notifications (user requested clean slate)
 -- 2. Add unique constraint on (recipient_id, category, data->>'submission_id')
 --    to prevent future duplicates at database level
--- 3. Update notify_on_submission() to use ON CONFLICT DO NOTHING
--- 4. Update notify_on_status_change() to use ON CONFLICT DO NOTHING
+-- 3. Update notify_on_submission() to use NOT EXISTS dedup
+-- 4. Update notify_on_status_change() to use NOT EXISTS dedup
 -- ═══════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -35,7 +35,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedup_unique
 CREATE INDEX IF NOT EXISTS idx_notifications_time_dedup
   ON notifications (recipient_id, category, title, created_at);
 
--- ═══ 4. Update notify_on_submission with ON CONFLICT DO NOTHING ═══
+-- ═══ 4. Update notify_on_submission with NOT EXISTS dedup ═══
 CREATE OR REPLACE FUNCTION notify_on_submission()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -84,7 +84,8 @@ BEGIN
 
   v_body := v_body || v_round;
 
-  -- Insert notification with ON CONFLICT DO NOTHING (database-level dedup)
+  -- Insert notification with dedup via NOT EXISTS (reliable with partial index)
+  -- ON CONFLICT DO NOTHING doesn't work with partial unique indexes
   INSERT INTO notifications (recipient_id, title, body, type, category, data)
   SELECT p.id,
     'استمارة جديدة',
@@ -108,7 +109,13 @@ BEGIN
       p.role IN ('admin', 'central')
       OR (p.role = 'governorate' AND p.governorate_id = NEW.governorate_id)
     )
-  ON CONFLICT DO NOTHING;
+    -- ═══ DEDUP: Don't insert if already exists for this recipient + submission ═══
+    AND NOT EXISTS (
+      SELECT 1 FROM notifications n
+      WHERE n.recipient_id = p.id
+        AND n.category = 'form'
+        AND n.data->>'submission_id' = NEW.id::TEXT
+    );
 
   RETURN NEW;
 END;

@@ -61,13 +61,20 @@ jobs:
       - name: Deploy database migrations
         run: |
           # Try to push migrations — ignore already-applied ones
-          supabase db push --include-all 2>&1 || {
-            if echo "$?" | grep -q "already exists"; then
-              echo "⚠️ Some migrations already applied — skipping"
-            else
-              echo "❌ Migration failed"
-              exit 1
-            fi
-          }
+          set +e
+          OUTPUT=$(supabase db push --include-all 2>&1)
+          EXIT_CODE=$?
+          set -e
+          
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ Migrations deployed successfully"
+          elif echo "$OUTPUT" | grep -q "already exists"; then
+            echo "⚠️ Some migrations already applied — this is OK"
+            echo "Output: $OUTPUT"
+          else
+            echo "❌ Migration failed:"
+            echo "$OUTPUT"
+            exit 1
+          fi
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

@@ -187,6 +187,9 @@ class OfflineManager {
   }
 
   // ═══ FIX: Serialize write operations to prevent race conditions ═══
+  // WARNING: This lock is NOT reentrant. Do NOT call removeFromQueue()
+  // or addToSyncQueue() from within a function that already holds the lock.
+  // syncPendingItems() uses _saveQueue() directly (not removeFromQueue) to avoid deadlock.
   final _lockQueue = <Completer<void>>[];
 
   Future<T> _withWriteLock<T>(Future<T> Function() action) async {
@@ -1361,6 +1364,10 @@ class OfflineManager {
 
       final draftsToRemove = <String>[];
       final draftsToPreserve = <String, String>{}; // id → raw data (for recovery)
+      // ═══ FIX: Limit PBKDF2 migration attempts to prevent long init times ═══
+      // Each attempt = ~2-3s (PBKDF2 600k in Isolate). Max 5 attempts = ~15s.
+      int migrationAttempts = 0;
+      const maxMigrationAttempts = 5;
       for (final draftId in draftIndex) {
         final data = _box!.get('drafts/$draftId');
         if (data == null || data.isEmpty) {
@@ -1375,8 +1382,9 @@ class OfflineManager {
             // ═══ FIX R-C1: Try old format migration before giving up ═══
             // Previously: catch → add to draftsToRemove → delete → DATA LOST
             // Now: attempt PBKDF2 migration → if fails, preserve for recovery
-            if (EncryptionService.isOldFormat(data) && _encryptionKeyForMigration.isNotEmpty) {
+            if (EncryptionService.isOldFormat(data) && _encryptionKeyForMigration.isNotEmpty && migrationAttempts < maxMigrationAttempts) {
               if (kDebugMode) debugPrint('[OfflineManager] Draft $draftId is old format — attempting migration...');
+              migrationAttempts++;
               final migrated = await EncryptionService.decryptOldFormat(data, _encryptionKeyForMigration);
               if (migrated != null) {
                 decrypted = migrated;

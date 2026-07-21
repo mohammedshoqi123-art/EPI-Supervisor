@@ -147,7 +147,6 @@ export function useBulkUpdateSubmissionStatus() {
       }
 
       let totalUpdated = 0
-      const failedIds: string[] = []
 
       const chunkResults = await Promise.allSettled(
         chunks.map(async (chunk) => {

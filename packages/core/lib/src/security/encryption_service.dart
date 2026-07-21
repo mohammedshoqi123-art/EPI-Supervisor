@@ -486,7 +486,7 @@ class PersistentEncryptionIsolate {
     if (!_initialized) {
       // Fallback: inline encode+encrypt (no access to offline_manager's private functions)
       final json = jsonEncode(draftData);
-      final keyBytes = _deriveKeySync(utf8.encode(encryptionKey), salt);
+      final keyBytes = EncryptionService._deriveKeySync(utf8.encode(encryptionKey), salt);
       final key = enc.Key(keyBytes);
       final iv = enc.IV.fromSecureRandom(12);
       final encrypter = enc.Encrypter(enc.AES(key, mode: enc.AESMode.gcm));

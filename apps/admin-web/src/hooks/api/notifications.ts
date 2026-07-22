@@ -182,7 +182,6 @@ export function useSendNotification() {
         .select('id')
         .eq('is_active', true)
         .is('deleted_at', null)
-        .limit(10000)
 
       if (params.target === 'admin') {
         recipientQuery = recipientQuery.in('role', ['admin', 'central'])
@@ -192,8 +191,19 @@ export function useSendNotification() {
         recipientQuery = recipientQuery.eq('governorate_id', params.governorate_id)
       }
 
-      const { data: recipients, error: recError } = await recipientQuery
-      if (recError) throw recError
+      // ═══ CR-4: Paginate recipients to avoid 10k PostgREST cap ═══
+      const allRecipients: { id: string }[] = []
+      const PAGE_SIZE = 10000
+      let offset = 0
+      while (true) {
+        const { data: page, error: pageError } = await recipientQuery.range(offset, offset + PAGE_SIZE - 1)
+        if (pageError) throw pageError
+        if (!page || page.length === 0) break
+        allRecipients.push(...page)
+        if (page.length < PAGE_SIZE) break
+        offset += PAGE_SIZE
+      }
+      const recipients = allRecipients
       if (!recipients || recipients.length === 0) throw new Error('لا يوجد مستلمين')
 
       // Batch insert

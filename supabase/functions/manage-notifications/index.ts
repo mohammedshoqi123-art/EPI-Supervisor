@@ -83,7 +83,20 @@ serve(async (req) => {
           recipientQuery = recipientQuery.in('id', target.user_ids)
         }
 
-        const { data: recipients } = await recipientQuery
+        // ═══ CR-4: Paginate recipients to avoid 10k PostgREST cap ═══
+        // Previously: single query without limit → silent cap at 10000 users.
+        // Now: fetch in pages of 10000 until all recipients are loaded.
+        const allRecipients: { id: string }[] = []
+        const PAGE_SIZE = 10000
+        let offset = 0
+        while (true) {
+          const { data: page } = await recipientQuery.range(offset, offset + PAGE_SIZE - 1)
+          if (!page || page.length === 0) break
+          allRecipients.push(...page)
+          if (page.length < PAGE_SIZE) break
+          offset += PAGE_SIZE
+        }
+        const recipients = allRecipients
         if (!recipients || recipients.length === 0) {
           return jsonResponse({ error: 'No recipients found' }, 400, origin)
         }

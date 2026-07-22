@@ -63,7 +63,7 @@ class EncryptionService {
   static Future<void> initialize({
     String? encryptionKey,
     required Uint8List? Function() saltSource,
-    required void Function(Uint8List salt) onSaltCreated,
+    required Future<void> Function(Uint8List salt) onSaltCreated,
   }) async {
     if (_pinnedKey != null) return; // Already initialized
 
@@ -84,7 +84,7 @@ class EncryptionService {
     final Uint8List salt;
     if (existingSalt == null) {
       salt = _generateRandomBytes(_saltLength);
-      onSaltCreated(salt);
+      await onSaltCreated(salt);
     } else {
       salt = existingSalt;
     }

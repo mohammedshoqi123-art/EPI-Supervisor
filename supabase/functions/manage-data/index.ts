@@ -267,6 +267,40 @@ serve(async (req) => {
       }
 
       // ═══════════════════════════════════════════
+      // FORM SUBMISSIONS
+      // ═══════════════════════════════════════════
+      case 'submissions': {
+        if (action === 'delete') {
+          const { id } = body
+          if (!id) return jsonResponse({ error: 'Missing submission id' }, 400, origin)
+          const { error } = await adminClient
+            .from('form_submissions')
+            .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq('id', id)
+          if (error) return jsonResponse({ error: error.message }, 400, origin)
+          return jsonResponse({ success: true }, 200, origin)
+        }
+
+        if (action === 'bulk_delete') {
+          const { ids } = body
+          if (!ids || !Array.isArray(ids) || ids.length === 0) return jsonResponse({ error: 'Missing submission ids' }, 400, origin)
+          const results = await Promise.allSettled(
+            ids.map((id: string) =>
+              adminClient
+                .from('form_submissions')
+                .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+                .eq('id', id)
+            )
+          )
+          const succeeded = results.filter(r => r.status === 'fulfilled').length
+          const failed = results.filter(r => r.status === 'rejected').length
+          return jsonResponse({ success: true, succeeded, failed }, 200, origin)
+        }
+
+        return jsonResponse({ error: 'Unknown action for submissions' }, 400, origin)
+      }
+
+      // ═══════════════════════════════════════════
       // FORMS
       // ═══════════════════════════════════════════
       case 'forms': {

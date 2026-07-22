@@ -177,17 +177,19 @@ export default function SubmissionsPage() {
   }
 
   const deleteSubmission = async (sub: FormSubmission) => {
-    const { error: delError } = await supabase
-      .from('form_submissions')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', sub.id)
-
-    if (delError) {
-      toast({ title: 'فشل حذف الإرسالية', variant: 'destructive' })
-    } else {
-      toast({ title: 'تم حذف الإرسالية', variant: 'success' })
-      setDeleteTarget(null)
-      refetch()
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-data', {
+        body: { resource: 'submissions', action: 'delete', id: sub.id },
+      })
+      if (error || (data && data.error)) {
+        toast({ title: 'فشل حذف الإرسالية', description: data?.error || error?.message, variant: 'destructive' })
+      } else {
+        toast({ title: 'تم حذف الإرسالية', variant: 'success' })
+        setDeleteTarget(null)
+        refetch()
+      }
+    } catch (e: any) {
+      toast({ title: 'فشل حذف الإرسالية', description: e.message, variant: 'destructive' })
     }
   }
 
@@ -648,16 +650,23 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
     )
   }
 
+  const [deleting, setDeleting] = useState(false)
   const handleDelete = async () => {
-    const { error } = await supabase
-      .from('form_submissions')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', submission.id)
-    if (error) {
-      toast({ title: 'فشل الحذف', variant: 'destructive' })
-    } else {
-      toast({ title: 'تم حذف الإرسالية', variant: 'success' })
-      onDeleted()
+    setDeleting(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-data', {
+        body: { resource: 'submissions', action: 'delete', id: submission.id },
+      })
+      if (error || (data && data.error)) {
+        toast({ title: 'فشل الحذف', description: data?.error || error?.message, variant: 'destructive' })
+      } else {
+        toast({ title: 'تم حذف الإرسالية', variant: 'success' })
+        onDeleted()
+      }
+    } catch (e: any) {
+      toast({ title: 'فشل الحذف', description: e.message, variant: 'destructive' })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -815,8 +824,9 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
                 </Button>
               )}
               {canDelete && (
-                <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleDelete}>
-                  <Trash2 className="w-3.5 h-3.5" /> حذف
+                <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleDelete} disabled={deleting}>
+                  {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  حذف
                 </Button>
               )}
             </div>

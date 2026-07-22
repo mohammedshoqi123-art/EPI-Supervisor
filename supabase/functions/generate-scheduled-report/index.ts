@@ -65,8 +65,11 @@ async function fetchReportData(supa: any, report: ScheduledReport): Promise<Repo
   const [
     subsRes, usersRes, govsRes, shortagesRes, weekSubsRes, todaySubsRes, submittedRes, draftRes, formsRes
   ] = await Promise.allSettled([
+    // ═══ CR-3: .limit(10000) matches pgrst.db_max_rows (migration 055) ═══
+    // Previously .limit(50000) was silently capped to 10000 by PostgREST.
+    // For reports needing >10k rows, use RPC fetch_submissions (bypasses pgrst limit).
     applyRound(supa.from('form_submissions').select('id, form_id, submitted_by, governorate_id, district_id, status, created_at, campaign_round, data')
-      .is('deleted_at', null).gte('created_at', monthAgo).limit(50000)),
+      .is('deleted_at', null).gte('created_at', monthAgo).limit(10000)),
     supa.from('profiles').select('id, full_name, email, role, governorate_id, is_active').is('deleted_at', null),
     supa.from('governorates').select('id, name_ar, is_active').eq('is_active', true).is('deleted_at', null),
     supa.from('supply_shortages').select('id, item_name, severity, is_resolved, governorate_id').is('deleted_at', null),

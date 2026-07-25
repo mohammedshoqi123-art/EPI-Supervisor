@@ -794,7 +794,7 @@ export function AIChatWidget() {
   // Previously: loadSavedContext() called on every render → localStorage.getItem
   //   + JSON.parse on main thread every render (streaming = hundreds of renders/sec)
   // Now: useRef lazy initializer → runs only once on mount
-  const contextRef = useRef(() => {
+  const contextRef = useRef((() => {
     const savedCtx = loadSavedContext()
     return {
       userId: 'copilot-user',
@@ -804,7 +804,7 @@ export function AIChatWidget() {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
-  }())
+  })())
 
   // ═══ FIX #26: debounced save — لا نكتب localStorage على كل تغيير ═══
   // Previously: saveMessages(messages) على كل تغيير = 500 كتابة/ثانية مع streaming

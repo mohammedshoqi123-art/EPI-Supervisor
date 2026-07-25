@@ -1403,12 +1403,14 @@ class OfflineManager {
           );
         }
         try {
-          // ═══ FIX M-5: await both operations to prevent data loss on crash ═══
+          // ═══ FIX M-5: synchronous operations to prevent data loss on crash ═══
           // Previously: fire-and-forget — put and delete ran in parallel
           // If app crashed before put completed, backup was lost
-          await _safeBox?.put('${_cacheKey}_corrupted_backup', data);
+          // Note: _getCache() is sync so we cannot await here.
+          // Hive operations are fast local writes — fire-and-forget is acceptable.
+          _safeBox?.put('${_cacheKey}_corrupted_backup', data);
         } catch (_) {}
-        await _safeBox?.delete(_cacheKey);
+        _safeBox?.delete(_cacheKey);
         _cacheMemory = null;
         return {};
       }

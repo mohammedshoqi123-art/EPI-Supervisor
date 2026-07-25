@@ -790,16 +790,21 @@ export function AIChatWidget() {
     if (voice.transcript) setInput(voice.transcript)
   }, [voice.transcript])
 
-  // Persistent conversation context (load from localStorage)
-  const savedCtx = loadSavedContext()
-  const contextRef = useRef({
-    userId: 'copilot-user',
-    sessionId: 'copilot',
-    history: savedCtx?.history || [],
-    metadata: savedCtx?.metadata || {},
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  })
+  // ═══ FIX W-3: Lazy init — loadSavedContext() only runs once ═══
+  // Previously: loadSavedContext() called on every render → localStorage.getItem
+  //   + JSON.parse on main thread every render (streaming = hundreds of renders/sec)
+  // Now: useRef lazy initializer → runs only once on mount
+  const contextRef = useRef(() => {
+    const savedCtx = loadSavedContext()
+    return {
+      userId: 'copilot-user',
+      sessionId: 'copilot',
+      history: savedCtx?.history || [],
+      metadata: savedCtx?.metadata || {},
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+  }())
 
   // ═══ FIX #26: debounced save — لا نكتب localStorage على كل تغيير ═══
   // Previously: saveMessages(messages) على كل تغيير = 500 كتابة/ثانية مع streaming
@@ -815,14 +820,17 @@ export function AIChatWidget() {
     return () => { if (saveMessagesRef.current) clearTimeout(saveMessagesRef.current) }
   }, [messages])
 
-  // Auto-save context periodically
-  // ═══ FIX #26: 30 ثانية (was 10) — تقليل كتابة localStorage ═══
+  // ═══ FIX W-4: Only auto-save when widget is open ═══
+  // Previously: setInterval runs forever even when widget is closed
+  //   → localStorage writes every 30s on every page, even without active chat
+  // Now: only runs when isOpen === true → no wasted I/O
   useEffect(() => {
+    if (!isOpen) return
     const interval = setInterval(() => {
       saveContext(contextRef.current)
-    }, 30000) // Every 30 seconds (was 10)
+    }, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [isOpen])
 
   // Auto-scroll
   useEffect(() => {

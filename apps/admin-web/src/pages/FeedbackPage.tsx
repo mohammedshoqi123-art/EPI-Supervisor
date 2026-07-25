@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   MessageCircle, Plus, Clock, AlertTriangle, Send, Loader2,
   RefreshCw, Reply, CheckCircle2, XCircle, Clock3,
@@ -85,12 +85,17 @@ export default function FeedbackPage() {
   const [selectedTicket, setSelectedTicket] = useState<FeedbackTicket | null>(null)
   const [editingTicket, setEditingTicket] = useState<FeedbackTicket | null>(null)
 
-  // Listen for edit events from detail dialog
-  if (typeof window !== 'undefined') {
-    window.addEventListener('editTicket', ((e: CustomEvent) => {
-      setEditingTicket(e.detail)
-    }) as EventListener)
-  }
+  // ═══ FIX W-2: useEffect with cleanup to prevent memory leak ═══
+  // Previously: addEventListener in component body → new listener every re-render
+  //   → thousands of listeners → page freeze after minutes
+  // Now: useEffect with cleanup → single listener, removed on unmount
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setEditingTicket((e as CustomEvent).detail)
+    }
+    window.addEventListener('editTicket', handler)
+    return () => window.removeEventListener('editTicket', handler)
+  }, [])
 
   const ticketsQuery = useFeedbackTickets(activeFilter)
   const tickets = ticketsQuery.data || []

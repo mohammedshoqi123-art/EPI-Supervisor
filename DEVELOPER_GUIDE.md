@@ -487,6 +487,59 @@ enum UserRole { admin, central, governorate, district, data_entry }
 - UNIQUE constraint على notifications مطبّق يدوياً على الإنتاج (ليس عبر migration CLI)
 - PITR و Backups تتطلب ترقية إلى خطة Pro
 - PgBouncer settings (query_wait_timeout) يمكن تغييرها من Supabase Dashboard فقط
+### 8.0 إصلاحات v3.18.0 (2026-07-26) — 25 إصلاح + تنظيف قاعدة البيانات
+
+تم تنفيذ إصلاحات شاملة بعد تشخيص فعلي للسيرفر الإنتاجي + تدقيق عميق للكود (75+ ملف).
+
+#### إصلاحات Supabase (مُطبّقة مباشرة على السيرفر):
+
+| # | الإصلاح | التأثير |
+|---|---------|--------|
+| S-1 | **حذف 14,487 إشعار مكرر** (26MB → 216KB) | تقليل 99.7% |
+| S-2 | **تطبيق UNIQUE constraint** `idx_notifications_recipient_cat_title` | منع تكرار الإشعارات بقوة على مستوى DB |
+| S-3 | **إصلاح max_rows** من 100,000 إلى 10,000 (migration 055) | منع استعلامات ضخمة |
+| S-4 | **تنظيف audit_logs** — حذف entries أقدم من 90 يوم + stripping old_data/new_data + VACUUM FULL | تقليل حجم audit_logs |
+| S-5 | **إعادة تشغيل قاعدة البيانات** (كانت UNHEALTHY — timeout) | استعادة الخدمات |
+
+#### إصلاحات حرجة — الموبايل (منع ضياع البيانات):
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| F-1 | **حذف مسودة بناءً على نتيجة خاطئة** — `result.syncedIds.contains(offlineId)` بدلاً من `result.synced > 0` | `sync_service.dart` + `form_fill_screen.dart` | لا حذف خاطئ للمسودات |
+| F-2 | **auto-save hash ضعيف** — `.hashCode` + `.toString().hashCode` لـ Lists/Maps/Numbers | `form_fill_screen.dart` | لا ضياع تعديلات الصور |
+| F-4 | **failed_submissions 7 أيام** → 30 يوم | `offline_manager.dart` | وقت أطول للاسترجاع |
+| M-1 | **retry_count لا يُحفظ** — إضافة `updateQueueItems()` لحفظ retry_count/backoff في Hive | `sync_service.dart` + `offline_manager.dart` | لا تكرار لانهائي للعناصر الفاشلة |
+| M-2 | **رسالة كاذبة في deactivation** — إزالة claim "سيتم الحفظ" (المسودات المحفوظة تبقى في Hive) | `main.dart` | رسالة صادقة |
+| M-3 | **تشفير fallback خطير** — `_encryptionAvailable` flag + محاولة ثانية + تنبيه في saveDraft | `offline_manager.dart` | لا مفتاح عشوائي → لا silent data loss |
+| M-4 | **_unmigrated_drafts_blob يُكتب ولا يُقرأ** — إضافة fallback في getAllDrafts | `offline_manager.dart` | استرجاع مسودات مفقودة بعد التحديث |
+| M-5 | **_safeBox put/delete بدون await** — إضافة await لمنع فقدان backup عند crash | `offline_manager.dart` | backup يُكتب بالكامل قبل الحذف |
+
+#### إصلاحات حرجة — الويب (منع تجميد الصفحات):
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| R-2 | **mass assignment في manage-data** — إضافة allowlists لكل الـ 4 handlers | `manage-data/index.ts` | لا تعديل أعمدة حساسة |
+| W-1 | **تسريب ذاكرة MemosPage** — useEffect + removeEventListener cleanup | `MemosPage.tsx` | لا تجميد صفحة |
+| W-2 | **تسريب ذاكرة FeedbackPage** — نفس الإصلاح | `FeedbackPage.tsx` | لا تجميد صفحة |
+| W-3 | **localStorage على كل render** — useRef lazy initializer | `AIChatWidget.tsx` | لا I/O متكرر |
+| W-4 | **setInterval دائم** — `if (!isOpen) return` + `[isOpen]` deps | `AIChatWidget.tsx` | لا كتابة بلا داعٍ |
+
+#### إصلاحات النماذج أوفلاين:
+
+| # | الإصلاح | الملف | التأثير |
+|---|---------|-------|--------|
+| N-1 | **حدود كاش قاسية** (20/500KB/2MB) → (100/5MB/20MB) + إعفاء مرجعي من LRU | `offline_manager.dart` | النماذج لا تُحذف |
+| N-2 | **cleanup 7 أيام** → 30 يوم + إعفاء مرجعي | `offline_manager.dart` | لا حذف أسبوعي |
+| N-3 | **clearCache كامل عند 100MB** → انتقائي عند 200MB | `offline_manager.dart` | لا مسح النماذج |
+| N-5 | **findCachedListByPrefix مفقود** — fallback ثالث | `form_fill_screen.dart` | النموذج يُوجد عند تغيير الحملة |
+| N-6 | **Navigator.pop قسري** → AlertDialog مع زر يدوي | `form_fill_screen.dart` | لا إخراج المستخدم |
+| N-8 | **_warmUpFormsCache** — فحص ALL بدلاً من ANY | `sync_service.dart` | كل أنواع النماذج تُحمّل |
+
+#### ملاحظات:
+- UNIQUE constraint على notifications مطبّق يدوياً على الإنتاج (ليس عبر migration CLI)
+- PITR و Backups تتطلب ترقية إلى خطة Pro
+- PgBouncer settings (query_wait_timeout) يمكن تغييرها من Supabase Dashboard فقط
+- Migration 055 أُعيد ترقيمها إلى 068 لحل تعارض الترقيم
 ### 8.1 إصلاحات v3.18.0 (2026-07-26) — 17 إصلاح + تحسين الخريطة
 
 تم تنفيذ مراجعة شاملة لمشاكل التقرير المُرفق + إصلاحات أداء + تحسين تفاعلية الخريطة.

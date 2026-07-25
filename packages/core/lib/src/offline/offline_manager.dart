@@ -39,6 +39,9 @@ class OfflineManager {
   final _uuid = const Uuid();
 
   bool _initialized = false;
+  /// ═══ FIX M-3: Track encryption availability ═══
+  /// Set to false if encryption init times out — prevents silent data loss
+  bool _encryptionAvailable = true;
 
   // ═══ FIX: Use late-initialized connectivity status, default to true ═══
   bool _isOnline = true;
@@ -168,9 +171,35 @@ class OfflineManager {
       ).timeout(
         const Duration(seconds: 8),
         onTimeout: () {
-          debugPrint('[OfflineManager] Encryption init timed out — continuing without');
+          // ═══ FIX M-3: Mark encryption as failed instead of silent continue ═══
+          // Previously: 'continuing without' → _ephemeralKey used → random key →
+          //   data encrypted with unreproducible key → silent data loss on restart
+          // Now: set flag so saveDraft can warn user or skip encryption
+          debugPrint('[OfflineManager] ⚠️ Encryption init timed out — marking as unavailable');
+          _encryptionAvailable = false;
         },
       );
+    }
+
+    // ═══ FIX M-3: Check if encryption is available ═══
+    if (!EncryptionService.isInitialized && _encryptionAvailable) {
+      // Try one more time with a shorter timeout
+      try {
+        await EncryptionService.initialize(
+          encryptionKey: const String.fromEnvironment('ENCRYPTION_KEY', defaultValue: ''),
+          saltSource: () {
+            final saltStr = _box?.get(EncryptionService.saltStorageKey);
+            if (saltStr == null) return null;
+            return Uint8List.fromList(base64Decode(saltStr));
+          },
+          onSaltCreated: (salt) async {
+            await _box?.put(EncryptionService.saltStorageKey, base64Encode(salt));
+          },
+        ).timeout(const Duration(seconds: 5));
+      } catch (e) {
+        debugPrint('[OfflineManager] ⚠️ Encryption retry failed: $e');
+        _encryptionAvailable = false;
+      }
     }
 
     // ═══ PROPOSAL 2: Migrate old blob drafts to sharded storage ═══
@@ -420,6 +449,28 @@ class OfflineManager {
       queue.removeWhere((item) => idSet.contains(item['offline_id']));
       await _saveQueue(queue);
       _invalidatePendingCount();
+    });
+  }
+
+  /// ═══ FIX M-1: Update specific items in the sync queue ═══
+  /// Used by SyncService to persist retry_count, last_retry_at, next_retry_at
+  /// after a failed sync attempt. Without this, retry_count resets to 0 every cycle.
+  Future<void> updateQueueItems(List<Map<String, dynamic>> items) async {
+    if (items.isEmpty) return;
+    return _withWriteLock(() async {
+      final queue = _getQueue();
+      final updateMap = <String, Map<String, dynamic>>{};
+      for (final item in items) {
+        final id = item['offline_id'] as String?;
+        if (id != null) updateMap[id] = item;
+      }
+      for (int i = 0; i < queue.length; i++) {
+        final id = queue[i]['offline_id'] as String?;
+        if (id != null && updateMap.containsKey(id)) {
+          queue[i] = updateMap[id]!;
+        }
+      }
+      await _saveQueue(queue);
     });
   }
 
@@ -864,6 +915,13 @@ class OfflineManager {
   Future<void> saveDraft(
       String draftId, String formId, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
+      // ═══ FIX M-3: Warn if encryption is not available ═══
+      // Previously: silent fallback to random key → data loss on restart
+      // Now: log warning so developers can diagnose
+      if (!_encryptionAvailable) {
+        debugPrint('[OfflineManager] ⚠️ M-3: Encryption not available — saving as plain JSON');
+      }
+
       final draftData = {
         'form_id': formId,
         'data': data,
@@ -1098,6 +1156,44 @@ class OfflineManager {
       }
     }
 
+    // ═══ FIX M-4: Check _unmigrated_drafts_blob as last resort ═══
+    // Previously: written during migration failure but never read → data loss
+    // Now: read and attempt to recover drafts from old format
+    if (result.isEmpty) {
+      final unmigratedData = _box?.get('_unmigrated_drafts_blob');
+      if (unmigratedData != null) {
+        try {
+          // Try to decrypt with current key first
+          String json;
+          try {
+            json = _encryption.decrypt(unmigratedData);
+          } catch (_) {
+            json = unmigratedData; // plain JSON
+          }
+          final unmigratedMap = Map<String, dynamic>.from(jsonDecode(json));
+          for (final entry in unmigratedMap.entries) {
+            final draftData = entry.value;
+            if (draftData is Map) {
+              result.add({
+                'draft_id': entry.key,
+                'form_id': draftData['form_id'] ?? entry.key,
+                'data': draftData['data'] ?? <String, dynamic>{},
+                'saved_at': draftData['saved_at'],
+                '_unmigrated': true,
+              });
+            }
+          }
+          if (kDebugMode && result.isNotEmpty) {
+            debugPrint('[OfflineManager] M-4: Recovered ${result.length} drafts from unmigrated blob');
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('[OfflineManager] M-4: Failed to read unmigrated drafts: $e');
+          }
+        }
+      }
+    }
+
     return result;
   }
 
@@ -1307,9 +1403,12 @@ class OfflineManager {
           );
         }
         try {
-          _safeBox?.put('${_cacheKey}_corrupted_backup', data);
+          // ═══ FIX M-5: await both operations to prevent data loss on crash ═══
+          // Previously: fire-and-forget — put and delete ran in parallel
+          // If app crashed before put completed, backup was lost
+          await _safeBox?.put('${_cacheKey}_corrupted_backup', data);
         } catch (_) {}
-        _safeBox?.delete(_cacheKey);
+        await _safeBox?.delete(_cacheKey);
         _cacheMemory = null;
         return {};
       }

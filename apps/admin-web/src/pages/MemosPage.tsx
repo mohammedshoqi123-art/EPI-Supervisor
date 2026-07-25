@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   ScrollText, Plus, CheckCircle2, Clock, AlertTriangle,
@@ -60,12 +60,17 @@ export default function MemosPage() {
   const [selectedMemo, setSelectedMemo] = useState<OfficialMemo | null>(null)
   const [editingMemo, setEditingMemo] = useState<OfficialMemo | null>(null)
 
-  // Listen for edit events from detail dialog
-  if (typeof window !== 'undefined') {
-    window.addEventListener('editMemo', ((e: CustomEvent) => {
-      setEditingMemo(e.detail)
-    }) as EventListener)
-  }
+  // ═══ FIX W-1: useEffect with cleanup to prevent memory leak ═══
+  // Previously: addEventListener in component body → new listener every re-render
+  //   → thousands of listeners → page freeze after minutes
+  // Now: useEffect with cleanup → single listener, removed on unmount
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setEditingMemo((e as CustomEvent).detail)
+    }
+    window.addEventListener('editMemo', handler)
+    return () => window.removeEventListener('editMemo', handler)
+  }, [])
 
   // Admin/central can see all memos; others see only their memos
   const userRole = user?.role as string | undefined

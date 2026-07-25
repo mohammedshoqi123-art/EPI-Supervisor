@@ -402,7 +402,7 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
       builder: (ctx) => AlertDialog(
         title: const Text('تم تعطيل حسابك', style: TextStyle(fontFamily: 'Cairo')),
         content: const Text(
-          'تم تعطيل حسابك من قبل المدير. سيتم تسجيل الخروج تلقائياً.\n\nسيتم حفظ مسوداتك محلياً قبل الخروج.',
+          'تم تعطيل حسابك من قبل المدير. سيتم تسجيل الخروج تلقائياً.',
           style: TextStyle(fontFamily: 'Tajawal'),
         ),
         actions: [
@@ -415,17 +415,12 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
     );
 
     if (shouldLogout == true && mounted) {
-      // Save any unsaved drafts before logout
-      try {
-        final offline = await ref.read(offlineManagerProvider.future).timeout(
-          const Duration(seconds: 5),
-        );
-        debugPrint('[App] Saved drafts before deactivation logout');
-      } catch (e) {
-        debugPrint('[App] Could not save drafts before logout: $e');
-      }
+      // ═══ FIX M-2: Honest about draft saving ═══
+      // Previously: message said 'will save drafts' but no save was called
+      // Now: drafts are auto-saved by form_fill_screen's _autoSave (every 4 min)
+      // We just sign out — existing drafts in Hive survive logout
+      debugPrint('[App] User deactivated — signing out (drafts in Hive preserved)');
 
-      // Sign out
       try {
         await Supabase.instance.client.auth.signOut();
       } catch (e) {

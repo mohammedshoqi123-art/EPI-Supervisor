@@ -341,6 +341,19 @@ class SyncService {
           if (syncedIds.isNotEmpty) {
             await _offline.removeFromQueueBatch(syncedIds);
           }
+
+          // ═══ FIX M-1: Persist retry_count for failed items ═══
+          // Previously: retry_count was modified in-memory only → reset to 0 next cycle
+          // Now: save failed items back to queue with updated retry_count/backoff
+          final failedItems = toRetry
+              .where((item) => !syncedIds.contains(item['offline_id'] as String? ?? ''))
+              .toList();
+          if (failedItems.isNotEmpty) {
+            await _offline.updateQueueItems(failedItems);
+            if (kDebugMode) {
+              debugPrint('[SyncService] M-1: Saved ${failedItems.length} failed items with updated retry_count');
+            }
+          }
         } on TimeoutException {
           // ═══ FIX: Save timed-out items to failed_submissions immediately ═══
           // Previously: applied backoff → retried 5 times over ~1 hour → then saved

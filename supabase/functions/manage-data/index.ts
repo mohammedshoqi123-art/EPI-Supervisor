@@ -76,10 +76,18 @@ serve(async (req) => {
         }
 
         if (action === 'update') {
-          const { id, ...updates } = body
+          // ═══ FIX R-2: Allowlist to prevent mass assignment ═══
+          const { id, name_ar, name_en, code, center_lat, center_lng, population } = body
+          const safeUpdates: Record<string, unknown> = {}
+          if (name_ar !== undefined) safeUpdates.name_ar = name_ar
+          if (name_en !== undefined) safeUpdates.name_en = name_en
+          if (code !== undefined) safeUpdates.code = code
+          if (center_lat !== undefined) safeUpdates.center_lat = center_lat
+          if (center_lng !== undefined) safeUpdates.center_lng = center_lng
+          if (population !== undefined) safeUpdates.population = population
           const { data, error } = await adminClient
             .from('governorates')
-            .update({ ...updates, updated_at: new Date().toISOString() })
+            .update({ ...safeUpdates, updated_at: new Date().toISOString() })
             .eq('id', id)
             .select()
             .single()
@@ -136,10 +144,19 @@ serve(async (req) => {
         }
 
         if (action === 'update') {
-          const { id, ...updates } = body
+          // ═══ FIX R-2: Allowlist to prevent mass assignment ═══
+          const { id, governorate_id, name_ar, name_en, code, center_lat, center_lng, population } = body
+          const safeUpdates: Record<string, unknown> = {}
+          if (governorate_id !== undefined) safeUpdates.governorate_id = governorate_id
+          if (name_ar !== undefined) safeUpdates.name_ar = name_ar
+          if (name_en !== undefined) safeUpdates.name_en = name_en
+          if (code !== undefined) safeUpdates.code = code
+          if (center_lat !== undefined) safeUpdates.center_lat = center_lat
+          if (center_lng !== undefined) safeUpdates.center_lng = center_lng
+          if (population !== undefined) safeUpdates.population = population
           const { data, error } = await adminClient
             .from('districts')
-            .update({ ...updates, updated_at: new Date().toISOString() })
+            .update({ ...safeUpdates, updated_at: new Date().toISOString() })
             .eq('id', id)
             .select()
             .single()
@@ -196,10 +213,18 @@ serve(async (req) => {
         }
 
         if (action === 'update') {
-          const { id, ...updates } = body
+          // ═══ FIX R-2: Allowlist to prevent mass assignment ═══
+          const { id, district_id, name_ar, name_en, code, facility_type, is_active } = body
+          const safeUpdates: Record<string, unknown> = {}
+          if (district_id !== undefined) safeUpdates.district_id = district_id
+          if (name_ar !== undefined) safeUpdates.name_ar = name_ar
+          if (name_en !== undefined) safeUpdates.name_en = name_en
+          if (code !== undefined) safeUpdates.code = code
+          if (facility_type !== undefined) safeUpdates.facility_type = facility_type
+          if (is_active !== undefined) safeUpdates.is_active = is_active
           const { data, error } = await adminClient
             .from('health_facilities')
-            .update({ ...updates, updated_at: new Date().toISOString() })
+            .update({ ...safeUpdates, updated_at: new Date().toISOString() })
             .eq('id', id)
             .select()
             .single()
@@ -336,10 +361,19 @@ serve(async (req) => {
         }
 
         if (action === 'update') {
-          const { id, ...updates } = body
+          // ═══ FIX R-2: Allowlist to prevent mass assignment ═══
+          const { id, title, title_ar, description, schema, campaign_type, is_active, version } = body
+          const safeUpdates: Record<string, unknown> = {}
+          if (title !== undefined) safeUpdates.title = title
+          if (title_ar !== undefined) safeUpdates.title_ar = title_ar
+          if (description !== undefined) safeUpdates.description = description
+          if (schema !== undefined) safeUpdates.schema = schema
+          if (campaign_type !== undefined) safeUpdates.campaign_type = campaign_type
+          if (is_active !== undefined) safeUpdates.is_active = is_active
+          if (version !== undefined) safeUpdates.version = version
           const { data, error } = await adminClient
             .from('forms')
-            .update({ ...updates, updated_at: new Date().toISOString() })
+            .update({ ...safeUpdates, updated_at: new Date().toISOString() })
             .eq('id', id)
             .select()
             .single()

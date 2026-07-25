@@ -94,10 +94,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       // First try the specific form cache, then try campaign-specific list
       final campaignValue = ref.read(campaignProvider).value;
       List<Map<String, dynamic>>? cachedForms;
-      // Try campaign-specific cache key first (matches formsProvider)
+      // ═══ FIX N-5: Try multiple cache keys with prefix fallback ═══
+      // Previously: only tried forms_$campaign and forms_all
+      // Now: also tries findCachedListByPrefix('forms_') as third fallback
+      // This matches formsProvider and forms_status_screen behavior
       cachedForms = cache.getCachedDataList('forms_$campaignValue');
-      // Also try 'forms_all' as fallback (may be populated by full sync)
       cachedForms ??= cache.getCachedDataList('forms_all');
+      // ═══ FIX N-5: Third fallback — search across ALL form cache keys ═══
+      cachedForms ??= cache.findCachedListByPrefix('forms_');
       if (cachedForms != null) {
         for (final f in cachedForms) {
           if (f['id'] == widget.formId) {
@@ -108,22 +112,30 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       }
 
       if (form == null) {
-        // ⚠️ OFFLINE FIX: لا تحاول الشبكة بدون إنترنت
+        // ═══ FIX N-6: No forced Navigator.pop — let user decide ═══
+        // Previously: forced pop after 2 seconds — user loses all context
+        // Now: show dialog with manual back button — user controls navigation
         if (!ConnectivityUtils.isOnline) {
           setState(() => _isLoading = false);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('لا يمكن تحميل النموذج بدون إنترنت — لم يتم تخزينه مسبقاً', style: TextStyle(fontFamily: 'Tajawal')),
-                behavior: SnackBarBehavior.floating,
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 3),
+            await showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                icon: const Icon(Icons.wifi_off, color: Colors.orange, size: 48),
+                title: const Text('لا يمكن تحميل النموذج', style: TextStyle(fontFamily: 'Cairo')),
+                content: const Text(
+                  'النموذج غير مخزّن مسبقاً ولا يوجد اتصال بالإنترنت.\n\nتزامن النماذج أولاً أثناء وجود اتصال، ثم حاول مجدداً.',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('رجوع', style: TextStyle(fontFamily: 'Tajawal')),
+                  ),
+                ],
               ),
             );
-            // العودة للصفحة السابقة بعد عرض الرسالة
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted) Navigator.of(context).pop();
-            });
           }
           return;
         }
@@ -956,7 +968,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         'created_at': DateTime.now().toIso8601String(),
       };
 
-      await offline.addToSyncQueue(submissionData);
+      // ═══ FIX F-1: Capture offline_id to check THIS item specifically ═══
+      // Previously: addToSyncQueue returned ID but it was discarded
+      // Now: stored and used to verify THIS submission was synced (not just any item)
+      final offlineId = await offline.addToSyncQueue(submissionData);
       await offline.saveDraft(
         _draftId,
         widget.formId,
@@ -979,7 +994,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           if (kDebugMode) {
             debugPrint('[FormSubmit] Sync: ${result.synced} synced, ${result.failed} failed');
           }
-          if (result.synced > 0) {
+          // ═══ FIX F-1: Check if THIS specific item was synced ═══
+          // Previously: result.synced > 0 (total queue count — wrong!)
+          // Now: result.syncedIds.contains(offlineId) (this item specifically)
+          if (result.syncedIds.contains(offlineId)) {
             syncSucceeded = true;
             try {
               await offline.removeDraft(_draftId);
@@ -1089,15 +1107,22 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   int _lastSavedDataHash = 0;
 
   /// Fast hash for change detection — avoids expensive .toString() on large maps
+  /// ═══ FIX F-2: Use .hashCode for strings instead of .length ═══
+  /// Previously: .length only — "yes" (3) and "no" (2) had different lengths,
+  ///   but "true" (4) and some other values could collide.
+  ///   More critically: changing "yes" to "no" works (different lengths),
+  ///   but changing a value to another of same length was invisible.
+  /// Now: .hashCode catches ALL content changes (cached in Dart, very fast).
   int _computeDataHash() {
     int hash = _formData.length;
     for (final entry in _formData.entries) {
-      // Use key length + value type as hash — fast, no string conversion
-      hash = (hash * 31 + entry.key.length) & 0x7FFFFFFF;
+      hash = (hash * 31 + entry.key.hashCode) & 0x7FFFFFFF;
       if (entry.value is String) {
-        hash = (hash * 31 + (entry.value as String).length) & 0x7FFFFFFF;
+        hash = (hash * 31 + (entry.value as String).hashCode) & 0x7FFFFFFF;
       } else if (entry.value is num) {
         hash = (hash * 31 + (entry.value as num).toInt()) & 0x7FFFFFFF;
+      } else if (entry.value is bool) {
+        hash = (hash * 31 + (entry.value as bool ? 1 : 0)) & 0x7FFFFFFF;
       } else if (entry.value is List) {
         hash = (hash * 31 + (entry.value as List).length) & 0x7FFFFFFF;
       } else if (entry.value is Map) {

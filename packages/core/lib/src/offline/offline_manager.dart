@@ -1184,12 +1184,16 @@ class OfflineManager {
   /// Now: decrypt once, cache in memory, only re-decrypt when data changes
   Map<String, dynamic>? _cacheMemory;
   String? _cacheRawSignature;
-  // ═══ FIX Storage: تقليل حد الكاش لمنع نمو المساحة ═══
-  // Previously: 50 entries × 200KB average = 10MB+ في Hive
-  // Now: 20 entries + حد 500KB لكل entry + حد 2MB للكل
-  static const int _maxCacheMemoryEntries = 20; // LRU limit
-  static const int _maxSingleEntrySize = 500 * 1024; // 500KB per entry
-  static const int _maxTotalCacheSize = 2 * 1024 * 1024; // 2MB total
+  // ═══ FIX N-1: Increase cache limits for offline-first reliability ═══
+  // Previously: 20 entries, 500KB per entry, 2MB total — forms got evicted by LRU
+  // Now: 100 entries, 5MB per entry, 20MB total — forms stay cached
+  // Forms are reference data (rarely change) and MUST be available offline.
+  static const int _maxCacheMemoryEntries = 100; // LRU limit (was 20)
+  static const int _maxSingleEntrySize = 5 * 1024 * 1024; // 5MB per entry (was 500KB)
+  static const int _maxTotalCacheSize = 20 * 1024 * 1024; // 20MB total (was 2MB)
+  /// Keys matching these prefixes are reference data — exempt from LRU eviction.
+  /// They are small, rarely change, and MUST be available offline.
+  static const List<String> _referenceCachePrefixes = ['forms_', 'governorates', 'districts', 'facilities', 'references'];
 
   Future<void> cacheData(String key, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
@@ -1207,11 +1211,16 @@ class OfflineManager {
       // ═══ FIX: Remove old entry for same key first ═══
       cache.remove(key);
 
-      // LRU eviction: remove oldest if over limit
+      // ═══ FIX N-1: LRU eviction — skip reference data (forms, governorates, etc.) ═══
+      // Reference data is small, rarely changes, and MUST be available offline.
+      // Only evict non-reference entries (submissions, analytics, etc.).
       while (cache.length >= _maxCacheMemoryEntries) {
         String? oldestKey;
         DateTime? oldestTime;
         for (final e in cache.entries) {
+          // Skip reference data — never evict forms, governorates, districts, etc.
+          final isReference = _referenceCachePrefixes.any((prefix) => e.key.startsWith(prefix));
+          if (isReference) continue;
           final t = DateTime.tryParse(e.value['cached_at'] ?? '');
           if (t != null && (oldestTime == null || t.isBefore(oldestTime))) {
             oldestTime = t;
@@ -1221,7 +1230,7 @@ class OfflineManager {
         if (oldestKey != null) {
           cache.remove(oldestKey);
         } else {
-          break;
+          break; // No non-reference entries to evict
         }
       }
 
@@ -1232,16 +1241,19 @@ class OfflineManager {
 
       final jsonStr = jsonEncode(cache);
 
-      // ═══ FIX Storage: حد 2MB للكل بدلاً من 5MB ═══
+      // ═══ FIX N-1: Total size eviction — skip reference data ═══
       if (jsonStr.length > _maxTotalCacheSize) {
         if (kDebugMode) {
-          debugPrint('[OfflineManager] Cache blob too large (${jsonStr.length ~/ 1024}KB) — evicting to 1MB');
+          debugPrint('[OfflineManager] Cache blob too large (${jsonStr.length ~/ 1024}KB) — evicting non-reference entries');
         }
-        // Remove oldest entries until under 1MB
+        // Remove oldest NON-REFERENCE entries until under limit
         while (cache.length > 5) {
           String? oldestKey;
           DateTime? oldestTime;
           for (final e in cache.entries) {
+            // Skip reference data
+            final isReference = _referenceCachePrefixes.any((prefix) => e.key.startsWith(prefix));
+            if (isReference) continue;
             final t = DateTime.tryParse(e.value['cached_at'] ?? '');
             if (t != null && (oldestTime == null || t.isBefore(oldestTime))) {
               oldestTime = t;
@@ -1251,9 +1263,9 @@ class OfflineManager {
           if (oldestKey != null) {
             cache.remove(oldestKey);
           } else {
-            break;
+            break; // No non-reference entries to evict
           }
-          if (jsonEncode(cache).length < 1024 * 1024) break;
+          if (jsonEncode(cache).length < _maxTotalCacheSize ~/ 2) break;
         }
       }
 
@@ -1370,15 +1382,15 @@ class OfflineManager {
   // STORAGE CLEANUP — prevent Hive from growing to 600MB+
   // ═══════════════════════════════════════════════════════════════════════
 
-  /// Max Hive box size — 100MB. If exceeded, oldest data is purged.
-  static const int _maxBoxSizeBytes = 100 * 1024 * 1024; // 100MB
+  /// Max Hive box size — 200MB. If exceeded, non-reference cache is cleared.
+  static const int _maxBoxSizeBytes = 200 * 1024 * 1024; // 200MB
 
   /// Cleanup old data to prevent storage bloat.
   /// Called once on init. Removes:
   ///   1. Drafts older than 30 days
-  ///   2. Failed submissions older than 7 days
-  ///   3. Cache entries older than 30 days
-  ///   4. If total size > 100MB, removes oldest entries
+  ///   2. Failed submissions older than 30 days
+  ///   3. Non-reference cache entries older than 30 days
+  ///   4. If total box size > 200MB, clears non-reference cache
   Future<void> _cleanupOldData() async {
     if (_box == null || !_box!.isOpen) return;
 
@@ -1504,12 +1516,15 @@ class OfflineManager {
         }
       }
 
-      // 2. Clean old failed submissions (older than 7 days)
+      // 2. Clean old failed submissions (older than 30 days — was 7)
+      // ═══ FIX F-4: تمديد مدة الاحتفاظ من 7 إلى 30 يوم ═══
+      // Previously: 7 days → users lose failed submissions if they don't open app for a week
+      // Now: 30 days → more time to notice and retry failed submissions
       final failed = _getFailedSubmissions();
       final failedToRemove = <String>[];
       for (final entry in failed.entries) {
         final failedAt = DateTime.tryParse(entry.value['failed_at'] ?? '');
-        if (failedAt != null && now.difference(failedAt).inDays > 7) {
+        if (failedAt != null && now.difference(failedAt).inDays > 30) {
           failedToRemove.add(entry.key);
         }
       }
@@ -1522,15 +1537,19 @@ class OfflineManager {
         await _safeBox?.put(_failedSubmissionsKey, encrypted);
       }
 
-      // 3. Clean old cache entries (older than 7 days — was 30)
-      // ═══ FIX Storage: تقليل مدة الاحتفاظ من 30 إلى 7 أيام ═══
-      // Previously: 30 days → cache يحتفظ ببيانات قديمة ضخمة
-      // Now: 7 days → بيانات أحدث فقط، مساحة أقل
+      // 3. Clean old cache entries (older than 30 days)
+      // ═══ FIX N-2: تمديد مدة الاحتفاظ من 7 إلى 30 يوم ═══
+      // Previously: 7 days → users who don't open app for a week lose all forms
+      // Now: 30 days → forms stay cached for a month
+      // Reference data (forms, governorates, etc.) is NEVER cleaned by time.
       final cache = _getCache();
       final cacheToRemove = <String>[];
       for (final entry in cache.entries) {
+        // Skip reference data — never time-expire forms, governorates, etc.
+        final isReference = _referenceCachePrefixes.any((prefix) => entry.key.startsWith(prefix));
+        if (isReference) continue;
         final cachedAt = DateTime.tryParse(entry.value['cached_at'] ?? '');
-        if (cachedAt != null && now.difference(cachedAt).inDays > 7) {
+        if (cachedAt != null && now.difference(cachedAt).inDays > 30) {
           cacheToRemove.add(entry.key);
         }
       }
@@ -1544,7 +1563,10 @@ class OfflineManager {
         _cacheMemory = cache;
       }
 
-      // 4. Clean old sync queue items (older than 7 days — stuck items)
+      // 4. Clean old sync queue items (older than 30 days — was 7)
+      // ═══ FIX: تمديد مدة الاحتفاظ من 7 إلى 30 يوم ═══
+      // Previously: 7 days → items stuck for a week get deleted
+      // Now: 30 days → more time for retry before giving up
       final queueIndex = _getQueueIndex();
       final queueToRemove = <String>[];
       for (final id in queueIndex) {
@@ -1557,10 +1579,10 @@ class OfflineManager {
           final decrypted = _encryption.decrypt(data);
           final item = jsonDecode(decrypted);
           final createdAt = DateTime.tryParse(item['created_at'] ?? '');
-          if (createdAt != null && now.difference(createdAt).inDays > 7) {
+          if (createdAt != null && now.difference(createdAt).inDays > 30) {
             queueToRemove.add(id);
             // Save to failed submissions before removing
-            await saveFailedSubmission(item, 'Auto-cleanup: older than 7 days');
+            await saveFailedSubmission(item, 'Auto-cleanup: older than 30 days');
           }
         } catch (_) {
           queueToRemove.add(id); // corrupted item
@@ -1576,7 +1598,7 @@ class OfflineManager {
         _invalidatePendingCount();
       }
 
-      // 5. Check total box size — if > 100MB, log warning
+      // 5. Check total box size — if > 200MB, clear non-reference cache
       try {
         final appDir = await getApplicationDocumentsDirectory().timeout(
           const Duration(seconds: 3),
@@ -1586,10 +1608,26 @@ class OfflineManager {
           final sizeBytes = await boxFile.length();
           if (sizeBytes > _maxBoxSizeBytes) {
             if (kDebugMode) {
-              debugPrint('[OfflineManager] ⚠️ Hive box is ${sizeBytes ~/ (1024*1024)}MB — clearing cache');
+              debugPrint('[OfflineManager] ⚠️ Hive box is ${sizeBytes ~/ (1024*1024)}MB — clearing non-reference cache');
             }
-            // Clear cache to reduce size
-            await clearCache();
+            // ═══ FIX N-3: Selective cache clear — preserve reference data ═══
+            // Previously: clearCache() wiped everything including forms
+            // Now: only clear non-reference entries (submissions, analytics, etc.)
+            final cache = _getCache();
+            final keysToRemove = <String>[];
+            for (final key in cache.keys) {
+              final isReference = _referenceCachePrefixes.any((prefix) => key.startsWith(prefix));
+              if (!isReference) keysToRemove.add(key);
+            }
+            for (final key in keysToRemove) {
+              cache.remove(key);
+            }
+            if (keysToRemove.isNotEmpty) {
+              final encrypted = _encryption.encrypt(jsonEncode(cache));
+              await _safeBox?.put(_cacheKey, encrypted);
+              _cacheMemory = cache;
+              _cacheRawSignature = null;
+            }
             removedCount++;
           }
         }

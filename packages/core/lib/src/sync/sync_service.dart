@@ -332,6 +332,9 @@ class SyncService {
             }
           }
 
+          // ═══ FIX F-1: Expose synced IDs in result for specific-item checking ═══
+          result.syncedIds.addAll(syncedIds);
+
           // ═══ PROPOSAL 3: Batch remove all synced/duplicate/conflict items ═══
           // Previously: 50× (decrypt + encrypt) for 50 synced items
           // Now: 1× (decrypt + encrypt) for all items at once
@@ -450,12 +453,15 @@ class SyncService {
     if (cache == null) return;
 
     try {
-      // Check if forms are already cached
-      final hasForms = cache.hasCachedData('forms_all') ||
-          cache.hasCachedData('forms_polio_campaign') ||
+      // ═══ FIX N-8: Check if ALL form cache keys exist, not just any one ═══
+      // Previously: skipped if ANY key existed (e.g. forms_polio_campaign cached
+      //   but forms_all not → forms_all never warmed up)
+      // Now: only skips if ALL required keys are cached
+      final hasAllForms = cache.hasCachedData('forms_all') &&
+          cache.hasCachedData('forms_polio_campaign') &&
           cache.hasCachedData('forms_integrated_activity');
 
-      if (hasForms) {
+      if (hasAllForms) {
         if (kDebugMode)
           debugPrint('[SyncService] Forms cache already warm — skipping');
         return;
@@ -575,6 +581,10 @@ class SyncCycleResult {
   int archived = 0;
   List<SyncError> errors = [];
   List<OfflineSyncResult> conflictDetails = [];
+  /// ═══ FIX F-1: Track which specific items were synced ═══
+  /// Previously: form_fill_screen checked result.synced > 0 (total queue count)
+  /// Now: can check result.syncedIds.contains(myOfflineId) for specific item
+  List<String> syncedIds = [];
 
   SyncCycleResult();
   factory SyncCycleResult.empty() => SyncCycleResult();
@@ -586,7 +596,7 @@ class SyncCycleResult {
   @override
   String toString() =>
       'SyncCycleResult(synced=$synced, dup=$duplicates, conflict=$conflicts, '
-      'failed=$failed, archived=$archived)';
+      'failed=$failed, archived=$archived, syncedIds=${syncedIds.length})';
 }
 
 /// خطأ مزامنة فردي

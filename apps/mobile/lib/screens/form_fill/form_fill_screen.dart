@@ -1113,6 +1113,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   ///   More critically: changing "yes" to "no" works (different lengths),
   ///   but changing a value to another of same length was invisible.
   /// Now: .hashCode catches ALL content changes (cached in Dart, very fast).
+  /// Hash for change detection — captures ALL content changes.
+  /// ═══ FIX R-4: Use .hashCode for Lists/Maps + full precision for Numbers ═══
+  /// Previously: Lists/Maps used .length (photo change undetected),
+  ///   Numbers used .toInt() (decimal precision lost).
+  /// Now: Lists/Maps use .toString().hashCode (content-aware),
+  ///   Numbers use .toDouble().hashCode (full precision).
   int _computeDataHash() {
     int hash = _formData.length;
     for (final entry in _formData.entries) {
@@ -1120,13 +1126,15 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       if (entry.value is String) {
         hash = (hash * 31 + (entry.value as String).hashCode) & 0x7FFFFFFF;
       } else if (entry.value is num) {
-        hash = (hash * 31 + (entry.value as num).toInt()) & 0x7FFFFFFF;
+        // Use toString().hashCode to preserve decimal precision
+        hash = (hash * 31 + entry.value.toString().hashCode) & 0x7FFFFFFF;
       } else if (entry.value is bool) {
         hash = (hash * 31 + (entry.value as bool ? 1 : 0)) & 0x7FFFFFFF;
       } else if (entry.value is List) {
-        hash = (hash * 31 + (entry.value as List).length) & 0x7FFFFFFF;
+        // Use toString().hashCode to detect content changes (e.g. photo paths)
+        hash = (hash * 31 + (entry.value as List).toString().hashCode) & 0x7FFFFFFF;
       } else if (entry.value is Map) {
-        hash = (hash * 31 + (entry.value as Map).length) & 0x7FFFFFFF;
+        hash = (hash * 31 + (entry.value as Map).toString().hashCode) & 0x7FFFFFFF;
       }
     }
     return hash;

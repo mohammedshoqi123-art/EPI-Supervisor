@@ -703,11 +703,29 @@ class OfflineManager {
   // move them to a separate storage so users can retry later.
 
   /// Save a failed submission (moved from sync queue after max retries)
+  // FIX: حد أقصى لعدد failed_submissions لمنع نمو التخزين
+  static const int _maxFailedSubmissions = 20;
+
   Future<void> saveFailedSubmission(Map<String, dynamic> item, String error) async {
     return _withWriteLock(() async {
       try {
         final failed = _getFailedSubmissions();
         final offlineId = item['offline_id'] as String? ?? 'unknown';
+
+        // FIX: تجاوز الحد الأقصى → احذف الأقدم
+        while (failed.length >= _maxFailedSubmissions) {
+          String? oldestKey;
+          String? oldestTime;
+          failed.forEach((k, v) {
+            final t = v['failed_at'] as String? ?? '';
+            if (oldestTime == null || t.compareTo(oldestTime!) < 0) {
+              oldestTime = t;
+              oldestKey = k;
+            }
+          });
+          if (oldestKey != null) failed.remove(oldestKey);
+        }
+
         failed[offlineId] = {
           'data': item,
           'error': error,
@@ -1577,6 +1595,7 @@ class OfflineManager {
       }
 
       // ═══ FIX R-C1: Preserve unmigrated/corrupted drafts for manual recovery ═══
+      // FIX: حد أقصى 10 مسودات مستردة لمنع نمو التخزين
       if (draftsToPreserve.isNotEmpty) {
         final existingRecovery = _box!.get('_recovered_drafts') ?? '{}';
         Map<String, dynamic> recoveryMap;
@@ -1586,9 +1605,13 @@ class OfflineManager {
           recoveryMap = {};
         }
         recoveryMap.addAll(draftsToPreserve);
+        // FIX: احذف الأقدم إذا تجاوز 10
+        while (recoveryMap.length > 10) {
+          recoveryMap.remove(recoveryMap.keys.first);
+        }
         await _box!.put('_recovered_drafts', jsonEncode(recoveryMap));
         if (kDebugMode) {
-          debugPrint('[OfflineManager] 📦 Preserved ${draftsToPreserve.length} drafts for recovery');
+          debugPrint('[OfflineManager] Preserved ${draftsToPreserve.length} drafts for recovery (total: ${recoveryMap.length})');
         }
       }
 
@@ -1725,12 +1748,26 @@ class OfflineManager {
       }
 
       // ═══ FIX Storage: Hive compaction — يُزيل البيانات الميتة من الملف ═══
-      // بدون compaction، الملف يبقى يكبر حتى مع الحذف
-      if (removedCount > 0) {
+      // FIX: compact دوري كل 7 أيام حتى بدون removal لمنع تراكم البيانات الميتة
+      final lastCompactStr = _box?.get('_last_compact_at');
+      bool shouldCompact = removedCount > 0;
+      if (lastCompactStr != null) {
+        try {
+          final lastCompact = DateTime.parse(lastCompactStr as String);
+          if (DateTime.now().difference(lastCompact).inDays > 7) {
+            shouldCompact = true;
+          }
+        } catch (_) {}
+      } else {
+        shouldCompact = true; // أول مرة
+      }
+
+      if (shouldCompact) {
         try {
           await _box!.compact();
+          await _box?.put('_last_compact_at', DateTime.now().toIso8601String());
           if (kDebugMode) {
-            debugPrint('[OfflineManager] ✅ Hive compacted after removing $removedCount items');
+            debugPrint('[OfflineManager] Hive compacted (removedCount=$removedCount)');
           }
         } catch (e) {
           if (kDebugMode) debugPrint('[OfflineManager] Compact failed: $e');

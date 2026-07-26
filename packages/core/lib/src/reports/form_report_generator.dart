@@ -615,8 +615,20 @@ class FormReportGenerator {
   /// Format a field value based on its type.
   static String _formatValue(String type, dynamic rawValue) {
     if (rawValue == null) return '-';
+    // FIX: تعامل مع نوع photo — لا تعرض base64 كـ text
+    if (type == 'photo') {
+      if (rawValue is List) return '${rawValue.length} صورة';
+      return '1 صورة';
+    }
+    // FIX: تعامل مع List قد يحتوي على base64
     if (rawValue is List) {
-      return rawValue.join('، ');
+      // تحقق إذا كان List يحتوي على base64 (نص طويل جداً)
+      if (rawValue.isNotEmpty && rawValue.first is String && (rawValue.first as String).length > 200) {
+        return '${rawValue.length} صورة';
+      }
+      final joined = rawValue.join('، ');
+      if (joined.length > 200) return '${rawValue.length} عنصر';
+      return joined;
     }
     if (rawValue is bool) {
       return rawValue ? 'نعم' : 'لا';
@@ -626,6 +638,8 @@ class FormReportGenerator {
     }
     final str = rawValue.toString();
     if (str.isEmpty) return '-';
+    // FIX: قص النصوص الطويلة جداً (base64 leak)
+    if (str.length > 200) return '${str.length ~/ 1024}KB بيانات';
     return str;
   }
 

@@ -917,7 +917,9 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       List<Map<String, dynamic>> subs) {
     final realSubs = subs.where((s) {
       final d = s['data'] as Map<String, dynamic>? ?? {};
-      return d['governorate_id'] != null;
+      // FIX: البحث عن governorate_id في كلا المكانين (data + top-level)
+      final govId = (d['governorate_id'] as String?) ?? (s['governorate_id'] as String?);
+      return govId != null && govId.isNotEmpty;
     }).toList();
 
     return _yesNoSections.entries.map((section) {
@@ -943,7 +945,9 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       List<Map<String, dynamic>> subs) {
     final realSubs = subs.where((s) {
       final d = s['data'] as Map<String, dynamic>? ?? {};
-      return d['governorate_id'] != null;
+      // FIX: البحث عن governorate_id في كلا المكانين
+      final govId = (d['governorate_id'] as String?) ?? (s['governorate_id'] as String?);
+      return govId != null && govId.isNotEmpty;
     }).toList();
 
     final totals = <String, int>{};
@@ -1238,7 +1242,9 @@ class _ComplianceTab extends ConsumerWidget {
       data: (subs) {
         final realSubs = subs.where((s) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
-          return d['governorate_id'] != null;
+          // FIX: البحث عن governorate_id في كلا المكانين (data + top-level)
+          final govId = (d['governorate_id'] as String?) ?? (s['governorate_id'] as String?);
+          return govId != null && govId.isNotEmpty;
         }).toList();
 
         if (realSubs.isEmpty) {
@@ -1261,7 +1267,8 @@ class _ComplianceTab extends ConsumerWidget {
         final byGov = <String, List<Map<String, dynamic>>>{};
         for (final s in realSubs) {
           final d = s['data'] as Map<String, dynamic>? ?? {};
-          final govId = d['governorate_id'] as String? ?? 'unknown';
+          // FIX: البحث عن governorate_id في كلا المكانين
+          final govId = (d['governorate_id'] as String?) ?? (s['governorate_id'] as String?) ?? 'unknown';
           byGov.putIfAbsent(govId, () => []).add(s);
         }
 
@@ -1529,7 +1536,8 @@ class _ChallengesTab extends ConsumerWidget {
               ChallengesCategoryCard(
                 challenges: realSubs.map((s) {
                   final d = s['data'] as Map<String, dynamic>? ?? {};
-                  final govId = d['governorate_id'] as String?;
+                  // FIX: البحث عن governorate_id في كلا المكانين
+                  final govId = (d['governorate_id'] as String?) ?? (s['governorate_id'] as String?);
                   final govName = govNames[govId] ?? '';
                   return {
                     'challenge': d['main_challenge'] ?? d['challenge'] ?? '',

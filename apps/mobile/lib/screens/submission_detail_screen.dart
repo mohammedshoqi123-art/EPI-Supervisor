@@ -380,6 +380,8 @@ class _SubmissionDetailScreenState
           Expanded(
             child: Text(
               value,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontFamily: 'Tajawal',
                 fontWeight: FontWeight.w500,
@@ -404,7 +406,19 @@ class _SubmissionDetailScreenState
         ),
       ];
 
-    return data.entries.map((e) => _infoRow(e.key, '${e.value}')).toList();
+    // FIX: تعامل مع الصور base64 — اعرض عددها بدلاً من النص الضخم
+    return data.entries.map((e) {
+      final value = e.value;
+      String displayValue;
+      if (value is List && value.isNotEmpty && value.first is String && (value.first as String).length > 200) {
+        displayValue = '${value.length} صورة';
+      } else if (value is String && value.length > 200) {
+        displayValue = '${value.length ~/ 1024}KB بيانات';
+      } else {
+        displayValue = '$value';
+      }
+      return _infoRow(e.key, displayValue);
+    }).toList();
   }
 
   String _formatDate(dynamic dateStr) {
@@ -442,7 +456,14 @@ class _SubmissionDetailScreenState
     if (data.isNotEmpty) {
       text.writeln('📊 البيانات:');
       data.forEach((key, value) {
-        text.writeln('  • $key: $value');
+        // FIX: تجاوز الصور base64 في المشاركة
+        if (value is List && value.isNotEmpty && value.first is String && (value.first as String).length > 200) {
+          text.writeln('  • $key: (${value.length} صورة)');
+        } else if (value is String && value.length > 200) {
+          text.writeln('  • $key: (1 صورة)');
+        } else {
+          text.writeln('  • $key: $value');
+        }
       });
     }
     if (_submission!['gps_lat'] != null) {
@@ -459,7 +480,12 @@ class _SubmissionDetailScreenState
 
   void _copyData() {
     final data = _submission!['data'] as Map<String, dynamic>? ?? {};
-    final text = data.entries.map((e) => '${e.key}: ${e.value}').join('\n');
+    // FIX: تجاوز الصور base64 في النسخ
+    final text = data.entries.where((e) {
+      if (e.value is List && e.value.isNotEmpty && e.value.first is String && (e.value.first as String).length > 200) return false;
+      if (e.value is String && (e.value as String).length > 200) return false;
+      return true;
+    }).map((e) => '${e.key}: ${e.value}').join('\n');
 
     Clipboard.setData(ClipboardData(text: text));
     if (mounted) context.showSuccess('تم نسخ البيانات');
@@ -476,11 +502,15 @@ class _SubmissionDetailScreenState
 
     try {
       final form = _submission!['forms'] as Map<String, dynamic>? ?? {};
+      // FIX: timeout 30s لمنع تعليق التطبيق مع الصور الكبيرة
       final file = await FormReportGenerator.generate(
         form: form,
         submissions: [_submission!],
         period:
             'إرسال واحدة — ${(_submission!['created_at'] ?? '').toString().substring(0, 10)}',
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw TimeoutException('استغرق إنشاء التقرير وقتاً طويلاً'),
       );
 
       if (!mounted) return;
@@ -494,6 +524,10 @@ class _SubmissionDetailScreenState
 
       if (mounted) {
         context.showSuccess('تم إنشاء التقرير بنجاح ✅');
+      }
+    } on TimeoutException {
+      if (mounted) {
+        context.showError('استغرق إنشاء التقرير وقتاً طويلاً — حاول مرة أخرى');
       }
     } catch (e) {
       if (mounted) {

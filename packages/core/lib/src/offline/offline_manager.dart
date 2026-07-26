@@ -181,26 +181,9 @@ class OfflineManager {
       );
     }
 
-    // ═══ FIX M-3: Check if encryption is available ═══
-    if (!EncryptionService.isInitialized && _encryptionAvailable) {
-      // Try one more time with a shorter timeout
-      try {
-        await EncryptionService.initialize(
-          encryptionKey: const String.fromEnvironment('ENCRYPTION_KEY', defaultValue: ''),
-          saltSource: () {
-            final saltStr = _box?.get(EncryptionService.saltStorageKey);
-            if (saltStr == null) return null;
-            return Uint8List.fromList(base64Decode(saltStr));
-          },
-          onSaltCreated: (salt) async {
-            await _box?.put(EncryptionService.saltStorageKey, base64Encode(salt));
-          },
-        ).timeout(const Duration(seconds: 5));
-      } catch (e) {
-        debugPrint('[OfflineManager] ⚠️ Encryption retry failed: $e');
-        _encryptionAvailable = false;
-      }
-    }
+    // ═══ FIX M-3b: Removed dead code ═══
+    // Previously: second encryption init attempt that never executes because
+    // _encryptionAvailable is already false when init times out.
 
     // ═══ PROPOSAL 2: Migrate old blob drafts to sharded storage ═══
     await _migrateDraftsToSharded();
@@ -208,10 +191,18 @@ class OfflineManager {
     // ═══ FIX: Recover stuck items from previous crashes ═══
     await _recoverStuckSyncingItems();
 
-    // ═══ FIX: Cleanup old data to prevent storage bloat ═══
-    await _cleanupOldData();
-
     _initialized = true;
+
+    // ═══ FIX: Cleanup old data — deferred after UI build ═══
+    // Previously: ran synchronously during init → 5-15s white screen on startup
+    // Now: runs in background after UI is ready — no blocking
+    Future.delayed(const Duration(seconds: 5), () async {
+      try {
+        await _cleanupOldData();
+      } catch (e) {
+        if (kDebugMode) debugPrint('[OfflineManager] Cleanup failed: $e');
+      }
+    });
     if (kDebugMode)
       debugPrint(
         '[OfflineManager] Initialized. Pending items: ${_getQueue().length}',
@@ -915,31 +906,28 @@ class OfflineManager {
   Future<void> saveDraft(
       String draftId, String formId, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
-      // ═══ FIX M-3: Warn if encryption is not available ═══
-      // Previously: silent fallback to random key → data loss on restart
-      // Now: log warning so developers can diagnose
-      if (!_encryptionAvailable) {
-        debugPrint('[OfflineManager] ⚠️ M-3: Encryption not available — saving as plain JSON');
-      }
-
       final draftData = {
         'form_id': formId,
         'data': data,
         'saved_at': DateTime.now().toIso8601String(),
       };
 
-      // ═══ FIX N-C1: شفّر على main isolate مباشرة ═══
-      // Previously: compute() يُنشئ Isolate جديد → _pinnedKey = null → مفتاح عشوائي
-      //   → المسودة تُشفّر بمفتاح مختلف → لا يمكن فكها → ضياع دائم!
-      // Now: شفّر على main isolate حيث _pinnedKey مضبوط → <1ms (migrated key)
+      // ═══ FIX M-3: Skip encryption entirely when unavailable ═══
+      // Previously: tried encrypt() with ephemeral key → data encrypted with wrong key
+      //   → can't decrypt on restart → permanent data loss!
+      // Now: when _encryptionAvailable is false, save as plain JSON directly.
       String encrypted;
-      try {
-        final json = jsonEncode(draftData);
-        encrypted = _encryption.encrypt(json);
-      } catch (e) {
-        // ═══ FIX: لا نرمي الخطأ — نحفظ كـ plain JSON ═══
-        debugPrint('[OfflineManager] Encrypt failed — saving draft as plain JSON: $e');
-        encrypted = jsonEncode(draftData); // Plain JSON fallback
+      if (!_encryptionAvailable) {
+        debugPrint('[OfflineManager] ⚠️ M-3: Encryption not available — saving as plain JSON');
+        encrypted = jsonEncode(draftData);
+      } else {
+        try {
+          final json = jsonEncode(draftData);
+          encrypted = _encryption.encrypt(json);
+        } catch (e) {
+          debugPrint('[OfflineManager] Encrypt failed — saving draft as plain JSON: $e');
+          encrypted = jsonEncode(draftData);
+        }
       }
 
       await _box?.put('drafts/$draftId', encrypted);

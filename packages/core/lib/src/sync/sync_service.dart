@@ -372,6 +372,10 @@ class SyncService {
         } catch (e) {
           if (kDebugMode) print('[SyncService] Batch error: $e');
           _applyBackoffToBatch(toRetry, result, e.toString());
+          // ═══ FIX M-1: Persist retry_count after backoff ═══
+          // Previously: backoff applied in-memory only → lost on next cycle
+          // Now: save updated retry_count/next_retry_at to queue
+          await _offline.updateQueueItems(toRetry);
         }
 
         // ═══ PERFORMANCE: Yield to UI thread between sync batches ═══

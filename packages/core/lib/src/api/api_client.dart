@@ -798,7 +798,7 @@ class ApiClient {
   Future<T> _withRetry<T>(
     String label,
     Future<T> Function() action, {
-    int maxRetries = 3,
+    int maxRetries = 2,
   }) async {
     int attempt = 0;
     while (true) {
@@ -807,19 +807,18 @@ class ApiClient {
       } on NetworkException {
         attempt++;
         if (attempt >= maxRetries) rethrow;
-        final delay = Duration(seconds: 1 << (attempt - 1)); // 1s, 2s, 4s
+        final delay = Duration(seconds: attempt); // 1s
         debugPrint('[ApiClient] $label network error, retry $attempt/$maxRetries in ${delay.inSeconds}s');
         await Future.delayed(delay);
       } on TimeoutException {
-        attempt++;
-        if (attempt >= maxRetries) rethrow;
-        final delay = Duration(seconds: 1 << (attempt - 1));
-        debugPrint('[ApiClient] $label timeout, retry $attempt/$maxRetries in ${delay.inSeconds}s');
-        await Future.delayed(delay);
+        // ═══ FIX: No retry on timeout — server is slow, retrying won't help ═══
+        // Previously: 3 retries × 60s = 180s freeze!
+        // Now: fail immediately, let UI show error
+        rethrow;
       } on ServerException {
         attempt++;
         if (attempt >= maxRetries) rethrow;
-        final delay = Duration(seconds: 1 << (attempt - 1));
+        final delay = Duration(seconds: attempt); // 1s
         debugPrint('[ApiClient] $label server error, retry $attempt/$maxRetries in ${delay.inSeconds}s');
         await Future.delayed(delay);
       }

@@ -32,7 +32,7 @@ class AnalyticsService {
         'form_id': formId,
         'campaign_type': campaignType,
         'campaign_round': campaignRound,
-      });
+      }, timeout: const Duration(seconds: 30));
       return result;
     } catch (_) {
       // Fallback: compute locally from raw queries

@@ -190,8 +190,9 @@ class OfflineDataCache {
         debugPrint('[OfflineDataCache] Periodic full refresh for $cacheKey (every $_incrementalSyncsBeforeFullRefresh syncs)');
       }
       try {
+        // FIX: 45s timeout (was 15s) — large datasets with data JSONB need more time
         final allData = await fetchFn().timeout(
-          const Duration(seconds: 15),
+          const Duration(seconds: 45),
           onTimeout: () => throw TimeoutException('Full refresh timeout for $cacheKey'),
         );
         if (allData.isNotEmpty) {
@@ -213,8 +214,9 @@ class OfflineDataCache {
 
     try {
       // 3. Fetch only new records (after latest cached date)
+      // FIX: 45s timeout (was 15s) — fetch_submissions with 200+ rows needs more time
       final newRecords = await fetchFn(createdAfter: latestDate).timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 45),
         onTimeout: () => throw TimeoutException('Incremental fetch timeout for $cacheKey'),
       );
 

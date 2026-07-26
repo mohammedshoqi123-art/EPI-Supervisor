@@ -373,9 +373,10 @@ class ApiClient {
           functionName,
           params: params,
         ).timeout(
-          const Duration(seconds: 15),  // ═══ FIX: 15s (was 30s) — don't block UI too long ═══
+          // FIX: 30s for RPC (was 15s) — fetch_submissions with 200+ rows + data JSONB needs more time
+          const Duration(seconds: 30),
           onTimeout: () => throw TimeoutException(
-            'RPC $functionName timed out',
+            'RPC $functionName timed out after 30s',
           ),
         );
 
@@ -393,7 +394,8 @@ class ApiClient {
         _reportUnexpectedError(e, stack, context: 'rpc($functionName)');
         if (_isNetworkError(e)) throw const NetworkException();
         debugPrint('[ApiClient] rpc($functionName) error: $e');
-        return [];
+        // FIX: rethrow instead of returning [] — empty list is indistinguishable from "no data"
+        throw ApiException('RPC $functionName failed: $e', code: 'rpc_error');
       }
     });
   }

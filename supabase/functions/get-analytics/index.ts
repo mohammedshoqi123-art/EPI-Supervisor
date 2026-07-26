@@ -40,7 +40,7 @@ serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}))
-    const { governorate_id, district_id, start_date, end_date, form_id, campaign_type, campaign_round, include_details } = body
+    const { governorate_id, district_id, start_date, end_date, form_id, campaign_type, campaign_round } = body
 
     // ═══ NEW: Validate optional campaign_round (only filter when a valid number > 0) ═══
     const parsedRound = Number(campaign_round)
@@ -84,11 +84,6 @@ serve(async (req) => {
       return q
     }
 
-    // ═══ Form IDs (hardcoded — matches Flutter FormIds) ═══
-    const READINESS_FORM_ID = '8aa0f3d5-7ab0-430f-85fd-4488c0c129bb'
-    const SUPERVISION_FORM_ID = '97a4f2b3-c573-4812-b58c-5b0acf814e24'
-    const ASSESSMENT_FORM_ID = '606b5093-9a8f-47d6-a6c9-b0429ce4a9f6'
-
     // ═══ FIX: Fetch submissions with governorate_id and form_id for proper breakdowns ═══
     const [
       { count: todayCount },
@@ -102,10 +97,6 @@ serve(async (req) => {
       { data: allForms },
       // ═══ NEW: Fetch full submissions for governorate + form breakdowns ═══
       { data: fullSubmissions },
-      // ═══ NEW: Fetch detailed submissions with data JSONB for each tab ═══
-      { data: readinessDetails },
-      { data: supervisionDetails },
-      { data: assessmentDetails },
     ] = await Promise.all([
       applyFormSubFilters(
         supabase.from('form_submissions').select('*', { count: 'exact', head: true })
@@ -146,31 +137,6 @@ serve(async (req) => {
         supabase.from('form_submissions').select('governorate_id, form_id, status')
           .is('deleted_at', null).limit(5000)
       ),
-      // ═══ NEW: Readiness submissions with full data JSONB ═══
-      applyCampaignRound(
-        supabase.from('form_submissions')
-          .select('id, governorate_id, district_id, data, created_at, updated_at, submitted_by, campaign_round, profiles!submitted_by(full_name)')
-          .eq('form_id', READINESS_FORM_ID)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(2000)
-      ),
-      // ═══ NEW: Supervision submissions with full data JSONB ═══
-      applyCampaignRound(
-        supabase.from('form_submissions')
-          .select('id, governorate_id, district_id, data, created_at, updated_at, submitted_by, campaign_round, profiles!submitted_by(full_name)')
-          .eq('form_id', SUPERVISION_FORM_ID)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(2000)
-      ),
-      // ═══ NEW: Assessment submissions with full data JSONB ═══
-      supabase.from('form_submissions')
-        .select('id, governorate_id, district_id, data, created_at, updated_at, submitted_by, campaign_round, profiles!submitted_by(full_name)')
-        .eq('form_id', ASSESSMENT_FORM_ID)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(2000),
     ])
 
     const byStatus: Record<string, number> = {}
@@ -239,55 +205,12 @@ serve(async (req) => {
       byGovernorate[g.name_ar ?? g.name_en ?? g.id] = govSubmissionCounts[g.id] || 0
     }
 
-    // ═══ NEW: Compute compliance_rate and supervisor_count server-side ═══
-    const YES_NO_KEYS = [
-      'has_activity_plan', 'has_doctor_or_trained', 'wearing_uniform',
-      'suitable_location', 'community_coordination', 'has_speaker',
-      'has_transport', 'previous_visit', 'complete_records', 'daily_work_forms',
-      'correct_data_entry', 'next_visit_noted', 'child_vaccination_cards',
-      'women_vaccination_cards', 'good_acceptance', 'safe_vaccination',
-      'respiratory_rate_check', 'muac_measurement', 'ors_provision',
-      'clean_delivery_kit', 'nutrition_assessment', 'vitamin_a_children',
-      'vitamin_a_women', 'facility_referral', 'correct_medication',
-      'nutrition_counseling', 'vaccine_disposal', 'safety_box_usage',
-      'cold_chain_proper', 'family_planning_available', 'folic_iron_stock',
-      'fetal_stethoscope', 'bp_device', 'muac_tape', 'height_board',
-      'thermometer', 'scale', 'daily_supply_tracking', 'has_vaccine_carrier',
-      'vaccines_sufficient', 'correct_vaccine_site', 'catch_up_knowledge',
-      'catch_up_training', 'catch_up_2to5_registration', 'team_target_knowledge',
-      'has_defaulter_mechanism', 'has_previous_vaccination_records',
-      'aefi_knowledge', 'aefi_mothers_info',
-    ];
-
-    let yesCount = 0;
-    let totalFields = 0;
-    const supervisors = new Set<string>();
-
-    for (const sub of (supervisionDetails ?? [])) {
-      const data = sub.data ?? {};
-      for (const key of YES_NO_KEYS) {
-        if (data[key] === true) yesCount++;
-        if (data[key] === true || data[key] === false) totalFields++;
-      }
-      if (sub.submitted_by) supervisors.add(sub.submitted_by);
-    }
-
-    const complianceRate = totalFields > 0 ? Math.round((yesCount / totalFields) * 1000) / 10 : 0;
-    const supervisorCount = supervisors.size;
-
     return jsonResponse({
       submissions: { total: totalCount ?? 0, today: todayCount ?? 0, byStatus, byDay: last7Days, byGovernorate },
       shortages: { total: shortageTotal ?? 0, resolved: resolvedCount ?? 0, pending: (shortageTotal ?? 0) - (resolvedCount ?? 0), bySeverity },
       topGovernorates: govBreakdown.sort((a: any, b: any) => b.count - a.count).slice(0, 10),
       forms: formAnalytics,
       governorateBreakdown: govBreakdown.sort((a: any, b: any) => b.count - a.count),
-      // ═══ NEW: Raw submissions with data JSONB for each tab ═══
-      readiness_submissions: readinessDetails ?? [],
-      supervision_submissions: supervisionDetails ?? [],
-      assessment_submissions: assessmentDetails ?? [],
-      // ═══ NEW: Pre-computed KPI values ═══
-      compliance_rate: complianceRate,
-      supervisor_count: supervisorCount,
       generatedAt: new Date().toISOString(),
       filters: { governorate_id, district_id, start_date, end_date, form_id, campaign_round: campaignRound },
     }, 200, origin)

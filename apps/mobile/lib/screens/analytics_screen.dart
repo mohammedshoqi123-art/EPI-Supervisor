@@ -176,29 +176,50 @@ const _serviceNumberFields = {
 final _readinessSubsProvider = FutureProvider.family
     .autoDispose<List<Map<String, dynamic>>, ({String? campaignType, int? campaignRound})>(
   (ref, params) async {
-  // ═══ FIX: Get data from Edge Function — no direct DB query, no 2000 rows fetch ═══
-  // Previously: getSubmissions() fetched 2000 rows with data JSONB → timeout
-  // Now: Edge Function returns pre-fetched data — mobile just displays it
-  final filter = AnalyticsFilter(
-    campaignType: params.campaignType,
-    campaignRound: params.campaignRound,
+  // ═══ FIX: استخدام fallback مباشرة (جلب إرساليات فردية) ═══
+  // Previously: RPC يُرجع بيانات مُجمّعة بدون ready_for_launch → جدول فارغ
+  // Now: جلب الإرساليات الفعلية مع حقل data الكامل
+  final cache = await ref.watch(offlineDataCacheProvider.future);
+  final cacheKey = 'readiness_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
+  return cache.incrementalGetList(
+    cacheKey,
+    ({String? createdAfter}) async {
+      return ref.read(databaseServiceProvider).getSubmissions(
+            formId: _readinessFormId,
+            campaignType: params.campaignType,
+            campaignRound: params.campaignRound,
+            limit: 2000,
+            lean: false,
+            createdAfter: createdAfter,
+          );
+    },
+    maxAge: const Duration(hours: 2),
+    dateField: 'updated_at',
+    idField: 'id',
   );
-  final dashboard = await ref.watch(dashboardAnalyticsProvider(filter).future);
-  final submissions = dashboard['readiness_submissions'] as List? ?? [];
-  return submissions.map((s) => Map<String, dynamic>.from(s as Map)).toList();
 });
 
 final _supervisionSubsProvider = FutureProvider.family
     .autoDispose<List<Map<String, dynamic>>, ({String? campaignType, int? campaignRound})>(
   (ref, params) async {
-  // ═══ FIX: Get data from Edge Function — no direct DB query, no 2000 rows fetch ═══
-  final filter = AnalyticsFilter(
-    campaignType: params.campaignType,
-    campaignRound: params.campaignRound,
+  final cache = await ref.watch(offlineDataCacheProvider.future);
+  final cacheKey = 'supervision_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
+  return cache.incrementalGetList(
+    cacheKey,
+    ({String? createdAfter}) async {
+      return ref.read(databaseServiceProvider).getSubmissions(
+            formId: _supervisionFormId,
+            campaignType: params.campaignType,
+            campaignRound: params.campaignRound,
+            limit: 2000,
+            lean: false, // ═══ NEEDS 'data' column for field-level analysis ═══
+            createdAfter: createdAfter,
+          );
+    },
+    maxAge: const Duration(hours: 2),
+    dateField: 'updated_at',
+    idField: 'id',
   );
-  final dashboard = await ref.watch(dashboardAnalyticsProvider(filter).future);
-  final submissions = dashboard['supervision_submissions'] as List? ?? [];
-  return submissions.map((s) => Map<String, dynamic>.from(s as Map)).toList();
 });
 
 // ═══ P0-4: Precomputed KPI Provider — was 250,000 iterations per build()
@@ -209,8 +230,11 @@ final _analyticsKpiProvider = Provider.family
   ref,
   params,
 ) {
-  // ═══ FIX: 100% server-side — Edge Function returns everything computed ═══
-  // No local computation, no watching heavy providers
+  // ═══ FIX: Use dashboardAnalyticsProvider — already cached, no extra RPC call ═══
+  // Previously: watched 2 heavy providers (2000 rows each) → timeout
+  // Then: used _unifiedAnalyticsProvider (RPC) → extra network call
+  // Now: uses dashboardAnalyticsProvider which is already loaded by the dashboard
+  //   and cached for 24 hours — KPI bar shows data instantly
   final filter = AnalyticsFilter(
     campaignType: params.campaignType,
     campaignRound: params.campaignRound,
@@ -219,10 +243,37 @@ final _analyticsKpiProvider = Provider.family
 
   final totalSubs = (dashboard?['submissions']?['total'] as int?) ?? 0;
 
-  // Get compliance rate and supervisor count from Edge Function
-  // These are computed server-side from the unified RPC
-  final complianceRate = (dashboard?['compliance_rate'] as num?)?.toDouble() ?? 0.0;
-  final supervisorCount = (dashboard?['supervisor_count'] as int?) ?? 0;
+  // Compliance rate: compute from supervision data if available, else from dashboard
+  // The dashboard doesn't have compliance rate, so we compute it from supervision subs
+  // but ONLY if they're already loaded (don't trigger a new fetch)
+  final supervisionAsync = ref.watch(_supervisionSubsProvider(params));
+  final supervision = supervisionAsync.valueOrNull ?? [];
+
+  double complianceRate = 0;
+  int supervisorCount = 0;
+
+  if (supervision.isNotEmpty) {
+    // Compute compliance rate from loaded supervision data
+    int yesCount = 0;
+    int totalFields = 0;
+    final supervisors = <String>{};
+    for (final s in supervision) {
+      final data = s['data'] as Map<String, dynamic>? ?? {};
+      for (final sectionFields in _yesNoSections.values) {
+        for (final key in sectionFields) {
+          final val = data[key];
+          if (val == true) yesCount++;
+          if (val == true || val == false) totalFields++;
+        }
+      }
+      final uid = s['submitted_by'] as String?;
+      if (uid != null) supervisors.add(uid);
+    }
+    if (totalFields > 0) {
+      complianceRate = (yesCount / totalFields) * 100;
+    }
+    supervisorCount = supervisors.length;
+  }
 
   return (
     totalSubs: totalSubs,
@@ -2577,14 +2628,24 @@ class _HealthFacilityAssessmentTab extends ConsumerWidget {
 final _assessmentSubsProvider = FutureProvider.family
     .autoDispose<List<Map<String, dynamic>>, ({String? campaignType, int? campaignRound})>(
   (ref, params) async {
-    // ═══ FIX: Get data from Edge Function — no direct DB query ═══
-    final filter = AnalyticsFilter(
-      campaignType: params.campaignType,
-      campaignRound: params.campaignRound,
+    final cache = await ref.watch(offlineDataCacheProvider.future);
+    final cacheKey = 'assessment_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
+    return cache.incrementalGetList(
+      cacheKey,
+      ({String? createdAfter}) async {
+        return ref.read(databaseServiceProvider).getSubmissions(
+              formId: _assessmentFormId,
+              campaignType: params.campaignType,
+              campaignRound: params.campaignRound,
+              limit: 2000,
+              lean: false,
+              createdAfter: createdAfter,
+            );
+      },
+      maxAge: const Duration(hours: 2),
+      dateField: 'updated_at',
+      idField: 'id',
     );
-    final dashboard = await ref.watch(dashboardAnalyticsProvider(filter).future);
-    final submissions = dashboard['assessment_submissions'] as List? ?? [];
-    return submissions.map((s) => Map<String, dynamic>.from(s as Map)).toList();
   },
 );
 

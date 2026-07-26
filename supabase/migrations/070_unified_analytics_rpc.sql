@@ -94,8 +94,8 @@ BEGIN
       END
       FROM (
         SELECT
-          count(*) FILTER (WHERE val = true) AS yes_count,
-          count(*) FILTER (WHERE val = true OR val = false) AS total_fields
+          count(*) FILTER (WHERE val = 'true') AS yes_count,
+          count(*) FILTER (WHERE val IN ('true', 'false')) AS total_fields
         FROM form_submissions fs,
              jsonb_each_text(fs.data) AS kv(key, val)
         WHERE fs.form_id = p_supervision_form_id
@@ -151,7 +151,7 @@ BEGIN
       SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
       FROM (
         SELECT
-          COALESCE(ss.severity, 'unknown') AS severity,
+          ss.severity::text,
           count(*) AS total
         FROM supply_shortages ss
         WHERE ss.deleted_at IS NULL

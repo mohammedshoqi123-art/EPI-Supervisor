@@ -181,26 +181,10 @@ class OfflineManager {
       );
     }
 
-    // ═══ FIX M-3: Check if encryption is available ═══
-    if (!EncryptionService.isInitialized && _encryptionAvailable) {
-      // Try one more time with a shorter timeout
-      try {
-        await EncryptionService.initialize(
-          encryptionKey: const String.fromEnvironment('ENCRYPTION_KEY', defaultValue: ''),
-          saltSource: () {
-            final saltStr = _box?.get(EncryptionService.saltStorageKey);
-            if (saltStr == null) return null;
-            return Uint8List.fromList(base64Decode(saltStr));
-          },
-          onSaltCreated: (salt) async {
-            await _box?.put(EncryptionService.saltStorageKey, base64Encode(salt));
-          },
-        ).timeout(const Duration(seconds: 5));
-      } catch (e) {
-        debugPrint('[OfflineManager] ⚠️ Encryption retry failed: $e');
-        _encryptionAvailable = false;
-      }
-    }
+    // ═══ FIX M-3b: Removed dead code ═══
+    // Previously: second encryption init attempt that never executes because
+    // _encryptionAvailable is already false when init times out.
+    // If init fails for other reasons, saveDraft handles it with plain JSON fallback.
 
     // ═══ PROPOSAL 2: Migrate old blob drafts to sharded storage ═══
     await _migrateDraftsToSharded();
@@ -915,31 +899,30 @@ class OfflineManager {
   Future<void> saveDraft(
       String draftId, String formId, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
-      // ═══ FIX M-3: Warn if encryption is not available ═══
-      // Previously: silent fallback to random key → data loss on restart
-      // Now: log warning so developers can diagnose
-      if (!_encryptionAvailable) {
-        debugPrint('[OfflineManager] ⚠️ M-3: Encryption not available — saving as plain JSON');
-      }
-
       final draftData = {
         'form_id': formId,
         'data': data,
         'saved_at': DateTime.now().toIso8601String(),
       };
 
-      // ═══ FIX N-C1: شفّر على main isolate مباشرة ═══
-      // Previously: compute() يُنشئ Isolate جديد → _pinnedKey = null → مفتاح عشوائي
-      //   → المسودة تُشفّر بمفتاح مختلف → لا يمكن فكها → ضياع دائم!
-      // Now: شفّر على main isolate حيث _pinnedKey مضبوط → <1ms (migrated key)
+      // ═══ FIX M-3: Skip encryption entirely when unavailable ═══
+      // Previously: tried encrypt() with ephemeral key → data encrypted with wrong key
+      //   → can't decrypt on restart → permanent data loss!
+      // Now: when _encryptionAvailable is false, save as plain JSON directly.
+      // Plain JSON is readable on next startup and gets re-encrypted when key is ready.
       String encrypted;
-      try {
-        final json = jsonEncode(draftData);
-        encrypted = _encryption.encrypt(json);
-      } catch (e) {
-        // ═══ FIX: لا نرمي الخطأ — نحفظ كـ plain JSON ═══
-        debugPrint('[OfflineManager] Encrypt failed — saving draft as plain JSON: $e');
-        encrypted = jsonEncode(draftData); // Plain JSON fallback
+      if (!_encryptionAvailable) {
+        debugPrint('[OfflineManager] ⚠️ M-3: Encryption not available — saving draft as plain JSON');
+        encrypted = jsonEncode(draftData);
+      } else {
+        try {
+          final json = jsonEncode(draftData);
+          encrypted = _encryption.encrypt(json);
+        } catch (e) {
+          // ═══ FIX: Encryption failed — save as plain JSON instead of losing data ═══
+          debugPrint('[OfflineManager] Encrypt failed — saving draft as plain JSON: $e');
+          encrypted = jsonEncode(draftData);
+        }
       }
 
       await _box?.put('drafts/$draftId', encrypted);

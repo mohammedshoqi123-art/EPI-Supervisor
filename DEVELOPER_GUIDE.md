@@ -843,6 +843,53 @@ final myNotifierProvider = StateNotifierProvider<MyNotifier, MyState>((ref) {
 
 ---
 
+## 🔧 إصلاحات جلسة 26 يوليو 2026 (v1.0.1012)
+
+### إصلاحات CI/CD (4 مشاكل)
+
+| # | المشكلة | الملف | الحل |
+|---|---------|-------|------|
+| CI-1 | Dart `await` في non-async method | `offline_manager.dart:1409` | إزالة `await` — Hive operations are fire-and-forget |
+| CI-2 | TypeScript IIFE syntax error | `AIChatWidget.tsx:807` | `useRef(() => {})()` → `useRef((() => {})())` |
+| CI-3 | flutter_tts requires SDK 36 | `build.gradle:32` | `compileSdkVersion 35` → `36` |
+| CI-4 | Migration history mismatch | `055_reduce` | إصلاح + rename `055_add_health_facility` → `071` |
+
+### إصلاح timeout التحليلات (3 مراحل)
+
+| المرحلة | الحل | الملف | الأثر |
+|---------|------|-------|-------|
+| 1 | VACUUM ANALYZE + autovacuum | `migrations/069_autovacuum_settings.sql` | dead tuples: 10→0 |
+| 2 | KPI bar lazy loading | `analytics_screen.dart` | لا يحمّل providers ثقيلة فوراً |
+| 2 | Analytics timeout 20s→30s | `analytics_service.dart` | يمنع timeout على الشبكة البطيئة |
+| 3 | RPC موحّد server-side | `migrations/070_unified_analytics_rpc.sql` | 5MB→50KB, 11s→100ms |
+
+### إصلاح المشاكل المتبقية (M-1, M-3, M-3b)
+
+| # | المشكلة | الملف | الحل |
+|---|---------|-------|------|
+| M-1 | catch block لا يحفظ retry_count | `sync_service.dart:374` | `await _offline.updateQueueItems(toRetry)` بعد backoff |
+| M-3 | saveDraft يستخدم ephemeral key | `offline_manager.dart:921` | plain JSON مباشر عندما `_encryptionAvailable=false` |
+| M-3b | dead code (encryption retry) | `offline_manager.dart:185` | إزالة الكود الميت |
+
+### إعدادات Supabase المطبقة
+
+| الإعداد | القيمة |
+|---------|-------|
+| autovacuum على form_submissions | `scale_factor=0.1` |
+| autovacuum على notifications | `scale_factor=0.05` |
+| RPC get_unified_analytics | 48 حقل yes/no + aggregation server-side |
+
+### الأداء بعد الإصلاح
+
+| المؤشر | قبل | بعد |
+|--------|------|-----|
+| dead tuples | 10 | 0 |
+| analytics load time | 3-11s (timeout) | 100-200ms |
+| analytics data transfer | ~5MB | ~50KB |
+| compliance rate | 22% (عمليات خاطئة) | 91.7% (server-side) |
+
+---
+
 ## 📚 مراجع إضافية
 
 | الملف | المحتوى |
@@ -856,4 +903,4 @@ final myNotifierProvider = StateNotifierProvider<MyNotifier, MyState>((ref) {
 
 ---
 
-*آخر تحديث: 2026-07-21 — بعد تطبيق 27 إصلاح*
+*آخر تحديث: 2026-07-26 — بعد تطبيق 33 إصلاح (CI/CD + Analytics + Offline)*

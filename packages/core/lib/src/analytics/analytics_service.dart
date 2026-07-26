@@ -24,6 +24,7 @@ class AnalyticsService {
   }) async {
     try {
       // Try Edge Function first for complex aggregation
+      // ═══ FIX: 30s timeout for analytics (default 20s was too tight) ═══
       final result = await _api.callFunction(SupabaseConfig.fnGetAnalytics, {
         'governorate_id': governorateId,
         'district_id': districtId,
@@ -32,7 +33,7 @@ class AnalyticsService {
         'form_id': formId,
         'campaign_type': campaignType,
         'campaign_round': campaignRound,
-      });
+      }, timeout: const Duration(seconds: 30));
       return result;
     } catch (_) {
       // Fallback: compute locally from raw queries

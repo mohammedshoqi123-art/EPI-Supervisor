@@ -192,10 +192,17 @@ class OfflineManager {
     // ═══ FIX: Recover stuck items from previous crashes ═══
     await _recoverStuckSyncingItems();
 
-    // ═══ FIX: Cleanup old data to prevent storage bloat ═══
-    await _cleanupOldData();
-
+    // ═══ FIX: Cleanup old data — deferred after UI build ═══
+    // Previously: ran synchronously during init → 5-15s white screen on startup
+    // Now: runs in background after UI is ready — no blocking
     _initialized = true;
+    Future.delayed(const Duration(seconds: 5), () async {
+      try {
+        await _cleanupOldData();
+      } catch (e) {
+        if (kDebugMode) debugPrint('[OfflineManager] Cleanup failed: $e');
+      }
+    });
     if (kDebugMode)
       debugPrint(
         '[OfflineManager] Initialized. Pending items: ${_getQueue().length}',

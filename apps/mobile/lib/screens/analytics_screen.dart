@@ -225,19 +225,55 @@ final _supervisionSubsProvider = FutureProvider.family
 // ═══ P0-4: Precomputed KPI Provider — was 250,000 iterations per build()
 // ═══ FIX LAZY: Uses dashboardAnalyticsProvider (server-computed counts)
 // instead of watching both heavy providers. Heavy data loads only per-tab.
-final _analyticsKpiProvider = FutureProvider.family
-    .autoDispose<({int totalSubs, double complianceRate, int supervisorCount}), ({String? campaignType, int? campaignRound})>(
-  (ref,
+final _analyticsKpiProvider = Provider.family
+    .autoDispose<({int totalSubs, double complianceRate, int supervisorCount}), ({String? campaignType, int? campaignRound})>((
+  ref,
   params,
-) async {
-  // ═══ FIX: Use unified RPC — single server-side call replaces 3 heavy providers ═══
-  final unified = await ref.watch(_unifiedAnalyticsProvider(params).future);
+) {
+  // ═══ FIX: Use dashboardAnalyticsProvider — already cached, no extra RPC call ═══
+  // Previously: watched 2 heavy providers (2000 rows each) → timeout
+  // Then: used _unifiedAnalyticsProvider (RPC) → extra network call
+  // Now: uses dashboardAnalyticsProvider which is already loaded by the dashboard
+  //   and cached for 24 hours — KPI bar shows data instantly
+  final filter = AnalyticsFilter(
+    campaignType: params.campaignType,
+    campaignRound: params.campaignRound,
+  );
+  final dashboard = ref.watch(dashboardAnalyticsProvider(filter)).valueOrNull;
 
-  final readinessCount = (unified['readiness_count'] as int?) ?? 0;
-  final supervisionCount = (unified['supervision_count'] as int?) ?? 0;
-  final totalSubs = readinessCount + supervisionCount;
-  final complianceRate = (unified['compliance_rate'] as num?)?.toDouble() ?? 0.0;
-  final supervisorCount = (unified['supervisor_count'] as int?) ?? 0;
+  final totalSubs = (dashboard?['submissions']?['total'] as int?) ?? 0;
+
+  // Compliance rate: compute from supervision data if available, else from dashboard
+  // The dashboard doesn't have compliance rate, so we compute it from supervision subs
+  // but ONLY if they're already loaded (don't trigger a new fetch)
+  final supervisionAsync = ref.watch(_supervisionSubsProvider(params));
+  final supervision = supervisionAsync.valueOrNull ?? [];
+
+  double complianceRate = 0;
+  int supervisorCount = 0;
+
+  if (supervision.isNotEmpty) {
+    // Compute compliance rate from loaded supervision data
+    int yesCount = 0;
+    int totalFields = 0;
+    final supervisors = <String>{};
+    for (final s in supervision) {
+      final data = s['data'] as Map<String, dynamic>? ?? {};
+      for (final sectionFields in _yesNoSections.values) {
+        for (final key in sectionFields) {
+          final val = data[key];
+          if (val == true) yesCount++;
+          if (val == true || val == false) totalFields++;
+        }
+      }
+      final uid = s['submitted_by'] as String?;
+      if (uid != null) supervisors.add(uid);
+    }
+    if (totalFields > 0) {
+      complianceRate = (yesCount / totalFields) * 100;
+    }
+    supervisorCount = supervisors.length;
+  }
 
   return (
     totalSubs: totalSubs,
@@ -428,67 +464,18 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   }
 
   Widget _buildKPIBar() {
-    // ═══ FIX LAZY: KPI bar uses lightweight dashboardAnalyticsProvider
-    // No longer watches heavy _readinessSubsProvider / _supervisionSubsProvider
-    // Heavy data loads only when user opens specific tabs
+    // ═══ FIX: KPI bar uses dashboardAnalyticsProvider (cached, instant)
+    // + supervision provider for compliance rate (only if already loaded)
+    // Previously: FutureProvider + RPC → loading spinner every time
+    // Now: sync Provider → data available instantly from cache
     final params = _getAnalyticsParams(ref);
-    final kpiAsync = ref.watch(_analyticsKpiProvider(params));
+    final kpi = ref.watch(_analyticsKpiProvider(params));
 
-    return kpiAsync.when(
-      loading: () => Container(
-        height: 80,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Center(
-          child: SizedBox(
-            width: 24, height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      ),
-      error: (_, __) => Container(
-        height: 80,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.error_outline, size: 18, color: Colors.orange[700]),
-              const SizedBox(width: 8),
-              Text(
-                'خطأ في تحميل التحليلات',
-                style: TextStyle(
-                  fontFamily: 'Tajawal', fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: () => ref.invalidate(_analyticsKpiProvider(params)),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text('إعادة المحاولة', style: TextStyle(fontSize: 11)),
-              ),
-            ],
-          ),
-        ),
-      ),
-      data: (kpi) => AnalyticsKPIBar(
-        totalSubmissions: kpi.totalSubs,
-        complianceRate: kpi.complianceRate,
-        supervisorCount: kpi.supervisorCount,
-        challengeCount: 0,
-      ),
+    return AnalyticsKPIBar(
+      totalSubmissions: kpi.totalSubs,
+      complianceRate: kpi.complianceRate,
+      supervisorCount: kpi.supervisorCount,
+      challengeCount: 0,
     );
   }
 

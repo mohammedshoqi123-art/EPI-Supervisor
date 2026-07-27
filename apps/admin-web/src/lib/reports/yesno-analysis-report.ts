@@ -6,7 +6,6 @@
  */
 
 import { supabase } from '../supabase'
-import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import {
   escapeHtml,
@@ -194,27 +193,40 @@ export async function generateYesNoAnalysisReport(options?: {
   const dayStart = `${dateFrom}T00:00:00`
   const dayEnd = `${dateTo}T23:59:59`
 
-  // ── Fetch submissions (paginated to bypass PostgREST 1000-row cap) ──
-  const subsResult = await bulkFetch({
-    table: 'form_submissions',
-    select: 'id, data, governorate_id, submitted_by, created_at',
-    maxRows: 100000,
-    pageSize: 1000,
-    orderBy: 'created_at',
-    orderDirection: 'desc',
-    applyFilters: (q) => {
-      q = q.eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
+  // ═══ FIX: Direct Supabase query with fallback (bulkFetch silently returns empty) ═══
+  async function fetchSubs(round: number | null) {
+    const PAGE = 1000
+    let all: any[] = []
+    let offset = 0
+    while (true) {
+      let q = supabase
+        .from('form_submissions')
+        .select('id, data, governorate_id, submitted_by, created_at')
+        .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
         .is('deleted_at', null)
         .eq('status', 'submitted')
         .gte('created_at', dayStart)
         .lte('created_at', dayEnd)
-      if (options?.governorateId && options.governorateId !== 'all') {
-        q = q.eq('governorate_id', options.governorateId)
-      }
-      if (campaignRound) q = q.eq('campaign_round', campaignRound)
-      return q
-    },
-  })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + PAGE - 1)
+      if (options?.governorateId && options.governorateId !== 'all') q = q.eq('governorate_id', options.governorateId)
+      if (round) q = q.eq('campaign_round', round)
+      const { data, error } = await q
+      if (error) { console.error('[YesNoReport] fetch error:', error.message); break }
+      if (!data || data.length === 0) break
+      all.push(...data)
+      if (data.length < PAGE) break
+      offset += PAGE
+    }
+    return all
+  }
+
+  let subsRaw = await fetchSubs(campaignRound)
+  if (subsRaw.length === 0 && campaignRound) {
+    console.warn(`[YesNoReport] No data for round ${campaignRound}, retrying without round filter`)
+    subsRaw = await fetchSubs(null)
+  }
+  const subsResult = { data: subsRaw }
 
   // Fetch profiles map for supervisor names
   const profilesRes = await supabase.from('profiles').select('id, full_name, role').is('deleted_at', null)

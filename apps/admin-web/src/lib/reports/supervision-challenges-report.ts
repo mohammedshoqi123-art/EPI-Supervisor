@@ -9,7 +9,6 @@
  */
 
 import { supabase } from '../supabase'
-import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import {
   escapeHtml,
@@ -107,21 +106,36 @@ export async function generateSupervisionChallengesReport(options?: {
 }): Promise<void> {
   const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   // ── Fetch data (paginated) ──
-  const subsResult = await bulkFetch({
-    table: 'form_submissions',
-    select: 'id, status, data, notes, gps_lat, gps_lng, created_at, submitted_by, governorate_id, district_id',
-    maxRows: 100000,
-    pageSize: 1000,
-    orderBy: 'created_at',
-    orderDirection: 'desc',
-    applyFilters: (q) => {
-      q = q.is('deleted_at', null)
+  // ═══ FIX: Direct query with fallback for round filter ═══
+  async function fetchSubs(round: number | null) {
+    const PAGE = 1000
+    let all: any[] = []
+    let offset = 0
+    while (true) {
+      let q = supabase.from('form_submissions')
+        .select('id, status, data, notes, gps_lat, gps_lng, created_at, submitted_by, governorate_id, district_id')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + PAGE - 1)
       if (options?.dateFrom) q = q.gte('created_at', options.dateFrom)
       if (options?.dateTo) q = q.lte('created_at', options.dateTo + 'T23:59:59')
-      if (campaignRound) q = q.eq('campaign_round', campaignRound)
-      return q
-    },
-  })
+      if (round) q = q.eq('campaign_round', round)
+      const { data, error } = await q
+      if (error) { console.error('[SupChallengesReport] fetch error:', error.message); break }
+      if (!data || data.length === 0) break
+      all.push(...data)
+      if (data.length < PAGE) break
+      offset += PAGE
+      if (all.length >= 100000) break
+    }
+    return all
+  }
+  let subsRaw = await fetchSubs(campaignRound)
+  if (subsRaw.length === 0 && campaignRound) {
+    console.warn(`[SupChallengesReport] No data for round ${campaignRound}, retrying without round filter`)
+    subsRaw = await fetchSubs(null)
+  }
+  const subsResult = { data: subsRaw }
 
   const [{ data: profilesData }, { data: govsData }, { data: distsData }] = await Promise.all([
     supabase.from('profiles').select('id, full_name, phone, role').is('deleted_at', null),

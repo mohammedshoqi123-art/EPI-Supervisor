@@ -11,7 +11,6 @@
  */
 
 import { supabase } from '../supabase'
-import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import {
   escapeHtml,
@@ -176,37 +175,81 @@ export async function generateMasterSupervisorReport(options?: {
 
   const evalData = await fetchComprehensiveEvaluationData(options)
 
-  // Fetch yes/no submissions + challenges + GPS in parallel
-  // NOTE: Uses bulkFetch for pagination (Supabase PostgREST caps at ~1000 rows per request)
-  const [yesNoResult, challengesResult] = await Promise.allSettled([
-    bulkFetch({
-      table: 'form_submissions',
-      select: 'id, data, governorate_id, status',
-      maxRows: 100000,
-      pageSize: 1000,
-      orderBy: 'created_at',
-      orderDirection: 'desc',
-      applyFilters: (q) => {
-        let qq: any = q.eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24').eq('status', 'submitted').is('deleted_at', null)
-        if (campaignRound) qq = qq.eq('campaign_round', campaignRound)
-        return qq
-      },
-    }),
+  // ═══ FIX: Use direct Supabase queries with retry + fallback ═══
+  // Previous bulkFetch silently returned empty data when filters combined.
+  // Now: direct query → if empty + round filter → retry without round filter.
 
-    bulkFetch({
-      table: 'form_submissions',
-      select: 'id, data, governorate_id, district_id, submitted_by, created_at',
-      maxRows: 100000,
-      pageSize: 1000,
-      orderBy: 'created_at',
-      orderDirection: 'desc',
-      applyFilters: (q) => {
-        let qq: any = q.is('deleted_at', null)
-        if (campaignRound) qq = qq.eq('campaign_round', campaignRound)
-        return qq
-      },
-    }),
-  ])
+  async function fetchSupervisionData(round: number | null) {
+    const PAGE_SIZE = 1000
+    let allData: any[] = []
+    let offset = 0
+
+    while (true) {
+      let q = supabase
+        .from('form_submissions')
+        .select('id, data, governorate_id, status')
+        .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
+        .eq('status', 'submitted')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1)
+
+      if (round) q = q.eq('campaign_round', round)
+
+      const { data, error } = await q
+      if (error) { console.error('[MasterReport] yesNo fetch error:', error.message); break }
+      if (!data || data.length === 0) break
+
+      allData.push(...data)
+      if (data.length < PAGE_SIZE) break
+      offset += PAGE_SIZE
+    }
+
+    return allData
+  }
+
+  async function fetchChallengesData(round: number | null) {
+    const PAGE_SIZE = 1000
+    let allData: any[] = []
+    let offset = 0
+
+    while (true) {
+      let q = supabase
+        .from('form_submissions')
+        .select('id, data, governorate_id, district_id, submitted_by, created_at')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1)
+
+      if (round) q = q.eq('campaign_round', round)
+
+      const { data, error } = await q
+      if (error) { console.error('[MasterReport] challenges fetch error:', error.message); break }
+      if (!data || data.length === 0) break
+
+      allData.push(...data)
+      if (data.length < PAGE_SIZE) break
+      offset += PAGE_SIZE
+    }
+
+    return allData
+  }
+
+  // Fetch with round filter first, fallback to no filter if empty
+  let yesNoSubsRaw = await fetchSupervisionData(campaignRound)
+  if (yesNoSubsRaw.length === 0 && campaignRound) {
+    console.warn(`[MasterReport] No supervision data for round ${campaignRound}, retrying without round filter`)
+    yesNoSubsRaw = await fetchSupervisionData(null)
+  }
+
+  let challengeSubsRaw = await fetchChallengesData(campaignRound)
+  if (challengeSubsRaw.length === 0 && campaignRound) {
+    console.warn(`[MasterReport] No challenges data for round ${campaignRound}, retrying without round filter`)
+    challengeSubsRaw = await fetchChallengesData(null)
+  }
+
+  const yesNoResult = { status: 'fulfilled' as const, value: { data: yesNoSubsRaw } }
+  const challengesResult = { status: 'fulfilled' as const, value: { data: challengeSubsRaw } }
 
   // ── Governorate lookup ──
   const govsMap = new Map<string, string>()

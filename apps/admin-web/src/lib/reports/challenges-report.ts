@@ -6,7 +6,6 @@
  */
 
 import { supabase } from '../supabase'
-import { bulkFetch } from '../bulk-fetch'
 import { BRAND } from '../pdf-brand'
 import { EPI_LOGO_BASE64 } from '../epi-logo'
 import {
@@ -73,14 +72,27 @@ export async function generateChallengesReport(options?: {
     return allData
   }
 
-  const [subsData, shortagesRes, govsRes, districtsRes, usersRes, auditData] = await Promise.allSettled([
-    fetchPaginated('form_submissions', `
+  // ═══ FIX: Fetch submissions with round filter, fallback to no filter if empty ═══
+  async function fetchSubsWithFallback() {
+    const sel = `
       id, status, data, notes, gps_lat, gps_lng, photos, created_at,
       forms(title_ar, campaign_type),
       profiles!submitted_by(full_name, phone),
       governorates(id, name_ar),
       districts(id, name_ar)
-    `, (q: any) => campaignRound ? q.eq('campaign_round', campaignRound) : q),
+    `
+    let result = await fetchPaginated('form_submissions', sel,
+      (q: any) => campaignRound ? q.eq('campaign_round', campaignRound) : q)
+    if (result.length === 0 && campaignRound) {
+      console.warn(`[ChallengesReport] No data for round ${campaignRound}, retrying without round filter`)
+      result = await fetchPaginated('form_submissions', sel)
+    }
+    return result
+  }
+
+  const subsDirect = await fetchSubsWithFallback()
+
+  const [shortagesRes, govsRes, districtsRes, usersRes, auditData] = await Promise.allSettled([
     supabase.from('supply_shortages')
       .select('*, governorates(name_ar), districts(name_ar), profiles:reported_by(full_name)')
       .is('deleted_at', null)
@@ -91,7 +103,7 @@ export async function generateChallengesReport(options?: {
     fetchPaginated('audit_logs', '*, profiles(full_name)', (q) => q.in('action', ['create', 'update', 'delete'])),
   ])
 
-  const subs = subsData.status === 'fulfilled' ? (subsData.value as any[]) || [] : []
+  const subs = subsDirect || []
   const shortages = shortagesRes.status === 'fulfilled' ? shortagesRes.value.data || [] : []
   const govs = govsRes.status === 'fulfilled' ? govsRes.value.data || [] : []
   const districts = districtsRes.status === 'fulfilled' ? districtsRes.value.data || [] : []

@@ -100,6 +100,7 @@ export default function ReportsPage() {
     // Health Facility Assessment Report
     if (canExportGovernorate(h.userRole)) {
       cards.push({ icon: Building2, title: 'تقييم المرافق الصحية', subtitle: 'تقرير تقييم جودة أداء المرافق الصحية — الجاهزية، الخطط، التغطية', color: 'text-teal-600', gradient: 'bg-gradient-to-r from-teal-500 to-teal-600', onClick: h.handleExportHealthFacilityAssessment, loading: h.exportingReport === 'health-facility-assessment', badge: 'تقييم', format: 'excel' })
+      cards.push({ icon: Building2, title: '📄 PDF — تقييم المرافق الصحية', subtitle: 'تقرير PDF احترافي — مؤشرات الجاهزية، أداء المحافظات، تحليل المؤشرات', color: 'text-red-600', gradient: 'bg-gradient-to-r from-teal-600 to-emerald-700', onClick: h.handleHealthFacilityAssessmentReport, loading: h.exportingReport === 'health-facility-assessment-pdf', badge: 'PDF', format: 'pdf' })
     }
     if (canExportAll(h.userRole)) {
       cards.push({ icon: ScrollText, title: 'سجل التدقيق', subtitle: 'جميع العمليات: إنشاء، تعديل، حذف، تسجيل دخول — مع IP والمستخدم', color: 'text-slate-600', gradient: 'bg-gradient-to-r from-slate-500 to-slate-600', onClick: h.handleExportAudit, loading: h.exportingReport === 'audit', badge: 'audit', format: 'excel' })

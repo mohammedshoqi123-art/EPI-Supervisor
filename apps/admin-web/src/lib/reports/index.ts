@@ -47,3 +47,4 @@ export { generateCentralSupervisorsEvaluation } from './central-supervisors-eval
 export { generateGeneralSupervisorsEvaluation } from './general-supervisors-evaluation'
 export { generateYesNoAnalysisReport } from './yesno-analysis-report'
 export { generateMapReport } from './map-report'
+export { generateHealthFacilityAssessmentReport } from './health-facility-assessment-report'

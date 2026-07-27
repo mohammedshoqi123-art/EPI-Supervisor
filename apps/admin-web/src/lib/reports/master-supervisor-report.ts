@@ -175,77 +175,89 @@ export async function generateMasterSupervisorReport(options?: {
 
   const evalData = await fetchComprehensiveEvaluationData(options)
 
-  // ═══ FIX: Refresh session + use RPC to bypass RLS ═══
-  // The regular supabase client is subject to RLS which can return empty data.
-  // Solution: use get_reports_data RPC (SECURITY DEFINER) which bypasses RLS.
+  // ═══ FIX: Ensure fresh auth + explicit queries (no reusable functions) ═══
+  const { data: sessionData } = await supabase.auth.getSession()
+  console.log('[MasterReport] Auth user:', sessionData.session?.user?.id || 'NONE')
+  console.log('[MasterReport] Campaign round:', campaignRound)
 
-  // First, ensure session is fresh (expired JWT = empty results)
-  await supabase.auth.getSession()
+  // ─── Section 2: Yes/No data from supervision form ───
+  let yesNoSubsRaw: any[] = []
+  try {
+    // Step 1: Try with round filter
+    const { data: d1, error: e1 } = await supabase
+      .from('form_submissions')
+      .select('id, data, governorate_id, status')
+      .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
+      .eq('status', 'submitted')
+      .is('deleted_at', null)
+      .eq('campaign_round', campaignRound ?? -1)  // -1 will match nothing if no round
+      .order('created_at', { ascending: false })
+      .limit(5000)
+    if (e1) console.error('[MasterReport] Section2 round query error:', e1.message)
+    else yesNoSubsRaw = d1 || []
+    console.log(`[MasterReport] Section2 with round ${campaignRound}: ${yesNoSubsRaw.length} rows`)
 
-  async function fetchSupervisionViaRPC(round: number | null) {
-    try {
-      const { data, error } = await supabase.rpc('get_reports_data', {
-        p_campaign_type: null,
-        p_campaign_round: round,
-      })
-      if (error) { console.error('[MasterReport] RPC error:', error.message); return [] }
-      if (!data) return []
-
-      const parsed = typeof data === 'string' ? JSON.parse(data) : data
-      // The RPC returns yes/no data from the supervision form
-      return parsed.yes_no_submissions || []
-    } catch (e: any) {
-      console.error('[MasterReport] RPC exception:', e.message)
-      return []
+    // Step 2: If empty, retry WITHOUT round filter
+    if (yesNoSubsRaw.length === 0) {
+      const { data: d2, error: e2 } = await supabase
+        .from('form_submissions')
+        .select('id, data, governorate_id, status')
+        .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
+        .eq('status', 'submitted')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(5000)
+      if (e2) console.error('[MasterReport] Section2 no-round error:', e2.message)
+      else yesNoSubsRaw = d2 || []
+      console.log(`[MasterReport] Section2 without round: ${yesNoSubsRaw.length} rows`)
     }
-  }
 
-  // Try direct query first (respects RLS but faster)
-  async function fetchDirect(round: number | null, select: string, extraFilters?: (q: any) => any) {
-    const PAGE = 1000
-    let all: any[] = []
-    let offset = 0
-    while (true) {
-      let q = supabase.from('form_submissions').select(select)
-        .is('deleted_at', null).order('created_at', { ascending: false })
-        .range(offset, offset + PAGE - 1)
-      if (round) q = q.eq('campaign_round', round)
-      if (extraFilters) q = extraFilters(q)
-      const { data, error } = await q
-      if (error) { console.error('[MasterReport] direct query error:', error.message); break }
-      if (!data || data.length === 0) break
-      all.push(...data)
-      if (data.length < PAGE) break
-      offset += PAGE
+    // Step 3: Last resort — try without status filter too
+    if (yesNoSubsRaw.length === 0) {
+      const { data: d3, error: e3 } = await supabase
+        .from('form_submissions')
+        .select('id, data, governorate_id, status')
+        .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(5000)
+      if (e3) console.error('[MasterReport] Section2 minimal error:', e3.message)
+      else yesNoSubsRaw = d3 || []
+      console.log(`[MasterReport] Section2 minimal filter: ${yesNoSubsRaw.length} rows`)
     }
-    return all
+  } catch (err: any) {
+    console.error('[MasterReport] Section2 exception:', err.message)
   }
 
-  // Section 2: yes/no data from supervision form
-  let yesNoSubsRaw = await fetchDirect(campaignRound,
-    'id, data, governorate_id, status',
-    (q: any) => q.eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24').eq('status', 'submitted'))
-  if (yesNoSubsRaw.length === 0 && campaignRound) {
-    console.warn(`[MasterReport] No yes/no data for round ${campaignRound}, retrying without round`)
-    yesNoSubsRaw = await fetchDirect(null,
-      'id, data, governorate_id, status',
-      (q: any) => q.eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24').eq('status', 'submitted'))
-  }
-  // Last resort: try without status filter
-  if (yesNoSubsRaw.length === 0) {
-    console.warn('[MasterReport] No yes/no data at all, trying without status filter')
-    yesNoSubsRaw = await fetchDirect(null,
-      'id, data, governorate_id, status',
-      (q: any) => q.eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24'))
-  }
+  // ─── Section 3: Challenges data (all submissions) ───
+  let challengeSubsRaw: any[] = []
+  try {
+    // Step 1: Try with round filter
+    const { data: c1, error: ce1 } = await supabase
+      .from('form_submissions')
+      .select('id, data, governorate_id, district_id, submitted_by, created_at')
+      .is('deleted_at', null)
+      .eq('campaign_round', campaignRound ?? -1)
+      .order('created_at', { ascending: false })
+      .limit(5000)
+    if (ce1) console.error('[MasterReport] Section3 round error:', ce1.message)
+    else challengeSubsRaw = c1 || []
+    console.log(`[MasterReport] Section3 with round ${campaignRound}: ${challengeSubsRaw.length} rows`)
 
-  // Section 3: challenges data (all submissions)
-  let challengeSubsRaw = await fetchDirect(campaignRound,
-    'id, data, governorate_id, district_id, submitted_by, created_at')
-  if (challengeSubsRaw.length === 0 && campaignRound) {
-    console.warn(`[MasterReport] No challenges data for round ${campaignRound}, retrying without round`)
-    challengeSubsRaw = await fetchDirect(null,
-      'id, data, governorate_id, district_id, submitted_by, created_at')
+    // Step 2: If empty, retry WITHOUT round filter
+    if (challengeSubsRaw.length === 0) {
+      const { data: c2, error: ce2 } = await supabase
+        .from('form_submissions')
+        .select('id, data, governorate_id, district_id, submitted_by, created_at')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(5000)
+      if (ce2) console.error('[MasterReport] Section3 no-round error:', ce2.message)
+      else challengeSubsRaw = c2 || []
+      console.log(`[MasterReport] Section3 without round: ${challengeSubsRaw.length} rows`)
+    }
+  } catch (err: any) {
+    console.error('[MasterReport] Section3 exception:', err.message)
   }
 
   const yesNoResult = { status: 'fulfilled' as const, value: { data: yesNoSubsRaw } }

@@ -136,14 +136,26 @@ export default function MapPage() {
     loadLeaflet().then(() => setLeafletLoaded(true))
   }, [])
 
-  // GPS submissions
+  // GPS submissions — check both dedicated columns AND data.gps_location string
   const gpsSubmissions = useMemo(() => {
     if (!submissions?.data) return []
-    return submissions.data.filter((s: any) =>
-      s.gps_lat && s.gps_lng &&
-      typeof s.gps_lat === 'number' && typeof s.gps_lng === 'number' &&
-      s.gps_lat !== 0 && s.gps_lng !== 0
-    )
+    return submissions.data
+      .map((s: any) => {
+        // If gps_lat/lng columns exist, use them directly
+        if (s.gps_lat && s.gps_lng && typeof s.gps_lat === 'number' && typeof s.gps_lng === 'number' && s.gps_lat !== 0 && s.gps_lng !== 0) {
+          return s
+        }
+        // Otherwise, try to parse from data.gps_location ("15.445637, 45.401030")
+        const gpsStr = s.data?.gps_location
+        if (typeof gpsStr === 'string' && gpsStr.includes(',')) {
+          const parts = gpsStr.split(',').map((p: string) => parseFloat(p.trim()))
+          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[0] !== 0 && parts[1] !== 0) {
+            return { ...s, gps_lat: parts[0], gps_lng: parts[1] }
+          }
+        }
+        return null
+      })
+      .filter(Boolean)
   }, [submissions])
 
   // Supervisors list

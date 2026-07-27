@@ -193,8 +193,10 @@ export async function generateYesNoAnalysisReport(options?: {
   const dayStart = `${dateFrom}T00:00:00`
   const dayEnd = `${dateTo}T23:59:59`
 
-  // ═══ FIX: Direct Supabase query with fallback (bulkFetch silently returns empty) ═══
-  async function fetchSubs(round: number | null) {
+  // ═══ FIX: Refresh session + direct query + multi-level fallback ═══
+  await supabase.auth.getSession()
+
+  async function fetchSubs(round: number | null, includeStatus = true) {
     const PAGE = 1000
     let all: any[] = []
     let offset = 0
@@ -204,11 +206,11 @@ export async function generateYesNoAnalysisReport(options?: {
         .select('id, data, governorate_id, submitted_by, created_at')
         .eq('form_id', '97a4f2b3-c573-4812-b58c-5b0acf814e24')
         .is('deleted_at', null)
-        .eq('status', 'submitted')
         .gte('created_at', dayStart)
         .lte('created_at', dayEnd)
         .order('created_at', { ascending: false })
         .range(offset, offset + PAGE - 1)
+      if (includeStatus) q = q.eq('status', 'submitted')
       if (options?.governorateId && options.governorateId !== 'all') q = q.eq('governorate_id', options.governorateId)
       if (round) q = q.eq('campaign_round', round)
       const { data, error } = await q
@@ -223,8 +225,12 @@ export async function generateYesNoAnalysisReport(options?: {
 
   let subsRaw = await fetchSubs(campaignRound)
   if (subsRaw.length === 0 && campaignRound) {
-    console.warn(`[YesNoReport] No data for round ${campaignRound}, retrying without round filter`)
+    console.warn(`[YesNoReport] No data for round ${campaignRound}, retrying without round`)
     subsRaw = await fetchSubs(null)
+  }
+  if (subsRaw.length === 0) {
+    console.warn('[YesNoReport] No data, retrying without status filter')
+    subsRaw = await fetchSubs(null, false)
   }
   const subsResult = { data: subsRaw }
 

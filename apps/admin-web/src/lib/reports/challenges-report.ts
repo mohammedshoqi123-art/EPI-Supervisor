@@ -72,7 +72,9 @@ export async function generateChallengesReport(options?: {
     return allData
   }
 
-  // ═══ FIX: Fetch submissions with round filter, fallback to no filter if empty ═══
+  // ═══ FIX: Refresh session + fetch with fallback ═══
+  await supabase.auth.getSession()
+
   async function fetchSubsWithFallback() {
     const sel = `
       id, status, data, notes, gps_lat, gps_lng, photos, created_at,

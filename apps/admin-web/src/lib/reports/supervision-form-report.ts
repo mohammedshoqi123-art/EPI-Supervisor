@@ -209,7 +209,9 @@ export async function generateSupervisionFormReport(options?: {
   const now = new Date()
 
   // ── Fetch supervision form submissions (paginated) ──
-  // ═══ FIX: Direct query with fallback for round filter ═══
+  // ═══ FIX: Refresh session + direct query with fallback ═══
+  await supabase.auth.getSession()
+
   async function fetchSubs(round: number | null) {
     const PAGE = 1000
     let all: any[] = []

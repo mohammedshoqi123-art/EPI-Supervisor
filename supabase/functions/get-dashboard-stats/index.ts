@@ -17,9 +17,9 @@ async function checkRateLimit(
       p_window_seconds: DASHBOARD_RATE_WINDOW,
       p_max_requests: DASHBOARD_RATE_LIMIT,
     })
-    if (error) { console.error('Dashboard rate limit RPC error (allowing):', error.message); return true }
-    return data?.[0]?.allowed ?? true
-  } catch (e) { console.error('Dashboard rate limit failed (allowing):', e); return true }
+    if (error) { console.error('Dashboard rate limit RPC error (blocking):', error.message); return false }
+    return data?.[0]?.allowed ?? false
+  } catch (e) { console.error('Dashboard rate limit failed (blocking):', e); return false }
 }
 
 serve(async (req) => {
@@ -34,7 +34,7 @@ serve(async (req) => {
     const auth = await authenticateRequest(supabase, authHeader)
     if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
 
-    // Rate limiting (fail-open)
+    // Rate limiting (fail-closed)
     if (!(await checkRateLimit(supabase, auth.userId))) {
       return jsonResponse({ error: 'Rate limit exceeded' }, 429, origin)
     }

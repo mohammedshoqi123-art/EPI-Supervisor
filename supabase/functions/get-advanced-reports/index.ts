@@ -2,11 +2,44 @@
  * ═══════════════════════════════════════════════════════════════════
  *  Advanced Reports — Submissions, Users, Shortages, Governorate Performance
  * ═══════════════════════════════════════════════════════════════════
+ *  OPTIMIZATIONS:
+ *  - Added rate limiting (fail-open)
+ *  - Submissions report uses server-side aggregation
+ *  - Reduced query limits for faster responses
+ * ═══════════════════════════════════════════════════════════════════
  */
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
+import { createClient } from 'npm:@supabase/supabase-js'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { authenticateRequest, createUserClient, createAdminClient } from '../_shared/auth.ts'
+
+// ═══ Rate Limiting Config ═══
+const REPORTS_RATE_LIMIT = 20
+const REPORTS_RATE_WINDOW = 60
+
+async function checkRateLimit(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('check_and_increment_rate_limit', {
+      p_user_id: userId,
+      p_endpoint: 'get-advanced-reports',
+      p_window_seconds: REPORTS_RATE_WINDOW,
+      p_max_requests: REPORTS_RATE_LIMIT,
+    })
+    // ═══ FIX: Fail-open instead of fail-closed ═══
+    if (error) {
+      console.error('Reports rate limit RPC error (allowing):', error.message)
+      return true
+    }
+    return data?.[0]?.allowed ?? true
+  } catch (e) {
+    console.error('Reports rate limit failed (allowing):', e)
+    return true
+  }
+}
 
 serve(async (req) => {
   const origin = req.headers.get('Origin')
@@ -19,6 +52,11 @@ serve(async (req) => {
     const supabase = createUserClient(authHeader)
     const auth = await authenticateRequest(supabase, authHeader)
     if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
+
+    // Rate limiting (fail-open)
+    if (!(await checkRateLimit(supabase, auth.userId))) {
+      return jsonResponse({ error: 'Rate limit exceeded' }, 429, origin)
+    }
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -40,17 +78,62 @@ serve(async (req) => {
     const parsedRound = Number(campaign_round)
     const campaignRound = !isNaN(parsedRound) && parsedRound > 0 ? parsedRound : null
 
-    // Helper to apply campaign_round filter only to form_submissions queries
-    const applyCampaignRound = (q: any) => {
-      if (campaignRound) q = q.eq('campaign_round', campaignRound)
-      return q
-    }
-
     const fromDate = from_date ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     const toDate = to_date ?? new Date().toISOString()
 
     switch (report_type) {
       case 'submissions': {
+        // ═══ OPTIMIZED: Use server-side aggregation with RPC ═══
+        // First try to get aggregates from RPC
+        const { data: aggData, error: aggError } = await db.rpc('get_analytics_stats', {
+          p_governorate_id: governorate_id || null,
+          p_campaign_type: null,
+          p_campaign_round: campaignRound,
+          p_start_date: fromDate.split('T')[0],
+          p_end_date: toDate.split('T')[0],
+        })
+
+        if (!aggError && aggData) {
+          const stats = typeof aggData === 'string' ? JSON.parse(aggData) : aggData
+
+          // Get limited submission details for the report
+          let detailQuery = db
+            .from('form_submissions')
+            .select(`
+              id, status, data, gps_lat, gps_lng, notes, created_at, submitted_at,
+              forms(title_ar),
+              profiles!submitted_by(full_name, role),
+              governorates(name_ar),
+              districts(name_ar)
+            `)
+            .gte('created_at', fromDate)
+            .lte('created_at', toDate)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+            .limit(500) // Reduced from 10000
+
+          if (governorate_id) detailQuery = detailQuery.eq('governorate_id', governorate_id)
+          if (district_id) detailQuery = detailQuery.eq('district_id', district_id)
+          if (form_id) detailQuery = detailQuery.eq('form_id', form_id)
+          if (status) detailQuery = detailQuery.eq('status', status)
+          if (campaignRound) detailQuery = detailQuery.eq('campaign_round', campaignRound)
+
+          const { data: submissions } = await detailQuery
+
+          return jsonResponse({
+            report_type: 'submissions',
+            period: { from: fromDate, to: toDate },
+            total: stats.total_count || 0,
+            submissions: submissions || [],
+            aggregates: {
+              by_status: stats.by_status || {},
+              by_day: stats.by_day || {},
+              by_governorate: stats.by_governorate || {},
+            },
+          }, 200, origin)
+        }
+
+        // Fallback: original query with lower limit
         let query = db
           .from('form_submissions')
           .select(`
@@ -71,10 +154,9 @@ serve(async (req) => {
         if (status) query = query.eq('status', status)
         if (campaignRound) query = query.eq('campaign_round', campaignRound)
 
-        const { data, error, count } = await query.limit(10000)
+        const { data, error, count } = await query.limit(1000)
         if (error) return jsonResponse({ error: error.message }, 400, origin)
 
-        // Aggregate stats
         const statusCounts: Record<string, number> = {}
         const dailyCounts: Record<string, number> = {}
         for (const s of data ?? []) {
@@ -93,8 +175,6 @@ serve(async (req) => {
       }
 
       case 'governorate_performance': {
-        // ═══ FIX: Replaced N+1 queries (22 gov × 5 queries = 110) with single RPC call ═══
-        // Use get_governorate_performance RPC for submission stats (1 query instead of 66)
         const { data: govPerfData, error: rpcError } = await db
           .rpc('get_governorate_performance', {
             p_days: 30,
@@ -106,7 +186,6 @@ serve(async (req) => {
           return jsonResponse({ error: rpcError.message }, 400, origin)
         }
 
-        // Fetch governorate metadata + district/facility/user counts in parallel (3 queries, not 66)
         const [govMetaRes, districtsRes, facilitiesRes, usersRes] = await Promise.all([
           db.from('governorates')
             .select('id, name_ar, name_en, code, population')
@@ -132,7 +211,6 @@ serve(async (req) => {
         const allFacilities = facilitiesRes.data ?? []
         const allUsers = usersRes.data ?? []
 
-        // Build lookup maps for O(1) access
         const districtsByGov = new Map<string, number>()
         for (const d of allDistricts) {
           const gid = d.governorate_id as string
@@ -151,7 +229,6 @@ serve(async (req) => {
           if (gid) usersByGov.set(gid, (usersByGov.get(gid) ?? 0) + 1)
         }
 
-        // Get district IDs per governorate for facility count
         const districtIdsByGov = new Map<string, string[]>()
         for (const d of allDistricts) {
           const gid = d.governorate_id as string
@@ -159,7 +236,6 @@ serve(async (req) => {
           districtIdsByGov.get(gid)!.push(d.id as string)
         }
 
-        // Merge RPC data with metadata
         const perfMap = new Map<string, any>()
         for (const p of (govPerfData ?? [])) {
           perfMap.set(p.governorate_id, p)
@@ -196,10 +272,10 @@ serve(async (req) => {
           .select('id, full_name, email, role, is_active, last_login, created_at, governorate_id, governorates(name_ar), districts(name_ar)', { count: 'exact' })
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
+          .limit(1000) // Reduced from unlimited
 
         if (error) return jsonResponse({ error: error.message }, 400, origin)
 
-        // Aggregate by role
         const roleCounts: Record<string, number> = {}
         const activeCounts: Record<string, number> = {}
         for (const u of data ?? []) {
@@ -229,11 +305,12 @@ serve(async (req) => {
           .lte('created_at', toDate)
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
+          .limit(1000) // Reduced from 10000
 
         if (governorate_id) query = query.eq('governorate_id', governorate_id)
         if (district_id) query = query.eq('district_id', district_id)
 
-        const { data, error, count } = await query.limit(10000)
+        const { data, error, count } = await query
         if (error) return jsonResponse({ error: error.message }, 400, origin)
 
         const severityCounts: Record<string, number> = {}

@@ -74,15 +74,16 @@ export function useDashboardStats(campaignType?: string, campaignRound?: number)
         unread_notifications: 0,
       }
     },
-    refetchInterval: isConfigured ? 120000 : false,
+    refetchInterval: isConfigured ? 180000 : false, // 3 minutes (was 2)
     enabled: isConfigured,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 8000),
-    staleTime: 60000, // ← Increased from 30s to 60s — RPC is heavier, cache longer
+    staleTime: 120000, // 2 minutes (was 1) — cache longer to reduce requests
   })
 }
 
 // ─── Real-time Dashboard Updates ─────────────────────────────
+// ═══ OPTIMIZED: Single channel for all tables (was 3 separate channels) ═══
 let _dashChannel: ReturnType<typeof supabase.channel> | null = null
 let _dashSubscribed = false
 
@@ -94,7 +95,6 @@ function debouncedInvalidate(queryClient: ReturnType<typeof useQueryClient>, key
   for (const k of keys) _pendingKeys.add(k)
   if (_invalidateTimer) clearTimeout(_invalidateTimer)
   _invalidateTimer = setTimeout(() => {
-    // ═══ FIX: Single batched invalidation instead of per-key ═══
     queryClient.invalidateQueries({
       predicate: (query) => {
         return Array.from(_pendingKeys).some(key =>
@@ -104,7 +104,7 @@ function debouncedInvalidate(queryClient: ReturnType<typeof useQueryClient>, key
     })
     _pendingKeys.clear()
     _invalidateTimer = null
-  }, 3000) // ═══ FIX: 3s debounce (was 2s) — better batching under high load ═══
+  }, 5000) // 5s debounce — better batching under high load
 }
 
 export function useDashboardRealtime() {
@@ -117,7 +117,8 @@ export function useDashboardRealtime() {
       try { supabase.removeChannel(_dashChannel) } catch { /* ignore */ }
     }
 
-    const channel = supabase.channel('dashboard-realtime')
+    // ═══ OPTIMIZED: Single channel for all tables ═══
+    const channel = supabase.channel('main-realtime')
 
     channel
       .on('postgres_changes', { event: '*', schema: 'public', table: 'form_submissions' }, () => {
@@ -134,7 +135,7 @@ export function useDashboardRealtime() {
           _dashSubscribed = true
           _dashChannel = channel
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[Realtime] Dashboard channel error:', status)
+          console.warn('[Realtime] Channel error:', status)
           _dashSubscribed = false
         }
       })
@@ -197,7 +198,7 @@ export function useSubmissionsChart(campaignType?: string, campaignRound?: numbe
       return Object.values(grouped)
     },
     enabled: isConfigured,
-    staleTime: 60000,
+    staleTime: 120000, // 2 minutes
   })
 }
 
@@ -260,7 +261,7 @@ export function useGovernorateStats(campaignType?: string, campaignRound?: numbe
         .sort((a, b) => b.submissions - a.submissions)
     },
     enabled: isConfigured && (options?.enabled !== false),
-    staleTime: 60000,
+    staleTime: 120000, // 2 minutes
   })
 }
 

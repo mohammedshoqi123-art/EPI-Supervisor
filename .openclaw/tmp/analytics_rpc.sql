@@ -1,16 +1,3 @@
--- ═══════════════════════════════════════════════════════════════════
--- Migration 070: Optimized Analytics RPC
--- ═══════════════════════════════════════════════════════════════════
--- Problem: get-analytics Edge Function fires 11 parallel queries → timeout
--- Solution: Single RPC returns all analytics data in one round-trip
--- Impact: Reduces analytics load from 11 HTTP requests to 1
--- ═══════════════════════════════════════════════════════════════════
-
-BEGIN;
-
--- Drop existing function if exists
-DROP FUNCTION IF EXISTS public.get_analytics_stats(UUID, TEXT, INTEGER, DATE, DATE);
-
 CREATE OR REPLACE FUNCTION public.get_analytics_stats(
   p_governorate_id UUID DEFAULT NULL,
   p_campaign_type TEXT DEFAULT NULL,
@@ -22,13 +9,16 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $$
+AS $fn$
 DECLARE
   result JSONB;
   v_today DATE := CURRENT_DATE;
   v_form_ids UUID[];
   v_start DATE := COALESCE(p_start_date, v_today - 30);
-  v_end DATE := COALESCE(p_end_date, v_today);
+  v_end_plus1 DATE := COALESCE(p_end_date, v_today) + 1;
+  v_today_ts TIMESTAMPTZ := v_today::timestamptz;
+  v_start_ts TIMESTAMPTZ := v_start::timestamptz;
+  v_end_ts TIMESTAMPTZ := v_end_plus1::timestamptz;
 BEGIN
   IF p_campaign_type IS NOT NULL AND p_campaign_type != 'all' THEN
     SELECT ARRAY_AGG(id) INTO v_form_ids
@@ -39,7 +29,7 @@ BEGIN
     'today_count', (
       SELECT COUNT(*) FROM form_submissions fs
       WHERE fs.deleted_at IS NULL
-        AND fs.created_at::date = v_today
+        AND fs.created_at >= v_today_ts
         AND (p_governorate_id IS NULL OR fs.governorate_id = p_governorate_id)
         AND (v_form_ids IS NULL OR fs.form_id = ANY(v_form_ids))
         AND (p_campaign_round IS NULL OR fs.campaign_round = p_campaign_round)
@@ -47,8 +37,8 @@ BEGIN
     'total_count', (
       SELECT COUNT(*) FROM form_submissions fs
       WHERE fs.deleted_at IS NULL
-        AND fs.created_at::date >= v_start
-        AND fs.created_at::date <= v_end
+        AND fs.created_at >= v_start_ts
+        AND fs.created_at < v_end_ts
         AND (p_governorate_id IS NULL OR fs.governorate_id = p_governorate_id)
         AND (v_form_ids IS NULL OR fs.form_id = ANY(v_form_ids))
         AND (p_campaign_round IS NULL OR fs.campaign_round = p_campaign_round)
@@ -59,8 +49,8 @@ BEGIN
         SELECT status, COUNT(*) as cnt
         FROM form_submissions fs
         WHERE fs.deleted_at IS NULL
-          AND fs.created_at::date >= v_start
-          AND fs.created_at::date <= v_end
+          AND fs.created_at >= v_start_ts
+          AND fs.created_at < v_end_ts
           AND (p_governorate_id IS NULL OR fs.governorate_id = p_governorate_id)
           AND (v_form_ids IS NULL OR fs.form_id = ANY(v_form_ids))
           AND (p_campaign_round IS NULL OR fs.campaign_round = p_campaign_round)
@@ -74,7 +64,8 @@ BEGIN
         FROM generate_series(v_today - 6, v_today, '1 day'::interval) gs(d)
         LEFT JOIN form_submissions fs
           ON fs.deleted_at IS NULL
-          AND fs.created_at::date = gs.d
+          AND fs.created_at >= gs.d::timestamptz
+          AND fs.created_at < (gs.d + 1)::timestamptz
           AND (p_governorate_id IS NULL OR fs.governorate_id = p_governorate_id)
           AND (v_form_ids IS NULL OR fs.form_id = ANY(v_form_ids))
           AND (p_campaign_round IS NULL OR fs.campaign_round = p_campaign_round)
@@ -90,8 +81,8 @@ BEGIN
         LEFT JOIN form_submissions fs
           ON fs.governorate_id = g.id
           AND fs.deleted_at IS NULL
-          AND fs.created_at::date >= v_start
-          AND fs.created_at::date <= v_end
+          AND fs.created_at >= v_start_ts
+          AND fs.created_at < v_end_ts
           AND (v_form_ids IS NULL OR fs.form_id = ANY(v_form_ids))
           AND (p_campaign_round IS NULL OR fs.campaign_round = p_campaign_round)
         WHERE g.deleted_at IS NULL AND g.is_active = true
@@ -126,22 +117,10 @@ BEGIN
       'campaign_type', p_campaign_type,
       'campaign_round', p_campaign_round,
       'start_date', v_start,
-      'end_date', v_end
+      'end_date', COALESCE(p_end_date, v_today)
     )
   ) INTO result;
 
   RETURN result;
 END;
-$$;
-
--- Grant execute to authenticated users
-GRANT EXECUTE ON FUNCTION public.get_analytics_stats(UUID, TEXT, INTEGER, DATE, DATE) TO authenticated;
-
--- ═══════════════════════════════════════════════════════════════════
--- Performance Index for Analytics Queries
--- ═══════════════════════════════════════════════════════════════════
-CREATE INDEX IF NOT EXISTS idx_submissions_analytics_v2
-ON form_submissions (deleted_at, created_at DESC, governorate_id, form_id, status)
-WHERE deleted_at IS NULL;
-
-COMMIT;
+$fn$;

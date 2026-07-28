@@ -35,7 +35,7 @@ export async function generateGovernorateDetailReport(
   }
 
   const subsQuery = applyDateFilter(
-    applyRoundFilter(supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), profiles:submitted_by(full_name, role), districts(name_ar)').eq('governorate_id', governorateId).is('deleted_at', null), campaignRound)
+    applyRoundFilter(supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, reviewed_by, reviewed_at, review_notes, forms(title_ar, campaign_type), profiles:submitted_by(full_name, role), districts(name_ar)').eq('governorate_id', governorateId).is('deleted_at', null), campaignRound)
   ).order('created_at', { ascending: false })
 
   const shortagesQuery = applyDateFilter(

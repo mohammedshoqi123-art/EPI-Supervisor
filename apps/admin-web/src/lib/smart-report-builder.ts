@@ -103,7 +103,7 @@ async function fetchDailyData() {
   const todayISO = today.toISOString()
 
   const [subs, users, forms, shortages, govStats] = await Promise.allSettled([
-    supabase.from('form_submissions').select('*, forms(title_ar), profiles:submitted_by(full_name), governorates(name_ar)').gte('created_at', todayISO).is('deleted_at', null).order('created_at', { ascending: false }),
+    supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, reviewed_by, reviewed_at, review_notes, forms(title_ar), profiles:submitted_by(full_name), governorates(name_ar)').gte('created_at', todayISO).is('deleted_at', null).order('created_at', { ascending: false }),
     supabase.from('profiles').select('*').is('deleted_at', null),
     supabase.from('forms').select('*').is('deleted_at', null).eq('is_active', true),
     supabase.from('supply_shortages').select('*, governorates(name_ar)').is('deleted_at', null).eq('is_resolved', false),

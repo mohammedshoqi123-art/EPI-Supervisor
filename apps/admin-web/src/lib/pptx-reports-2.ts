@@ -75,7 +75,7 @@ export async function generateWeeklyBulletinPPTX(): Promise<void> {
   const prevWeekStart = new Date(now.getTime() - 14 * 86400000)
 
   const [thisWeekRes, lastWeekRes, usersRes, govsRes, shortagesRes] = await Promise.allSettled([
-    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar)').gte('created_at', weekStart.toISOString()).is('deleted_at', null),
+    supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, reviewed_by, reviewed_at, review_notes, forms(title_ar, campaign_type), governorates(name_ar)').gte('created_at', weekStart.toISOString()).is('deleted_at', null),
     supabase.from('form_submissions').select('id', { count: 'exact', head: true }).gte('created_at', prevWeekStart.toISOString()).lt('created_at', weekStart.toISOString()).is('deleted_at', null),
     supabase.from('profiles').select('*').is('deleted_at', null),
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
@@ -176,7 +176,7 @@ export async function generateCampaignPerformancePPTX(): Promise<void> {
   const now = new Date()
 
   const [subsRes, govsRes, formsRes, shortagesRes] = await Promise.allSettled([
-    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('created_at', { ascending: false }).limit(50000),
+    supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, reviewed_by, reviewed_at, review_notes, forms(title_ar, campaign_type), governorates(name_ar), districts(name_ar)').is('deleted_at', null).order('created_at', { ascending: false }).limit(50000),
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
     supabase.from('forms').select('*').eq('is_active', true).is('deleted_at', null),
     supabase.from('supply_shortages').select('*, governorates(name_ar)').is('deleted_at', null),

@@ -97,9 +97,10 @@ export default function SubmissionsPage() {
   const totalPages = Math.ceil(totalCount / 20)
 
   const exportAll = async () => {
+    // ═══ FIX: Exclude 'data' column (base64 photos ~42KB/row) from export ═══
     let exportQuery = supabase
       .from('form_submissions')
-      .select('*, forms(title_ar), profiles:submitted_by(full_name, email), governorates(name_ar)')
+      .select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, photos, reviewed_by, reviewed_at, review_notes, device_id, app_version, forms(title_ar), profiles:submitted_by(full_name, email), governorates(name_ar)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       // ═══ FIX #25: 2000 (was 10000) — تقليل تجميد UI عند التصدير ═══

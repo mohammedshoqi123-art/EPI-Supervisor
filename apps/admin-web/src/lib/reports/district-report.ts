@@ -26,7 +26,7 @@ export async function generateDistrictReport(
   const campaignRound = options?.campaignRound && options.campaignRound > 0 ? options.campaignRound : null
   const [distRes, subsRes, usersRes] = await Promise.allSettled([
     supabase.from('districts').select('*, governorates(name_ar)').eq('id', districtId).single(),
-    applyRoundFilter(supabase.from('form_submissions').select('*, forms(title_ar), profiles:submitted_by(full_name, role)').eq('district_id', districtId).is('deleted_at', null).order('created_at', { ascending: false }), campaignRound),
+    applyRoundFilter(supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, reviewed_by, reviewed_at, review_notes, forms(title_ar), profiles:submitted_by(full_name, role)').eq('district_id', districtId).is('deleted_at', null).order('created_at', { ascending: false }), campaignRound),
     supabase.from('profiles').select('*').eq('district_id', districtId).is('deleted_at', null),
   ])
 

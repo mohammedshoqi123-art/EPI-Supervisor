@@ -27,7 +27,7 @@ export async function generateDailyActivityReport(options?: { campaignRound?: nu
   const yesterdayStr = new Date(today.getTime() - 86400000).toISOString().split('T')[0]
 
   const [subsRes, usersRes, notifsRes] = await Promise.allSettled([
-    applyRoundFilter(supabase.from('form_submissions').select('*, forms(title_ar), profiles:submitted_by(full_name, role), governorates(name_ar)').gte('created_at', `${todayStr}T00:00:00`).is('deleted_at', null).order('created_at', { ascending: false }), campaignRound),
+    applyRoundFilter(supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, reviewed_by, reviewed_at, review_notes, forms(title_ar), profiles:submitted_by(full_name, role), governorates(name_ar)').gte('created_at', `${todayStr}T00:00:00`).is('deleted_at', null).order('created_at', { ascending: false }), campaignRound),
     supabase.from('profiles').select('*').is('deleted_at', null),
     supabase.from('notifications').select('*').gte('created_at', `${todayStr}T00:00:00`).order('created_at', { ascending: false }),
   ])

@@ -35,7 +35,7 @@ export async function generateFormAnalysisReport(
   }
 
   const subsQuery = applyDateFilter(
-    applyRoundFilter(supabase.from('form_submissions').select('*, profiles:submitted_by(full_name, role), governorates(name_ar), districts(name_ar)').eq('form_id', formId).is('deleted_at', null), campaignRound)
+    applyRoundFilter(supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, reviewed_by, reviewed_at, review_notes, profiles:submitted_by(full_name, role), governorates(name_ar), districts(name_ar)').eq('form_id', formId).is('deleted_at', null), campaignRound)
   ).order('created_at', { ascending: false })
 
   const [formRes, subsRes, govsRes] = await Promise.allSettled([

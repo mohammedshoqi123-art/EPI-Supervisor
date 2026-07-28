@@ -45,12 +45,14 @@ export function useSubmissions(filters?: {
       }
 
       // Standard query for small page sizes
+      // ═══ FIX: Exclude 'data' column (contains base64 photos ~42KB/row avg) ═══
+      // Only fetch data column when viewing individual submission details
       let query = supabase
         .from('form_submissions')
         .select(`
           id, status, form_id, governorate_id, district_id, submitted_by,
           created_at, submitted_at, gps_lat, gps_lng, gps_accuracy,
-          campaign_round, notes, data, photos, reviewed_by, reviewed_at, review_notes,
+          campaign_round, notes, reviewed_by, reviewed_at, review_notes,
           device_id, app_version, is_offline, offline_id, synced_at, updated_at,
           forms(title_ar, campaign_type),
           profiles:submitted_by(full_name, email, role),

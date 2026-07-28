@@ -198,7 +198,7 @@ export async function generateMonthlyPerformancePPTX(): Promise<void> {
   const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
 
   const [subsRes, usersRes, govsRes, shortagesRes, formsRes] = await Promise.allSettled([
-    supabase.from('form_submissions').select('*, forms(title_ar, campaign_type), governorates(name_ar)').gte('created_at', monthStart.toISOString()).is('deleted_at', null),
+    supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, reviewed_by, reviewed_at, review_notes, forms(title_ar, campaign_type), governorates(name_ar)').gte('created_at', monthStart.toISOString()).is('deleted_at', null),
     supabase.from('profiles').select('*').is('deleted_at', null),
     supabase.from('governorates').select('*').eq('is_active', true).is('deleted_at', null),
     supabase.from('supply_shortages').select('*').is('deleted_at', null),

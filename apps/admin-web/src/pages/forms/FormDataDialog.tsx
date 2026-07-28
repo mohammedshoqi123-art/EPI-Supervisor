@@ -53,7 +53,9 @@ export function FormDataDialog({ open, onOpenChange, form }: {
   const handleExport = async () => {
     setExporting(true)
     try {
-      let query = supabase.from('form_submissions').select('*').eq('form_id', form.id).order('created_at', { ascending: false })
+      // ═══ FIX: Exclude 'data' column from export to prevent massive payload ═══
+      // data column contains base64 photos (~42KB/row avg) — export metadata only
+      let query = supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, photos, reviewed_by, reviewed_at, review_notes').eq('form_id', form.id).order('created_at', { ascending: false })
       if (showRoundFilter && campaignRound) query = query.eq('campaign_round', campaignRound)
       const { data: allData } = await query
       if (!allData || allData.length === 0) { toast({ title: 'تنبيه', description: 'لا توجد بيانات للتصدير' }); return }

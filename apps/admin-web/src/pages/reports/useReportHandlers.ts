@@ -57,6 +57,7 @@ import {
   generateMapReport,
   generateHealthFacilityAssessmentReport,
   generateGeneralSupervisorsEvaluation,
+  generateFieldAnalysisReport,
   enableCaptureMode,
   disableCaptureMode,
 } from '@/lib/professional-reports'
@@ -496,6 +497,7 @@ export function useReportHandlers() {
   const handleYesNoAnalysis = () => exportReport('yesno-analysis', () => captureAndPreview('تحليل حقول نعم/لا', 'استمارة الاشراف — تحليل شامل', () => generateYesNoAnalysisReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
   const handleMapReport = () => { generateMapReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound }) }
   const handleHealthFacilityAssessmentReport = () => exportReport('health-facility-assessment-pdf', () => captureAndPreview('تقرير تقييم المرافق الصحية', 'تقييم جودة أداء المرافق الصحية — الجاهزية، الخطط، التغطية', () => generateHealthFacilityAssessmentReport({ governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+  const handleFieldAnalysisReport = () => exportReport('field-analysis-report', () => captureAndPreview('تحليل المتابعة الميدانية', 'تحليل حقول نعم/لا + تحديات الإشراف الميداني + توصيات ذكية', () => generateFieldAnalysisReport({ governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
 
   // ═══ Charts data ═══
   const govChartData = useMemo(() => {
@@ -551,6 +553,7 @@ export function useReportHandlers() {
     handleYesNoAnalysis,
     handleMapReport,
     handleHealthFacilityAssessmentReport,
+    handleFieldAnalysisReport,
     handleExportHealthFacilityAssessment,
     // Charts
     govChartData, statusPieData,

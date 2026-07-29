@@ -36,6 +36,7 @@ const MemosPage = lazy(() => import('@/pages/MemosPage'))
 const FeedbackPage = lazy(() => import('@/pages/FeedbackPage'))
 const BotKnowledgePage = lazy(() => import('@/pages/BotKnowledgePage'))
 const CampaignRoundsPage = lazy(() => import('@/pages/CampaignRoundsPage'))
+const FieldAnalysisPage = lazy(() => import('@/pages/FieldAnalysisPage'))
 
 // ═══ Page Loader ═══
 function PageLoader() {
@@ -153,6 +154,7 @@ export default function App() {
               <Route path="shortages" element={<LazyPage name="النواقص"><ShortagesPage /></LazyPage>} />
               <Route path="insights" element={<LazyPage name="التحليلات"><AIInsightsPage /></LazyPage>} />
               <Route path="reports" element={<LazyPage name="التقارير"><ReportsPage /></LazyPage>} />
+              <Route path="field-analysis" element={<LazyPage name="تحليل المتابعة"><FieldAnalysisPage /></LazyPage>} />
               <Route path="scheduled-reports" element={<LazyPage name="التقارير المجدولة"><ScheduledReportsPage /></LazyPage>} />
             </Route>
           </Route>

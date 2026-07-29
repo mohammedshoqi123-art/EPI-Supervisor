@@ -77,6 +77,7 @@ const navSections: NavSection[] = [
     items: [
       { icon: BarChart3, label: 'التحليلات', href: '/insights', roles: ['admin', 'central', 'governorate', 'district'] },
       { icon: FileSpreadsheet, label: 'التقارير والبيانات', href: '/reports', roles: ['admin', 'central', 'governorate', 'district'] },
+      { icon: Target, label: 'تحليل المتابعة الميدانية', href: '/field-analysis', roles: ['admin', 'central', 'governorate', 'district'] },
       { icon: Calendar, label: 'التقارير المجدولة', href: '/scheduled-reports', roles: ['admin', 'central', 'governorate', 'district'] },
     ],
   },

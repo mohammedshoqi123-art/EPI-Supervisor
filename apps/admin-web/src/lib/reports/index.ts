@@ -48,3 +48,4 @@ export { generateGeneralSupervisorsEvaluation } from './general-supervisors-eval
 export { generateYesNoAnalysisReport } from './yesno-analysis-report'
 export { generateMapReport } from './map-report'
 export { generateHealthFacilityAssessmentReport } from './health-facility-assessment-report'
+export { generateFieldAnalysisReport } from './field-analysis-report'

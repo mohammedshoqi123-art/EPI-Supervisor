@@ -43,7 +43,7 @@ export async function generateDistrictReport(
   // Form breakdown
   const formBreakdown: Record<string, { name: string; total: number; submitted: number }> = {}
   subs.forEach(s => {
-    const fname = s.forms?.title_ar || 'غير معروف'
+    const f = s.forms as any; const fname = (Array.isArray(f) ? f[0]?.title_ar : f?.title_ar) || 'غير معروف'
     if (!formBreakdown[s.form_id]) formBreakdown[s.form_id] = { name: fname, total: 0, submitted: 0 }
     formBreakdown[s.form_id].total++
     if (s.status === 'submitted') formBreakdown[s.form_id].submitted++
@@ -96,8 +96,8 @@ export async function generateDistrictReport(
         ['#', 'النموذج', 'المُرسل', 'الحالة', 'التاريخ'],
         subs.slice(0, 15).map((s, i) => [
           `${i+1}`,
-          escapeHtml(s.forms?.title_ar || '—'),
-          escapeHtml(s.profiles?.full_name || '—'),
+          escapeHtml((Array.isArray(s.forms) ? s.forms[0]?.title_ar : s.forms?.title_ar) || '—'),
+          escapeHtml((Array.isArray(s.profiles) ? s.profiles[0]?.full_name : s.profiles?.full_name) || '—'),
           `<span class="status-badge ${s.status === 'submitted' ? 'status-ready' : 'status-partial'}">${s.status === 'submitted' ? 'مرسلة' : 'مسودة'}</span>`,
           new Date(s.created_at).toLocaleDateString('ar-SA'),
         ])

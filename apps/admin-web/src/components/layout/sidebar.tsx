@@ -8,7 +8,8 @@ import {
   AlertTriangle, Bell, Moon, Sun, Menu, X, Sparkles, Layout, Clock,
   Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
   FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare,
-  FileSpreadsheet, Calendar, RotateCw, ScrollText as ScrollTextIcon, MessageCircle
+  FileSpreadsheet, Calendar, RotateCw, ScrollText as ScrollTextIcon, MessageCircle,
+  Target
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'

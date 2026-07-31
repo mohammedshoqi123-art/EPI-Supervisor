@@ -96,9 +96,9 @@ export async function generateDailyActivityReport(options?: { campaignRound?: nu
           todaySubs.slice(0, 30).map((s, i) => [
             `${i+1}`,
             new Date(s.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
-            escapeHtml(s.forms?.title_ar || '—'),
-            escapeHtml(s.profiles?.full_name || '—'),
-            escapeHtml(s.governorates?.name_ar || '—'),
+            escapeHtml((Array.isArray(s.forms) ? s.forms[0]?.title_ar : s.forms?.title_ar) || '—'),
+            escapeHtml((Array.isArray(s.profiles) ? s.profiles[0]?.full_name : s.profiles?.full_name) || '—'),
+            escapeHtml((Array.isArray(s.governorates) ? s.governorates[0]?.name_ar : s.governorates?.name_ar) || '—'),
             `<span class="status-badge ${s.status === 'submitted' ? 'status-ready' : 'status-partial'}">${s.status === 'submitted' ? 'مرسلة' : 'مسودة'}</span>`,
           ])
         )}

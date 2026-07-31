@@ -130,10 +130,10 @@ export default function SubmissionsPage() {
     const headers = ['الرقم', 'النموذج', 'المحافظة', 'المُرسل', 'البريد', 'الحالة', 'التاريخ']
     const rows = allData.map((s, i) => ({
       'الرقم': i + 1,
-      'النموذج': (Array.isArray(s.forms) ? s.forms[0]?.title_ar : s.forms?.title_ar) || '',
-      'المحافظة': (Array.isArray(s.governorates) ? s.governorates[0]?.name_ar : s.governorates?.name_ar) || '',
-      'المُرسل': (Array.isArray(s.profiles) ? s.profiles[0]?.full_name : s.profiles?.full_name) || '',
-      'البريد': (Array.isArray(s.profiles) ? s.profiles[0]?.email : s.profiles?.email) || '',
+      'النموذج': ((s.forms as any)?.title_ar) || '',
+      'المحافظة': ((s.governorates as any)?.name_ar) || '',
+      'المُرسل': ((s.profiles as any)?.full_name) || '',
+      'البريد': ((s.profiles as any)?.email) || '',
       'الحالة': s.status === 'submitted' ? 'مرسلة' : 'مسودة',
       'التاريخ': s.created_at,
     }))

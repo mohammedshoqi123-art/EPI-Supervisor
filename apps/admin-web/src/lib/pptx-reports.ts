@@ -231,8 +231,8 @@ export async function generateMonthlyPerformancePPTX(): Promise<void> {
   }).sort((a, b) => b.total - a.total)
 
   // Campaign breakdown
-  const polioSubs = subs.filter(s => { const f = s.forms as any; return (Array.isArray(f) ? f[0]?.campaign_type : f?.campaign_type) === 'polio_campaign' })
-  const epiSubs = subs.filter(s => { const f = s.forms as any; return (Array.isArray(f) ? f[0]?.campaign_type : f?.campaign_type) !== 'polio_campaign' })
+  const polioSubs = subs.filter(s => { const f = s.forms as any; return ((f as any)?.campaign_type) === 'polio_campaign' })
+  const epiSubs = subs.filter(s => { const f = s.forms as any; return ((f as any)?.campaign_type) !== 'polio_campaign' })
 
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_WIDE'

@@ -96,8 +96,8 @@ export async function generateDistrictReport(
         ['#', 'النموذج', 'المُرسل', 'الحالة', 'التاريخ'],
         subs.slice(0, 15).map((s, i) => [
           `${i+1}`,
-          escapeHtml((Array.isArray(s.forms) ? s.forms[0]?.title_ar : s.forms?.title_ar) || '—'),
-          escapeHtml((Array.isArray(s.profiles) ? s.profiles[0]?.full_name : s.profiles?.full_name) || '—'),
+          escapeHtml(((s.forms as any)?.title_ar) || '—'),
+          escapeHtml(((s.profiles as any)?.full_name) || '—'),
           `<span class="status-badge ${s.status === 'submitted' ? 'status-ready' : 'status-partial'}">${s.status === 'submitted' ? 'مرسلة' : 'مسودة'}</span>`,
           new Date(s.created_at).toLocaleDateString('ar-SA'),
         ])

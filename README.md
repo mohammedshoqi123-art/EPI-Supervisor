@@ -10,7 +10,7 @@
 ![Flutter](https://img.shields.io/badge/Flutter-3.27-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Backend-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)
 ![Version](https://img.shields.io/badge/Version-3.16.0-brightgreen?style=for-the-badge)
-![License](https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 [📖 دليل المطور](DEVELOPER_GUIDE.md) · [📱 تحميل APK](https://github.com/mohammedshoqi123-art/EPI-Supervisor/releases) · [🐛 الإبلاغ عن مشكلة](https://github.com/mohammedshoqi123-art/EPI-Supervisor/issues)
 

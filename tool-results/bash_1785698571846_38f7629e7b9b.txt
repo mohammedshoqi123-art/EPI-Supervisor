@@ -1,0 +1,401 @@
+
+    const todayCount = todaySubs?.count || 0
+    const pendingCount = pendingSubs?.count || 0
+    const criticalCount = criticalShortages?.count || 0
+    const userCount = activeUsers?.count || 0
+
+    const activeGovs = new Set(recentSubs?.map((r: any) => r.governorate_id).filter(Boolean))
+    const { data: allGovs } = await supa.from('governorates').select('id').eq('is_active', true)
+    const totalGovs = allGovs?.length || 15
+    const govActivityRate = Math.round((activeGovs.size / totalGovs) * 100)
+
+    let score = 100
+    let status = '🟢 ممتاز'
+    const issues: string[] = []
+
+    if (todayCount === 0) { score -= 30; issues.push('لا إرساليات اليوم') }
+    else if (todayCount < 10) { score -= 15; issues.push(`إرسالات قليلة: ${todayCount}`) }
+    if (pendingCount > 50) { score -= 20; issues.push(`${pendingCount} بانتظار المراجعة`) }
+    else if (pendingCount > 20) { score -= 10 }
+    if (criticalCount > 0) { score -= 25; issues.push(`${criticalCount} نقص حرج`) }
+    if (govActivityRate < 50) { score -= 15; issues.push(`${govActivityRate}% نشاط المحافظات`) }
+
+    if (score < 60) status = '🔴 يحتاج تدخل'
+    else if (score < 80) status = '🟡 مقبول'
+    else if (score < 90) status = '🟢 جيد'
+
+    return { score: Math.max(0, score), status, today_submissions: todayCount, pending_review: pendingCount, critical_shortages: criticalCount, active_users: userCount, governorate_activity: govActivityRate + '%', active_governorates: activeGovs.size, total_governorates: totalGovs, issues: issues.length > 0 ? issues : ['كل شي تمام ✅'] }
+  } catch { return { score: 0, status: '❌ خطأ في الحساب' } }
+}
+
+// ═══════════════════════════════════════════════════════════
+// TOOLS DEFINITION
+// ═══════════════════════════════════════════════════════════
+
+const TOOLS = [
+  { type: 'function', function: { name: 'get_submissions', description: 'جلب إحصائيات الإرساليات — يمكن فلترة حسب الحالة أو المحافظة أو الفترة أو الحملة. campaign_type: polio_campaign أو integrated_activity أو all', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['draft', 'submitted', 'approved', 'rejected'] }, governorate_name: { type: 'string' }, days: { type: 'number' }, campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] } }, required: [] } } },
+  { type: 'function', function: { name: 'get_shortages', description: 'جلب إحصائيات النواقص الميدانية', parameters: { type: 'object', properties: { severity: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] }, governorate_name: { type: 'string' }, resolved: { type: 'boolean' }, campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] } }, required: [] } } },
+  { type: 'function', function: { name: 'get_analytics', description: 'جلب إحصائيات لوحة التحكم', parameters: { type: 'object', properties: {}, required: [] } } },
+  { type: 'function', function: { name: 'get_governorate_performance', description: 'ترتيب المحافظات حسب الإرساليات ونسبة الاعتماد', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] } }, required: [] } } },
+  { type: 'function', function: { name: 'get_users_summary', description: 'ملخص المستخدمين حسب الدور', parameters: { type: 'object', properties: {}, required: [] } } },
+  { type: 'function', function: { name: 'get_submission_trend', description: 'اتجاه الإرساليات آخر 30 يوم', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] } }, required: [] } } },
+  { type: 'function', function: { name: 'get_submission_details', description: 'تفاصيل إرسالية واحدة بما فيها محتوى الحقول', parameters: { type: 'object', properties: { submission_id: { type: 'string' }, limit: { type: 'number' }, governorate_name: { type: 'string' }, campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, status: { type: 'string', enum: ['draft', 'submitted', 'approved', 'rejected'] } }, required: [] } } },
+  { type: 'function', function: { name: 'get_form_schemas', description: 'تعريفات النماذج (أسماء الحقول، الأنواع)', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] } }, required: [] } } },
+  { type: 'function', function: { name: 'aggregate_form_data', description: 'تجميع أرقام من حقول النماذج (مجموع، متوسط، عدد)', parameters: { type: 'object', properties: { form_id: { type: 'string' }, field_key: { type: 'string' }, aggregation: { type: 'string', enum: ['sum', 'avg', 'count', 'min', 'max'] }, days: { type: 'number' } }, required: ['form_id', 'field_key', 'aggregation'] } } },
+  { type: 'function', function: { name: 'get_form_field_values', description: 'القيم الفعلية لحقل محدد مع تكرارها', parameters: { type: 'object', properties: { form_id: { type: 'string' }, field_key: { type: 'string' }, days: { type: 'number' }, limit: { type: 'number' } }, required: ['form_id', 'field_key'] } } },
+  { type: 'function', function: { name: 'search_submissions', description: 'البحث في الإرساليات حسب محتوى الحقول', parameters: { type: 'object', properties: { form_id: { type: 'string' }, field_key: { type: 'string' }, field_value: { type: 'string' }, days: { type: 'number' }, limit: { type: 'number' } }, required: ['field_key', 'field_value'] } } },
+  { type: 'function', function: { name: 'compare_periods', description: 'مقارنة أداء فترتين', parameters: { type: 'object', properties: { current_days: { type: 'number' }, previous_days: { type: 'number' }, campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] } }, required: ['current_days'] } } },
+  { type: 'function', function: { name: 'get_user_activity', description: 'نشاط المستخدمين — مَن أكثرهم إرسالاً', parameters: { type: 'object', properties: { days: { type: 'number' }, limit: { type: 'number' } }, required: [] } } },
+  { type: 'function', function: { name: 'get_critical_alerts', description: 'التنبيهات الحرجة — نواقص، إرساليات متأخرة', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] } }, required: [] } } },
+  { type: 'function', function: { name: 'export_report', description: 'إنشاء تقرير مفصل', parameters: { type: 'object', properties: { report_type: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'governorate', 'campaign', 'custom'] }, campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, governorate_name: { type: 'string' }, days: { type: 'number' } }, required: ['report_type'] } } },
+  { type: 'function', function: { name: 'get_data_quality', description: 'تحليل جودة البيانات — نسبة الاكتمال والرفض', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, governorate_name: { type: 'string' } }, required: [] } } },
+  { type: 'function', function: { name: 'compare_governorates', description: 'مقارنة تفصيلية بين محافظات', parameters: { type: 'object', properties: { governorate_names: { type: 'array', items: { type: 'string' } }, campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, days: { type: 'number' } }, required: ['governorate_names'] } } },
+  { type: 'function', function: { name: 'get_weak_governorates', description: 'أضعف المحافظات أداءً', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, threshold: { type: 'number' } }, required: [] } } },
+  // Write tools
+  { type: 'function', function: { name: 'update_submission_status', description: 'تغيير حالة إرسالية. ⚠️ تحتاج تأكيد.', parameters: { type: 'object', properties: { submission_id: { type: 'string' }, status: { type: 'string', enum: ['draft', 'submitted', 'approved', 'rejected'] }, notes: { type: 'string' }, batch_governorate: { type: 'string' }, batch_current_status: { type: 'string', enum: ['draft', 'submitted', 'approved', 'rejected'] } }, required: ['status'] } } },
+  { type: 'function', function: { name: 'create_notification', description: 'إرسال إشعار. ⚠️ تحتاج تأكيد.', parameters: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' }, target_role: { type: 'string', enum: ['admin', 'central', 'governorate', 'district', 'data_entry', 'all'] }, target_governorate: { type: 'string' }, priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] } }, required: ['title', 'body'] } } },
+  { type: 'function', function: { name: 'execute_sql', description: 'استعلام SQL للقراءة فقط. ⚠️ تحتاج تأكيد.', parameters: { type: 'object', properties: { query: { type: 'string' }, description: { type: 'string' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'generate_chart', description: 'توليد بيانات رسم بياني', parameters: { type: 'object', properties: { chart_type: { type: 'string', enum: ['bar', 'pie', 'line', 'progress'] }, title: { type: 'string' }, data_source: { type: 'string', enum: ['governorates', 'submissions_by_day', 'users_by_role', 'shortages_by_severity', 'forms_by_campaign'] }, campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, days: { type: 'number' }, limit: { type: 'number' } }, required: ['chart_type', 'data_source'] } } },
+  { type: 'function', function: { name: 'bulk_export', description: 'تصدير بيانات. ⚠️ تحتاج تأكيد.', parameters: { type: 'object', properties: { data_type: { type: 'string', enum: ['submissions', 'users', 'shortages', 'governorates', 'forms'] }, format: { type: 'string', enum: ['json', 'csv'] }, campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, governorate_name: { type: 'string' }, days: { type: 'number' }, limit: { type: 'number' } }, required: ['data_type'] } } },
+  { type: 'function', function: { name: 'create_scheduled_report', description: 'إنشاء تقرير مجدول. ⚠️ تحتاج تأكيد.', parameters: { type: 'object', properties: { name: { type: 'string' }, report_type: { type: 'string', enum: ['daily', 'weekly', 'monthly'] }, schedule: { type: 'string' }, recipients: { type: 'string' }, campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] } }, required: ['name', 'report_type'] } } },
+  { type: 'function', function: { name: 'workflow_chain', description: 'سلسلة عمليات. ⚠️ تحتاج تأكيد.', parameters: { type: 'object', properties: { steps: { type: 'array', items: { type: 'object', properties: { action: { type: 'string' }, params: { type: 'object' } } } }, description: { type: 'string' } }, required: ['steps'] } } },
+  // System tools
+  { type: 'function', function: { name: 'get_system_health', description: 'نقاط صحة النظام (0-100)', parameters: { type: 'object', properties: {}, required: [] } } },
+  { type: 'function', function: { name: 'get_ai_usage', description: 'إحصائيات AI (Admin only)', parameters: { type: 'object', properties: {}, required: [] } } },
+  // ═══ AI Predictive Tools (NEW — advanced analytics) ═══
+  { type: 'function', function: { name: 'forecast_completion', description: 'تنبؤ ذكي بتاريخ اكتمال الجولة الحالية بناءً على معدل الإرساليات الحالي. يحلل الاتجاه ويعطي تاريخاً متوقعاً + نسبة احتمال.', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, target_submissions: { type: 'number', description: 'العدد المستهدف للإرساليات (افتراضي: يحسب من البيانات)' } }, required: [] } } },
+  { type: 'function', function: { name: 'get_smart_alerts', description: 'تنبيهات ذكية استباقية — يحلل الأنماط ويكشف المشاكل قبل تفاقمها: انخفاض الأداء، مشرفين خاملين، أنماط شاذة، نواقص حرجة متوقعة', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, sensitivity: { type: 'string', enum: ['high', 'medium', 'low'], description: 'حساسية الكشف (high = تنبيهات أكثر)' } }, required: [] } } },
+  { type: 'function', function: { name: 'get_recommendations', description: 'توصيات ذكية مبنية على البيانات — يقترح إجراءات تحسينية بناءً على تحليل الأنماط والمقارنات', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, focus: { type: 'string', enum: ['coverage', 'quality', 'speed', 'all'], description: 'مجال التركيز: التغطية، الجودة، السرعة' } }, required: [] } } },
+  { type: 'function', function: { name: 'detect_anomalies', description: 'كشف الأنماط الشاذة في البيانات — إرساليات مكررة، قيم غير منطقية، نشاط مشبوه، اختلافات كبيرة بين المحافظات', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, days: { type: 'number', description: 'عدد الأيام للتحليل (افتراضي 30)' } }, required: [] } } },
+  { type: 'function', function: { name: 'compare_rounds', description: 'مقارنة ذكية بين جولتين — يحلل الفروقات في الأداء، التغطية، السرعة، ويحدد أسباب التحسن/التراجع', parameters: { type: 'object', properties: { round1: { type: 'number', description: 'رقم الجولة الأولى' }, round2: { type: 'number', description: 'رقم الجولة الثانية' } }, required: ['round1', 'round2'] } } },
+  { type: 'function', function: { name: 'get_supervisor_insights', description: 'رؤى ذكية عن أداء المشرفين — يحدد الأكثر إنتاجية، الأقل نشاطاً، ويقترح تدخلات', parameters: { type: 'object', properties: { days: { type: 'number', description: 'عدد الأيام للتحليل' }, limit: { type: 'number', description: 'عدد المشرفين' } }, required: [] } } },
+]
+
+// ═══════════════════════════════════════════════════════════
+// TOOL EXECUTION
+// ═══════════════════════════════════════════════════════════
+
+async function executeFunction(supa: any, name: string, args: Record<string, any>, context?: { campaignRound?: number | null }): Promise<any> {
+  // Confirmation gate
+  const confirmationRequired = requireConfirmation(name, args)
+  if (confirmationRequired) return confirmationRequired
+
+  try {
+    switch (name) {
+      case 'get_submissions': {
+        const formIds = await getCampaignFormIds(supa, args.campaign_type || 'all')
+        let q = supa.from('form_submissions').select('status, governorate_id, created_at, form_id, campaign_round').is('deleted_at', null)
+        if (args.status) q = q.eq('status', args.status)
+        if (args.days) q = q.gte('created_at', daysAgo(args.days))
+        q = applyCampaignFilter(q, formIds, context?.campaignRound)
+        const { data } = await withTimeout(q.limit(10000), 10_000) ?? {}
+        if (!data) return { error: 'لا توجد بيانات' }
+        const byStatus: Record<string, number> = {}
+        data.forEach((r: any) => { byStatus[r.status] = (byStatus[r.status] ?? 0) + 1 })
+        return { total: data.length, byStatus, campaign: CAMPAIGN_LABELS[args.campaign_type || 'all'] || 'كل الحملات', period_days: args.days || 'كل الفترات' }
+      }
+
+      case 'get_analytics': {
+        let subQuery = supa.from('form_submissions').select('id', { count: 'exact' }).is('deleted_at', null)
+        if (context?.campaignRound && context.campaignRound > 0) subQuery = subQuery.eq('campaign_round', context.campaignRound)
+        const [s, sh, u] = await Promise.all([
+          withTimeout(subQuery, 8_000),
+          withTimeout(supa.from('supply_shortages').select('id', { count: 'exact' }).is('deleted_at', null).eq('is_resolved', false), 8_000),
+          withTimeout(supa.from('profiles').select('id', { count: 'exact' }).eq('is_active', true), 8_000),
+        ])
+        return { total_submissions: s?.count || 0, active_shortages: sh?.count || 0, active_users: u?.count || 0, campaign_round: context?.campaignRound || 'all' }
+      }
+
+      case 'get_system_health': return await getSystemHealthScore(supa)
+
+      case 'get_ai_usage': {
+        const weekAgo = daysAgo(7)
+        const [usage, feedback, writes] = await Promise.all([
+          withTimeout(supa.from('ai_model_usage').select('tokens_used, success, response_source').gte('created_at', weekAgo).limit(2000), 8_000),
+          withTimeout(supa.from('ai_feedback').select('rating, metadata').gte('created_at', weekAgo).limit(100), 5_000),
+          withTimeout(supa.from('ai_write_audit').select('tool_name, confirmed_by_user, affected_count').gte('created_at', weekAgo).limit(50), 5_000),
+        ])
+        const uData = usage?.data || []
+        const fData = feedback?.data || []
+        const wData = writes?.data || []
+        const up = fData.filter((f: any) => f.rating === 'up').length
+        const down = fData.filter((f: any) => f.rating === 'down').length
+        return {
+          period: 'آخر 7 أيام',
+          requests: { total: uData.length, successful: uData.filter((u: any) => u.success).length },
+          tokens: { total: uData.reduce((s: number, u: any) => s + (u.tokens_used || 0), 0) },
+          feedback: { up, down, satisfaction: (up + down) > 0 ? Math.round(up / (up + down) * 100) + '%' : 'N/A' },
+          writes: { total: wData.length, confirmed: wData.filter((w: any) => w.confirmed_by_user).length },
+        }
+      }
+
+      case 'update_submission_status': {
+        const { submission_id, status, notes, batch_governorate, batch_current_status } = args
+        if (!status) return { error: 'الحالة مطلوبة' }
+        if (batch_governorate) {
+          const { data: gov } = await supa.from('governorates').select('id').ilike('name_ar', `%${batch_governorate}%`).limit(1)
+          if (!gov?.[0]) return { error: `المحافظة "${batch_governorate}" غير موجودة` }
+          let q = supa.from('form_submissions').update({ status, notes: notes || null, updated_at: new Date().toISOString() }).eq('governorate_id', gov[0].id).is('deleted_at', null)
+          if (batch_current_status) q = q.eq('status', batch_current_status)
+          const { count } = await withTimeout(q.select('id', { count: 'exact', head: true }), 15_000) ?? {}
+          return { success: true, action: 'batch_update', governorate: batch_governorate, new_status: status, updated_count: count || 0, message: `✅ تم تحديث ${count || 0} إرسالية في ${batch_governorate} إلى "${STATUS_LABELS[status] || status}"` }
+        }
+        if (!submission_id) return { error: 'submission_id مطلوب' }
+        const { data: sub, error: err } = await withTimeout(supa.from('form_submissions').update({ status, notes: notes || null, updated_at: new Date().toISOString() }).eq('id', submission_id).select('id, status').single(), 10_000)
+        if (err) return { error: `فشل التحديث: ${err.message}` }
+        return { success: true, submission_id, new_status: status, message: `✅ تم تحديث الإرسالية إلى "${STATUS_LABELS[status] || status}"` }
+      }
+
+      case 'create_notification': {
+        const { title, body, target_role, target_governorate, priority } = args
+        if (!title || !body) return { error: 'العنوان والنص مطلوبان' }
+        let uq = supa.from('profiles').select('id').eq('is_active', true).is('deleted_at', null)
+        if (target_role && target_role !== 'all') uq = uq.eq('role', target_role)
+        if (target_governorate) {
+          const { data: gov } = await supa.from('governorates').select('id').ilike('name_ar', `%${target_governorate}%`).limit(1)
+          if (gov?.[0]) uq = uq.eq('governorate_id', gov[0].id)
+        }
+        const { data: users } = await withTimeout(uq.limit(5000), 10_000) ?? {}
+        if (!users?.length) return { error: 'لا يوجد مستلمين' }
+        const notifications = users.map((u: any) => ({ user_id: u.id, title, body, priority: priority || 'normal', is_read: false, created_at: new Date().toISOString() }))
+        const { error: err } = await withTimeout(supa.from('notifications').insert(notifications), 15_000)
+        if (err) return { error: `فشل: ${err.message}` }
+        return { success: true, sent_to: users.length, message: `✅ تم إرسال "${title}" إلى ${users.length} مستخدم` }
+      }
+
+      case 'execute_sql': {
+        const { query } = args
+        if (!query) return { error: 'الاستعلام مطلوب' }
+        const normalized = query.trim().toUpperCase()
+        if (!normalized.startsWith('SELECT')) return { error: '❌ مسموح فقط باستعلامات SELECT' }
+        const forbidden = ['DELETE', 'UPDATE', 'INSERT', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT', 'REVOKE']
+        for (const kw of forbidden) { if (normalized.includes(kw)) return { error: `❌ ممنوع ${kw}` } }
+        const { data, error: err } = await withTimeout(supa.rpc('exec_sql', { sql_query: query }).limit(100), 15_000)
+        if (err) return { error: `خطأ SQL: ${err.message}` }
+        return { success: true, rows: Array.isArray(data) ? data.slice(0, 100) : data, row_count: Array.isArray(data) ? data.length : 1 }
+      }
+
+      case 'generate_chart': {
+        const { chart_type, data_source, campaign_type, days, limit } = args
+        const formIds = await getCampaignFormIds(supa, campaign_type || 'all')
+        const since = daysAgo(days || 30)
+        let chartData: any[] = []
+
+        if (data_source === 'governorates') {
+          let q = supa.from('form_submissions').select('governorate_id').is('deleted_at', null).gte('created_at', since).limit(10000)
+          q = applyCampaignFilter(q, formIds, context?.campaignRound)
+          const { data: subs } = await withTimeout(q, 10_000) ?? {}
+          const { data: govs } = await withTimeout(supa.from('governorates').select('id, name_ar').eq('is_active', true), 5_000) ?? {}
+          const govMap: Record<string, string> = {}
+          govs?.forEach((g: any) => { govMap[g.id] = g.name_ar })
+          const counts: Record<string, number> = {}
+          subs?.forEach((s: any) => { if (s.governorate_id) counts[s.governorate_id] = (counts[s.governorate_id] || 0) + 1 })
+          chartData = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, limit || 10).map(([id, val]) => ({ label: govMap[id] || id.slice(0, 8), value: val }))
+        } else if (data_source === 'submissions_by_day') {
+          let q = supa.from('form_submissions').select('created_at').is('deleted_at', null).gte('created_at', since).limit(10000)
+          q = applyCampaignFilter(q, formIds, context?.campaignRound)
+          const { data: subs } = await withTimeout(q, 10_000) ?? {}
+          const dayCounts: Record<string, number> = {}
+          subs?.forEach((s: any) => { const d = s.created_at?.split('T')[0]; if (d) dayCounts[d] = (dayCounts[d] || 0) + 1 })
+          chartData = Object.entries(dayCounts).sort(([a], [b]) => a.localeCompare(b)).slice(-(limit || 10)).map(([day, val]) => ({ label: day, value: val }))
+        } else if (data_source === 'users_by_role') {
+          // ⚠️ NEW: Users by role chart
+          const { data: users } = await withTimeout(supa.from('profiles').select('role').eq('is_active', true).is('deleted_at', null), 5_000) ?? {}
+          const roleCounts: Record<string, number> = {}
+          users?.forEach((u: any) => { const r = u.role || 'unknown'; roleCounts[r] = (roleCounts[r] || 0) + 1 })
+          const roleLabels: Record<string, string> = { admin: 'مدير', central: 'مركزي', governorate: 'مشرف محافظة', district: 'مديرية', data_entry: 'إدخال بيانات' }
+          chartData = Object.entries(roleCounts).map(([role, val]) => ({ label: roleLabels[role] || role, value: val }))
+        } else if (data_source === 'shortages_by_severity') {
+          // ⚠️ NEW: Shortages by severity chart
+          const { data: shortages } = await withTimeout(supa.from('supply_shortages').select('severity').is('deleted_at', null).eq('is_resolved', false), 5_000) ?? {}
+          const sevCounts: Record<string, number> = {}
+          shortages?.forEach((s: any) => { const sv = s.severity || 'unknown'; sevCounts[sv] = (sevCounts[sv] || 0) + 1 })
+          const sevLabels: Record<string, string> = { critical: 'حرج', high: 'عالي', medium: 'متوسط', low: 'منخفض' }
+          chartData = Object.entries(sevCounts).map(([sev, val]) => ({ label: sevLabels[sev] || sev, value: val }))
+        } else if (data_source === 'forms_by_campaign') {
+          // ⚠️ NEW: Forms by campaign type chart
+          const { data: forms } = await withTimeout(supa.from('forms').select('campaign_type').eq('is_active', true).is('deleted_at', null), 5_000) ?? {}
+          const campCounts: Record<string, number> = {}
+          forms?.forEach((f: any) => { const ct = f.campaign_type || 'unknown'; campCounts[ct] = (campCounts[ct] || 0) + 1 })
+          const campLabels: Record<string, string> = { polio_campaign: 'شلل الأطفال', integrated_activity: 'إيصالي تكاملي' }
+          chartData = Object.entries(campCounts).map(([ct, val]) => ({ label: campLabels[ct] || ct, value: val }))
+        }
+
+        return { chart_type, title: args.title || data_source, items: chartData.map((d, i) => ({ ...d, color: CHART_COLORS[i % CHART_COLORS.length] })), generated_at: new Date().toISOString() }
+      }
+
+      case 'bulk_export': {
+        const { data_type, format, campaign_type, governorate_name, days, limit } = args
+        const since = daysAgo(days || 30)
+        const exportLimit = Math.min(limit || 1000, 5000)
+        let q = supa.from(data_type === 'shortages' ? 'supply_shortages' : data_type === 'users' ? 'profiles' : data_type === 'governorates' ? 'governorates' : data_type === 'forms' ? 'forms' : 'form_submissions')
+          .select('*').is('deleted_at', null).limit(exportLimit)
+        if (data_type !== 'users' && data_type !== 'governorates') q = q.gte('created_at', since)
+        const { data } = await withTimeout(q, 15_000) ?? {}
+        return { data_type, count: data?.length || 0, records: data || [], export_format: format || 'json', exported_at: new Date().toISOString(), message: `✅ تم تصدير ${data?.length || 0} سجل من ${data_type}` }
+      }
+
+      case 'create_scheduled_report': {
+        const { name, report_type, schedule, recipients, campaign_type } = args
+        if (!name) return { error: 'اسم التقرير مطلوب' }
+        const { data: report, error: err } = await withTimeout(supa.from('scheduled_reports').insert({ name, report_type, schedule: schedule || '0 8 * * *', recipients: recipients || 'admin', campaign_type: campaign_type || 'all', is_active: true, created_at: new Date().toISOString() }).select().single(), 10_000)
+        if (err) return { error: `فشل: ${err.message}` }
+        return { success: true, report_id: report?.id, message: `✅ تم إنشاء "${name}" — يُرسل ${report_type === 'daily' ? 'يومياً' : report_type === 'weekly' ? 'أسبوعياً' : 'شهرياً'}` }
+      }
+
+      case 'workflow_chain': {
+        const { steps, description } = args
+        if (!steps?.length) return { error: 'الخطوات مطلوبة' }
+        const results: any[] = []
+        for (let i = 0; i < steps.length; i++) {
+          try {
+            const result = await executeFunction(supa, steps[i].action, steps[i].params || {})
+            results.push({ step: i + 1, action: steps[i].action, success: !result.error, result })
+            if (result.error) { results.push({ step: i + 1, error: result.error, stopped: true }); break }
+          } catch (e) { results.push({ step: i + 1, error: String(e), stopped: true }); break }
+        }
+        return { workflow: description || 'سلسلة عمليات', total_steps: steps.length, completed: results.filter(r => !r.error).length, results, message: `✅ ${results.filter(r => !r.error).length}/${steps.length} خطوات` }
+      }
+
+      // ═══ AI Predictive Tools (NEW) ═══
+      case 'forecast_completion': {
+        // Smart forecast: analyze trend + predict completion date
+        const days = args.days || 30
+        const since = daysAgo(days)
+        const formIds = await getCampaignFormIds(supa, args.campaign_type || 'all')
+        const roundFilter = context?.campaignRound ? { campaign_round: `eq.${context.campaignRound}` } : {}
+
+        let q = applyCampaignFilter(
+          supa.from('form_submissions').select('created_at, status').is('deleted_at', null).gte('created_at', since),
+          formIds, context?.campaignRound
+        )
+        const { data: subs } = await withTimeout(q.limit(10000), 10_000) ?? {}
+        if (!subs || subs.length === 0) return { error: 'لا توجد بيانات كافية للتنبؤ' }
+
+        // Calculate daily average
+        const byDay: Record<string, number> = {}
+        for (const s of subs) {
+          const day = s.created_at?.split('T')[0]
+          if (day) byDay[day] = (byDay[day] || 0) + 1
+        }
+        const dailyAvg = subs.length / Object.keys(byDay).length
+        const recentDays = Object.entries(byDay).sort().slice(-7)
+        const recentAvg = recentDays.length > 0 ? recentDays.reduce((s, [_, c]) => s + c, 0) / recentDays.length : dailyAvg
+
+        // Trend: is it increasing or decreasing?
+        const firstHalf = recentDays.slice(0, 3).reduce((s, [_, c]) => s + c, 0)
+        const secondHalf = recentDays.slice(3).reduce((s, [_, c]) => s + c, 0)
+        const trendPct = firstHalf > 0 ? Math.round(((secondHalf - firstHalf) / firstHalf) * 100) : 0
+
+        const total = subs.length
+        const target = args.target_submissions || Math.max(total * 2, 1000) // estimate
+        const remaining = Math.max(target - total, 0)
+        const daysToComplete = dailyAvg > 0 ? Math.ceil(remaining / recentAvg) : -1
+        const projectedDate = daysToComplete > 0
+          ? new Date(Date.now() + daysToComplete * 86400000).toISOString().split('T')[0]
+          : 'غير محدد'
+
+        return {
+          forecast: {
+            current_total: total,
+            target,
+            remaining,
+            daily_average: Math.round(dailyAvg),
+            recent_7day_average: Math.round(recentAvg),
+            trend: trendPct > 5 ? '↗️ متزايد' : trendPct < -5 ? '↘️ متناقص' : '→ مستقر',
+            trend_percentage: trendPct,
+            estimated_days_to_complete: daysToComplete,
+            projected_completion_date: projectedDate,
+            confidence: daysToComplete > 0 && daysToComplete < 60 ? 'عالية' : daysToComplete > 0 ? 'متوسطة' : 'منخفضة',
+            recommendation: trendPct < -10
+              ? `⚠️ معدل الإرساليات يتناقص بنسبة ${Math.abs(trendPct)}%. يُنصح بمتابعة المشرفين الخاملين.`
+              : trendPct > 10
+              ? `✅ معدل الإرساليات يتزايد بنسبة ${trendPct}%. الاستمرار على هذا النهج.`
+              : `معدل الإرساليات مستقر. الجولة ستكتمل تقريباً في ${projectedDate}`,
+          }
+        }
+      }
+
+      case 'get_smart_alerts': {
+        // Smart proactive alerts — detect issues before they escalate
+        const sensitivity = args.sensitivity || 'medium'
+        const formIds = await getCampaignFormIds(supa, args.campaign_type || 'all')
+        const alerts: any[] = []
+
+        // 1. Inactive supervisors (no submissions in X days)
+        const inactiveDays = sensitivity === 'high' ? 2 : sensitivity === 'medium' ? 5 : 7
+        const { data: activeUsers } = await withTimeout(
+          supa.from('form_submissions').select('submitted_by, created_at')
+            .is('deleted_at', null).gte('created_at', daysAgo(inactiveDays))
+            .limit(5000),
+          8_000
+        ) ?? {}
+        const activeSet = new Set((activeUsers || []).map(s => s.submitted_by))
+        const { data: allUsers } = await withTimeout(
+          supa.from('profiles').select('id, full_name, role, governorate_id, governorates(name_ar)')
+            .eq('is_active', true).is('deleted_at', null).in('role', ['data_entry', 'district', 'governorate']),
+          8_000
+        ) ?? {}
+        const inactive = (allUsers || []).filter(u => !activeSet.has(u.id))
+        if (inactive.length > 0) {
+          alerts.push({
+            type: 'inactive_supervisors',
+            severity: inactive.length > 10 ? 'critical' : 'warning',
+            title: `${inactive.length} مشرف بدون إرساليات منذ ${inactiveDays} أيام`,
+            details: inactive.slice(0, 10).map(u => ({
+              name: u.full_name,
+              role: u.role,
+              governorate: u.governorates?.name_ar || '—',
+            })),
+            recommendation: 'تواصل مع المشرفين الخاملين وتأكد من توفر الظروف الميدانية',
+          })
+        }
+
+        // 2. Governorates with zero submissions
+        const { data: govSubs } = await withTimeout(
+          supa.from('form_submissions').select('governorate_id').is('deleted_at', null)
+            .gte('created_at', daysAgo(3)).not('governorate_id', 'is', null),
+          8_000
+        ) ?? {}
+        const activeGovs = new Set((govSubs || []).map(s => s.governorate_id))
+        const { data: allGovs } = await withTimeout(
+          supa.from('governorates').select('id, name_ar').eq('is_active', true).is('deleted_at', null),
+          5_000
+        ) ?? {}
+        const inactiveGovs = (allGovs || []).filter(g => !activeGovs.has(g.id))
+        if (inactiveGovs.length > 0) {
+          alerts.push({
+            type: 'inactive_governorates',
+            severity: 'critical',
+            title: `${inactiveGovs.length} محافظة بدون إرساليات منذ 3 أيام`,
+            details: inactiveGovs.map(g => g.name_ar),
+            recommendation: 'تحقق من الاتصال بالفرق الميدانية في هذه المحافظات',
+          })
+        }
+
+        // 3. Critical shortages
+        const { data: shortages } = await withTimeout(
+          supa.from('supply_shortages').select('id, item_name, severity, governorates(name_ar)')
+            .is('deleted_at', null).eq('is_resolved', false).eq('severity', 'critical'),
+          5_000
+        ) ?? {}
+        if (shortages && shortages.length > 0) {
+          alerts.push({
+            type: 'critical_shortages',
+            severity: 'critical',
+            title: `${shortages.length} نقص حرج غير محلول`,
+            details: shortages.slice(0, 5).map(s => ({
+              item: s.item_name,
+              governorate: s.governorates?.name_ar || '—',
+            })),
+            recommendation: 'توفير الموارد العاجلة للمحافظات المتأثرة',
+          })
+        }
+
+        return {
+          total_alerts: alerts.length,
+          critical_count: alerts.filter(a => a.severity === 'critical').length,
+          warning_count: alerts.filter(a => a.severity === 'warning').length,
+          alerts,
+        }
+      }

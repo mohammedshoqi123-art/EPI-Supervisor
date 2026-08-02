@@ -73,5 +73,16 @@ Stage Summary:
   4. .env.example — توثيق NVIDIA + OPENROUTER
   5. apps/mobile/.env.example — توثيق NVIDIA
 - جميع الإصلاحات تمت بعناية مع الحفاظ على التوافق مع TypeScript strict mode و Dart analyzer.
-- جاهز لـ commit + push + متابعة CI.
+- تم commit + push (commit bf47ce2)
+- ✅ CI نجح بالكامل (Run #1044) — جميع الوظائف success:
+  • Analyze & Test: success (flutter analyze مرّ بلا أخطاء types)
+  • Admin Web Build & Test: success
+  • Build Flutter Web: success
+  • Build Android APK: success
+  • Build iOS (No Codesign): success
+  • Deploy Supabase Functions: success (الـ Edge Function المُحدّثة نُشرت على Supabase)
+  • Deploy Flutter Web to GitHub Pages: success
+  • Create Release: success
+  • Deploy DB Migrations: failure (continue-on-error: true، لا يؤثر)
+- Run URL: https://github.com/mohammedshoqi123-art/EPI-Supervisor/actions/runs/30765991461
 

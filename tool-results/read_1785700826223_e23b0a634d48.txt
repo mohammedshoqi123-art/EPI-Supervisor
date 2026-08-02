@@ -1,0 +1,200 @@
+     1→2026-08-02T19:36:09.0048202Z    info • Statements in an if should be enclosed in a block • lib/screens/form_fill/form_fill_screen.dart:1513:15 • curly_braces_in_flow_control_structures
+     2→2026-08-02T19:36:09.0049937Z    info • Statements in an if should be enclosed in a block • lib/screens/form_fill/form_fill_screen.dart:1514:53 • curly_braces_in_flow_control_structures
+     3→2026-08-02T19:36:09.0051987Z    info • Statements in an if should be enclosed in a block • lib/screens/form_fill/form_fill_screen.dart:1573:11 • curly_braces_in_flow_control_structures
+     4→2026-08-02T19:36:09.0053704Z    info • Statements in an if should be enclosed in a block • lib/screens/form_fill/form_fill_screen.dart:1575:11 • curly_braces_in_flow_control_structures
+     5→2026-08-02T19:36:09.0055439Z    info • Statements in an if should be enclosed in a block • lib/screens/form_fill/form_fill_screen.dart:1577:11 • curly_braces_in_flow_control_structures
+     6→2026-08-02T19:36:09.0057153Z    info • Statements in an if should be enclosed in a block • lib/screens/form_fill/form_fill_screen.dart:1578:49 • curly_braces_in_flow_control_structures
+     7→2026-08-02T19:36:09.0058899Z    info • Statements in an if should be enclosed in a block • lib/screens/form_fill/form_fill_screen.dart:1649:21 • curly_braces_in_flow_control_structures
+     8→2026-08-02T19:36:09.0068835Z    info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/form_fill/form_fill_screen.dart:1665:24 • use_build_context_synchronously
+     9→2026-08-02T19:36:09.0071253Z    info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/form_fill/form_fill_screen.dart:1668:24 • use_build_context_synchronously
+    10→2026-08-02T19:36:09.0073252Z    info • Use 'const' with the constructor to improve performance • lib/screens/form_fill/form_fill_screen.dart:1796:19 • prefer_const_constructors
+    11→2026-08-02T19:36:09.0075059Z    info • Use 'const' with the constructor to improve performance • lib/screens/form_fill/form_fill_screen.dart:1804:25 • prefer_const_constructors
+    12→2026-08-02T19:36:09.0076936Z    info • Use 'const' with the constructor to improve performance • lib/screens/form_fill/form_fill_screen.dart:1805:36 • prefer_const_constructors
+    13→2026-08-02T19:36:09.0078740Z    info • Use 'const' with the constructor to improve performance • lib/screens/form_fill/form_fill_screen.dart:1810:36 • prefer_const_constructors
+    14→2026-08-02T19:36:09.0080565Z    info • Statements in an if should be enclosed in a block • lib/screens/form_fill/photo_picker_field.dart:66:11 • curly_braces_in_flow_control_structures
+    15→2026-08-02T19:36:09.0082529Z    info • Use 'const' with the constructor to improve performance • lib/screens/forms_management_screen.dart:382:23 • prefer_const_constructors
+    16→2026-08-02T19:36:09.0084494Z    info • Use 'const' with the constructor to improve performance • lib/screens/forms_management_screen.dart:383:23 • prefer_const_constructors
+    17→2026-08-02T19:36:09.0086390Z    info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/screens/forms_management_screen.dart:384:23 • prefer_const_literals_to_create_immutables
+    18→2026-08-02T19:36:09.0088309Z    info • Statements in an if should be enclosed in a block • lib/screens/forms_management_screen.dart:475:7 • curly_braces_in_flow_control_structures
+    19→2026-08-02T19:36:09.0090266Z    info • Statements in an if should be enclosed in a block • lib/screens/forms_management_screen.dart:479:7 • curly_braces_in_flow_control_structures
+    20→2026-08-02T19:36:09.0092044Z warning • Unused import: 'package:epi_core/epi_core.dart' • lib/screens/forms_status_screen.dart:7:8 • unused_import
+    21→2026-08-02T19:36:09.0093353Z warning • Unused import: '../router/app_router.dart' • lib/screens/forms_status_screen.dart:9:8 • unused_import
+    22→2026-08-02T19:36:09.0094697Z warning • The value of the field '_refreshKey' isn't used • lib/screens/forms_status_screen.dart:26:7 • unused_field
+    23→2026-08-02T19:36:09.0096111Z    info • The private field _levelFilter could be 'final' • lib/screens/forms_status_screen.dart:39:10 • prefer_final_fields
+    24→2026-08-02T19:36:09.0097641Z    info • Use 'const' with the constructor to improve performance • lib/screens/forms_status_screen.dart:789:19 • prefer_const_constructors
+    25→2026-08-02T19:36:09.0099241Z warning • The declaration '_applyLevelFilter' isn't referenced • lib/screens/forms_status_screen.dart:1128:30 • unused_element
+    26→2026-08-02T19:36:09.0101125Z    info • Statements in an if should be enclosed in a block • lib/screens/forms_status_widgets.dart:814:9 • curly_braces_in_flow_control_structures
+    27→2026-08-02T19:36:09.0102845Z    info • Statements in an if should be enclosed in a block • lib/screens/forms_status_widgets.dart:830:11 • curly_braces_in_flow_control_structures
+    28→2026-08-02T19:36:09.0104546Z    info • Statements in an if should be enclosed in a block • lib/screens/forms_status_widgets.dart:836:9 • curly_braces_in_flow_control_structures
+    29→2026-08-02T19:36:09.0106795Z    info • The import of 'package:flutter/foundation.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' • lib/screens/login_screen.dart:3:8 • unnecessary_import
+    30→2026-08-02T19:36:09.0109107Z    info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/login_screen.dart:170:40 • use_build_context_synchronously
+    31→2026-08-02T19:36:09.0111149Z    info • Statements in an if should be enclosed in a block • lib/screens/login_screen.dart:419:39 • curly_braces_in_flow_control_structures
+    32→2026-08-02T19:36:09.0112773Z    info • Statements in an if should be enclosed in a block • lib/screens/login_screen.dart:449:37 • curly_braces_in_flow_control_structures
+    33→2026-08-02T19:36:09.0114246Z    info • Statements in an if should be enclosed in a block • lib/screens/login_screen.dart:451:37 • curly_braces_in_flow_control_structures
+    34→2026-08-02T19:36:09.0115783Z    info • Use 'const' with the constructor to improve performance • lib/screens/login_screen.dart:538:42 • prefer_const_constructors
+    35→2026-08-02T19:36:09.0117311Z    info • Use 'const' with the constructor to improve performance • lib/screens/login_screen.dart:540:44 • prefer_const_constructors
+    36→2026-08-02T19:36:09.0118862Z    info • Statements in an if should be enclosed in a block • lib/screens/login_screen.dart:556:37 • curly_braces_in_flow_control_structures
+    37→2026-08-02T19:36:09.0120524Z warning • Unused import: '../router/app_router.dart' • lib/screens/map_screen.dart:11:8 • unused_import
+    38→2026-08-02T19:36:09.0121984Z    info • The private field _viewMode could be 'final' • lib/screens/map_screen.dart:27:15 • prefer_final_fields
+    39→2026-08-02T19:36:09.0123212Z warning • The value of the field '_viewMode' isn't used • lib/screens/map_screen.dart:27:15 • unused_field
+    40→2026-08-02T19:36:09.0124685Z warning • The declaration '_toggleMode' isn't referenced • lib/screens/map_screen.dart:88:8 • unused_element
+    41→2026-08-02T19:36:09.0126087Z    info • Statements in an if should be enclosed in a block • lib/screens/map_screen.dart:188:53 • curly_braces_in_flow_control_structures
+    42→2026-08-02T19:36:09.0127192Z    info • Use 'const' with the constructor to improve performance • lib/screens/map_screen.dart:309:19 • prefer_const_constructors
+    43→2026-08-02T19:36:09.0128663Z    info • Use 'const' with the constructor to improve performance • lib/screens/map_screen.dart:310:28 • prefer_const_constructors
+    44→2026-08-02T19:36:09.0130434Z    info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/screens/map_screen.dart:312:33 • prefer_const_literals_to_create_immutables
+    45→2026-08-02T19:36:09.0132434Z    info • Use 'const' with the constructor to improve performance • lib/screens/map_screen.dart:319:25 • prefer_const_constructors
+    46→2026-08-02T19:36:09.0134043Z warning • The declaration '_buildAggregatedLayer' isn't referenced • lib/screens/map_screen.dart:831:10 • unused_element
+    47→2026-08-02T19:36:09.0135392Z warning • The declaration '_chip' isn't referenced • lib/screens/map_screen.dart:1445:10 • unused_element
+    48→2026-08-02T19:36:09.0136681Z warning • The declaration '_MemosListTab' isn't referenced • lib/screens/memos_screen.dart:22:7 • unused_element
+    49→2026-08-02T19:36:09.0138061Z    info • The private field _targetRoles could be 'final' • lib/screens/memos_screen.dart:777:16 • prefer_final_fields
+    50→2026-08-02T19:36:09.0139555Z    info • Use 'const' with the constructor to improve performance • lib/screens/memos_screen.dart:1103:21 • prefer_const_constructors
+    51→2026-08-02T19:36:09.0141194Z warning • Unused import: '../router/app_router.dart' • lib/screens/notifications_screen.dart:6:8 • unused_import
+    52→2026-08-02T19:36:09.0142696Z    info • Use 'const' with the constructor to improve performance • lib/screens/notifications_screen.dart:64:23 • prefer_const_constructors
+    53→2026-08-02T19:36:09.0144371Z    info • Use 'const' with the constructor to improve performance • lib/screens/notifications_screen.dart:65:23 • prefer_const_constructors
+    54→2026-08-02T19:36:09.0146222Z    info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/screens/notifications_screen.dart:66:23 • prefer_const_literals_to_create_immutables
+    55→2026-08-02T19:36:09.0148123Z    info • Use 'const' with the constructor to improve performance • lib/screens/notifications_screen.dart:200:17 • prefer_const_constructors
+    56→2026-08-02T19:36:09.0149822Z    info • Use 'const' with the constructor to improve performance • lib/screens/notifications_screen.dart:201:28 • prefer_const_constructors
+    57→2026-08-02T19:36:09.0151628Z    info • Statements in an if should be enclosed in a block • lib/screens/profile_screen.dart:61:7 • curly_braces_in_flow_control_structures
+    58→2026-08-02T19:36:09.0152571Z    info • Use 'const' with the constructor to improve performance • lib/screens/profile_screen.dart:378:42 • prefer_const_constructors
+    59→2026-08-02T19:36:09.0153478Z    info • Use 'const' with the constructor to improve performance • lib/screens/profile_screen.dart:463:50 • prefer_const_constructors
+    60→2026-08-02T19:36:09.0155219Z    info • Use 'const' with the constructor to improve performance • lib/screens/profile_screen.dart:471:41 • prefer_const_constructors
+    61→2026-08-02T19:36:09.0157177Z    info • Statements in an if should be enclosed in a block • lib/screens/profile_screen.dart:982:23 • curly_braces_in_flow_control_structures
+    62→2026-08-02T19:36:09.0158899Z    info • Statements in an if should be enclosed in a block • lib/screens/profile_screen.dart:1007:23 • curly_braces_in_flow_control_structures
+    63→2026-08-02T19:36:09.0161015Z    info • Statements in an if should be enclosed in a block • lib/screens/profile_screen.dart:1034:23 • curly_braces_in_flow_control_structures
+    64→2026-08-02T19:36:09.0162705Z    info • Statements in an if should be enclosed in a block • lib/screens/profile_screen.dart:1058:27 • curly_braces_in_flow_control_structures
+    65→2026-08-02T19:36:09.0164601Z    info • Use 'const' with the constructor to improve performance • lib/screens/references_management_screen.dart:311:23 • prefer_const_constructors
+    66→2026-08-02T19:36:09.0166380Z    info • Use 'const' with the constructor to improve performance • lib/screens/references_management_screen.dart:312:23 • prefer_const_constructors
+    67→2026-08-02T19:36:09.0168363Z    info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/screens/references_management_screen.dart:313:23 • prefer_const_literals_to_create_immutables
+    68→2026-08-02T19:36:09.0170336Z    info • Statements in an if should be enclosed in a block • lib/screens/references_management_screen.dart:387:7 • curly_braces_in_flow_control_structures
+    69→2026-08-02T19:36:09.0172096Z warning • Unused import: '../router/app_router.dart' • lib/screens/references_screen.dart:5:8 • unused_import
+    70→2026-08-02T19:36:09.0173584Z    info • Use 'const' with the constructor to improve performance • lib/screens/references_screen.dart:65:23 • prefer_const_constructors
+    71→2026-08-02T19:36:09.0175203Z    info • Use 'const' with the constructor to improve performance • lib/screens/references_screen.dart:66:23 • prefer_const_constructors
+    72→2026-08-02T19:36:09.0177116Z    info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/screens/references_screen.dart:67:23 • prefer_const_literals_to_create_immutables
+    73→2026-08-02T19:36:09.0178807Z warning • The name supabaseInitialized is shown, but isn't used • lib/screens/splash_screen.dart:9:28 • unused_shown_name
+    74→2026-08-02T19:36:09.0180433Z    info • Use 'const' with the constructor to improve performance • lib/screens/submission_detail_screen.dart:124:37 • prefer_const_constructors
+    75→2026-08-02T19:36:09.0182368Z    info • Use 'const' with the constructor to improve performance • lib/screens/submission_detail_screen.dart:136:46 • prefer_const_constructors
+    76→2026-08-02T19:36:09.0184119Z    info • Statements in an if should be enclosed in a block • lib/screens/submission_detail_screen.dart:404:7 • curly_braces_in_flow_control_structures
+    77→2026-08-02T19:36:09.0185910Z    info • Statements in an if should be enclosed in a block • lib/screens/submission_detail_screen.dart:500:55 • curly_braces_in_flow_control_structures
+    78→2026-08-02T19:36:09.0187659Z    info • Statements in an if should be enclosed in a block • lib/screens/submission_detail_screen.dart:502:13 • curly_braces_in_flow_control_structures
+    79→2026-08-02T19:36:09.0189296Z warning • The declaration '_updateFilteredCount' isn't referenced • lib/screens/submissions_screen.dart:186:8 • unused_element
+    80→2026-08-02T19:36:09.0191090Z warning • The value of the local variable 'totalPages' isn't used • lib/screens/submissions_screen.dart:205:11 • unused_local_variable
+    81→2026-08-02T19:36:09.0192765Z    info • Use 'const' with the constructor to improve performance • lib/screens/submissions_screen.dart:275:19 • prefer_const_constructors
+    82→2026-08-02T19:36:09.0194469Z    info • Constructors for public widgets should have a named 'key' parameter • lib/screens/user_form_sheet.dart:10:9 • use_key_in_widget_constructors
+    83→2026-08-02T19:36:09.0196214Z    info • Statements in an if should be enclosed in a block • lib/screens/user_form_sheet.dart:146:43 • curly_braces_in_flow_control_structures
+    84→2026-08-02T19:36:09.0197855Z    info • Statements in an if should be enclosed in a block • lib/screens/user_form_sheet.dart:195:23 • curly_braces_in_flow_control_structures
+    85→2026-08-02T19:36:09.0199273Z warning • Unused import: '../router/app_router.dart' • lib/screens/users_screen.dart:5:8 • unused_import
+    86→2026-08-02T19:36:09.0200889Z    info • Use 'const' with the constructor to improve performance • lib/screens/users_screen.dart:343:23 • prefer_const_constructors
+    87→2026-08-02T19:36:09.0202740Z    info • Use 'const' with the constructor to improve performance • lib/screens/users_screen.dart:344:23 • prefer_const_constructors
+    88→2026-08-02T19:36:09.0204542Z    info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/screens/users_screen.dart:345:23 • prefer_const_literals_to_create_immutables
+    89→2026-08-02T19:36:09.0206617Z    info • Statements in an if should be enclosed in a block • lib/screens/users_screen.dart:473:7 • curly_braces_in_flow_control_structures
+    90→2026-08-02T19:36:09.0208263Z    info • Statements in an if should be enclosed in a block • lib/screens/users_screen.dart:477:7 • curly_braces_in_flow_control_structures
+    91→2026-08-02T19:36:09.0209708Z warning • The value of the field '_api' isn't used • lib/services/ai_chat_thread_service.dart:54:19 • unused_field
+    92→2026-08-02T19:36:09.0211286Z warning • Unused import: 'package:epi_core/epi_core.dart' • lib/services/attachment_service.dart:6:8 • unused_import
+    93→2026-08-02T19:36:09.0212734Z warning • Unused import: '../providers/app_providers.dart' • lib/services/attachment_service.dart:7:8 • unused_import
+    94→2026-08-02T19:36:09.0214299Z    info • Statements in an if should be enclosed in a block • lib/services/attachment_service.dart:115:7 • curly_braces_in_flow_control_structures
+    95→2026-08-02T19:36:09.0215977Z    info • Statements in an if should be enclosed in a block • lib/services/attachment_service.dart:164:7 • curly_braces_in_flow_control_structures
+    96→2026-08-02T19:36:09.0217453Z    info • The private field _voices could be 'final' • lib/services/epi_audio_service.dart:60:23 • prefer_final_fields
+    97→2026-08-02T19:36:09.0218937Z    info • Use 'const' for final variables initialized to a constant value • test/unit/accessibility_test.dart:71:7 • prefer_const_declarations
+    98→2026-08-02T19:36:09.0220174Z warning • Dead code • test/unit/accessibility_test.dart:71:46 • dead_code
+    99→2026-08-02T19:36:09.0221665Z    info • Use 'const' for final variables initialized to a constant value • test/unit/accessibility_test.dart:72:7 • prefer_const_declarations
+   100→2026-08-02T19:36:09.0222951Z warning • Dead code • test/unit/accessibility_test.dart:72:43 • dead_code
+   101→2026-08-02T19:36:09.0224194Z warning • Unused import: 'package:supabase_flutter/supabase_flutter.dart' • test/unit/auth_repository_test.dart:5:8 • unused_import
+   102→2026-08-02T19:36:09.0225807Z    info • Use 'const' with the constructor to improve performance • test/unit/auth_repository_test.dart:197:24 • prefer_const_constructors
+   103→2026-08-02T19:36:09.0227456Z    info • Statements in an if should be enclosed in a block • test/unit/data_validation_test.dart:17:9 • curly_braces_in_flow_control_structures
+   104→2026-08-02T19:36:09.0229048Z    info • Statements in an if should be enclosed in a block • test/unit/data_validation_test.dart:23:9 • curly_braces_in_flow_control_structures
+   105→2026-08-02T19:36:09.0230886Z    info • Statements in an if should be enclosed in a block • test/unit/data_validation_test.dart:67:9 • curly_braces_in_flow_control_structures
+   106→2026-08-02T19:36:09.0232558Z    info • Statements in an if should be enclosed in a block • test/unit/data_validation_test.dart:98:9 • curly_braces_in_flow_control_structures
+   107→2026-08-02T19:36:09.0234248Z    info • Use 'const' with the constructor to improve performance • test/unit/data_validation_test.dart:120:39 • prefer_const_constructors
+   108→2026-08-02T19:36:09.0235827Z    info • Use 'const' with the constructor to improve performance • test/unit/exceptions_test.dart:126:14 • prefer_const_constructors
+   109→2026-08-02T19:36:09.0237358Z    info • Use 'const' with the constructor to improve performance • test/unit/exceptions_test.dart:127:14 • prefer_const_constructors
+   110→2026-08-02T19:36:09.0238855Z    info • Use 'const' with the constructor to improve performance • test/unit/exceptions_test.dart:130:14 • prefer_const_constructors
+   111→2026-08-02T19:36:09.0240375Z    info • Use 'const' with the constructor to improve performance • test/unit/form_validation_test.dart:102:55 • prefer_const_constructors
+   112→2026-08-02T19:36:09.0242427Z    info • Use 'const' with the constructor to improve performance • test/unit/form_validation_test.dart:104:55 • prefer_const_constructors
+   113→2026-08-02T19:36:09.0244066Z    info • Use 'const' with the constructor to improve performance • test/unit/form_validation_test.dart:109:50 • prefer_const_constructors
+   114→2026-08-02T19:36:09.0245785Z    info • Use 'const' with the constructor to improve performance • test/unit/i18n_test.dart:12:18 • prefer_const_constructors
+   115→2026-08-02T19:36:09.0247280Z    info • Use 'const' with the constructor to improve performance • test/unit/i18n_test.dart:200:18 • prefer_const_constructors
+   116→2026-08-02T19:36:09.0248759Z    info • Use 'const' with the constructor to improve performance • test/unit/i18n_test.dart:267:20 • prefer_const_constructors
+   117→2026-08-02T19:36:09.0250195Z    info • Use 'const' with the constructor to improve performance • test/unit/i18n_test.dart:276:20 • prefer_const_constructors
+   118→2026-08-02T19:36:09.0251955Z    info • Use 'const' with the constructor to improve performance • test/unit/i18n_test.dart:287:20 • prefer_const_constructors
+   119→2026-08-02T19:36:09.0253535Z    info • Use 'const' with the constructor to improve performance • test/unit/network_resilience_test.dart:48:18 • prefer_const_constructors
+   120→2026-08-02T19:36:09.0255135Z    info • Use 'const' with the constructor to improve performance • test/unit/network_resilience_test.dart:50:18 • prefer_const_constructors
+   121→2026-08-02T19:36:09.0256630Z    info • Use 'const' with the constructor to improve performance • test/unit/network_resilience_test.dart:52:18 • prefer_const_constructors
+   122→2026-08-02T19:36:09.0258102Z    info • Use 'const' with the constructor to improve performance • test/unit/network_resilience_test.dart:54:18 • prefer_const_constructors
+   123→2026-08-02T19:36:09.0259781Z    info • Use 'const' with the constructor to improve performance • test/unit/network_resilience_test.dart:56:18 • prefer_const_constructors
+   124→2026-08-02T19:36:09.0261679Z    info • Use 'const' with the constructor to improve performance • test/unit/network_resilience_test.dart:61:41 • prefer_const_constructors
+   125→2026-08-02T19:36:09.0263247Z    info • Use 'const' with the constructor to improve performance • test/unit/network_resilience_test.dart:65:43 • prefer_const_constructors
+   126→2026-08-02T19:36:09.0264879Z    info • Use 'const' with the constructor to improve performance • test/unit/network_resilience_test.dart:69:41 • prefer_const_constructors
+   127→2026-08-02T19:36:09.0266483Z    info • Use 'const' with the constructor to improve performance • test/unit/network_resilience_test.dart:73:43 • prefer_const_constructors
+   128→2026-08-02T19:36:09.0268100Z    info • Use 'const' for final variables initialized to a constant value • test/unit/performance_test.dart:14:7 • prefer_const_declarations
+   129→2026-08-02T19:36:09.0269667Z    info • Use 'const' for final variables initialized to a constant value • test/unit/performance_test.dart:26:7 • prefer_const_declarations
+   130→2026-08-02T19:36:09.0271387Z    info • Use 'const' for final variables initialized to a constant value • test/unit/performance_test.dart:38:7 • prefer_const_declarations
+   131→2026-08-02T19:36:09.0273036Z    info • Use 'const' with the constructor to improve performance • test/unit/performance_test.dart:50:35 • prefer_const_constructors
+   132→2026-08-02T19:36:09.0274398Z    info • Use 'const' with the constructor to improve performance • test/unit/performance_test.dart:60:35 • prefer_const_constructors
+   133→2026-08-02T19:36:09.0276662Z warning • The value of the local variable 'delay' isn't used • test/unit/performance_test.dart:74:13 • unused_local_variable
+   134→2026-08-02T19:36:09.0278096Z warning • The value of the local variable 'timer' isn't used • test/unit/performance_test.dart:75:13 • unused_local_variable
+   135→2026-08-02T19:36:09.0279551Z    info • Use 'const' for final variables initialized to a constant value • test/unit/performance_test.dart:121:7 • prefer_const_declarations
+   136→2026-08-02T19:36:09.0281215Z warning • Unused import: 'package:flutter_riverpod/flutter_riverpod.dart' • test/widget/forms_status_widgets_test.dart:3:8 • unused_import
+   137→2026-08-02T19:36:09.0282974Z    info • Use 'const' with the constructor to improve performance • test/widget/forms_status_widgets_test.dart:17:9 • prefer_const_constructors
+   138→2026-08-02T19:36:09.0284553Z    info • Use 'const' with the constructor to improve performance • test/widget/forms_status_widgets_test.dart:18:17 • prefer_const_constructors
+   139→2026-08-02T19:36:09.0286318Z    info • Use 'const' with the constructor to improve performance • test/widget/forms_status_widgets_test.dart:19:19 • prefer_const_constructors
+   140→2026-08-02T19:36:09.0287782Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:83:9 • prefer_const_constructors
+   141→2026-08-02T19:36:09.0289205Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:84:18 • prefer_const_constructors
+   142→2026-08-02T19:36:09.0290778Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:85:19 • prefer_const_constructors
+   143→2026-08-02T19:36:09.0292237Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:85:34 • prefer_const_constructors
+   144→2026-08-02T19:36:09.0293701Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:95:9 • prefer_const_constructors
+   145→2026-08-02T19:36:09.0295170Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:96:18 • prefer_const_constructors
+   146→2026-08-02T19:36:09.0296761Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:97:19 • prefer_const_constructors
+   147→2026-08-02T19:36:09.0298341Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:97:34 • prefer_const_constructors
+   148→2026-08-02T19:36:09.0299908Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:107:9 • prefer_const_constructors
+   149→2026-08-02T19:36:09.0301668Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:108:18 • prefer_const_constructors
+   150→2026-08-02T19:36:09.0303303Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:109:19 • prefer_const_constructors
+   151→2026-08-02T19:36:09.0304919Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:109:34 • prefer_const_constructors
+   152→2026-08-02T19:36:09.0306513Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:119:9 • prefer_const_constructors
+   153→2026-08-02T19:36:09.0308131Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:120:18 • prefer_const_constructors
+   154→2026-08-02T19:36:09.0309727Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:121:19 • prefer_const_constructors
+   155→2026-08-02T19:36:09.0311478Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:121:34 • prefer_const_constructors
+   156→2026-08-02T19:36:09.0313059Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:133:9 • prefer_const_constructors
+   157→2026-08-02T19:36:09.0314734Z    info • Use 'const' with the constructor to improve performance • test/widget/shared_widgets_test.dart:148:9 • prefer_const_constructors
+   158→2026-08-02T19:36:09.0316079Z warning • Unused import: 'package:epi_core/epi_core.dart' • test/widget/theme_and_settings_test.dart:5:8 • unused_import
+   159→2026-08-02T19:36:09.0317466Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:74:20 • prefer_const_constructors
+   160→2026-08-02T19:36:09.0318910Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:119:9 • prefer_const_constructors
+   161→2026-08-02T19:36:09.0320569Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:120:18 • prefer_const_constructors
+   162→2026-08-02T19:36:09.0322261Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:121:19 • prefer_const_constructors
+   163→2026-08-02T19:36:09.0323813Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:122:21 • prefer_const_constructors
+   164→2026-08-02T19:36:09.0325344Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:176:9 • prefer_const_constructors
+   165→2026-08-02T19:36:09.0326981Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:177:17 • prefer_const_constructors
+   166→2026-08-02T19:36:09.0328607Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:178:19 • prefer_const_constructors
+   167→2026-08-02T19:36:09.0330231Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:194:9 • prefer_const_constructors
+   168→2026-08-02T19:36:09.0332045Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:195:17 • prefer_const_constructors
+   169→2026-08-02T19:36:09.0333717Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:196:19 • prefer_const_constructors
+   170→2026-08-02T19:36:09.0335358Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:213:9 • prefer_const_constructors
+   171→2026-08-02T19:36:09.0336946Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:214:17 • prefer_const_constructors
+   172→2026-08-02T19:36:09.0338584Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:215:19 • prefer_const_constructors
+   173→2026-08-02T19:36:09.0340225Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:228:9 • prefer_const_constructors
+   174→2026-08-02T19:36:09.0341967Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:229:17 • prefer_const_constructors
+   175→2026-08-02T19:36:09.0343668Z    info • Use 'const' with the constructor to improve performance • test/widget/theme_and_settings_test.dart:230:19 • prefer_const_constructors
+   176→2026-08-02T19:36:09.0344500Z 
+   177→2026-08-02T19:36:09.0344682Z 314 issues found. (ran in 23.2s)
+   178→2026-08-02T19:36:09.0369077Z ##[error]Process completed with exit code 1.
+   179→2026-08-02T19:36:09.0544052Z Post job cleanup.
+   180→2026-08-02T19:36:09.0547973Z ##[start-action display=Cache pub dependencies;id=__33c42c2e-bbdb-4b69-8e5b-246db61236db.cache-pub]
+   181→2026-08-02T19:36:09.0550198Z ##[end-action id=__33c42c2e-bbdb-4b69-8e5b-246db61236db.cache-pub;outcome=skipped;conclusion=skipped;duration_ms=0]
+   182→2026-08-02T19:36:09.0552465Z ##[start-action display=Cache Flutter;id=__33c42c2e-bbdb-4b69-8e5b-246db61236db.cache-flutter]
+   183→2026-08-02T19:36:09.0554453Z ##[end-action id=__33c42c2e-bbdb-4b69-8e5b-246db61236db.cache-flutter;outcome=skipped;conclusion=skipped;duration_ms=0]
+   184→2026-08-02T19:36:09.0619208Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+   185→2026-08-02T19:36:09.0620545Z Post job cleanup.
+   186→2026-08-02T19:36:09.1523602Z [command]/usr/bin/git version
+   187→2026-08-02T19:36:09.1603012Z git version 2.54.0
+   188→2026-08-02T19:36:09.1644943Z Temporarily overriding HOME='/home/runner/work/_temp/a1dedded-f490-41d8-b34b-b4dfe9b12251' before making global git config changes
+   189→2026-08-02T19:36:09.1646224Z Adding repository directory to the temporary git global config as a safe directory
+   190→2026-08-02T19:36:09.1651036Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/EPI-Supervisor/EPI-Supervisor
+   191→2026-08-02T19:36:09.1692896Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+   192→2026-08-02T19:36:09.1729598Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+   193→2026-08-02T19:36:09.2000271Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+   194→2026-08-02T19:36:09.2029939Z http.https://github.com/.extraheader
+   195→2026-08-02T19:36:09.2049830Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+   196→2026-08-02T19:36:09.2084467Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+   197→2026-08-02T19:36:09.2365850Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+   198→2026-08-02T19:36:09.2419590Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+   199→2026-08-02T19:36:09.2864257Z Cleaning up orphan processes
+   200→2026-08-02T19:36:09.3177376Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

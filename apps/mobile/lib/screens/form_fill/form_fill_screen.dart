@@ -537,12 +537,26 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   @override
   void dispose() {
     // FIX: احفظ التغييرات غير المحفوظة قبل التخلص من الـ widget
+    // ملاحظة: dispose لا يمكن أن يكون async. offlineManagerProvider هو
+    // FutureProvider<OfflineManager> — ref.read يُرجع AsyncValue<OfflineManager>،
+    // لذا نستخدم .value للوصول للمدير بشكل متزامن (قد يكون null إذا لم يكتمل التهيئة).
     if (_hasUnsavedChanges && _formData.isNotEmpty) {
       try {
         _syncControllersToFormData();
-        final offline = ref.read(offlineManagerProvider);
-        offline.saveDraft(_draftId, widget.formId, Map<String, dynamic>.from(_formData));
-        _hasUnsavedChanges = false;
+        final asyncValue = ref.read(offlineManagerProvider);
+        final offline = asyncValue.value;
+        if (offline != null) {
+          offline.saveDraft(
+            _draftId,
+            widget.formId,
+            Map<String, dynamic>.from(_formData),
+          );
+          _hasUnsavedChanges = false;
+        } else {
+          debugPrint(
+            '[FormFillScreen] Save-on-dispose skipped — OfflineManager not ready yet',
+          );
+        }
       } catch (e) {
         debugPrint('[FormFillScreen] Save-on-dispose failed: $e');
       }

@@ -666,6 +666,17 @@ class OfflineDataCache {
     return null;
   }
 
+  /// Expose all cache keys — used by form_fill_screen to search
+  /// for a specific form across every cached "forms_*" key.
+  /// Delegates to the underlying OfflineManager.
+  List<String> getCacheKeys() {
+    try {
+      return _offline.getCacheKeys();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Get cache status for debugging
   Map<String, dynamic> getDebugInfo() {
     return {

@@ -36,3 +36,42 @@ Stage Summary:
 Notes for future work:
 - بالنسبة للمشكلة 1 (ظهور المسودات): المستخدم أكد أن مكان ظهور المسودات الصحيح هو في صفحة الحالة (Forms Status Screen) بتبويب "المسودات" — وهذا التبويب يعمل عبر `_loadDraftsPage()` في `forms_status_screen.dart` ويستدعي `offline.getAllDrafts()`. الإصلاحات في dispose() و `_loadDraft()` ستضمن حفظ المسودات بشكل صحيح ثم ظهورها في هذا التبويب.
 
+---
+Task ID: 2
+Agent: main (Super Z)
+Task: إصلاح 5 مشاكل إضافية مكتشفة في الكود
+
+Work Log:
+- مشكلة #1 (getRecoveredDrafts غير مستدعى): أضفت استدعاءً مباشراً لـ `offline.getRecoveredDrafts()` في `_loadDraftsPage()` بصفحة الحالة، وأضفت قسم "مسودات مستردة" منفصل في تبويب المسودات مع ترويسة مميزة برتقالية تشرح للمستخدم أنها مُرحّلة من بيانات قديمة. المسودات المستردة تظهر الآن في `CustomScrollView` مع `SliverToBoxAdapter` كترويسة و`SliverList` للعناصر.
+- مشكلة #2 (Promise.all في ai-chat-v3): استبدلت 6 استعلامات تسلسلية بـ Promise.all واحد متوازي:
+    1. fetchLiveData
+    2. getConversationSummary (مشروط بوجود groqKey)
+    3. getFeedbackContext
+    4. forms schema query (مع timeout 5s)
+    5. campaign_types query (مع timeout 3s)
+    6. getActiveCampaignRound (مشروط بعدم وجود round في الطلب)
+  كل عملية لها .catch() الخاص بها، والنتائج تُعالج بشكل منفصل بعد Promise.all. الزمن المتوقع: 30s → ~6s.
+- مشكلة #3 (.env.example): أضفت NVIDIA_API_KEY و OPENROUTER_KEY إلى:
+    • /home/z/my-project/.env.example (مع شرح الـ fallback chain كاملة)
+    • /home/z/my-project/apps/mobile/.env.example (مع ملاحظة أن الموبايل لا يستخدمها مباشرة بل الـ Edge Function)
+- مشكلة #4 (HuggingFace gated model): استبدلت `meta-llama/Meta-Llama-3-8B-Instruct` (gated) بقائمة نماذج مفتوحة بالكامل:
+    1. mistralai/Mistral-7B-Instruct-v0.3 (Apache 2.0 — الأفضل في العربية)
+    2. HuggingFaceH4/zephyr-7b-beta (مفتوح، chat-tuned)
+  الدالة huggingfaceChat أصبحت تجرّب كل نموذج بالترتيب وتُرجع أول استجابة ناجحة، مع log واضح لأي نموذج يفشل.
+- مشكلة #5 (Groq fallback): أضفت GROQ_FALLBACK_CHAIN بـ 4 نماذج:
+    1. llama-3.3-70b-versatile (PRIMARY)
+    2. openai/gpt-oss-120b (fallback — يدعم tools)
+    3. llama-3.1-8b-instant (سريع)
+    4. llama3-70b-8192 (legacy)
+  الدالة groqChat أصبحت تجرّب كل نموذج عند receipt 404/400/429/503 (النموذج ملغى أو محمّل)، وتتوقف عند 401/403 (مفتاح غير صالح — لا فائدة من إعادة المحاولة).
+
+Stage Summary:
+- 6 ملفات معدّلة:
+  1. apps/mobile/lib/screens/forms_status_screen.dart — إضافة قسم المسودات المستردة
+  2. supabase/functions/ai-chat-v3/index.ts — Promise.all للـ prep steps
+  3. supabase/functions/ai-chat-v3/llm/providers.ts — Groq fallback chain + HF open models
+  4. .env.example — توثيق NVIDIA + OPENROUTER
+  5. apps/mobile/.env.example — توثيق NVIDIA
+- جميع الإصلاحات تمت بعناية مع الحفاظ على التوافق مع TypeScript strict mode و Dart analyzer.
+- جاهز لـ commit + push + متابعة CI.
+

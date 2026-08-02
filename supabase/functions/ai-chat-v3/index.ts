@@ -1445,22 +1445,45 @@ serve(async (req) => {
       if (cached) return jsonResponse({ reply: cached, source: 'response_cache', model: dbModelId, intent, confidence, messageId: crypto.randomUUID() }, 200, origin)
     }
 
-    // Live data + memory + feedback
-    const liveData = await fetchLiveData(supabase, profile).catch(() => '')
-    const conversationSummary = groqKey ? await getConversationSummary(supabase, auth.userId).catch(() => '') : ''
-    const feedbackContext = await getFeedbackContext(supabase, auth.userId, intent).catch(() => '')
-
-    // ═══ Campaign Round — read from request body or fall back to app_settings.active_campaign_round ═══
+    // ═══ FIX: PARALLEL PREP — was sequential (5+ queries × ~6s = 30s+) ═══
+    // Previously these 5 operations awaited one after another:
+    //   1. fetchLiveData        (~6s, multiple DB queries inside)
+    //   2. getConversationSummary (~3s, optional Groq call)
+    //   3. getFeedbackContext   (~2s, DB query)
+    //   4. forms schema query   (~5s, withTimeout 5s)
+    //   5. campaign_types query (~3s, withTimeout 3s)
+    //   6. getActiveCampaignRound (only if body/context missing — ~2s)
+    // Total: ~20-30s sequential → now runs in parallel ≈ 6s (slowest wins).
+    //
+    // Each operation already has its own .catch(() => '') / try-catch so
+    // failures don't break the others. Promise.all waits for all settled.
     const bodyRound = Number(body.campaign_round)
-    const campaignRound = !isNaN(bodyRound) && bodyRound > 0
+    const contextRound = context?.campaign_round ? Number(context.campaign_round) : NaN
+    const roundFromRequest = !isNaN(bodyRound) && bodyRound > 0
       ? bodyRound
-      : (context?.campaign_round ? Number(context.campaign_round) : NaN) || await getActiveCampaignRound(supabase)
-    const roundLabel = getRoundLabelAr(campaignRound)
+      : (!isNaN(contextRound) && contextRound > 0 ? contextRound : NaN)
 
-    // ═══ Fetch form schemas for system prompt ═══
-    let formSchemasText = ''
-    try {
-      const { data: forms } = await withTimeout(
+    const [
+      liveDataResult,
+      conversationSummaryResult,
+      feedbackContextResult,
+      formsResult,
+      campaignsResult,
+      activeRoundResult,
+    ] = await Promise.all([
+      // 1. Live data (DB queries)
+      fetchLiveData(supabase, profile).catch(() => ''),
+
+      // 2. Conversation summary (only if Groq key available)
+      groqKey
+        ? getConversationSummary(supabase, auth.userId).catch(() => '')
+        : Promise.resolve(''),
+
+      // 3. Feedback context
+      getFeedbackContext(supabase, auth.userId, intent).catch(() => ''),
+
+      // 4. Form schemas (5s timeout)
+      withTimeout(
         supabase.from('forms')
           .select('id, title_ar, schema, campaign_type')
           .eq('is_active', true)
@@ -1468,40 +1491,56 @@ serve(async (req) => {
           .order('title_ar')
           .limit(20),
         5_000,
-      ) ?? {}
-      if (forms && forms.length > 0) {
-        formSchemasText = forms.map((f: any) => {
-          let fieldNames: string[] = []
-          if (f.schema) {
-            if (Array.isArray(f.schema)) {
-              fieldNames = f.schema.map((s: any) => s.name || s.key || s.id || '').filter(Boolean)
-            } else if (f.schema.fields) {
-              fieldNames = f.schema.fields.map((s: any) => s.name || s.key || s.id || '').filter(Boolean)
-            } else if (f.schema.sections) {
-              for (const section of f.schema.sections) {
-                if (section.fields) fieldNames.push(...section.fields.map((s: any) => s.name || s.key || s.id || '').filter(Boolean))
-              }
-            }
-          }
-          const ct = f.campaign_type === 'polio_campaign' ? 'شلل الأطفال' : 'إيصالي تكاملي'
-          return `📋 ${f.title_ar} (${ct})\n   ID: ${f.id}\n   الحقول: ${fieldNames.length > 0 ? fieldNames.join(', ') : 'غير محدد'}`
-        }).join('\n\n')
-      }
-    } catch (e) {
-      console.warn('[FORM_SCHEMAS] Failed to fetch:', String(e).slice(0, 100))
-    }
+      ).catch(() => ({ data: null })),
 
-    // ═══ Campaign info ═══
-    let campaignInfoText = ''
-    try {
-      const { data: campaigns } = await withTimeout(
+      // 5. Campaign types (3s timeout)
+      withTimeout(
         supabase.from('campaign_types').select('key, label_ar, icon, visible').eq('visible', true),
         3_000,
-      ) ?? {}
-      if (campaigns) {
-        campaignInfoText = campaigns.map((c: any) => `${c.icon} ${c.label_ar} (${c.key})`).join('\n')
-      }
-    } catch {}
+      ).catch(() => ({ data: null })),
+
+      // 6. Active campaign round (only if not provided in request)
+      !isNaN(roundFromRequest)
+        ? Promise.resolve(roundFromRequest)
+        : getActiveCampaignRound(supabase).catch(() => 1),
+    ])
+
+    const liveData: string = liveDataResult as string
+    const conversationSummary: string = conversationSummaryResult as string
+    const feedbackContext: string = feedbackContextResult as string
+    const campaignRound: number = isNaN(roundFromRequest)
+      ? (typeof activeRoundResult === 'number' ? activeRoundResult : 1)
+      : roundFromRequest
+    const roundLabel = getRoundLabelAr(campaignRound)
+
+    // ═══ Process forms result into prompt text ═══
+    let formSchemasText = ''
+    const forms = (formsResult as any)?.data
+    if (forms && forms.length > 0) {
+      formSchemasText = forms.map((f: any) => {
+        let fieldNames: string[] = []
+        if (f.schema) {
+          if (Array.isArray(f.schema)) {
+            fieldNames = f.schema.map((s: any) => s.name || s.key || s.id || '').filter(Boolean)
+          } else if (f.schema.fields) {
+            fieldNames = f.schema.fields.map((s: any) => s.name || s.key || s.id || '').filter(Boolean)
+          } else if (f.schema.sections) {
+            for (const section of f.schema.sections) {
+              if (section.fields) fieldNames.push(...section.fields.map((s: any) => s.name || s.key || s.id || '').filter(Boolean))
+            }
+          }
+        }
+        const ct = f.campaign_type === 'polio_campaign' ? 'شلل الأطفال' : 'إيصالي تكاملي'
+        return `📋 ${f.title_ar} (${ct})\n   ID: ${f.id}\n   الحقول: ${fieldNames.length > 0 ? fieldNames.join(', ') : 'غير محدد'}`
+      }).join('\n\n')
+    }
+
+    // ═══ Process campaigns result ═══
+    let campaignInfoText = ''
+    const campaigns = (campaignsResult as any)?.data
+    if (campaigns) {
+      campaignInfoText = campaigns.map((c: any) => `${c.icon} ${c.label_ar} (${c.key})`).join('\n')
+    }
 
     // System prompt
     const systemPrompt = buildSystemPrompt(

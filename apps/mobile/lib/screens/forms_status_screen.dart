@@ -49,6 +49,10 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   int _draftPage = 0;
   bool _draftLoading = false;
   int _draftTotal = 0;
+  // ═══ Recovered drafts (تم ترحيلها تلقائياً من المسودات القديمة/التالفة) ═══
+  // مصدرها: offline.getRecoveredDrafts() — معروضة في تبويب المسودات كقسم منفصل
+  List<Map<String, dynamic>> _recoveredDraftItems = [];
+  int _recoveredDraftTotal = 0;
   // Pending sync tab
   List<Map<String, dynamic>> _pendingItems = [];
   int _pendingPage = 0;
@@ -187,7 +191,33 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
           );
       final allDrafts = offline.getAllDrafts();
 
-      debugPrint('[FormsStatusScreen] Loaded ${allDrafts.length} drafts from Hive');
+      // ═══ FIX: افصل المسودات المستردة في قسم خاص ═══
+      // getAllDrafts() يدمج المسودات المستردة (مع _recovered: true) ضمن النتائج،
+      // لكنها تظهر بشكل سيئ بدون عنوان/تاريخ. نعرضها في قسم منفصل بدلاً من ذلك
+      // حتى يفهم المستخدم أنها مسودات قديمة/مُرحّلة.
+      // كذلك نستدعي getRecoveredDrafts() مباشرة للحصول على البيانات الكاملة
+      // (هذه الدالة لم تكن مستدعاة من أي UI قبل هذا الإصلاح).
+      final recoveredMap = offline.getRecoveredDrafts();
+      _recoveredDraftItems = recoveredMap.entries.map((entry) {
+        final draftId = entry.key;
+        final draftData = (entry.value is Map)
+            ? Map<String, dynamic>.from(entry.value as Map)
+            : <String, dynamic>{};
+        return {
+          'draft_id': draftId,
+          'form_id': draftData['form_id'] ?? draftId,
+          'data': draftData['data'] ?? <String, dynamic>{},
+          'saved_at': draftData['saved_at'],
+          'form_title': draftData['form_title'] ?? 'مسودة مستردة',
+          '_recovered': true,
+        };
+      }).toList();
+      _recoveredDraftTotal = _recoveredDraftItems.length;
+
+      // أزل المسودات المستردة من القائمة الرئيسية حتى لا تتكرر
+      allDrafts.removeWhere((d) => d['_recovered'] == true);
+
+      debugPrint('[FormsStatusScreen] Loaded ${allDrafts.length} drafts + ${_recoveredDraftItems.length} recovered from Hive');
 
       // Enrich drafts with form titles from forms provider
       // ═══ FIX: تحميل النماذج من multiple sources لضمان ظهور الأسماء ═══
@@ -838,11 +868,11 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildDraftsTab() {
-    if (_draftLoading && _draftItems.isEmpty) {
+    if (_draftLoading && _draftItems.isEmpty && _recoveredDraftItems.isEmpty) {
       return const EpiLoading.shimmer();
     }
 
-    if (_draftItems.isEmpty) {
+    if (_draftItems.isEmpty && _recoveredDraftItems.isEmpty) {
       return ListView(
         children: const [
           SizedBox(height: 80),
@@ -855,43 +885,134 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       );
     }
 
+    // ═══ بناء قائمة مدمجة: المسودات العادية + قسم المسودات المستردة ═══
+    // المستردة تظهر في الأسفل مع ترويسة مميزة حتى يفهم المستخدم أنها قديمة/مُرحّلة.
+    final List<Widget> slivers = [];
+
+    // ─── المسودات العادية ───
+    if (_draftItems.isNotEmpty) {
+      slivers.add(SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final draft = _draftItems[index];
+            return DraftTile(
+              title: draft['form_title'] ?? 'مسودة',
+              formId: draft['formId'] ?? draft['form_id'] ?? '',
+              date: draft['saved_at'] ?? draft['created_at'],
+              draftData: draft,
+              onTap: () {
+                final draftId = draft['draft_id'];
+                final formId = draft['formId'] ?? draft['form_id'];
+                if (draftId != null && formId != null) {
+                  context.go('/forms/fill/$formId?draftId=$draftId');
+                }
+              },
+            );
+          },
+          childCount: _draftItems.length,
+        ),
+      ));
+    }
+
+    // ─── قسم المسودات المستردة ───
+    if (_recoveredDraftItems.isNotEmpty) {
+      slivers.add(SliverToBoxAdapter(
+        child: _buildRecoveredDraftsHeader(),
+      ));
+      slivers.add(SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final draft = _recoveredDraftItems[index];
+            return DraftTile(
+              title: draft['form_title'] ?? 'مسودة مستردة',
+              formId: draft['form_id'] ?? draft['draft_id'] ?? '',
+              date: draft['saved_at'],
+              draftData: draft,
+              onTap: () {
+                final draftId = draft['draft_id'];
+                final formId = draft['form_id'] ?? draft['draft_id'];
+                if (draftId != null && formId != null) {
+                  context.go('/forms/fill/$formId?draftId=$draftId');
+                }
+              },
+            );
+          },
+          childCount: _recoveredDraftItems.length,
+        ),
+      ));
+    }
+
     return Column(
       children: [
         Expanded(
           child: RefreshIndicator(
             onRefresh: () => _loadDraftsPage(0),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _draftItems.length,
-              itemBuilder: (context, index) {
-                final draft = _draftItems[index];
-                return DraftTile(
-                  title: draft['form_title'] ?? 'مسودة',
-                  formId: draft['formId'] ?? draft['form_id'] ?? '',
-                  date: draft['saved_at'] ?? draft['created_at'],
-                  draftData: draft, // Pass full draft data for preview
-                  onTap: () {
-                    final draftId = draft['draft_id'];
-                    final formId = draft['formId'] ?? draft['form_id'];
-                    if (draftId != null && formId != null) {
-                      context.go('/forms/fill/$formId?draftId=$draftId');
-                    }
-                  },
-                );
-              },
+            child: CustomScrollView(
+              slivers: [
+                const SliverPadding(padding: EdgeInsets.only(top: 8)),
+                ...slivers,
+                const SliverPadding(padding: EdgeInsets.only(bottom: 16)),
+              ],
             ),
           ),
         ),
-        // Pagination controls
-        _buildPaginationControls(
-          currentPage: _draftPage,
-          totalItems: _draftTotal,
-          isLoading: _draftLoading,
-          onNext: () => _loadDraftsPage(_draftPage + 1),
-          onPrev: () => _loadDraftsPage(_draftPage - 1),
-          onPage: (p) => _loadDraftsPage(p),
-        ),
+        // Pagination controls (للمسودات العادية فقط)
+        if (_draftItems.isNotEmpty)
+          _buildPaginationControls(
+            currentPage: _draftPage,
+            totalItems: _draftTotal,
+            isLoading: _draftLoading,
+            onNext: () => _loadDraftsPage(_draftPage + 1),
+            onPrev: () => _loadDraftsPage(_draftPage - 1),
+            onPage: (p) => _loadDraftsPage(p),
+          ),
       ],
+    );
+  }
+
+  /// ترويسة قسم "المسودات المستردة" — تشرح للمستخدم أن هذه مسودات
+  /// تمت استعادتها تلقائياً من بيانات قديمة/تالفة، وقد لا تحتوي على
+  /// كل المعلومات الأصلية.
+  Widget _buildRecoveredDraftsHeader() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.history_rounded, color: Colors.orange.shade700, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'مسودات مستردة ($_recoveredDraftTotal)',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.orange.shade800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'تم استعادتها من بيانات قديمة — قد لا تحتوي على كل التفاصيل',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 10,
+                    color: Colors.orange.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

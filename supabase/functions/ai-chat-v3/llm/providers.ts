@@ -33,7 +33,9 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'Groq',
     tier: 1,
     free: true,
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b'],
+    // FIX: قائمة النماذج الاحتياطية — إذا أُلغي النموذج الأساسي، نحاول الباقي.
+    // الترتيب من الأذكى للأسوأ (انظر GROQ_FALLBACK_CHAIN في groqChat).
+    models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'llama-3.1-8b-instant', 'llama3-70b-8192'],
     maxTokens: 4000,
     supportsTools: true,
     supportsStreaming: true,
@@ -60,7 +62,13 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'HuggingFace',
     tier: 4,
     free: true,
-    models: ['meta-llama/Meta-Llama-3-8B-Instruct'],
+    // FIX: استخدمنا سابقاً 'meta-llama/Meta-Llama-3-8B-Instruct' لكنه gated
+    // (يتطلب قبول شروط الاستخدام على HF Hub + قد يُرفض الطلب).
+    // استبدلناه بنماذج مفتوحة بالكامل لا تتطلب قبول شروط:
+    //   - HuggingFaceH4/zephyr-7b-beta: مفتوح، يدعم chat، عربي ضعيف لكنه fallback
+    //   - mistralai/Mistral-7B-Instruct-v0.3: مفتوح (Apache 2.0) — أفضل في العربية
+    // الترتيب من الأفضل للأسوأ في fallback chain.
+    models: ['mistralai/Mistral-7B-Instruct-v0.3', 'HuggingFaceH4/zephyr-7b-beta'],
     maxTokens: 800,
     supportsTools: false,
     supportsStreaming: false,
@@ -81,6 +89,18 @@ const PROVIDERS: Record<string, ProviderConfig> = {
 // ═══════════════════════════════════════════════════════════
 
 // ─── Tier 1: Groq (FREE, supports tools) ───
+// FIX: Groq قد يُلغي النماذج (deprecated) أو يتوقف عن دعمها مؤقتاً.
+// قبل هذا الإصلاح، فشل الطلب بالكامل عند إلغاء نموذج. الآن نحاول
+// عدة نماذج بالترتيب حتى نجد واحداً يعمل.
+//
+// ترتيب النماذج من الأفضل (الأذكى) إلى الأسوأ (الأسرع):
+const GROQ_FALLBACK_CHAIN = [
+  'llama-3.3-70b-versatile',      // PRIMARY — أذكى، يدعم tools
+  'openai/gpt-oss-120b',           // fallback — يدعم tools، مفتوح المصدر
+  'llama-3.1-8b-instant',          // fallback سريع — لكن أضعف
+  'llama3-70b-8192',               // legacy fallback — قد يُلغى لكن نجرب
+]
+
 export async function groqChat(
   messages: any[],
   key: string,
@@ -93,59 +113,89 @@ export async function groqChat(
     stream?: boolean
   } = {},
 ): Promise<GroqResponse | Response | null> {
-  const body: Record<string, any> = {
-    model: opts.model || 'llama-3.3-70b-versatile',
-    messages,
-    max_tokens: opts.maxTokens || 2000,
-    temperature: opts.temperature ?? 0.4,
-  }
-  if (opts.tools) body.tools = opts.tools
-  if (opts.tool_choice) body.tool_choice = opts.tool_choice
-  if (opts.stream) body.stream = true
+  // حدد النموذج المبدئي — إذا أعطى المستخدم نموذجاً، ابدأ به
+  // ثم أضف باقي النماذج الاحتياطية.
+  const requestedModel = opts.model || GROQ_FALLBACK_CHAIN[0]
+  const modelChain = [
+    requestedModel,
+    ...GROQ_FALLBACK_CHAIN.filter((m) => m !== requestedModel),
+  ]
 
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15_000)
-
-    const r = await fetch(GROQ_API, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
-
-    clearTimeout(timeoutId)
-
-    if (!r.ok) {
-      console.error(`[GROQ] ${r.status}: ${await r.text().catch(() => '')}`)
-      return null
+  for (const model of modelChain) {
+    const body: Record<string, any> = {
+      model,
+      messages,
+      max_tokens: opts.maxTokens || 2000,
+      temperature: opts.temperature ?? 0.4,
     }
+    if (opts.tools) body.tools = opts.tools
+    if (opts.tool_choice) body.tool_choice = opts.tool_choice
+    if (opts.stream) body.stream = true
 
-    if (opts.stream) return r
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15_000)
 
-    const json = await r.json()
-    const choice = json.choices?.[0]
-    if (!choice) return null
+      const r = await fetch(GROQ_API, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
 
-    if (choice.message?.tool_calls) {
+      clearTimeout(timeoutId)
+
+      // 404 / 400 → النموذج غير موجود أو تم إلغاؤه — جرّب التالي
+      // 429 → rate limited على هذا النموذج — جرّب التالي
+      // 503 → الخدمة محملة — جرّب التالي
+      if (r.status === 404 || r.status === 400 || r.status === 429 || r.status === 503) {
+        const errBody = await r.text().catch(() => '')
+        console.warn(`[GROQ] ${model} returned ${r.status}: ${errBody.slice(0, 100)} — trying next model`)
+        continue
+      }
+
+      if (!r.ok) {
+        const errBody = await r.text().catch(() => '')
+        console.error(`[GROQ] ${model} ${r.status}: ${errBody.slice(0, 100)}`)
+        // للأخطاء الأخرى (401, 403) لا فائدة من تجربة نماذج أخرى بنفس المفتاح
+        return null
+      }
+
+      // streaming: اقبل أول استجابة ناجحة (لا نحاول fallback للستريم)
+      if (opts.stream) return r
+
+      const json = await r.json()
+      const choice = json.choices?.[0]
+      if (!choice) {
+        console.warn(`[GROQ] ${model} returned no choices — trying next model`)
+        continue
+      }
+
+      if (choice.message?.tool_calls) {
+        return {
+          type: 'tool_calls',
+          tool_calls: choice.message.tool_calls,
+          usage: json.usage,
+        }
+      }
       return {
-        type: 'tool_calls',
-        tool_calls: choice.message.tool_calls,
+        type: 'message',
+        content: choice.message?.content || '',
         usage: json.usage,
       }
+    } catch (e: any) {
+      // AbortError أو خطأ شبكة — جرّب النموذج التالي
+      console.warn(`[GROQ] ${model} error: ${String(e).slice(0, 80)} — trying next model`)
+      continue
     }
-    return {
-      type: 'message',
-      content: choice.message?.content || '',
-      usage: json.usage,
-    }
-  } catch (e) {
-    console.error('[GROQ] Error:', e)
-    return null
   }
+
+  // كل النماذج فشلت
+  console.error('[GROQ] All models in fallback chain failed')
+  return null
 }
 
 // ─── Tier 2: Pollinations (FREE, no key) ───
@@ -248,36 +298,64 @@ export async function nvidiaChat(
 }
 
 // ─── Tier 4: HuggingFace ───
+// FIX: كان يستخدم نموذج gated (meta-llama/Meta-Llama-3-8B-Instruct) الذي
+// يتطلب قبول شروط الاستخدام على HF Hub — الطلبات تُرفض دون مفتاح مع القبول.
+// الآن نجرب عدة نماذج مفتوحة بالكامل، نُرجع أول استجابة ناجحة.
 export async function huggingfaceChat(
   messages: any[],
   key: string,
 ): Promise<string | null> {
-  try {
-    const model = 'meta-llama/Meta-Llama-3-8B-Instruct'
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15_000)
+  // قائمة النماذج المفتوحة بالكامل (لا gated، لا تتطلب قبول شروط)
+  const OPEN_MODELS = [
+    'mistralai/Mistral-7B-Instruct-v0.3',  // Apache 2.0، الأفضل في العربية
+    'HuggingFaceH4/zephyr-7b-beta',         // مفتوح، chat-tuned
+  ]
 
-    const r = await fetch(`${HF_API}/${model}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        inputs: messages.map((m: any) => `<|${m.role}|>\n${m.content}`).join('\n'),
-        parameters: { max_new_tokens: 500, temperature: 0.4 },
-      }),
-      signal: controller.signal,
-    })
+  const prompt = messages.map((m: any) => `<|${m.role}|>\n${m.content}`).join('\n')
 
-    clearTimeout(timeoutId)
+  for (const model of OPEN_MODELS) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15_000)
 
-    if (!r.ok) return null
-    const json = await r.json()
-    return json[0]?.generated_text || null
-  } catch {
-    return null
+      const r = await fetch(`${HF_API}/${model}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inputs: prompt,
+          parameters: { max_new_tokens: 500, temperature: 0.4 },
+        }),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      // 401/403 → المفتاح غير صالح أو النموذج gated — جرّب التالي
+      // 429 → rate limited — جرّب التالي (لا نُعيد المحاولة هنا، الـ router سيتعامل)
+      // 503 → النموذج يحمل (loading) — جرّب التالي
+      if (!r.ok) {
+        console.warn(`[HF] ${model} returned ${r.status} — trying next model`)
+        continue
+      }
+
+      const json = await r.json()
+      const text = json[0]?.generated_text || null
+      if (text && text.trim().length > 0) {
+        console.log(`[HF] ✓ ${model} succeeded`)
+        return text
+      }
+      // استجابة فارغة — جرّب التالي
+    } catch (e: any) {
+      console.warn(`[HF] ${model} error: ${String(e).slice(0, 80)} — trying next model`)
+      // تابع للنموذج التالي
+    }
   }
+
+  console.warn('[HF] All open models failed')
+  return null
 }
 
 // ─── Tier 5: OpenRouter (DeepSeek) ───

@@ -73,7 +73,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     // ═══ FIX #2: 240 ثانية (4 دقائق) — تقليل تجميد UI ═══
     // Previously: 60s → PBKDF2 encryption كل دقيقة = freeze 1-3s
     // Now: 240s → 4× أقل تجميد، مع حفظ عند كل تغيير مهم أيضاً
-    _autoSaveTimer = Timer.periodic(const Duration(seconds: 240), (_) {
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (_hasUnsavedChanges && _formData.isNotEmpty) {
         _autoSave(showFeedback: false);
       }
@@ -110,11 +110,26 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
           }
         }
       }
+      // FIX: ابحث في كل cache keys إذا لم نجد النموذج
+      if (form == null) {
+        final allKeys = cache.getCacheKeys();
+        for (final key in allKeys) {
+          if (key.startsWith('forms_') && key != 'forms_$campaignValue' && key != 'forms_all') {
+            final forms = cache.getCachedDataList(key);
+            if (forms != null) {
+              for (final f in forms) {
+                if (f['id'] == widget.formId) { form = f; break; }
+              }
+            }
+            if (form != null) break;
+          }
+        }
+      }
 
       if (form == null) {
-        // ═══ FIX N-6: No forced Navigator.pop — let user decide ═══
-        // Previously: forced pop after 2 seconds — user loses all context
-        // Now: show dialog with manual back button — user controls navigation
+        // FIX: حمّل المسودة حتى لو فشل تحميل النموذج
+        await _loadDraft();
+
         if (!ConnectivityUtils.isOnline) {
           setState(() => _isLoading = false);
           if (mounted) {
@@ -521,6 +536,17 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   @override
   void dispose() {
+    // FIX: احفظ التغييرات غير المحفوظة قبل التخلص من الـ widget
+    if (_hasUnsavedChanges && _formData.isNotEmpty) {
+      try {
+        _syncControllersToFormData();
+        final offline = ref.read(offlineManagerProvider);
+        offline.saveDraft(_draftId, widget.formId, Map<String, dynamic>.from(_formData));
+        _hasUnsavedChanges = false;
+      } catch (e) {
+        debugPrint('[FormFillScreen] Save-on-dispose failed: $e');
+      }
+    }
     _autoSaveTimer?.cancel();
     _pageController.dispose();
     for (final controller in _textControllers.values) {

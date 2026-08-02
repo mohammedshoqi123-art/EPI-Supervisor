@@ -1416,7 +1416,8 @@ class OfflineManager {
           // Hive operations are fast local writes — fire-and-forget is acceptable.
           _safeBox?.put('${_cacheKey}_corrupted_backup', data);
         } catch (_) {}
-        _safeBox?.delete(_cacheKey);
+        // FIX: لا تحذف الكاش — البيانات القديمة أفضل من لا شيء
+        // _safeBox?.delete(_cacheKey);
         _cacheMemory = null;
         return {};
       }
@@ -1443,10 +1444,14 @@ class OfflineManager {
     final entry = cache[key];
     if (entry == null) return null;
 
+    // FIX: عند offlineOverride=true، أرجع البيانات حتى لو قديمة
+    if (offlineOverride) {
+      return entry['data'];
+    }
+
     final cachedAt = DateTime.tryParse(entry['cached_at'] ?? '');
     if (cachedAt != null) {
       final age = DateTime.now().difference(cachedAt);
-      // Only discard data older than the hard retention limit (30 days)
       if (age > AppConfig.maxOfflineRetention) {
         if (kDebugMode) {
           debugPrint(
@@ -1583,6 +1588,8 @@ class OfflineManager {
           final draft = jsonDecode(decrypted);
           final savedAt = DateTime.tryParse(draft['saved_at'] ?? '');
           if (savedAt != null && now.difference(savedAt).inDays > 30) {
+            // FIX: انقل لـ recovered بدل الحذف الدائم
+            draftsToPreserve[draftId] = data;
             draftsToRemove.add(draftId);
           }
         } catch (_) {

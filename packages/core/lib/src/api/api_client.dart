@@ -441,7 +441,7 @@ class ApiClient {
         await _ensureFreshSession();
 
         // ═══ FIX: Timeout قابل للتعديل — الافتراضي 30s، يمكن زيادته للدوان الثقيلة ═══
-        final effectiveTimeout = timeout ?? _functionTimeout;
+        final effectiveTimeout = timeout ?? _getFunctionTimeout(functionName);
         final response =
             await _safeClient.functions.invoke(functionName, body: body).timeout(
                   effectiveTimeout,
@@ -464,7 +464,7 @@ class ApiClient {
             final response = await _safeClient.functions
                 .invoke(functionName, body: body)
                 .timeout(
-                  _functionTimeout,
+                  _getFunctionTimeout(functionName),
                   onTimeout: () => throw TimeoutException(
                     'Function $functionName timed out (retry)',
                   ),
@@ -792,7 +792,15 @@ class ApiClient {
 
   // ═══ FIX A2: Reduced timeout from 90s to 30s — 90s was too long for mobile users ═══
   // Edge Function cold starts are typically ≤10s. 30s gives headroom without freezing UI.
-  static const _functionTimeout = Duration(seconds: 20);  // ═══ FIX: 20s (was 30s) ═══
+  static const Map<String, Duration> _functionTimeouts = {
+    'ai-chat-v3': Duration(seconds: 60),
+    'submit-form': Duration(seconds: 30),
+    'sync-offline': Duration(seconds: 45),
+    'get-analytics': Duration(seconds: 45),
+  };
+  static const _defaultFunctionTimeout = Duration(seconds: 20);
+  static Duration _getFunctionTimeout(String name) =>
+      _functionTimeouts[name] ?? _defaultFunctionTimeout;  // ═══ FIX: 20s (was 30s) ═══
 
   // ═══ FIX A1: Retry logic for network errors ═══
   // Retries 3 times with exponential backoff (1s, 2s, 4s) for transient failures.

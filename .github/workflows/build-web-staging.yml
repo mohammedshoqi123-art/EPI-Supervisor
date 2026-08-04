@@ -1,0 +1,54 @@
+name: Build Flutter Web (Staging)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.27.4'
+
+jobs:
+  build-web-staging:
+    name: Build Flutter Web (Staging)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Setup project
+        run: |
+          cd packages/core && flutter pub get
+          cd $GITHUB_WORKSPACE/packages/shared && flutter pub get && dart run build_runner build --delete-conflicting-outputs
+          cd $GITHUB_WORKSPACE/apps/mobile && flutter pub get
+
+      - name: Build Flutter Web (Staging)
+        working-directory: apps/mobile
+        env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: *** secrets.STAGING_SUPABASE_ANON_KEY }}
+        run: |
+          flutter build web --release \
+            --dart-define=SUPABASE_URL=$STAGING_SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$STAGI…_KEY \
+            --dart-define=APP_ENV=development \
+            --dart-define=ENCRYPTION_KEY=*** secrets.ENCRYPTION_KEY }} \
+            --source-maps
+
+      - name: Deploy to GitHub Pages (app/staging)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./apps/mobile/build/web/
+          publish_branch: gh-pages
+          destination_dir: app/staging
+          keep_files: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'deploy: staging flutter web ${{ github.sha }}'

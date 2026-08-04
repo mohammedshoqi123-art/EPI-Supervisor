@@ -35,7 +35,8 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     free: true,
     // FIX: قائمة النماذج الاحتياطية — إذا أُلغي النموذج الأساسي، نحاول الباقي.
     // الترتيب من الأذكى للأسوأ (انظر GROQ_FALLBACK_CHAIN في groqChat).
-    models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'llama-3.1-8b-instant', 'llama3-70b-8192'],
+    // ⚠️ تم تقليل القائمة لنموذجين فقط لتجنب timeout mismatch مع hybridRouteChat.
+    models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'],
     maxTokens: 4000,
     supportsTools: true,
     supportsStreaming: true,
@@ -91,15 +92,23 @@ const PROVIDERS: Record<string, ProviderConfig> = {
 // ─── Tier 1: Groq (FREE, supports tools) ───
 // FIX: Groq قد يُلغي النماذج (deprecated) أو يتوقف عن دعمها مؤقتاً.
 // قبل هذا الإصلاح، فشل الطلب بالكامل عند إلغاء نموذج. الآن نحاول
-// عدة نماذج بالترتيب حتى نجد واحداً يعمل.
+// نموذجين بالترتيب حتى نجد واحداً يعمل.
+//
+// ⚠️ FIX #2 (timeout mismatch): hybridRouteChat يحيط groqChat بـ Promise.race
+// مع timeout 15s. النسخة السابقة جرّبت 4 نماذج × 15s = 60s محتملة، لكن
+// الـ race الخارجي كان يرفض الطلب بعد 15s قبل إكمال التجارب.
+// الآن: نموذجان فقط × 6s = 12s كحد أقصى (هامش 3s للشبكة).
 //
 // ترتيب النماذج من الأفضل (الأذكى) إلى الأسوأ (الأسرع):
 const GROQ_FALLBACK_CHAIN = [
   'llama-3.3-70b-versatile',      // PRIMARY — أذكى، يدعم tools
   'openai/gpt-oss-120b',           // fallback — يدعم tools، مفتوح المصدر
-  'llama-3.1-8b-instant',          // fallback سريع — لكن أضعف
-  'llama3-70b-8192',               // legacy fallback — قد يُلغى لكن نجرب
+  // أزلت llama-3.1-8b-instant و llama3-70b-8192 لأنهما يسببان timeout mismatch
 ]
+
+// Timeout لكل محاولة نموذج — أقل من الـ timeout الخارجي في hybridRouteChat (15s)
+// لنتمكن من تجربة نموذجين على الأقل قبل أن يرفض الـ race الخارجي.
+const GROQ_PER_MODEL_TIMEOUT_MS = 6_000
 
 export async function groqChat(
   messages: any[],
@@ -121,7 +130,12 @@ export async function groqChat(
     ...GROQ_FALLBACK_CHAIN.filter((m) => m !== requestedModel),
   ]
 
-  for (const model of modelChain) {
+  // For streaming, try only the FIRST model — streaming fallback is not safe
+  // (response body cannot be reused). Use 15s timeout for streaming.
+  const effectiveChain = opts.stream ? [modelChain[0]] : modelChain
+  const perModelTimeout = opts.stream ? 15_000 : GROQ_PER_MODEL_TIMEOUT_MS
+
+  for (const model of effectiveChain) {
     const body: Record<string, any> = {
       model,
       messages,
@@ -134,7 +148,7 @@ export async function groqChat(
 
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15_000)
+      const timeoutId = setTimeout(() => controller.abort(), perModelTimeout)
 
       const r = await fetch(GROQ_API, {
         method: 'POST',
@@ -301,6 +315,11 @@ export async function nvidiaChat(
 // FIX: كان يستخدم نموذج gated (meta-llama/Meta-Llama-3-8B-Instruct) الذي
 // يتطلب قبول شروط الاستخدام على HF Hub — الطلبات تُرفض دون مفتاح مع القبول.
 // الآن نجرب عدة نماذج مفتوحة بالكامل، نُرجع أول استجابة ناجحة.
+//
+// ⚠️ FIX #2 (timeout mismatch): hybridRouteChat يحيط huggingfaceChat بـ Promise.race
+// مع timeout 15s. النسخة السابقة جرّبت نموذجين × 15s = 30s محتملة، لكن
+// الـ race الخارجي كان يرفض الطلب بعد 15s قبل إكمال التجربة الثانية.
+// الآن: timeout 6s لكل نموذج = 12s كحد أقصى (هامش 3s للشبكة).
 export async function huggingfaceChat(
   messages: any[],
   key: string,
@@ -316,7 +335,9 @@ export async function huggingfaceChat(
   for (const model of OPEN_MODELS) {
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15_000)
+      // FIX: 6s لكل نموذج بدل 15s — حتى نتمكن من تجربة نموذجين ضمن
+      // الـ timeout الإجمالي 15s في hybridRouteChat.
+      const timeoutId = setTimeout(() => controller.abort(), 6_000)
 
       const r = await fetch(`${HF_API}/${model}`, {
         method: 'POST',
@@ -334,7 +355,7 @@ export async function huggingfaceChat(
       clearTimeout(timeoutId)
 
       // 401/403 → المفتاح غير صالح أو النموذج gated — جرّب التالي
-      // 429 → rate limited — جرّب التالي (لا نُعيد المحاولة هنا، الـ router سيتعامل)
+      // 429 → rate limited — جرّب التالي
       // 503 → النموذج يحمل (loading) — جرّب التالي
       if (!r.ok) {
         console.warn(`[HF] ${model} returned ${r.status} — trying next model`)

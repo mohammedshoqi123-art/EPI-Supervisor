@@ -86,3 +86,36 @@ Stage Summary:
   • Deploy DB Migrations: failure (continue-on-error: true، لا يؤثر)
 - Run URL: https://github.com/mohammedshoqi123-art/EPI-Supervisor/actions/runs/30765991461
 
+
+---
+Task ID: 3
+Agent: main (Super Z)
+Task: إصلاح مشكلتين: (1) المساعد الذكي يفشل بالرد (2) تبويبات التحليلات (الالتزام/المترددين/التحديات) تفشل بالظهور
+
+Work Log:
+- مشكلة AI chat — السبب الجذري: تعديلاتي السابقة (commit bf47ce2) أدخلت GROQ_FALLBACK_CHAIN بـ 4 نماذج، كل واحد له timeout 15s. لكن hybridRouteChat يحيط groqChat بـ Promise.race مع timeout 15s خارجي. النتيجة: إذا فشل النموذج الأول بـ timeout، لا يوجد وقت لتجربة الثاني.
+- مشكلة AI chat — السبب الجذري الثاني: عندما needTools=true (معظم أسئلة المستخدمين)، hybridRouteChat يُرجع null فوراً عند فشل Groq بدون fallback لـ Pollinations. هذا يفسر "all providers failed" لأسئلة بسيطة.
+- مشكلة AI chat — الحلول:
+  1. providers.ts: تقليل GROQ_FALLBACK_CHAIN لنموذجين فقط + تقليل timeout لكل نموذج إلى 6s (إجمالي 12s مع هامش 3s)
+  2. providers.ts: تقليل timeout في huggingfaceChat من 15s إلى 6s لكل نموذج
+  3. hybrid-gateway.ts: إضافة fallback كامل عندما needTools=true: Groq-with-tools → Groq-no-tools → Pollinations. هذا يضمن أن المستخدم يحصل على إجابة حتى لو فشلت الـ tools.
+  4. providers.ts: تحديث PROVIDERS.groq.models لتعكس الـ chain الجديد
+
+- مشكلة التحليلات — التشخيص:
+  - _ComplianceTab, _NumbersTab, _ChallengesTab كلها تستخدم _supervisionSubsProvider
+  - _supervisionSubsProvider يستدعي cache.incrementalGetList الذي يستدعي getSubmissions
+  - getSubmissions يستخدم RPC fetch_submissions مع timeout 30s، ثم fallback بـ pagination
+  - إذا فشل الـ cache + الـ RPC + الـ fallback، يفشل الـ provider بالكامل
+  - الجاهزية تعمل لأنها تستخدم _readinessSubsProvider منفصل
+
+- مشكلة التحليلات — الحلول:
+  1. analytics_screen.dart: إضافة fallback في _supervisionSubsProvider و _readinessSubsProvider — إذا فشل incrementalGetList، نحاول getSubmissions مباشرة بدون cache مع timeout 30s
+  2. analytics_screen.dart: تحسين _ErrRetry ليعرض تفاصيل الخطأ في وضع debug (kDebugMode) — هذا يساعد المستخدم في التشخيص
+  3. analytics_screen.dart: تمرير errorDetails للتبويبات الثلاثة (_ComplianceTab, _NumbersTab, _ChallengesTab)
+
+Stage Summary:
+- 3 ملفات معدّلة:
+  1. supabase/functions/ai-chat-v3/llm/providers.ts — Groq timeout fix + HF timeout fix
+  2. supabase/functions/ai-chat-v3/llm/hybrid-gateway.ts — fallback كامل لـ needTools path
+  3. apps/mobile/lib/screens/analytics_screen.dart — fallback في providers + error details في UI
+- جاهز لـ commit + push + متابعة CI

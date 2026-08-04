@@ -109,9 +109,10 @@ export async function hybridRouteChat(
   // ═══ FIX #7: أدوات (tools) — Groq فقط يدعمها، نبقي تسلسلي ═══
   if (needTools) {
     const groqKey = env.GROQ_API_KEY
+    // FIX: عرّف start في scope أوسع ليكون متاحاً للـ fallback paths
+    const start = Date.now()
     if (groqKey && isAvailable('groq')) {
       attempts.push('groq')
-      const start = Date.now()
       try {
         const result = await Promise.race([
           groqChat(messages, groqKey, {
@@ -137,6 +138,60 @@ export async function hybridRouteChat(
         console.error(`[GATEWAY] Groq (tools) failed: ${e.message}`)
       }
     }
+
+    // ═══ FIX: fallback للنص العادي بدون tools عندما يفشل Groq ═══
+    // Previously: إذا فشل Groq مع tools، نُرجع null مباشرة → المستخدم يرى
+    // "all providers failed" حتى لأسئلة بسيطة تحتاج بيانات.
+    // Now: نحاول Groq بدون tools ثم Pollinations كـ fallback أخير.
+    // الـ LLM سيجيب بناءً على grounding context المُحقن مسبقاً في system prompt.
+    console.warn('[GATEWAY] Tools path failed — falling back to no-tools chat with grounding context')
+
+    // جرّب Groq بدون tools (نفس الـ messages تحتوي grounding في system prompt)
+    if (groqKey && isAvailable('groq')) {
+      attempts.push('groq-no-tools')
+      try {
+        const result = await Promise.race([
+          groqChat(messages, groqKey, {
+            model: model || 'llama-3.3-70b-versatile',
+            maxTokens: maxTokens || 2000,
+            temperature,
+            // لا tools — استجابة نصية فقط
+          }),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+        ])
+        if (result && result.type === 'message' && result.content) {
+          recordSuccess('groq', Date.now() - start)
+          console.log('[GATEWAY] ✓ Groq no-tools fallback succeeded')
+          return { content: result.content, usage: result.usage, provider: 'groq-no-tools', attempts }
+        }
+      } catch (e: any) {
+        console.error(`[GATEWAY] Groq no-tools fallback failed: ${e.message}`)
+      }
+    }
+
+    // جرّب Pollinations كـ fallback أخير (مجاني، لا يحتاج مفتاح)
+    if (isAvailable('pollinations')) {
+      attempts.push('pollinations')
+      try {
+        const result = await Promise.race([
+          pollinationsChat(messages, {
+            model: 'openai',
+            maxTokens: maxTokens || 2000,
+            temperature,
+          }),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+        ])
+        if (result && typeof result === 'string') {
+          recordSuccess('pollinations', Date.now() - start)
+          console.log('[GATEWAY] ✓ Pollinations fallback succeeded')
+          return { content: result, provider: 'pollinations', attempts }
+        }
+      } catch (e: any) {
+        recordFailure('pollinations')
+        console.error(`[GATEWAY] Pollinations fallback failed: ${e.message}`)
+      }
+    }
+
     return { content: null, provider: 'none', attempts }
   }
 

@@ -181,22 +181,40 @@ final _readinessSubsProvider = FutureProvider.family
   // Now: جلب الإرساليات الفعلية مع حقل data الكامل
   final cache = await ref.watch(offlineDataCacheProvider.future);
   final cacheKey = 'readiness_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
-  return cache.incrementalGetList(
-    cacheKey,
-    ({String? createdAfter}) async {
-      return ref.read(databaseServiceProvider).getSubmissions(
+  try {
+    return await cache.incrementalGetList(
+      cacheKey,
+      ({String? createdAfter}) async {
+        return ref.read(databaseServiceProvider).getSubmissions(
+              formId: _readinessFormId,
+              campaignType: params.campaignType,
+              campaignRound: params.campaignRound,
+              limit: 2000,
+              lean: false,
+              createdAfter: createdAfter,
+            );
+      },
+      maxAge: const Duration(hours: 2),
+      dateField: 'updated_at',
+      idField: 'id',
+    );
+  } catch (e) {
+    // ═══ FIX: نفس الـ fallback المطبّق على _supervisionSubsProvider ═══
+    debugPrint('[Analytics] _readinessSubsProvider incrementalGetList failed: $e');
+    debugPrint('[Analytics] Trying direct getSubmissions without cache...');
+    try {
+      return await ref.read(databaseServiceProvider).getSubmissions(
             formId: _readinessFormId,
             campaignType: params.campaignType,
             campaignRound: params.campaignRound,
             limit: 2000,
             lean: false,
-            createdAfter: createdAfter,
-          );
-    },
-    maxAge: const Duration(hours: 2),
-    dateField: 'updated_at',
-    idField: 'id',
-  );
+          ).timeout(const Duration(seconds: 30));
+    } catch (e2) {
+      debugPrint('[Analytics] Direct getSubmissions also failed: $e2');
+      rethrow;
+    }
+  }
 });
 
 final _supervisionSubsProvider = FutureProvider.family
@@ -204,22 +222,43 @@ final _supervisionSubsProvider = FutureProvider.family
   (ref, params) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
   final cacheKey = 'supervision_subs_${params.campaignType ?? 'all'}_${params.campaignRound ?? 'all'}';
-  return cache.incrementalGetList(
-    cacheKey,
-    ({String? createdAfter}) async {
-      return ref.read(databaseServiceProvider).getSubmissions(
+  try {
+    return await cache.incrementalGetList(
+      cacheKey,
+      ({String? createdAfter}) async {
+        return ref.read(databaseServiceProvider).getSubmissions(
+              formId: _supervisionFormId,
+              campaignType: params.campaignType,
+              campaignRound: params.campaignRound,
+              limit: 2000,
+              lean: false, // ═══ NEEDS 'data' column for field-level analysis ═══
+              createdAfter: createdAfter,
+            );
+      },
+      maxAge: const Duration(hours: 2),
+      dateField: 'updated_at',
+      idField: 'id',
+    );
+  } catch (e) {
+    // ═══ FIX: في حالة فشل incrementalGetList (RPC timeout, cache corruption,
+    // network error مع cache فارغ)، جرب استدعاء مباشر بدون cache.
+    // هذا يضمن أن التبويبات تعمل حتى لو كان الـ cache سيئاً.
+    debugPrint('[Analytics] _supervisionSubsProvider incrementalGetList failed: $e');
+    debugPrint('[Analytics] Trying direct getSubmissions without cache...');
+    try {
+      return await ref.read(databaseServiceProvider).getSubmissions(
             formId: _supervisionFormId,
             campaignType: params.campaignType,
             campaignRound: params.campaignRound,
             limit: 2000,
-            lean: false, // ═══ NEEDS 'data' column for field-level analysis ═══
-            createdAfter: createdAfter,
-          );
-    },
-    maxAge: const Duration(hours: 2),
-    dateField: 'updated_at',
-    idField: 'id',
-  );
+            lean: false,
+          ).timeout(const Duration(seconds: 30));
+    } catch (e2) {
+      debugPrint('[Analytics] Direct getSubmissions also failed: $e2');
+      // أعد رمي الخطأ الأصلي ليتم عرضه في الـ UI بشكل صحيح
+      rethrow;
+    }
+  }
 });
 
 // ═══ P0-4: Precomputed KPI Provider — was 250,000 iterations per build()
@@ -1237,6 +1276,7 @@ class _ComplianceTab extends ConsumerWidget {
           onRetry: isOffline
               ? null
               : () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref))),
+          errorDetails: e,
         );
       },
       data: (subs) {
@@ -1348,6 +1388,7 @@ class _NumbersTab extends ConsumerWidget {
           onRetry: isOffline
               ? null
               : () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref))),
+          errorDetails: e,
         );
       },
       data: (subs) {
@@ -1503,6 +1544,7 @@ class _ChallengesTab extends ConsumerWidget {
           onRetry: isOffline
               ? null
               : () => ref.invalidate(_supervisionSubsProvider(_getAnalyticsParams(ref))),
+          errorDetails: e,
         );
       },
       data: (subs) {
@@ -2464,7 +2506,8 @@ class _TextBlock extends StatelessWidget {
 class _ErrRetry extends StatelessWidget {
   final String msg;
   final VoidCallback? onRetry; // ═══ Nullable for offline case ═══
-  const _ErrRetry({required this.msg, this.onRetry});
+  final Object? errorDetails; // ═══ FIX: optional error info for debugging ═══
+  const _ErrRetry({required this.msg, this.onRetry, this.errorDetails});
   @override
   Widget build(BuildContext context) => Center(
       child: Padding(
@@ -2479,6 +2522,26 @@ class _ErrRetry extends StatelessWidget {
             Text(msg,
                 style: const TextStyle(fontFamily: 'Tajawal'),
                 textAlign: TextAlign.center),
+            // ═══ FIX: في وضع debug، أظهر تفاصيل الخطأ لتشخيص المشكلة ═══
+            if (kDebugMode && errorDetails != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  errorDetails.toString(),
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 10,
+                    color: Colors.grey.shade700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
             if (onRetry != null) ...[
               const SizedBox(height: 16),
               ElevatedButton.icon(

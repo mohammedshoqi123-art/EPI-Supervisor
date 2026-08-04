@@ -424,6 +424,37 @@ class ApiClient {
     }
   }
 
+  /// ═══ RPC returning a single JSONB object (not a list) ═══
+  /// Use this for RPCs like `get_form_analytics` that return a single record.
+  Future<Map<String, dynamic>?> rpcSingle(
+    String functionName, {
+    Map<String, dynamic>? params,
+  }) async {
+    try {
+      await _ensureFreshSession();
+      final response = await _safeClient.rpc(
+        functionName,
+        params: params,
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw TimeoutException('RPC single timed out'),
+      );
+
+      if (response == null) return null;
+      if (response is Map) {
+        return Map<String, dynamic>.from(response);
+      }
+      // Some RPCs may return a list with one element
+      if (response is List && response.isNotEmpty) {
+        return Map<String, dynamic>.from(response.first as Map);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ApiClient] rpcSingle($functionName) error: $e');
+      return null;
+    }
+  }
+
   // ===== Edge Function calls =====
 
   Future<Map<String, dynamic>> callFunction(

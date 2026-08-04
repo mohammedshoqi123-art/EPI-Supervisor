@@ -256,6 +256,13 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
   // Direct REST queries are capped at 1000 rows even with .limit(50000)
   // RPC functions execute inside PostgreSQL and bypass this limit
   const effectiveRound = filters.campaign_round ?? campaignRound
+  // ⚠️ FIX: Only apply round filter for integrated_activity.
+  // Polio/measles submissions don't carry a real round; filtering by round=N
+  // excludes them all → empty results when user picks round 2.
+  const shouldApplyRound =
+    effectiveRound && effectiveRound > 0 &&
+    (filters.campaign_type === 'integrated_activity' ||
+     (!filters.campaign_type && campaignRound != null))
 
   try {
     // Use fetch_submissions RPC (bypasses 1000 limit, includes joins)
@@ -266,7 +273,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
         p_status: filters.status || null,
         p_form_id: filters.form_id || null,
         p_governorate_id: null,
-        p_campaign_round: (effectiveRound && effectiveRound > 0) ? effectiveRound : null,
+        p_campaign_round: shouldApplyRound ? effectiveRound : null,
         p_days: filters.days || null,
       }),
       15_000,
@@ -282,7 +289,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
       if (filters.days) q = q.gte('created_at', daysAgo(filters.days))
       if (filters.status) q = q.eq('status', filters.status)
       if (filters.form_id) q = q.eq('form_id', filters.form_id)
-      if (effectiveRound && effectiveRound > 0) q = q.eq('campaign_round', effectiveRound)
+      if (shouldApplyRound) q = q.eq('campaign_round', effectiveRound)
 
       const { data: fallbackData, error: fallbackErr } = await withTimeout(q.limit(1000), 15_000) ?? {}
       if (fallbackErr || !fallbackData || fallbackData.length === 0) return []
@@ -668,12 +675,17 @@ function analyzeFormData(rows: any[], formId?: string): { summary: string; quote
 async function fetchGovernoratesData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {
   // ⚠️ FIX: Apply campaign_round + campaign_type filters (were being ignored)
   const effectiveRound = plan.filters.campaign_round ?? campaignRound
+  // ⚠️ FIX: Only apply round filter for integrated_activity.
+  const shouldApplyRound =
+    effectiveRound && effectiveRound > 0 &&
+    (plan.filters.campaign_type === 'integrated_activity' ||
+     (!plan.filters.campaign_type && campaignRound != null))
 
   let q = supa.from('form_submissions')
     .select('id, status, governorate_id, district_id, governorates!governorate_id(name_ar), districts!district_id(name_ar), forms!form_id(campaign_type), campaign_round')
     .is('deleted_at', null)
 
-  if (effectiveRound && effectiveRound > 0) {
+  if (shouldApplyRound) {
     q = q.eq('campaign_round', effectiveRound)
   }
 
@@ -860,13 +872,18 @@ async function fetchShortagesData(supa: any, plan: QueryPlan): Promise<Grounding
 async function fetchTrendsData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {
   const days = plan.filters.days || 30
   const effectiveRound = plan.filters.campaign_round ?? campaignRound
+  // ⚠️ FIX: Only apply round filter for integrated_activity.
+  const shouldApplyRound =
+    effectiveRound && effectiveRound > 0 &&
+    (plan.filters.campaign_type === 'integrated_activity' ||
+     (!plan.filters.campaign_type && campaignRound != null))
 
   let q = supa.from('form_submissions')
     .select('created_at, status, campaign_round')
     .is('deleted_at', null)
     .gte('created_at', daysAgo(days))
 
-  if (effectiveRound && effectiveRound > 0) {
+  if (shouldApplyRound) {
     q = q.eq('campaign_round', effectiveRound)
   }
 
@@ -1458,12 +1475,18 @@ async function fetchFormsData(supa: any, plan?: QueryPlan): Promise<GroundingSou
 async function fetchAnalyticsPageData(supa: any, plan: QueryPlan, campaignRound: number | null): Promise<GroundingSource[]> {
   const sources: GroundingSource[] = []
 
+  // ⚠️ FIX: Only apply round filter for integrated_activity.
+  const shouldApplyRound =
+    campaignRound && campaignRound > 0 &&
+    (plan.filters.campaign_type === 'integrated_activity' ||
+     (!plan.filters.campaign_type && campaignRound != null))
+
   // 1) جلب الإرساليات (للاتجاه الأسبوعي + التغطية)
   let subsQuery = supa.from('form_submissions')
     .select('id, status, governorate_id, district_id, created_at, campaign_round, form_id')
     .is('deleted_at', null)
 
-  if (campaignRound && campaignRound > 0) {
+  if (shouldApplyRound) {
     subsQuery = subsQuery.eq('campaign_round', campaignRound)
   }
 
@@ -1700,12 +1723,18 @@ async function fetchSupervisionEvaluationData(supa: any, plan: QueryPlan, campai
     5_000,
   ) ?? {}
 
+  // ⚠️ FIX: Only apply round filter for integrated_activity.
+  const shouldApplyRoundSupervision =
+    campaignRound && campaignRound > 0 &&
+    (plan.filters.campaign_type === 'integrated_activity' ||
+     (!plan.filters.campaign_type && campaignRound != null))
+
   // 4) جلب كل الإرساليات (مع فلترة الجولة)
   let subsQuery = supa.from('form_submissions')
     .select('id, submitted_by, governorate_id, district_id, status, created_at, campaign_round, form_id')
     .is('deleted_at', null)
 
-  if (campaignRound && campaignRound > 0) {
+  if (shouldApplyRoundSupervision) {
     subsQuery = subsQuery.eq('campaign_round', campaignRound)
   }
 

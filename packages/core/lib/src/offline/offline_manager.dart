@@ -1126,15 +1126,19 @@ class OfflineManager {
           });
           debugPrint('[OfflineManager] Draft $draftId read as plain JSON (not encrypted)');
         } catch (_) {
-          // ═══ FIX: لا نتخطى المسودة — نُضيفها مع بيانات محدودة ═══
-          // Previously: skipped silently → user sees empty list
-          // Now: add with limited info so user can see the draft exists
-          debugPrint('[OfflineManager] ⚠️ Draft $draftId failed to decrypt — showing limited info');
+          // ═══ FIX: لا نتخطى المسودة — نُضيفها مع علامة _needs_migration ═══
+          // Previously: returned plain {data: {}} which form_fill_screen would
+          // load as an empty form and then overwrite on save-on-dispose → DATA LOSS.
+          // Now: return _needs_migration: true so form_fill_screen refuses to load
+          // and shows "draft corrupted" message instead of an empty form.
+          debugPrint('[OfflineManager] ⚠️ Draft $draftId failed to decrypt — marking as needs_migration');
           result.add({
             'draft_id': draftId,
             'form_id': draftId,
             'data': <String, dynamic>{},
             'saved_at': null,
+            '_needs_migration': true,
+            '_corrupted': true,
           });
         }
       }
@@ -1153,6 +1157,7 @@ class OfflineManager {
               'data': <String, dynamic>{},
               'saved_at': null,
               '_recovered': true,
+              '_needs_migration': true,
             });
           }
           if (kDebugMode && result.isNotEmpty) {
@@ -1466,8 +1471,30 @@ class OfflineManager {
   }
 
   Future<void> clearCache() async {
-    await _safeBox?.delete(_cacheKey);
-    _invalidateCacheMemory();
+    // ⚠️ FIX: Selective clear — preserve reference data (forms, governorates,
+    // districts, facilities) so the app still works offline after cache clear.
+    // Previously: deleted entire cache → forms disappeared → user couldn't fill
+    // any form offline. Now: only clear non-reference entries (submissions,
+    // dashboard stats, etc.) and let the next sync refresh them.
+    final cache = Map<String, dynamic>.from(_getCache());
+    final preserved = <String, dynamic>{};
+    for (final entry in cache.entries) {
+      final isReference = _referenceCachePrefixes.any((prefix) => entry.key.startsWith(prefix));
+      if (isReference) {
+        preserved[entry.key] = entry.value;
+      }
+    }
+    if (preserved.isNotEmpty) {
+      final encrypted = _encryption.encrypt(jsonEncode(preserved));
+      await _safeBox?.put(_cacheKey, encrypted);
+      _cacheMemory = preserved;
+    } else {
+      await _safeBox?.delete(_cacheKey);
+      _invalidateCacheMemory();
+    }
+    if (kDebugMode) {
+      debugPrint('[OfflineManager] clearCache: preserved ${preserved.length} reference entries, cleared ${cache.length - preserved.length} non-reference entries');
+    }
   }
 
   /// Remove a specific key from the persistent cache.

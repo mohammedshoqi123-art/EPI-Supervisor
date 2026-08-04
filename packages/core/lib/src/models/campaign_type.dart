@@ -2,7 +2,8 @@
 /// ═══ Now supports dynamic visibility from Supabase campaign_types table ═══
 enum CampaignType {
   polioCampaign('polio_campaign', 'حملة شلل الأطفال', '🧬'),
-  integratedActivity('integrated_activity', 'النشاط الإيصالي التكاملي', '📋');
+  integratedActivity('integrated_activity', 'النشاط الإيصالي التكاملي', '📋'),
+  measlesCampaign('measles_campaign', 'حملة الحصبة', '🦠');
 
   final String value;
   final String labelAr;

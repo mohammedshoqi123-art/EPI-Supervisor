@@ -116,10 +116,20 @@ export async function getCampaignFormIds(supa: any, campaignType: string): Promi
   return data?.map((f: any) => f.id) ?? null
 }
 
-export function applyCampaignFilter(query: any, formIds: string[] | null, campaignRound?: number | null) {
+export function applyCampaignFilter(
+  query: any,
+  formIds: string[] | null,
+  campaignRound?: number | null,
+  campaignType?: string | null,
+) {
   let q = query
   if (formIds && formIds.length > 0) q = q.in('form_id', formIds)
-  if (campaignRound && campaignRound > 0) q = q.eq('campaign_round', campaignRound)
+  // ⚠️ FIX: Only apply round filter for integrated_activity.
+  // Polio/measles submissions don't carry a real round; filtering by round=N
+  // excludes them all → empty results when user picks round 2.
+  if (campaignRound && campaignRound > 0 && campaignType === 'integrated_activity') {
+    q = q.eq('campaign_round', campaignRound)
+  }
   return q
 }
 

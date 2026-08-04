@@ -22,8 +22,24 @@ class FormIds {
   /// استمارة تقييم جودة الأداء للمرافق الصحية
   static const String healthFacilityAssessment = '606b5093-9a8f-47d6-a6c9-b0429ce4a9f6';
 
+  /// استمارة الإشراف لحملة الحصبة
+  static const String measlesSupervision = 'a1b2c3d4-1111-4111-8111-111111111111';
+
+  /// استمارة المسح العشوائي لحملة الحصبة
+  static const String measlesSurvey = 'a1b2c3d4-2222-4222-8222-222222222222';
+
+  /// استمارة جاهزية حملة الحصبة
+  static const String measlesReadiness = 'a1b2c3d4-3333-4333-8333-333333333333';
+
   /// كل المعرفات
-  static const List<String> all = [supervision, readiness, healthFacilityAssessment];
+  static const List<String> all = [
+    supervision,
+    readiness,
+    healthFacilityAssessment,
+    measlesSupervision,
+    measlesSurvey,
+    measlesReadiness,
+  ];
 
   /// التحقق إذا كان المعرف ينتمي لنموذج معروف
   static bool isKnown(String id) => all.contains(id);
@@ -33,6 +49,9 @@ class FormIds {
     if (id == supervision) return 'استمارة الإشراف للنشاط الإيصالي التكاملي';
     if (id == readiness) return 'استمارة الجاهزية للنشاط الإيصالي التكاملي';
     if (id == healthFacilityAssessment) return 'استمارة تقييم جودة الأداء للمرافق الصحية';
+    if (id == measlesSupervision) return 'استمارة الإشراف لحملة الحصبة';
+    if (id == measlesSurvey) return 'استمارة المسح العشوائي لحملة الحصبة';
+    if (id == measlesReadiness) return 'استمارة جاهزية حملة الحصبة';
     return null;
   }
 }

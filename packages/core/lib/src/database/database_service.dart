@@ -749,4 +749,13 @@ class DatabaseService {
       filters: {'key': key},
     );
   }
+
+  /// ═══ RPC returning a single JSONB object (not a list) ═══
+  /// Use this for RPCs like `get_form_analytics` that return a single record.
+  Future<Map<String, dynamic>?> rpcSingle(
+    String functionName, {
+    Map<String, dynamic>? params,
+  }) {
+    return _api.rpcSingle(functionName, params: params);
+  }
 }

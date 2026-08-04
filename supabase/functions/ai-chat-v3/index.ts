@@ -374,7 +374,7 @@ const TOOLS = [
 // TOOL EXECUTION
 // ═══════════════════════════════════════════════════════════
 
-async function executeFunction(supa: any, name: string, args: Record<string, any>, context?: { campaignRound?: number | null }): Promise<any> {
+async function executeFunction(supa: any, name: string, args: Record<string, any>, context?: { campaignRound?: number | null; campaignType?: string | null }): Promise<any> {
   // Confirmation gate
   const confirmationRequired = requireConfirmation(name, args)
   if (confirmationRequired) return confirmationRequired
@@ -386,7 +386,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
         let q = supa.from('form_submissions').select('status, governorate_id, created_at, form_id, campaign_round').is('deleted_at', null)
         if (args.status) q = q.eq('status', args.status)
         if (args.days) q = q.gte('created_at', daysAgo(args.days))
-        q = applyCampaignFilter(q, formIds, context?.campaignRound)
+        q = applyCampaignFilter(q, formIds, context?.campaignRound, args.campaign_type || context?.campaignType)
         const { data } = await withTimeout(q.limit(10000), 10_000) ?? {}
         if (!data) return { error: 'لا توجد بيانات' }
         const byStatus: Record<string, number> = {}
@@ -396,7 +396,10 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
 
       case 'get_analytics': {
         let subQuery = supa.from('form_submissions').select('id', { count: 'exact' }).is('deleted_at', null)
-        if (context?.campaignRound && context.campaignRound > 0) subQuery = subQuery.eq('campaign_round', context.campaignRound)
+        // ⚠️ FIX: Only apply round filter for integrated_activity.
+        if (context?.campaignRound && context.campaignRound > 0 && context?.campaignType === 'integrated_activity') {
+          subQuery = subQuery.eq('campaign_round', context.campaignRound)
+        }
         const [s, sh, u] = await Promise.all([
           withTimeout(subQuery, 8_000),
           withTimeout(supa.from('supply_shortages').select('id', { count: 'exact' }).is('deleted_at', null).eq('is_resolved', false), 8_000),
@@ -482,7 +485,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
 
         if (data_source === 'governorates') {
           let q = supa.from('form_submissions').select('governorate_id').is('deleted_at', null).gte('created_at', since).limit(10000)
-          q = applyCampaignFilter(q, formIds, context?.campaignRound)
+          q = applyCampaignFilter(q, formIds, context?.campaignRound, args.campaign_type || context?.campaignType)
           const { data: subs } = await withTimeout(q, 10_000) ?? {}
           const { data: govs } = await withTimeout(supa.from('governorates').select('id, name_ar').eq('is_active', true), 5_000) ?? {}
           const govMap: Record<string, string> = {}
@@ -492,7 +495,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           chartData = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, limit || 10).map(([id, val]) => ({ label: govMap[id] || id.slice(0, 8), value: val }))
         } else if (data_source === 'submissions_by_day') {
           let q = supa.from('form_submissions').select('created_at').is('deleted_at', null).gte('created_at', since).limit(10000)
-          q = applyCampaignFilter(q, formIds, context?.campaignRound)
+          q = applyCampaignFilter(q, formIds, context?.campaignRound, args.campaign_type || context?.campaignType)
           const { data: subs } = await withTimeout(q, 10_000) ?? {}
           const dayCounts: Record<string, number> = {}
           subs?.forEach((s: any) => { const d = s.created_at?.split('T')[0]; if (d) dayCounts[d] = (dayCounts[d] || 0) + 1 })
@@ -566,7 +569,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
 
         let q = applyCampaignFilter(
           supa.from('form_submissions').select('created_at, status').is('deleted_at', null).gte('created_at', since),
-          formIds, context?.campaignRound
+          formIds, context?.campaignRound, args.campaign_type || context?.campaignType
         )
         const { data: subs } = await withTimeout(q.limit(10000), 10_000) ?? {}
         if (!subs || subs.length === 0) return { error: 'لا توجد بيانات كافية للتنبؤ' }
@@ -989,7 +992,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
 // TOOL CALLS EXECUTOR
 // ═══════════════════════════════════════════════════════════
 
-async function executeToolCalls(supa: any, toolCalls: any[], userId?: string, context?: { campaignRound?: number | null }): Promise<any[]> {
+async function executeToolCalls(supa: any, toolCalls: any[], userId?: string, context?: { campaignRound?: number | null; campaignType?: string | null }): Promise<any[]> {
   const results = []
   for (const tc of toolCalls) {
     const fnName = tc.function?.name
@@ -1025,7 +1028,7 @@ async function executeToolCalls(supa: any, toolCalls: any[], userId?: string, co
 
 async function multiStepToolCalling(
   msgs: any[], groqKey: string, supa: any,
-  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null }
+  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null; campaignType?: string | null }
 ): Promise<{ content: string; toolCallsUsed: string[]; totalTokens: number } | null> {
   const maxSteps = opts.maxSteps ?? 3
   const toolCallsUsed: string[] = []
@@ -1036,7 +1039,7 @@ async function multiStepToolCalling(
     if (!result) return null
 
     if (result.type === 'tool_calls') {
-      const toolResults = await executeToolCalls(supa, result.tool_calls, opts.userId, { campaignRound: opts.campaignRound })
+      const toolResults = await executeToolCalls(supa, result.tool_calls, opts.userId, { campaignRound: opts.campaignRound, campaignType: opts.campaignType })
       msgs.push({ role: 'assistant', content: null, tool_calls: result.tool_calls })
       msgs.push(...toolResults)
       toolCallsUsed.push(...result.tool_calls.map((tc: any) => tc.function?.name))
@@ -1059,7 +1062,7 @@ async function multiStepToolCalling(
 
 async function multiStepToolCallingStream(
   msgs: any[], groqKey: string, supa: any,
-  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null },
+  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null; campaignType?: string | null },
   origin: string | null,
 ): Promise<Response> {
   const maxSteps = opts.maxSteps ?? 3
@@ -1082,7 +1085,7 @@ async function multiStepToolCallingStream(
             const fnName = tc.function?.name
             const fnArgs = JSON.parse(tc.function?.arguments || '{}')
             await send({ type: 'tool_call', step: step + 1, tool: fnName, message: `جاري: ${fnName}` })
-            const toolResult = await executeFunction(supa, fnName, fnArgs, { campaignRound: opts.campaignRound })
+            const toolResult = await executeFunction(supa, fnName, fnArgs, { campaignRound: opts.campaignRound, campaignType: opts.campaignType })
             if (WRITE_TOOLS.has(fnName) && opts.userId) logWriteOperation(supa, opts.userId, fnName, fnArgs, toolResult, fnArgs._confirmed === true).catch(() => {})
             if (toolResult.needs_confirmation) {
               await send({ type: 'confirmation_needed', tool: fnName, message: toolResult.message })
@@ -1716,7 +1719,7 @@ serve(async (req) => {
     // ─── If we got tool calls, execute them then ask LLM for final answer ───
     if (hybridResult.toolCalls?.length) {
       console.log(`[MAIN] Got ${hybridResult.toolCalls.length} tool calls from ${hybridResult.provider}`)
-      const toolResults = await executeToolCalls(supabase, hybridResult.toolCalls, auth.userId, { campaignRound })
+      const toolResults = await executeToolCalls(supabase, hybridResult.toolCalls, auth.userId, { campaignRound, campaignType: context?.campaign_type })
       const toolCallsUsed = hybridResult.toolCalls.map((tc: any) => tc.function?.name)
 
       // Check if any tool result needs confirmation
@@ -1751,6 +1754,7 @@ serve(async (req) => {
         maxSteps: 3,
         userId: auth.userId,
         campaignRound,
+        campaignType: context?.campaign_type,
       })
 
       if (finalResult) {

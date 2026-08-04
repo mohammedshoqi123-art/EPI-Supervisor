@@ -373,12 +373,15 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   }
 
   // ═══ FIX #2: Build params from current campaign/round selection ═══
+  // ⚠️ FIX: Only propagate campaign_round for integrated_activity.
+  // Polio and measles campaigns don't have real rounds; sending round=N
+  // filters out all submissions → empty results when user picks round 2.
   ({String? campaignType, int? campaignRound}) get _currentParams {
     final campaign = ref.read(campaignProvider).value;
     final round = ref.read(campaignRoundProvider);
     return (
       campaignType: campaign != 'all' ? campaign : null,
-      campaignRound: round,
+      campaignRound: campaign == 'integrated_activity' ? round : null,
     );
   }
 
@@ -435,6 +438,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             Tab(icon: Icon(Icons.report_problem_rounded), text: 'التحديات'),
             Tab(icon: Icon(Icons.assessment_rounded), text: 'التقارير'),
             Tab(icon: Icon(Icons.local_hospital_rounded), text: 'تقييم المرافق'),
+            Tab(icon: Icon(Icons.insights_rounded), text: 'تحليلات ديناميكية'),
           ],
         ),
       ),
@@ -457,6 +461,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                       _generateReport(type, format, period),
                 ),
                 const _HealthFacilityAssessmentTab(),
+                const _DynamicAnalyticsTab(),
               ],
             ),
           ),
@@ -2574,12 +2579,15 @@ class _Empty extends StatelessWidget {
 }
 
 // ═══ FIX: Global helper for campaign params — accessible from all widget classes ═══
+// ⚠️ FIX: Only propagate campaign_round for integrated_activity.
+// Polio and measles campaigns don't have real rounds; sending round=N
+// filters out all submissions → empty results when user picks round 2.
 ({String? campaignType, int? campaignRound}) _getAnalyticsParams(WidgetRef ref) {
   final campaign = ref.read(campaignProvider).value;
   final round = ref.read(campaignRoundProvider);
   return (
     campaignType: campaign != 'all' ? campaign : null,
-    campaignRound: round,
+    campaignRound: campaign == 'integrated_activity' ? round : null,
   );
 }
 
@@ -2800,5 +2808,381 @@ class _SummaryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Dynamic Analytics Tab — يستخدم get_form_analytics RPC (migration 071)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Provider يستدعي get_form_analytics RPC لجلب التحليلات الديناميكية لنموذج معين.
+final _dynamicAnalyticsProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, ({String formId, int? round, String? governorateId})>(
+  (ref, params) async {
+    final db = ref.watch(databaseServiceProvider);
+    final result = await db.rpcSingle('get_form_analytics', params: {
+      'p_form_id': params.formId,
+      'p_campaign_round': params.round,
+      'p_governorate_id': params.governorateId,
+    }).timeout(const Duration(seconds: 30));
+    if (result == null) {
+      return {'form_id': params.formId, 'analytics': <dynamic>[], 'total_submissions': 0};
+    }
+    return result;
+  },
+);
+
+class _DynamicAnalyticsTab extends ConsumerStatefulWidget {
+  const _DynamicAnalyticsTab();
+
+  @override
+  ConsumerState<_DynamicAnalyticsTab> createState() => _DynamicAnalyticsTabState();
+}
+
+class _DynamicAnalyticsTabState extends ConsumerState<_DynamicAnalyticsTab> {
+  String? _selectedFormId;
+
+  @override
+  Widget build(BuildContext context) {
+    final formsAsync = ref.watch(formsProvider);
+
+    return formsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => _ErrRetry(
+        message: 'تعذّر تحميل النماذج',
+        onRetry: () => ref.invalidate(formsProvider),
+      ),
+      data: (forms) {
+        // فلترة النماذج الفعّالة فقط
+        final activeForms = forms.where((f) => f['is_active'] == true).toList();
+
+        if (activeForms.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'لا توجد نماذج متاحة. تأكد من اتصالك بالإنترنت ثم أعد المحاولة.',
+                style: TextStyle(fontFamily: 'Tajawal', fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
+        // اختيار النموذج الافتراضي
+        final selectedFormId = _selectedFormId ?? activeForms.first['id'] as String;
+
+        return Column(
+          children: [
+            // فلتر اختيار النموذج
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: selectedFormId,
+                  isExpanded: true,
+                  style: const TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 14,
+                    color: Colors.black87,
+                  ),
+                  items: activeForms.map<DropdownMenuItem<String>>((f) {
+                    return DropdownMenuItem<String>(
+                      value: f['id'] as String,
+                      child: Text(f['title_ar'] as String? ?? 'بدون عنوان'),
+                    );
+                  }).toList(),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _selectedFormId = v);
+                  },
+                ),
+              ),
+            ),
+            // عرض التحليلات
+            Expanded(
+              child: _DynamicAnalyticsView(formId: selectedFormId),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DynamicAnalyticsView extends ConsumerWidget {
+  const _DynamicAnalyticsView({required this.formId});
+
+  final String formId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final params = _getAnalyticsParams(ref);
+    // ⚠️ نمرّر campaign_round فقط للنشاط الإيصالي التكاملي
+    final effectiveRound = params.campaignType == 'integrated_activity'
+        ? params.campaignRound
+        : null;
+
+    final analyticsAsync = ref.watch(_dynamicAnalyticsProvider(
+      (formId: formId, round: effectiveRound, governorateId: null),
+    ));
+
+    return analyticsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => _ErrRetry(
+        message: 'تعذّر تحميل التحليلات: $e',
+        onRetry: () => ref.invalidate(_dynamicAnalyticsProvider(
+          (formId: formId, round: effectiveRound, governorateId: null),
+        )),
+      ),
+      data: (result) {
+        final analytics = (result['analytics'] as List?) ?? <dynamic>[];
+        final totalSubs = (result['total_submissions'] as num?)?.toInt() ?? 0;
+
+        if (analytics.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.inbox_outlined,
+                      size: 64, color: Theme.of(context).colorScheme.outline),
+                  const SizedBox(height: 12),
+                  Text(
+                    'لا توجد تحليلات مكوّنة لهذا النموذج بعد.\n'
+                    'يمكن للمسؤول تفعيلها من صفحة إعدادات التحليلات.\n'
+                    'إجمالي الإرساليات: $totalSubs',
+                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: analytics.length + 1,
+          itemBuilder: (ctx, i) {
+            if (i == 0) {
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.summarize_rounded, color: Colors.blue),
+                  title: Text(
+                    'إجمالي الإرساليات: $totalSubs',
+                    style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold),
+                  ),
+                ),
+              );
+            }
+            final item = analytics[i - 1] as Map<String, dynamic>;
+            return _AnalyticsItemCard(item: item);
+          },
+        );
+      },
+    );
+  }
+}
+
+class _AnalyticsItemCard extends StatelessWidget {
+  const _AnalyticsItemCard({required this.item});
+
+  final Map<String, dynamic> item;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = (item['field_label'] as String?) ?? 'بدون عنوان';
+    final type = (item['type'] as String?) ?? 'count';
+    final total = (item['total'] as num?)?.toInt() ?? 0;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _typeColor(type).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _typeLabelAr(type),
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      color: _typeColor(type),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildTypeBody(type, total),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeBody(String type, int total) {
+    switch (type) {
+      case 'yesno':
+      case 'progress':
+        final yes = (item['yes'] as num?)?.toInt() ??
+            (item['value'] as num?)?.toInt() ??
+            0;
+        final no = (item['no'] as num?)?.toInt() ?? 0;
+        final pct = (item['yes_pct'] as num?)?.toDouble() ??
+            (item['percentage'] as num?)?.toDouble() ??
+            0;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            LinearProgressIndicator(
+              value: total > 0 ? yes / total : 0,
+              backgroundColor: Colors.red.shade100,
+              color: Colors.green,
+              minHeight: 8,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'نعم: $yes (${pct.toStringAsFixed(1)}%)  •  لا: $no  •  الإجمالي: $total',
+              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+            ),
+          ],
+        );
+
+      case 'avg':
+        final avg = (item['average'] as num?)?.toDouble() ?? 0;
+        return Text(
+          'المتوسط: ${avg.toStringAsFixed(2)}  •  الإجمالي: $total',
+          style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+        );
+
+      case 'sum':
+        final sum = (item['sum'] as num?)?.toDouble() ?? 0;
+        return Text(
+          'المجموع: ${sum.toStringAsFixed(2)}  •  الإجمالي: $total',
+          style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+        );
+
+      case 'bar':
+        final dist = item['distribution'] as Map<String, dynamic>? ?? {};
+        if (dist.isEmpty) {
+          return Text('لا توجد بيانات  •  الإجمالي: $total',
+              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12));
+        }
+        final entries = dist.entries.toList()
+          ..sort((a, b) => ((b.value as num).toInt()).compareTo((a.value as num).toInt()));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final e in entries.take(8)) ...[
+              Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      e.key,
+                      style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Expanded(
+                    flex: 5,
+                    child: LinearProgressIndicator(
+                      value: total > 0 ? (e.value as num).toInt() / total : 0,
+                      backgroundColor: Colors.grey.shade200,
+                      color: Colors.blue,
+                      minHeight: 6,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 32,
+                    child: Text(
+                      '${e.value}',
+                      style: const TextStyle(
+                          fontFamily: 'Tajawal', fontSize: 11, fontWeight: FontWeight.w600),
+                      textAlign: TextAlign.end,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+            ],
+          ],
+        );
+
+      case 'count':
+      default:
+        final count = (item['count'] as num?)?.toInt() ?? total;
+        return Text(
+          'العدد: $count',
+          style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+        );
+    }
+  }
+
+  Color _typeColor(String type) {
+    switch (type) {
+      case 'yesno':
+      case 'progress':
+        return Colors.green;
+      case 'avg':
+        return Colors.orange;
+      case 'sum':
+        return Colors.purple;
+      case 'bar':
+        return Colors.blue;
+      case 'count':
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _typeLabelAr(String type) {
+    switch (type) {
+      case 'yesno':
+        return 'نعم/لا';
+      case 'progress':
+        return 'تقدّم';
+      case 'avg':
+        return 'متوسط';
+      case 'sum':
+        return 'مجموع';
+      case 'bar':
+        return 'توزيع';
+      case 'count':
+      default:
+        return 'عدد';
+    }
   }
 }

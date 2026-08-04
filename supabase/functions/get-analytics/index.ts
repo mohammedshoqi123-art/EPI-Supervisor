@@ -68,9 +68,11 @@ serve(async (req) => {
       return q
     }
 
-    // ═══ NEW: Apply campaign_round filter — ONLY for form_submissions queries ═══
+    // ═══ NEW: Apply campaign_round filter — ONLY for integrated_activity ═══
+    // ⚠️ FIX: Polio/measles submissions don't carry a real round; filtering by
+    // round=N excludes them all → empty results when user picks round 2.
     const applyCampaignRound = (q: any) => {
-      if (campaignRound) q = q.eq('campaign_round', campaignRound)
+      if (campaignRound && campaign_type === 'integrated_activity') q = q.eq('campaign_round', campaignRound)
       return q
     }
 

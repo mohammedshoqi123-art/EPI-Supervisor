@@ -247,16 +247,21 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       final activeRound = ref.read(campaignRoundProvider);
       final activeCampaign = ref.read(campaignProvider).value;
 
+      // ⚠️ FIX: Only propagate campaign_round for integrated_activity.
+      // Polio and measles campaigns don't have real rounds; sending round=N
+      // filters out all submissions (which have round=NULL or round=1) → empty results.
+      final effectiveRound =
+          (activeCampaign == 'integrated_activity') ? activeRound : null;
+
       // ⚠️ FIX: Direct non-streaming call — more reliable than streaming
-      // ⚠️ FIX: Always send campaign_round + campaign_type so AI understands context
       final resp = await api.callFunction('ai-chat-v3', {
         'message': text,
         'history': historyJson,
         if (template != null) 'template': template,
-        'campaign_round': activeRound,  // ← Always send, not just for integrated_activity
+        if (effectiveRound != null) 'campaign_round': effectiveRound,
         'context': {
           'campaign_type': activeCampaign,
-          'campaign_round': activeRound,
+          if (effectiveRound != null) 'campaign_round': effectiveRound,
         },
       }).timeout(const Duration(seconds: 45), onTimeout: () {
         throw TimeoutException('انتهت مهلة الطلب');

@@ -270,6 +270,23 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       }
 
       if (draft != null && draft['data'] != null) {
+        // ⚠️ FIX: Refuse to load a corrupted draft (data:{} with _corrupted flag).
+        // Loading an empty form would let save-on-dispose overwrite the real
+        // (encrypted) draft with empty data → permanent data loss.
+        if (draft['_corrupted'] == true || draft['_needs_migration'] == true) {
+          debugPrint('[FormFill] Draft ${_draftId.substring(0, 8)} is corrupted — refusing to load empty form');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('تعذّر قراءة المسودة — البيانات محفوظة ولكنها مشفّرة بمفتاح قديم. تواصل مع المسؤول لاستعادتها.', style: TextStyle(fontFamily: 'Tajawal')),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 6),
+              ),
+            );
+          }
+          return;
+        }
         final draftData = Map<String, dynamic>.from(draft['data']);
         setState(() {
           _formData.addAll(draftData);
@@ -540,7 +557,19 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     // ملاحظة: dispose لا يمكن أن يكون async. offlineManagerProvider هو
     // FutureProvider<OfflineManager> — ref.read يُرجع AsyncValue<OfflineManager>،
     // لذا نستخدم .value للوصول للمدير بشكل متزامن (قد يكون null إذا لم يكتمل التهيئة).
-    if (_hasUnsavedChanges && _formData.isNotEmpty) {
+    // ⚠️ FIX: Guard against overwriting a real draft with an all-empty form.
+    // If _formData only contains empty values (no actual user input), don't save —
+    // this prevents a corrupted/empty draft from replacing a real one on dispose.
+    final hasNonEmptyValue = _formData.values.any((v) {
+      if (v == null) return false;
+      if (v is String) return v.trim().isNotEmpty;
+      if (v is List) return v.isNotEmpty;
+      if (v is Map) return v.isNotEmpty;
+      if (v is num) return v != 0;
+      if (v is bool) return true; // booleans are intentional choices
+      return true;
+    });
+    if (_hasUnsavedChanges && _formData.isNotEmpty && hasNonEmptyValue) {
       try {
         _syncControllersToFormData();
         final asyncValue = ref.read(offlineManagerProvider);
@@ -824,14 +853,19 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       try {
         final db = ref.read(databaseServiceProvider);
         final campaignRound = ref.read(campaignRoundProvider);
-        
+        final activeCampaign = ref.read(campaignProvider).value;
+        // ⚠️ FIX: Only tag submission with round for integrated_activity.
+        // Polio/measles submissions should not carry a round number.
+        final effectiveRound =
+            activeCampaign == 'integrated_activity' ? campaignRound : null;
+
         // Submit directly via Edge Function
         await db.submitForm({
           'form_id': widget.formId,
           'data': Map<String, dynamic>.from(_formData),
           if (_gpsLat != null) 'gps_lat': _gpsLat,
           if (_gpsLng != null) 'gps_lng': _gpsLng,
-          'campaign_round': campaignRound,
+          if (effectiveRound != null) 'campaign_round': effectiveRound,
         }).timeout(const Duration(seconds: 30));
 
         if (mounted) {
@@ -997,6 +1031,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
       }
 
       final campaignRound = ref.read(campaignRoundProvider);
+      final activeCampaign = ref.read(campaignProvider).value;
+      // ⚠️ FIX: Only tag submission with round for integrated_activity.
+      // Polio/measles submissions should not carry a round number.
+      final effectiveRound =
+          activeCampaign == 'integrated_activity' ? campaignRound : null;
       final submissionData = {
         'form_id': widget.formId,
         'data': dataWithPhotos,
@@ -1004,7 +1043,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         if (_gpsLng != null) 'gps_lng': _gpsLng,
         'photos_count': _photosByField.values.fold(0, (sum, list) => sum + list.length),
         'failed_photos': totalFailedPhotos,
-        'campaign_round': campaignRound,
+        if (effectiveRound != null) 'campaign_round': effectiveRound,
         'created_at': DateTime.now().toIso8601String(),
       };
 

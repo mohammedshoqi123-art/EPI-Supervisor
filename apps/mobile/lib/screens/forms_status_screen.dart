@@ -351,11 +351,16 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
     try {
       final campaign = ref.read(campaignProvider);
       final round = ref.read(campaignRoundProvider);
+      // ⚠️ FIX: Only filter by round for integrated_activity.
+      // Polio/measles submissions don't carry a real round; filtering by round=N
+      // excludes them all → user sees empty list when switching round.
+      final effectiveRound =
+          campaign.value == 'integrated_activity' ? round : null;
       // ═══ PERFORMANCE: Use 2000 limit (was 5000) — reduces memory pressure ═══
       // Actual count comes from getSubmissionsCount, not from loading all rows
       final filter = SubmissionsFilter(
         campaignType: campaign.value,
-        campaignRound: round,
+        campaignRound: effectiveRound,
         limit: 2000,
         offset: 0,
         lean: true,  // Skip 'data' column — SubmittedCard only needs joins (form title, gov, profile)

@@ -119,3 +119,49 @@ Stage Summary:
   2. supabase/functions/ai-chat-v3/llm/hybrid-gateway.ts — fallback كامل لـ needTools path
   3. apps/mobile/lib/screens/analytics_screen.dart — fallback في providers + error details في UI
 - جاهز لـ commit + push + متابعة CI
+
+---
+Task ID: 4
+Agent: main (Super Z)
+Task: تشخيص نهائي وإصلاح مشاكل AI chat + تبويبات التحليلات باستخدام بيانات Supabase الفعلية
+
+Work Log:
+- استلمت بيانات Supabase الفعلية (URL, anon key, service key, access token)
+- اختبرت fetch_submissions RPC مباشرة: كان يُرجع [] فارغ رغم وجود 2310 إرسالية
+- اختبرت fetch_count RPC: كان يُرجع 2257 (يعمل!)
+- شخّصت السبب الجذري: user_role() في migration 20260423 تستخدم:
+    SELECT COALESCE(
+      (SELECT (auth.jwt() ->> 'role')::user_role WHERE auth.jwt() ->> 'role' IS NOT NULL),
+      (SELECT role FROM profiles WHERE id = auth.uid() LIMIT 1)
+    );
+  المشكلة: cast ('service_role')::user_role يفشل لأن 'service_role' ليس قيمة enum صالحة
+  (user_role enum = admin, central, governorate, district, data_entry فقط)
+  COALESCE لا يلتقط الأخطاء، فقط يتعامل مع NULL → الدالة ترمي خطأ
+  في fetch_submissions (plpgsql EXECUTE), الخطأ يتم التقاطه ضمنياً ويعود NULL
+  → jsonb_agg(NULL) = NULL → COALESCE(NULL, '[]') = '[]' → نتيجة فارغة!
+
+- أنشأت migration 069_fix_fetch_submissions_empty_results.sql بـ 4 إصلاحات:
+  1. user_role() — تحويل من sql إلى plpgsql مع EXCEPTION handler لالتقاط cast failures
+  2. fetch_submissions — إضافة معالجة service_role (يعامل كـ admin) + NULL role (fail closed)
+  3. fetch_count — نفس المعالجة
+  4. fetch_all_submissions — نفس المعالجة
+
+- طبّقت الـ migration مباشرة على Supabase عبر Management API:
+    POST https://api.supabase.com/v1/projects/{ref}/database/query
+- تحققت من النجاح:
+    fetch_submissions الآن يُرجع البيانات ✓
+    fetch_submissions مع form_id يُرجع البيانات ✓
+    fetch_submissions مع campaign_round يُرجع البيانات ✓
+    user_role() ترجع null لـ service_role (بدلاً من رمي خطأ) ✓
+
+- تحققت من حالة AI chat:
+    Edge Function ai-chat-v3 منشورة (Version 665, ACTIVE)
+    جميع مفاتيح AI مضبوطة (GROQ, HF, NVIDIA, OPENROUTER, ZAI, MIMO)
+    تعديلاتي السابقة (commit 8407f86) منشورة: Groq fallback chain + needTools fallback
+
+Stage Summary:
+- المشكلة الجذرية لتبويبات التحليلات: user_role() كان يرمي خطأ بسبب cast فاشل
+- تم الإصلاح عبر migration 069 (مطبّق مباشرة على Supabase + منشور في repo)
+- المشكلة الجذرية لـ AI chat: timeout mismatch + لا fallback لـ needTools
+- تم الإصلاح في commit 8407f86 (منشور على Supabase كـ Version 665)
+- كلا المشكلتين يجب أن تكونا محلولتين الآن. المستخدم يحتاج لاختبار التطبيق.

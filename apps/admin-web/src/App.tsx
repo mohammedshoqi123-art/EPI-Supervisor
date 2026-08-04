@@ -38,6 +38,7 @@ const BotKnowledgePage = lazy(() => import('@/pages/BotKnowledgePage'))
 const CampaignRoundsPage = lazy(() => import('@/pages/CampaignRoundsPage'))
 const FieldAnalysisPage = lazy(() => import('@/pages/FieldAnalysisPage'))
 const TrashPage = lazy(() => import('@/pages/TrashPage'))
+const AnalyticsConfigPage = lazy(() => import('@/pages/AnalyticsConfigPage'))
 
 // ═══ Page Loader ═══
 function PageLoader() {
@@ -166,6 +167,7 @@ export default function App() {
               <Route path="users" element={<LazyPage name="المستخدمون"><UsersPage /></LazyPage>} />
               <Route path="campaign-rounds" element={<LazyPage name="إدارة الجولات"><CampaignRoundsPage /></LazyPage>} />
               <Route path="trash" element={<LazyPage name="المحذوفات"><TrashPage /></LazyPage>} />
+              <Route path="analytics-config" element={<LazyPage name="إعدادات التحليلات"><AnalyticsConfigPage /></LazyPage>} />
             </Route>
           </Route>
 

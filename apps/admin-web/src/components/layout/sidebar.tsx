@@ -107,6 +107,7 @@ const navSections: NavSection[] = [
       { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
       { icon: Calendar, label: 'إدارة الجولات', href: '/campaign-rounds', roles: ['admin', 'central'] },
       { icon: Trash2, label: 'المحذوفات', href: '/trash', roles: ['admin', 'central'] },
+      { icon: BarChart3, label: 'إعدادات التحليلات', href: '/analytics-config', roles: ['admin', 'central'] },
     ],
   },
   {

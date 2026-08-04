@@ -31,7 +31,11 @@ CREATE INDEX IF NOT EXISTS idx_analytics_config_type
   ON public.form_analytics_config(form_id, analytics_type);
 
 -- RLS (safe: only enable if not already enabled)
-ALTER TABLE public.form_analytics_config ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'form_analytics_config' AND rowsecurity = true) THEN
+    ALTER TABLE public.form_analytics_config ENABLE ROW LEVEL SECURITY;
+  END IF;
+END $$;
 
 -- Policies (safe: only create if not exists)
 DO $$ BEGIN

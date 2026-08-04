@@ -1,11 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════
 -- 071: Dynamic Analytics System — نظام التحليلات الديناميكي
 --
--- يضيف:
--- 1) جدول form_analytics_config (IF NOT EXISTS)
--- 2) يوسع app_config (ON CONFLICT DO NOTHING)
--- 3) دوال RPC (CREATE OR REPLACE)
---
 -- ⚠️ آمن: idempotent — يعمل مرة واحدة فقط
 -- Date: 2026-08-05
 -- ═══════════════════════════════════════════════════════════════
@@ -28,17 +23,19 @@ CREATE TABLE IF NOT EXISTS public.form_analytics_config (
   UNIQUE(form_id, field_key)
 );
 
--- Indexes (IF NOT EXISTS)
+-- Indexes
 CREATE INDEX IF NOT EXISTS idx_analytics_config_form 
   ON public.form_analytics_config(form_id) WHERE is_visible = true;
 
 CREATE INDEX IF NOT EXISTS idx_analytics_config_type 
   ON public.form_analytics_config(form_id, analytics_type);
 
--- RLS (safe: IF NOT EXISTS not available for policies, use DO block)
+-- RLS (safe: only enable if not already enabled)
+ALTER TABLE public.form_analytics_config ENABLE ROW LEVEL SECURITY;
+
+-- Policies (safe: only create if not exists)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'analytics_readable' AND tablename = 'form_analytics_config') THEN
-    ALTER TABLE public.form_analytics_config ENABLE ROW LEVEL SECURITY;
     CREATE POLICY analytics_readable ON public.form_analytics_config FOR SELECT USING (auth.role() = 'authenticated');
   END IF;
 END $$;
@@ -66,17 +63,7 @@ CREATE TRIGGER trg_analytics_config_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_analytics_config_updated_at();
 
--- ═══ 2. توسيع app_config — إعدادات الموبايل ═══
--- Only insert if app_config table exists
-DO $$ BEGIN
-  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'app_config' AND table_schema = 'public') THEN
-    INSERT INTO app_config (key, value) VALUES ('mobile_sync_interval', '30'::jsonb) ON CONFLICT (key) DO NOTHING;
-    INSERT INTO app_config (key, value) VALUES ('mobile_analytics_enabled', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
-    INSERT INTO app_config (key, value) VALUES ('mobile_offline_ttl_hours', '24'::jsonb) ON CONFLICT (key) DO NOTHING;
-  END IF;
-END $$;
-
--- ═══ 3. دالة RPC: get_form_analytics ═══
+-- ═══ 2. دالة RPC: get_form_analytics ═══
 CREATE OR REPLACE FUNCTION get_form_analytics(
   p_form_id UUID,
   p_campaign_round INTEGER DEFAULT NULL,
@@ -243,7 +230,7 @@ BEGIN
 END;
 $$;
 
--- ═══ 4. Grant permissions ═══
+-- ═══ 3. Grant permissions ═══
 GRANT EXECUTE ON FUNCTION get_form_analytics(UUID, INTEGER, UUID) TO authenticated;
 
 COMMIT;

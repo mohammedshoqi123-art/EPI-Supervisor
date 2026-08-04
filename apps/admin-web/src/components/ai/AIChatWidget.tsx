@@ -24,6 +24,7 @@ import { useVoiceInput } from '@/hooks/useVoiceInput'
 import { parseExportRequest, executeExport, QUICK_EXPORTS } from '@/lib/ai-export-engine'
 import { buildSmartReport } from '@/lib/smart-report-builder'
 import { queryAI, type AIMessage } from '@/lib/ai-providers'
+import { useCampaign } from '@/lib/campaign-context'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -765,6 +766,7 @@ export function AIChatWidget() {
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
   const { pathname, currentPage } = usePageContext()
+  const { campaignRound, showRoundFilter } = useCampaign()
 
   // ─── New: Fetch gateway health ───
   const fetchGatewayHealth = useCallback(async () => {
@@ -936,7 +938,9 @@ export function AIChatWidget() {
           .filter(m => !m.id.startsWith('err-'))
           .slice(-8)
           .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-        const aiResp = await queryAI(text, history)
+        const aiResp = await queryAI(text, history, {
+          campaignRound: showRoundFilter ? campaignRound : undefined,
+        })
         if (aiResp.text && !aiResp.error) {
           edgeResponse = aiResp.text
           // Capture Hybrid Gateway metadata

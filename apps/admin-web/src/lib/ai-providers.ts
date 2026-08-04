@@ -44,6 +44,7 @@ async function callEdgeFunction(
     template?: string
     systemPrompt?: string
     stream?: boolean
+    campaignRound?: number
   },
 ): Promise<AIResponse> {
   const startTime = Date.now()
@@ -66,6 +67,9 @@ async function callEdgeFunction(
       template: options?.template || undefined,
       system_prompt: options?.systemPrompt || undefined,
       stream: options?.stream || false,
+      context: {
+        campaignRound: options?.campaignRound || null,
+      },
     },
   })
 
@@ -105,11 +109,13 @@ export async function queryAI(
     preferProvider?: AIProvider
     template?: string
     systemPrompt?: string
+    campaignRound?: number
   },
 ): Promise<AIResponse> {
   return callEdgeFunction(message, history, {
     template: options?.template,
     systemPrompt: options?.systemPrompt,
+    campaignRound: options?.campaignRound,
   })
 }
 

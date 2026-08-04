@@ -23,3 +23,13 @@ export {
   useNotificationStats,
   useNotificationTemplates,
 } from './notifications'
+export {
+  useTrashStats,
+  useTrashList,
+  useRestoreItem,
+  useBulkRestore,
+  usePermanentDelete,
+  useEmptyTrash,
+  type TrashResource,
+  type TrashStat,
+} from './trash'

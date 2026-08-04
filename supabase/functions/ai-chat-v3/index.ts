@@ -1458,7 +1458,10 @@ serve(async (req) => {
     // Each operation already has its own .catch(() => '') / try-catch so
     // failures don't break the others. Promise.all waits for all settled.
     const bodyRound = Number(body.campaign_round)
-    const contextRound = context?.campaign_round ? Number(context.campaign_round) : NaN
+    // Accept both camelCase and snake_case from frontend
+    const contextRound = context?.campaign_round 
+      ? Number(context.campaign_round) 
+      : (context?.campaignRound ? Number(context.campaignRound) : NaN)
     const roundFromRequest = !isNaN(bodyRound) && bodyRound > 0
       ? bodyRound
       : (!isNaN(contextRound) && contextRound > 0 ? contextRound : NaN)

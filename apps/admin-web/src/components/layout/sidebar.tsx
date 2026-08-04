@@ -9,7 +9,7 @@ import {
   Brain, BookOpen, Filter, Globe, BarChart3, Activity, Stethoscope,
   FileSearch, ShieldCheck, MapPinned, Gauge, BellRing, Cog, MessageSquare,
   FileSpreadsheet, Calendar, RotateCw, ScrollText as ScrollTextIcon, MessageCircle,
-  Target
+  Target, Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -106,6 +106,7 @@ const navSections: NavSection[] = [
       { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
       { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
       { icon: Calendar, label: 'إدارة الجولات', href: '/campaign-rounds', roles: ['admin', 'central'] },
+      { icon: Trash2, label: 'المحذوفات', href: '/trash', roles: ['admin', 'central'] },
     ],
   },
   {

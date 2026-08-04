@@ -106,13 +106,24 @@ function extractFormId(text: string): string | undefined {
 
 // ═══ Campaign Round extraction from user text ═══
 const ROUND_KEYWORDS: [RegExp, number][] = [
-  [/الجولة الأولى|الجولة الاولى|جولة 1|الجولة 1|round 1/i, 1],
-  [/الجولة الثانية|جولة 2|الجولة 2|round 2/i, 2],
-  [/الجولة الثالثة|جولة 3|الجولة 3|round 3/i, 3],
-  [/الجولة الرابعة|جولة 4|الجولة 4|round 4/i, 4],
-  [/الجولة الخامسة|جولة 5|الجولة 5|round 5/i, 5],
-  [/الجولة السادسة|جولة 6|الجولة 6|round 6/i, 6],
-  [/الجولة السابعة|جولة 7|الجولة 7|round 7/i, 7],
+  // Arabic text + English digits
+  [/الجولة\s*(?:الأولى|الاولى|1)|جولة\s*1|round\s*1/i, 1],
+  [/الجولة\s*(?:الثانية|2)|جولة\s*2|round\s*2/i, 2],
+  [/الجولة\s*(?:الثالثة|3)|جولة\s*3|round\s*3/i, 3],
+  [/الجولة\s*(?:الرابعة|4)|جولة\s*4|round\s*4/i, 4],
+  [/الجولة\s*(?:الخامسة|5)|جولة\s*5|round\s*5/i, 5],
+  [/الجولة\s*(?:السادسة|6)|جولة\s*6|round\s*6/i, 6],
+  [/الجولة\s*(?:السابعة|7)|جولة\s*7|round\s*7/i, 7],
+  // Arabic numerals (١٢٣٤٥٦٧)
+  [/الجولة\s*١|جولة\s*١/i, 1],
+  [/الجولة\s*٢|جولة\s*٢/i, 2],
+  [/الجولة\s*٣|جولة\s*٣/i, 3],
+  [/الجولة\s*٤|جولة\s*٤/i, 4],
+  [/الجولة\s*٥|جولة\s*٥/i, 5],
+  // Short forms
+  [/ج1| round 1/i, 1],
+  [/ج2| round 2/i, 2],
+  [/ج3| round 3/i, 3],
 ]
 
 function extractCampaignRound(text: string): number | undefined {

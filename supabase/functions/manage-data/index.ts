@@ -100,7 +100,7 @@ serve(async (req) => {
           const { id } = body
           const { error } = await adminClient
             .from('governorates')
-            .update({ deleted_at: new Date().toISOString(), is_active: false })
+            .update({ deleted_at: new Date().toISOString(), deleted_by: auth.userId, is_active: false })
             .eq('id', id)
 
           if (error) return jsonResponse({ error: error.message }, 400, origin)
@@ -169,7 +169,7 @@ serve(async (req) => {
           const { id } = body
           const { error } = await adminClient
             .from('districts')
-            .update({ deleted_at: new Date().toISOString(), is_active: false })
+            .update({ deleted_at: new Date().toISOString(), deleted_by: auth.userId, is_active: false })
             .eq('id', id)
 
           if (error) return jsonResponse({ error: error.message }, 400, origin)
@@ -237,7 +237,7 @@ serve(async (req) => {
           const { id } = body
           const { error } = await adminClient
             .from('health_facilities')
-            .update({ deleted_at: new Date().toISOString(), is_active: false })
+            .update({ deleted_at: new Date().toISOString(), deleted_by: auth.userId, is_active: false })
             .eq('id', id)
 
           if (error) return jsonResponse({ error: error.message }, 400, origin)
@@ -300,7 +300,7 @@ serve(async (req) => {
           if (!id) return jsonResponse({ error: 'Missing submission id' }, 400, origin)
           const { error } = await adminClient
             .from('form_submissions')
-            .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .update({ deleted_at: new Date().toISOString(), deleted_by: auth.userId, updated_at: new Date().toISOString() })
             .eq('id', id)
           if (error) return jsonResponse({ error: error.message }, 400, origin)
           return jsonResponse({ success: true }, 200, origin)
@@ -313,7 +313,7 @@ serve(async (req) => {
             ids.map((id: string) =>
               adminClient
                 .from('form_submissions')
-                .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+                .update({ deleted_at: new Date().toISOString(), deleted_by: auth.userId, updated_at: new Date().toISOString() })
                 .eq('id', id)
             )
           )

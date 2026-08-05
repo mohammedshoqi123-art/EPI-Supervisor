@@ -46,9 +46,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   double? _gpsLng;
   final Map<String, List<XFile>> _photosByField = {};
 
-  // Auto-save timer
-  Timer? _autoSaveTimer;
-  // ═══ FIX: Debounce save after field changes ═══
+  // ═══ PERF: Removed _autoSaveTimer (60s periodic) — debounce is enough ═══
   Timer? _debounceSaveTimer;
 
   // ═══ Section Navigation ═══
@@ -74,11 +72,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
     // ═══ FIX: Register lifecycle observer for background save ═══
     WidgetsBinding.instance.addObserver(this);
     _loadForm();
-    _autoSaveTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (_hasUnsavedChanges && _formData.isNotEmpty) {
-        _autoSave(showFeedback: false);
-      }
-    });
+    // ═══ PERF: Removed periodic 60s timer — debounce handles all saves ═══
   }
 
   // ═══ FIX: Save when app goes to background ═══
@@ -567,7 +561,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   void dispose() {
     // ═══ FIX: Remove lifecycle observer and cancel timers ═══
     WidgetsBinding.instance.removeObserver(this);
-    _autoSaveTimer?.cancel();
     _debounceSaveTimer?.cancel();
     // FIX: احفظ التغييرات غير المحفوظة قبل التخلص من الـ widget
     // ملاحظة: dispose لا يمكن أن يكون async. offlineManagerProvider هو
@@ -1198,52 +1191,20 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   }
 
   int _autoSaveFailCount = 0;
-  // ═══ FIX: Track last saved data hash to avoid redundant saves ═══
-  // ═══ PERFORMANCE: Use length-based hash instead of .toString() (expensive for large maps with base64 photos)
-  int _lastSavedDataHash = 0;
-
-  /// Fast hash for change detection — avoids expensive .toString() on large maps
-  /// ═══ FIX F-2: Use .hashCode for strings instead of .length ═══
-  /// Previously: .length only — "yes" (3) and "no" (2) had different lengths,
-  ///   but "true" (4) and some other values could collide.
-  ///   More critically: changing "yes" to "no" works (different lengths),
-  ///   but changing a value to another of same length was invisible.
-  /// Now: .hashCode catches ALL content changes (cached in Dart, very fast).
-  /// Hash for change detection — captures ALL content changes.
-  /// ═══ FIX R-4: Use .hashCode for Lists/Maps + full precision for Numbers ═══
-  /// Previously: Lists/Maps used .length (photo change undetected),
-  ///   Numbers used .toInt() (decimal precision lost).
-  /// Now: Lists/Maps use .toString().hashCode (content-aware),
-  ///   Numbers use .toDouble().hashCode (full precision).
-  int _computeDataHash() {
-    int hash = _formData.length;
-    for (final entry in _formData.entries) {
-      hash = (hash * 31 + entry.key.hashCode) & 0x7FFFFFFF;
-      if (entry.value is String) {
-        hash = (hash * 31 + (entry.value as String).hashCode) & 0x7FFFFFFF;
-      } else if (entry.value is num) {
-        // Use toString().hashCode to preserve decimal precision
-        hash = (hash * 31 + entry.value.toString().hashCode) & 0x7FFFFFFF;
-      } else if (entry.value is bool) {
-        hash = (hash * 31 + (entry.value as bool ? 1 : 0)) & 0x7FFFFFFF;
-      } else if (entry.value is List) {
-        // Use toString().hashCode to detect content changes (e.g. photo paths)
-        hash = (hash * 31 + (entry.value as List).toString().hashCode) & 0x7FFFFFFF;
-      } else if (entry.value is Map) {
-        hash = (hash * 31 + (entry.value as Map).toString().hashCode) & 0x7FFFFFFF;
-      }
-    }
-    return hash;
-  }
+  // ═══ PERF: Simple change tracking — no expensive hash computation ═══
+  // Previously: _computeDataHash() called .toString().hashCode on ALL entries
+  //   including base64 photos → O(n) string allocation + hash on every keystroke
+  // Now: just track _hasUnsavedChanges flag (set by _markChanged)
+  //   and skip save if nothing changed
+  int _saveVersion = 0;  // Bumped on each change, compared to last saved version
+  int _lastSavedVersion = 0;
 
   Future<void> _autoSave({bool showFeedback = false}) async {
-    _syncControllersToFormData();
+    // ═══ PERF: Skip _syncControllersToFormData — controllers already sync on change ═══
     if (_formData.isEmpty) return;
 
-    // ═══ FIX: Skip save if data hasn't changed ═══
-    // ═══ PERFORMANCE: Fast hash instead of .toString() — O(n) vs O(n²) for large maps
-    final currentHash = _computeDataHash();
-    if (currentHash == _lastSavedDataHash) return;
+    // ═══ PERF: Skip save if nothing changed (version check — O(1)) ═══
+    if (_saveVersion == _lastSavedVersion) return;
 
     if (!mounted) return;
 
@@ -1271,7 +1232,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
           Map<String, dynamic>.from(_formData),
         );
         _hasUnsavedChanges = false;
-        _lastSavedDataHash = currentHash; // Track saved state (already computed)
+        _lastSavedVersion = _saveVersion; // Track saved state
         _autoSaveFailCount = 0; // Reset on success
         if (showFeedback && mounted) {
           context.showSuccess('تم الحفظ التلقائي');
@@ -1298,6 +1259,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   void _markChanged() {
     setState(() {
       _hasUnsavedChanges = true;
+      _saveVersion++; // Bump version for change detection
     });
     // ═══ FIX: Debounce save — 3 seconds after last change ═══
     _debounceSaveTimer?.cancel();

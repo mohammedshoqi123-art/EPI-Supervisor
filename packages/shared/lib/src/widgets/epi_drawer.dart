@@ -4,7 +4,8 @@ import '../theme/app_theme.dart';
 /// Campaign types for the activity selector.
 enum DrawerCampaign {
   polioCampaign('polio_campaign', 'حملة شلل الأطفال', '🧬'),
-  integratedActivity('integrated_activity', 'النشاط الإيصالي التكاملي', '📋');
+  integratedActivity('integrated_activity', 'النشاط الإيصالي التكاملي', '📋'),
+  measlesCampaign('measles_campaign', 'حملة الحصبة', '🦠');
 
   final String value;
   final String labelAr;

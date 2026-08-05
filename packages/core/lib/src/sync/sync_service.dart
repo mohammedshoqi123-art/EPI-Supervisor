@@ -474,9 +474,14 @@ class SyncService {
       // Previously: skipped if ANY key existed (e.g. forms_polio_campaign cached
       //   but forms_all not → forms_all never warmed up)
       // Now: only skips if ALL required keys are cached
+      // ⚠️ FIX: Include measles_campaign in cache warm-up.
+      // Previously: only polio_campaign and integrated_activity were warmed up,
+      // so when user selected measles campaign, formsProvider had to fetch live
+      // (slow on first load, and failed offline).
       final hasAllForms = cache.hasCachedData('forms_all') &&
           cache.hasCachedData('forms_polio_campaign') &&
-          cache.hasCachedData('forms_integrated_activity');
+          cache.hasCachedData('forms_integrated_activity') &&
+          cache.hasCachedData('forms_measles_campaign');
 
       if (hasAllForms) {
         if (kDebugMode)
@@ -493,7 +498,7 @@ class SyncService {
         maxAge: const Duration(hours: 12),
       );
 
-      const types = ['polio_campaign', 'integrated_activity'];
+      const types = ['polio_campaign', 'integrated_activity', 'measles_campaign'];
       for (final type in types) {
         await cache.getList(
           'forms_$type',

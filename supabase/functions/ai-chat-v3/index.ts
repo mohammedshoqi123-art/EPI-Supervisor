@@ -1514,10 +1514,24 @@ serve(async (req) => {
     const liveData: string = liveDataResult as string
     const conversationSummary: string = conversationSummaryResult as string
     const feedbackContext: string = feedbackContextResult as string
-    const campaignRound: number = isNaN(roundFromRequest)
-      ? (typeof activeRoundResult === 'number' ? activeRoundResult : 1)
-      : roundFromRequest
-    const roundLabel = getRoundLabelAr(campaignRound)
+    // ⚠️ FIX: Only use campaign_round for integrated_activity.
+    // Polio/measles submissions don't carry a real round; using round=N
+    // filters them all out → empty results when user picks round 2.
+    // The mobile app already gates campaign_round on integrated_activity
+    // before sending, but getActiveCampaignRound() returns a global default
+    // which we must NOT use for polio/measles.
+    const campaignTypeFromContext: string | null = context?.campaign_type ?? context?.campaignType ?? null
+    const isIntegratedActivity = campaignTypeFromContext === 'integrated_activity'
+    let campaignRound: number | null
+    if (isIntegratedActivity) {
+      campaignRound = isNaN(roundFromRequest)
+        ? (typeof activeRoundResult === 'number' ? activeRoundResult : 1)
+        : roundFromRequest
+    } else {
+      // Polio/measles — no round filtering
+      campaignRound = null
+    }
+    const roundLabel = campaignRound ? getRoundLabelAr(campaignRound) : ''
 
     // ═══ Process forms result into prompt text ═══
     let formSchemasText = ''

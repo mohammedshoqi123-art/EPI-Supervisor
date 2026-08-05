@@ -385,6 +385,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     );
   }
 
+  /// ⚠️ FIX: Returns round only when campaign is integrated_activity.
+  /// Use this in all report generators instead of reading campaignRoundProvider
+  /// directly. Polio/measles submissions don't carry a real round; sending
+  /// round=N filters them all out → empty results.
+  int? get _effectiveRound {
+    final campaign = ref.read(campaignProvider).value;
+    final round = ref.read(campaignRoundProvider);
+    return campaign == 'integrated_activity' ? round : null;
+  }
+
   // ═══ Debounce refresh — prevents rapid invalidations ═══
   Timer? _refreshDebounce;
   void _debouncedRefresh() {
@@ -639,7 +649,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             dashboardAnalyticsProvider(
               AnalyticsFilter(
                 campaignType: ref.read(campaignProvider).value,
-                campaignRound: ref.read(campaignRoundProvider),
+                campaignRound: _effectiveRound,
               ),
             ),
           )
@@ -647,7 +657,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       fetchGovRanking: () async {
         try {
           return await ref.read(analyticsServiceProvider).getGovernorateRanking(
-            campaignRound: ref.read(campaignRoundProvider),
+            campaignRound: _effectiveRound,
           );
         } catch (_) {
           return null;
@@ -665,7 +675,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     try {
       final db = ref.read(databaseServiceProvider);
       final campaign = ref.read(campaignProvider).value;
-      final round = ref.read(campaignRoundProvider);
+      final round = _effectiveRound;
 
       final subs = await db.getSubmissions(
         campaignType: campaign,
@@ -716,7 +726,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     if (!mounted) return;
     try {
       final db = ref.read(databaseServiceProvider);
-      final round = ref.read(campaignRoundProvider);
+      final round = _effectiveRound;
       final campaign = ref.read(campaignProvider).value;
 
       // Get form ID
@@ -864,10 +874,24 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   }
 
   /// ═══ Round Comparison Report ═══
+  /// Note: This report is only meaningful for integrated_activity (which has rounds).
+  /// For polio/measles, show a notice instead.
   Future<void> _generateRoundComparison() async {
+    final campaign = ref.read(campaignProvider).value;
+    if (campaign != 'integrated_activity') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تقرير مقارنة الجولات متاح فقط للنشاط الإيصالي التكاملي', style: TextStyle(fontFamily: 'Tajawal')),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
     try {
       final db = ref.read(databaseServiceProvider);
-      final campaign = ref.read(campaignProvider).value;
       final currentRound = ref.read(campaignRoundProvider);
 
       final currentSubs = await db.getSubmissions(

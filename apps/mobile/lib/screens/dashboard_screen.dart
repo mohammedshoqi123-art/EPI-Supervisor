@@ -490,7 +490,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               final label = campaign.labelAr;
               final icon = campaign == CampaignType.polioCampaign
                   ? Icons.vaccines_rounded
-                  : Icons.medical_services_rounded;
+                  : campaign == CampaignType.measlesCampaign
+                      ? Icons.coronavirus_rounded
+                      : Icons.medical_services_rounded;
               final current = ref.read(campaignProvider).value;
               return ListTile(
                 leading: Icon(icon, color: AppTheme.primaryColor),

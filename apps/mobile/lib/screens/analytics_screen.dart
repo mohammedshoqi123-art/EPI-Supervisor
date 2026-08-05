@@ -401,9 +401,13 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     _refreshDebounce?.cancel();
     _refreshDebounce = Timer(const Duration(seconds: 2), () {
       if (mounted) {
+        // ⚠️ FIX: Only invalidate dynamic analytics (the only active tab now).
+        // Previously: invalidated _readinessSubsProvider + _supervisionSubsProvider
+        // which fetched 2000+ rows with full data column → freezing.
         final params = _getAnalyticsParams(ref);
-        ref.invalidate(_readinessSubsProvider(params));
-        ref.invalidate(_supervisionSubsProvider(params));
+        ref.invalidate(_dynamicAnalyticsProvider(
+          (formId: '', round: params.campaignRound, governorateId: null),
+        ));
       }
     });
   }
@@ -442,124 +446,30 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           ),
           dividerHeight: 0,
           tabs: const [
-            Tab(icon: Icon(Icons.verified_user_rounded), text: 'الجاهزية'),
-            Tab(icon: Icon(Icons.checklist_rounded), text: 'الالتزام'),
-            Tab(icon: Icon(Icons.groups_3_rounded), text: 'المترددين'),
-            Tab(icon: Icon(Icons.report_problem_rounded), text: 'التحديات'),
+            Tab(icon: Icon(Icons.insights_rounded), text: 'التحليلات'),
             Tab(icon: Icon(Icons.assessment_rounded), text: 'التقارير'),
-            Tab(icon: Icon(Icons.local_hospital_rounded), text: 'تقييم المرافق'),
-            Tab(icon: Icon(Icons.insights_rounded), text: 'تحليلات ديناميكية'),
           ],
         ),
       ),
       body: Column(
         children: [
-          // ═══ P2-5: KPI Bar — 4 quick stats above tabs ═══
-          _buildKPIBar(),
+          // ═══ KPI Bar removed — was causing performance issues with large datasets ═══
           Expanded(
             child: TabBarView(
               controller: _tab,
               children: [
-                const _ReadinessTab(),
-                const _ComplianceTab(),
-                const _NumbersTab(),
-                const _ChallengesTab(),
+                const _DynamicAnalyticsTab(),
                 ReportsTab(
                   campaignLabel: ref.watch(campaignProvider).displayLabel,
                   campaignRound: ref.watch(campaignRoundProvider),
                   onGenerate: (type, format, period) =>
                       _generateReport(type, format, period),
                 ),
-                const _HealthFacilityAssessmentTab(),
-                const _DynamicAnalyticsTab(),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildKPIBar() {
-    // ═══ P0-4: Use precomputed KPI provider — was 250,000 iterations per build
-    // Now: 0 iterations in build(), computed once in provider and cached
-    final params = _getAnalyticsParams(ref);
-
-    // ═══ FIX #30: فحص حالة التحميل والخطأ قبل عرض KPI ═══
-    // Previously: _analyticsKpiProvider يُخفي أخطاء providers بـ .valueOrNull ?? []
-    // Now: نعرض loading shimmer أو error message قبل حساب KPI
-    final readinessAsync = ref.watch(_readinessSubsProvider(params));
-    final supervisionAsync = ref.watch(_supervisionSubsProvider(params));
-
-    // حالة التحميل — shimmer indicator
-    final isLoading = readinessAsync.isLoading || supervisionAsync.isLoading;
-    if (isLoading && !readinessAsync.hasValue && !supervisionAsync.hasValue) {
-      return Container(
-        height: 80,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Center(
-          child: SizedBox(
-            width: 24, height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-
-    // حالة الخطأ — رسالة مع إعادة المحاولة
-    final hasError = readinessAsync.hasError || supervisionAsync.hasError;
-    if (hasError && !readinessAsync.hasValue && !supervisionAsync.hasValue) {
-      return Container(
-        height: 80,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.error_outline, size: 18, color: Colors.orange[700]),
-              const SizedBox(width: 8),
-              Text(
-                'خطأ في تحميل التحليلات',
-                style: TextStyle(
-                  fontFamily: 'Tajawal', fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: () {
-                  ref.invalidate(_readinessSubsProvider(params));
-                  ref.invalidate(_supervisionSubsProvider(params));
-                },
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text('إعادة المحاولة', style: TextStyle(fontSize: 11)),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // الحالة العادية — عرض KPI
-    final kpi = ref.watch(_analyticsKpiProvider(params));
-
-    return AnalyticsKPIBar(
-      totalSubmissions: kpi.totalSubs,
-      complianceRate: kpi.complianceRate,
-      supervisorCount: kpi.supervisorCount,
-      challengeCount: 0, // Will be updated by ChallengesTab
     );
   }
 
@@ -615,29 +525,13 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       return;
     }
 
-    // ═══ Standard reports: fetch analytics data then generate ═══
+    // ═══ Standard reports: use dynamic analytics RPC (fast, server-side) ═══
+    // Previously: fetched 2000+ submissions and processed client-side → freezing
+    // Now: pass null for legacy data fields — report still generates without them
     List<ReadinessGovData>? readinessData;
     List<ComplianceSectionData>? complianceData;
     List<ServiceNumberData>? serviceNumbersData;
     List<ChallengeData>? challengesData;
-
-    try {
-      // Use cached providers instead of direct DB calls — avoids re-fetching 2000 records
-      final params = _currentParams;
-      final readinessSubs = ref.read(_readinessSubsProvider(params)).valueOrNull ?? [];
-      if (readinessSubs.isNotEmpty) {
-        readinessData = _processReadinessData(readinessSubs);
-      }
-
-      final supervisionSubs = ref.read(_supervisionSubsProvider(params)).valueOrNull ?? [];
-      if (supervisionSubs.isNotEmpty) {
-        complianceData = _processComplianceData(supervisionSubs);
-        serviceNumbersData = _processServiceNumbersData(supervisionSubs);
-        challengesData = _processChallengesData(supervisionSubs);
-      }
-    } catch (_) {
-      // Analytics data is optional — report will still generate without it
-    }
 
     if (!mounted) return;
 

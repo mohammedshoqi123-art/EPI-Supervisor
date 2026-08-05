@@ -367,6 +367,8 @@ const TOOLS = [
   { type: 'function', function: { name: 'get_recommendations', description: 'توصيات ذكية مبنية على البيانات — يقترح إجراءات تحسينية بناءً على تحليل الأنماط والمقارنات', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, focus: { type: 'string', enum: ['coverage', 'quality', 'speed', 'all'], description: 'مجال التركيز: التغطية، الجودة، السرعة' } }, required: [] } } },
   { type: 'function', function: { name: 'detect_anomalies', description: 'كشف الأنماط الشاذة في البيانات — إرساليات مكررة، قيم غير منطقية، نشاط مشبوه، اختلافات كبيرة بين المحافظات', parameters: { type: 'object', properties: { campaign_type: { type: 'string', enum: ['polio_campaign', 'integrated_activity', 'all'] }, days: { type: 'number', description: 'عدد الأيام للتحليل (افتراضي 30)' } }, required: [] } } },
   { type: 'function', function: { name: 'compare_rounds', description: 'مقارنة ذكية بين جولتين — يحلل الفروقات في الأداء، التغطية، السرعة، ويحدد أسباب التحسن/التراجع', parameters: { type: 'object', properties: { round1: { type: 'number', description: 'رقم الجولة الأولى' }, round2: { type: 'number', description: 'رقم الجولة الثانية' } }, required: ['round1', 'round2'] } } },
+  // ═══ Dynamic Analytics Tool (uses get_form_analytics RPC — fast, server-side) ═══
+  { type: 'function', function: { name: 'get_dynamic_analytics', description: 'تحليلات ديناميكية سريعة لأي نموذج — يستخدم get_form_analytics RPC (server-side aggregation). يُرجع تحليلات لكل حقل مُكوّن: yesno (نعم/لا + نسبة)، avg (متوسط)، sum (مجموع)، bar (توزيع)، count (عدد). أسرع بكثير من get_submissions. استخدم هذا دائماً للأسئلة التحليلية عن نموذج معين.', parameters: { type: 'object', properties: { form_id: { type: 'string', description: 'معرف النموذج (UUID). إذا لم يُحدد، يُستخدم النموذج الافتراضي للحملة.' }, campaign_round: { type: 'number', description: 'رقم الجولة (فقط للنشاط الإيصالي التكاملي)' }, governorate_id: { type: 'string', description: 'معرف المحافظة (UUID) — اختياري' } }, required: [] } } },
   { type: 'function', function: { name: 'get_supervisor_insights', description: 'رؤى ذكية عن أداء المشرفين — يحدد الأكثر إنتاجية، الأقل نشاطاً، ويقترح تدخلات', parameters: { type: 'object', properties: { days: { type: 'number', description: 'عدد الأيام للتحليل' }, limit: { type: 'number', description: 'عدد المشرفين' } }, required: [] } } },
 ]
 
@@ -406,6 +408,46 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
           withTimeout(supa.from('profiles').select('id', { count: 'exact' }).eq('is_active', true), 8_000),
         ])
         return { total_submissions: s?.count || 0, active_shortages: sh?.count || 0, active_users: u?.count || 0, campaign_round: context?.campaignRound || 'all' }
+      }
+
+      case 'get_dynamic_analytics': {
+        // ⚠️ FIX: Use get_form_analytics RPC for fast, server-side aggregation.
+        // Previously: AI used get_submissions which fetched 2000+ rows and
+        // processed client-side → timeouts and freezing.
+        // Now: single RPC call returns pre-aggregated analytics per field.
+        let formId = args.form_id as string | undefined
+
+        // If no form_id specified, resolve the default form for the current campaign
+        if (!formId) {
+          const campaignType = context?.campaignType || 'integrated_activity'
+          const { data: forms } = await withTimeout(
+            supa.from('forms').select('id').eq('campaign_type', campaignType).eq('is_active', true).is('deleted_at', null).order('created_at').limit(1),
+            5_000,
+          ) ?? {}
+          formId = forms?.[0]?.id as string | undefined
+        }
+
+        if (!formId) {
+          return { error: 'لم يتم العثور على نموذج. حدد form_id أو تأكد من وجود نماذج للحملة الحالية.' }
+        }
+
+        // Only pass campaign_round for integrated_activity
+        const round = context?.campaignType === 'integrated_activity' ? (args.campaign_round || context?.campaignRound || null) : null
+
+        const { data: analyticsResult, error: rpcError } = await withTimeout(
+          supa.rpc('get_form_analytics', {
+            p_form_id: formId,
+            p_campaign_round: round ?? null,
+            p_governorate_id: args.governorate_id || null,
+          }),
+          15_000,
+        ) ?? {}
+
+        if (rpcError) {
+          return { error: 'فشل جلب التحليلات: ' + (rpcError as any)?.message }
+        }
+
+        return analyticsResult || { form_id: formId, analytics: [], total_submissions: 0 }
       }
 
       case 'get_system_health': return await getSystemHealthScore(supa)

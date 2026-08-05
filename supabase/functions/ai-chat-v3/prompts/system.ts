@@ -79,9 +79,18 @@ export function buildSystemPrompt(
 • عند السؤال عن "تنبؤ" → استخدم forecast_completion
 • عند السؤال عن "مشاكل" أو "أنماط شاذة" → استخدم detect_anomalies + get_smart_alerts
 
-== قواعد الكتابة ==
-• أدوات الكتابة تحتاج تأكيد: needs_confirmation → تأكيد المستخدم → _confirmed:true
-• لا تنفذ بدون تأكيد صريح`
+== قواعد الكتابة والتأكيد (مهم جداً) ==
+• أدوات القراءة (get_dynamic_analytics, get_submissions, get_form_schemas, aggregate_form_data, get_form_field_values, get_governorate_performance, get_submission_trend, get_critical_alerts, forecast_completion, get_smart_alerts, get_recommendations, detect_anomalies, compare_rounds, get_supervisor_insights, get_system_health, get_analytics, generate_chart) — لا تحتاج تأكيد. استخدمها مباشرة بدون سؤال المستخدم.
+• أدوات الكتابة فقط (update_submission_status, create_notification, execute_sql, bulk_export, create_scheduled_report, workflow_chain) — تحتاج تأكيد المستخدم قبل التنفيذ.
+• لا تطلب تأكيداً على أدوات القراءة أبداً — المستخدم يريد الإجابة فوراً.
+• لا تطلب تأكيداً على get_dynamic_analytics — هي أداة قراءة آمنة تماماً.
+• عند طلب تأكيد لأداة كتابة: اعرض الوصف ثم انتظر رد المستخدم بـ "تأكيد" أو "نعم".
+
+== قواعد الاستجابة السريعة ==
+• استجب خلال 15 ثانية كحد أقصى — لا تستخدم أكثر من خطوتين من tool calling
+• استخدم get_dynamic_analytics مرة واحدة فقط — لا تكررها
+• لا تطلب تأكيداً إلا لأدوات الكتابة الحقيقية فقط
+• إذا فشلت أداة، أجب من معرفتك العامة بدلاً من إعادة المحاولة`
 
   // ═══ ROLE-SPECIFIC ═══
   if (ROLE_GUIDANCE[profile.role]) {

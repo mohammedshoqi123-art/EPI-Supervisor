@@ -1696,12 +1696,17 @@ serve(async (req) => {
     }
 
     // Determine if this query needs tool calls (data queries)
-    // Use tools when: Groq key available AND (intent suggests data OR grounding found no data)
+    // Use tools when: Groq key available AND intent suggests data OR analytical keywords
+    // ⚠️ FIX: Removed the '&& (!grounding || !grounding.hasData)' condition.
+    // Previously: if grounding.hasData was true (hardcoded true), tools were skipped
+    // → AI never called get_dynamic_analytics → answered from general knowledge only.
+    // Now: always use tools for analytical questions — grounding supplements but
+    // doesn't replace tool calls.
     const { needsDataTools: checkNeedsData } = await import('./prompts/intents.ts')
     const needsTools = !!groqKey && (
       checkNeedsData(message || '') ||
-      /حلل|تقرير|إحصائية|قارن|ترتيب|تنبؤ|توقع|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل/.test(message || '')
-    ) && (!grounding || !grounding.hasData)
+      /حلل|تقرير|إحصائية|قارن|ترتيب|تنبؤ|توقع|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل|أداء|نسبة|كم/.test(message || '')
+    )
 
     // Predict best provider
     const prediction = predictBestProvider(needsTools, gatewayEnv)
@@ -1821,7 +1826,7 @@ serve(async (req) => {
         model: dbModelId || 'llama-3.3-70b-versatile',
         maxTokens: dbMaxTokens,
         temperature: dbTemperature,
-        maxSteps: 3,
+        maxSteps: 2,  // ⚠️ FIX: 3→2 to reduce latency and avoid mobile timeout
         userId: auth.userId,
         campaignRound,
         campaignType: context?.campaign_type,

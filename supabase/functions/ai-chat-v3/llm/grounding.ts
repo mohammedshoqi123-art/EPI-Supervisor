@@ -2111,7 +2111,9 @@ export async function groundMessage(
   return {
     sources,
     contextText,
-    hasData: true,  // ⚠️ Always true — never refuse, always answer with EPI expertise
+    // ⚠️ FIX: was hardcoded 'true' — now reflects actual data availability.
+    // When false, the main handler will use tool calls to fetch real data.
+    hasData: sources.length > 0,
     refusalReason: undefined,  // Never refuse — EPI manager always answers
     suggestedFollowups: followups,
     detectedIntent: plan.intent,

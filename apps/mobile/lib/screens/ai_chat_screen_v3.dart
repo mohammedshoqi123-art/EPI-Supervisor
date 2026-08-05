@@ -272,8 +272,8 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           if (effectiveRound != null) 'campaign_round': effectiveRound,
           if (_selectedFormId != null) 'form_id': _selectedFormId,
         },
-      }).timeout(const Duration(seconds: 45), onTimeout: () {
-        throw TimeoutException('انتهت مهلة الطلب');
+      }).timeout(const Duration(seconds: 90), onTimeout: () {
+        throw TimeoutException('انتهت مهلة الطلب — حاول إعادة صياغة سؤالك بشكل أقصر');
       });
 
       final reply =

@@ -49,14 +49,12 @@ String _getCampaignLabel(String? type) =>
 // ═══════════════════════════════════════════════════════════
 
 class DynamicReportsTab extends ConsumerStatefulWidget {
-  final String? campaignLabel;
   final int? campaignRound;
   final Future<void> Function(String type, String format, String period)?
       onGenerate;
 
   const DynamicReportsTab({
     super.key,
-    this.campaignLabel,
     this.campaignRound,
     this.onGenerate,
   });
@@ -71,7 +69,6 @@ class _DynamicReportsTabState extends ConsumerState<DynamicReportsTab> {
   @override
   Widget build(BuildContext context) {
     final formsAsync = ref.watch(formsProvider);
-    final activeCampaign = ref.watch(campaignProvider).value;
     final campaignRound = ref.watch(campaignRoundProvider);
 
     return formsAsync.when(

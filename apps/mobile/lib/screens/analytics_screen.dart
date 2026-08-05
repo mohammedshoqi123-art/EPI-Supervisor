@@ -460,7 +460,6 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
               children: [
                 const _DynamicAnalyticsTab(),
                 DynamicReportsTab(
-                  campaignLabel: ref.watch(campaignProvider).displayLabel,
                   campaignRound: ref.watch(campaignRoundProvider),
                   onGenerate: (type, format, period) =>
                       _generateReport(type, format, period),

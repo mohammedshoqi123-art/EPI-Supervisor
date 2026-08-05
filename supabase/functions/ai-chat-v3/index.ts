@@ -1908,49 +1908,198 @@ serve(async (req) => {
       }, 200, origin)
     }
 
-    // ─── ALL FAILED — Data-only fallback with EPI expertise ───
+    // ═══ ALL FAILED — Direct Data Response (NO LLM NEEDED) ═══
+    // Instead of showing an error, we format the grounding data + dynamic
+    // analytics into a useful Arabic response directly.
+    // This is the "nuclear option" — when all 5 providers fail,
+    // the user still gets real data from the database.
     await logUsage(supabase, 'none', 0, Date.now() - startMs, false, `All providers failed (attempted: ${(hybridResult.attempts || []).join(',')})`, 'all_failed')
-    let fallbackAnswer = ''
-    try {
-      const health = await getSystemHealthScore(supabase)
-      if (health.score >= 0) {
-        // ⚠️ توفير إجابة مفيدة بدلاً من رسالة خطأ فارغة
-        const groundingInfo = grounding && grounding.sources.length > 0
-          ? `\n\n📋 **البيانات المتاحة** (${grounding.sources.length} مصدر):\n${grounding.sources.slice(0, 3).map(s => `• ${s.summary}`).join('\n')}`
-          : ''
 
-        fallbackAnswer = `📊 **ملخص النظام المباشر**:\n• نقاط الصحة: ${health.score}/100 ${health.status}\n• إرساليات اليوم: ${health.today_submissions}\n• بانتظار المراجعة: ${health.pending_review}\n• نواقص حرجة: ${health.critical_shortages}\n• نشاط المحافظات: ${health.governorate_activity}${groundingInfo}\n\n💡 **توصيات فنية كمدير EPI**:\n• ${health.today_submissions === 0 ? 'لا توجد إرساليات اليوم — تابع المشرفين الخاملين' : 'استمرار النشاط جيد'}\n• ${health.pending_review > 50 ? 'مراجعة الإرساليات المعلقة عاجلاً' : 'المراجعات تحت السيطرة'}\n• ${health.critical_shortages > 0 ? 'معالجة النواقص الحرجة فوراً' : 'لا توجد نواقص حرجة'}\n\n⚠️ ملاحظة: الاستجابة الكاملة للذكاء الاصطناعي تأخرت (${hybridResult.attempts.length} مزود).\nالبيانات أعلاه من قاعدة البيانات مباشرةً. أعد المحاولة لتحليل أعمق.`
+    let fallbackAnswer = ''
+
+    try {
+      // 1. Start with grounding data (already fetched)
+      if (grounding && grounding.sources.length > 0) {
+        fallbackAnswer = formatGroundingAsReport(grounding)
       }
-    } catch {}
+
+      // 2. If no grounding data, try dynamic analytics RPC directly
+      if (!fallbackAnswer && message) {
+        const dynamicData = await fetchDynamicAnalyticsDirect(supabase, message, campaignRound)
+        if (dynamicData) fallbackAnswer = dynamicData
+      }
+
+      // 3. If still nothing, try system health
+      if (!fallbackAnswer) {
+        const health = await getSystemHealthScore(supabase)
+        if (health.score >= 0) {
+          fallbackAnswer = formatSystemHealth(health)
+        }
+      }
+    } catch (fallbackErr) {
+      console.error('[FALLBACK] Direct data fallback failed:', fallbackErr)
+    }
+
     return jsonResponse({
-      reply: fallbackAnswer || '⚠️ خدمة AI مؤقتاً غير متاحة. يرجى إعادة المحاولة بعد لحظات — النظام يعمل على تحليل طلبك.',
-      source: 'all_failed',
+      reply: fallbackAnswer || '⚠️ عذراً، لا توجد بيانات متاحة حالياً. حاول مرة أخرى.',
+      source: 'direct_data_fallback',
       fallback_used: !!fallbackAnswer,
       attempted_providers: hybridResult.attempts,
-      provider_errors: hybridResult.errors || [],  // ⚠️ debug: actual error per provider
-      // ⚠️ debug: message size info
-      message_size: {
-        system_prompt_chars: messages[0]?.content?.length || 0,
-        user_message_chars: message?.length || 0,
-        total_messages: messages.length,
-        history_count: (history || []).length,
-        grounding_sources: grounding?.sources.length || 0,
-        grounding_context_chars: grounding?.contextText?.length || 0,
-      },
+      grounded_in_sources: grounding?.sources.length || 0,
       latency_ms: Date.now() - startMs,
     }, 200, origin)
 
   } catch (error) {
     console.error('AI error:', error)
-    // ⚠️ FIX: Return 200 with error message instead of 500 — mobile app treats
-    // 500 as "server error" and shows generic retry message. Returning 200 with
-    // a helpful reply lets the user see what went wrong and try again.
     const errMsg = error instanceof Error ? error.message : String(error)
     return jsonResponse({
-      reply: `⚠️ تعذّرت المعالجة: ${errMsg.slice(0, 150)}\n\nحاول مرة أخرى أو أعد صياغة سؤالك بشكل أبسط.`,
+      reply: `⚠️ تعذّرت المعالجة: ${errMsg.slice(0, 150)}\n\nحاول مرة أخرى.`,
       source: 'error',
       error: errMsg.slice(0, 300),
-      error_stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
     }, 200, origin)
   }
 })
+
+// ═══════════════════════════════════════════════════════════
+// DIRECT DATA FORMATTERS — No LLM needed
+// ═══════════════════════════════════════════════════════════
+// These functions format database data into readable Arabic reports.
+// Used when ALL LLM providers fail — user still gets real data.
+
+function formatGroundingAsReport(grounding: GroundingResult): string {
+  const parts: string[] = []
+  const intent = grounding.detectedIntent
+
+  // Header based on intent
+  const intentLabels: Record<string, string> = {
+    query_submissions: '📊 تقرير الإرساليات',
+    query_shortages: '⚠️ تقرير النواقص',
+    query_analytics: '📈 التحليلات العامة',
+    query_governorates: '🏛️ تقرير المحافظات',
+    query_users: '👥 تقرير المستخدمين',
+    analyze_trend: '📉 تحليل الاتجاهات',
+    query_health: '💉 تقرير التحصين',
+    campaign_analysis: '📋 تحليل الحملات',
+    general_question: '📋 تقرير النظام',
+  }
+  parts.push(`${intentLabels[intent] || '📋 تقرير'}\n${'═'.repeat(40)}\n`)
+
+  // Add each grounding source
+  for (const src of grounding.sources) {
+    parts.push(`📌 ${src.summary}`)
+    if (src.quote) {
+      // Format the quote nicely
+      const lines = src.quote.split('\n').filter(l => l.trim())
+      for (const line of lines.slice(0, 20)) {
+        parts.push(`   ${line}`)
+      }
+    }
+    parts.push('')
+  }
+
+  // Add suggested followups
+  if (grounding.suggestedFollowups?.length > 0) {
+    parts.push('💡 أسئلة مقترحة:')
+    for (const f of grounding.suggestedFollowups) {
+      parts.push(`   • ${f}`)
+    }
+  }
+
+  parts.push(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📌 مصدر البيانات: قاعدة البيانات مباشرة (بدون ذكاء اصطناعي)\n⏱️ تم التحديث: ${new Date().toLocaleString('ar-SA')}`)
+
+  return parts.join('\n')
+}
+
+async function fetchDynamicAnalyticsDirect(supa: any, message: string, campaignRound: number | null): Promise<string | null> {
+  try {
+    // Resolve the default form for the current campaign
+    const { data: forms } = await supa.from('forms')
+      .select('id, title_ar, campaign_type')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('created_at')
+      .limit(5)
+
+    if (!forms || forms.length === 0) return null
+
+    // Pick the right form based on message keywords
+    let formId = forms[0].id
+    let formTitle = forms[0].title_ar
+    const lower = message.toLowerCase()
+    if (/إشراف|supervision/.test(lower)) {
+      const supervisionForm = forms.find((f: any) => f.title_ar?.includes('إشراف'))
+      if (supervisionForm) { formId = supervisionForm.id; formTitle = supervisionForm.title_ar }
+    } else if (/جاهزية|readiness/.test(lower)) {
+      const readinessForm = forms.find((f: any) => f.title_ar?.includes('جاهزية'))
+      if (readinessForm) { formId = readinessForm.id; formTitle = readinessForm.title_ar }
+    }
+
+    // Call the RPC directly
+    const { data: analytics, error } = await supa.rpc('get_form_analytics', {
+      p_form_id: formId,
+      p_campaign_round: campaignRound || null,
+      p_governorate_id: null,
+    })
+
+    if (error || !analytics) return null
+
+    // Format the analytics into Arabic report
+    const parts: string[] = []
+    parts.push(`📊 تحليلات: ${formTitle}`)
+    parts.push('═'.repeat(40))
+    parts.push(`الإرساليات: ${analytics.total_submissions || 0}\n`)
+
+    if (analytics.analytics && Array.isArray(analytics.analytics)) {
+      for (const field of analytics.analytics) {
+        const label = field.label_ar || field.field_key || field.label
+        if (!label) continue
+
+        if (field.type === 'yesno') {
+          const pct = field.percentage ?? 0
+          const emoji = pct >= 80 ? '✅' : pct >= 50 ? '⚠️' : '❌'
+          parts.push(`${emoji} ${label}: ${pct}% (${field.yes || 0}/${field.total || 0})`)
+        } else if (field.type === 'avg') {
+          parts.push(`📊 ${label}: ${field.avg ?? 'N/A'}`)
+        } else if (field.type === 'sum') {
+          parts.push(`➕ ${label}: ${field.sum ?? 'N/A'}`)
+        } else if (field.type === 'count') {
+          parts.push(`🔢 ${label}: ${field.count ?? 'N/A'}`)
+        } else if (field.type === 'bar' && field.distribution) {
+          parts.push(`📊 ${label}:`)
+          const entries = Object.entries(field.distribution).slice(0, 5)
+          for (const [key, val] of entries) {
+            parts.push(`   • ${key}: ${val}`)
+          }
+        }
+      }
+    }
+
+    parts.push(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📌 مصدر: تحليلات ديناميكية (server-side RPC)\n⏱️ ${new Date().toLocaleString('ar-SA')}`)
+
+    return parts.join('\n')
+  } catch (e) {
+    console.error('[DIRECT-ANALYTICS] Failed:', e)
+    return null
+  }
+}
+
+function formatSystemHealth(health: any): string {
+  const parts: string[] = []
+  parts.push(`🏥 حالة النظام`)
+  parts.push('═'.repeat(40))
+  parts.push(`النقاط: ${health.score}/100 ${health.status}`)
+  parts.push(`📊 إرساليات اليوم: ${health.today_submissions}`)
+  parts.push(`⏳ بانتظار المراجعة: ${health.pending_review}`)
+  parts.push(`⚠️ نواقص حرجة: ${health.critical_shortages}`)
+  parts.push(`👥 مستخدمين نشطين: ${health.active_users}`)
+  parts.push(`🏛️ نشاط المحافظات: ${health.governorate_activity}`)
+  parts.push(``)
+  if (health.issues?.length > 0) {
+    parts.push(`💡 التوصيات:`)
+    for (const issue of health.issues) {
+      parts.push(`   • ${issue}`)
+    }
+  }
+  parts.push(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📌 مصدر: قاعدة البيانات مباشرة`) 
+  return parts.join('\n')
+}

@@ -276,7 +276,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
         p_campaign_round: shouldApplyRound ? effectiveRound : null,
         p_days: filters.days || null,
       }),
-      15_000,
+      20_000,  // FIX: Increased from 15s to 20s for reliability
     ) ?? {}
 
     if (rpcErr || !rpcData || !Array.isArray(rpcData) || rpcData.length === 0) {
@@ -291,7 +291,7 @@ async function fetchSubmissionsData(supa: any, plan: QueryPlan, campaignRound: n
       if (filters.form_id) q = q.eq('form_id', filters.form_id)
       if (shouldApplyRound) q = q.eq('campaign_round', effectiveRound)
 
-      const { data: fallbackData, error: fallbackErr } = await withTimeout(q.limit(1000), 15_000) ?? {}
+      const { data: fallbackData, error: fallbackErr } = await withTimeout(q.limit(1000), 20_000) ?? {}  // FIX: 20s
       if (fallbackErr || !fallbackData || fallbackData.length === 0) return []
       
       // Process fallback data (same format as before)
@@ -1977,11 +1977,29 @@ async function searchTrustedWebSources(message: string): Promise<GroundingSource
 
 // ═══ MAIN: Grounding Engine Entry Point ═══
 
+// FIX: Add simple in-memory cache for grounding results (5 min TTL)
+// Same query within 5 minutes = same data, no DB round-trip
+const _groundingCache = new Map<string, { result: GroundingResult; ts: number }>()
+const GROUNDING_CACHE_TTL = 5 * 60 * 1000  // 5 minutes
+
+function getGroundingCacheKey(message: string, campaignRound: number | null): string {
+  // Normalize: lowercase, first 100 chars + round
+  return `${message.toLowerCase().trim().slice(0, 100)}|r${campaignRound || 0}`
+}
+
 export async function groundMessage(
   supa: any,
   message: string,
   campaignRound: number | null,
 ): Promise<GroundingResult> {
+  // Check cache first
+  const cacheKey = getGroundingCacheKey(message, campaignRound)
+  const cached = _groundingCache.get(cacheKey)
+  if (cached && (Date.now() - cached.ts) < GROUNDING_CACHE_TTL) {
+    console.log(`[GROUNDING] Cache hit for: ${message.slice(0, 50)}`)
+    return cached.result
+  }
+
   const plan = buildQueryPlan(message)
   console.log(`[GROUNDING] Plan: entity=${plan.entity} intent=${plan.intent} filters=${JSON.stringify(plan.filters)}`)
 
@@ -2108,17 +2126,25 @@ export async function groundMessage(
 
   const followups = generateFollowups(plan, sources)
 
-  return {
+  const result: GroundingResult = {
     sources,
     contextText,
-    // ⚠️ FIX: was hardcoded 'true' — now reflects actual data availability.
-    // When false, the main handler will use tool calls to fetch real data.
     hasData: sources.length > 0,
-    refusalReason: undefined,  // Never refuse — EPI manager always answers
+    refusalReason: undefined,
     suggestedFollowups: followups,
     detectedIntent: plan.intent,
     queryPlan: plan,
   }
+
+  // Cache the result
+  _groundingCache.set(cacheKey, { result, ts: Date.now() })
+  // Cleanup old cache entries (keep last 100)
+  if (_groundingCache.size > 100) {
+    const oldest = _groundingCache.keys().next().value
+    if (oldest) _groundingCache.delete(oldest)
+  }
+
+  return result
 }
 
 // ═══ Citation Validator ═══

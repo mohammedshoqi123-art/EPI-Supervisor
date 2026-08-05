@@ -106,11 +106,13 @@ export async function hybridRouteChat(
   const { needTools, tools, tool_choice, maxTokens, temperature, model, timeoutMs = 15_000 } = opts
   const attempts: string[] = []
 
-  // ═══ FIX #7: أدوات (tools) — Groq فقط يدعمها، نبقي تسلسلي ═══
+  // ═══ FIX #7: أدوات (tools) — Groq + OpenRouter يدعمانها ═══
   if (needTools) {
-    const groqKey = env.GROQ_API_KEY
-    // FIX: عرّف start في scope أوسع ليكون متاحاً للـ fallback paths
     const start = Date.now()
+    const groqKey = env.GROQ_API_KEY
+    const orKey = env.OPENROUTER_API_KEY
+
+    // ─── Try Groq with tools first (fastest) ───
     if (groqKey && isAvailable('groq')) {
       attempts.push('groq')
       try {
@@ -133,20 +135,41 @@ export async function hybridRouteChat(
             return { content: result.content, usage: result.usage, provider: 'groq', attempts }
           }
         }
+        recordFailure('groq')
       } catch (e: any) {
         recordFailure('groq')
         console.error(`[GATEWAY] Groq (tools) failed: ${e.message}`)
       }
     }
 
-    // ═══ FIX: fallback للنص العادي بدون tools عندما يفشل Groq ═══
-    // Previously: إذا فشل Groq مع tools، نُرجع null مباشرة → المستخدم يرى
-    // "all providers failed" حتى لأسئلة بسيطة تحتاج بيانات.
-    // Now: نحاول Groq بدون tools ثم Pollinations كـ fallback أخير.
-    // الـ LLM سيجيب بناءً على grounding context المُحقن مسبقاً في system prompt.
+    // ─── Try OpenRouter with tools (DeepSeek supports tool calling) ───
+    if (orKey && isAvailable('openrouter')) {
+      attempts.push('openrouter')
+      try {
+        const result = await Promise.race([
+          openrouterChat(messages, orKey, maxTokens || 2000, { tools, tool_choice, temperature }),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+        ])
+        if (result) {
+          recordSuccess('openrouter', Date.now() - start)
+          if (result.type === 'tool_calls' && result.tool_calls) {
+            return { content: null, toolCalls: result.tool_calls, usage: result.usage, provider: 'openrouter', attempts }
+          }
+          if (result.type === 'message' && result.content) {
+            return { content: result.content, usage: result.usage, provider: 'openrouter', attempts }
+          }
+        }
+        recordFailure('openrouter')
+      } catch (e: any) {
+        recordFailure('openrouter')
+        console.error(`[GATEWAY] OpenRouter (tools) failed: ${e.message}`)
+      }
+    }
+
+    // ═══ FIX: fallback للنص العادي بدون tools عندما يفشل كلاهما ═══
     console.warn('[GATEWAY] Tools path failed — falling back to no-tools chat with grounding context')
 
-    // جرّب Groq بدون tools (نفس الـ messages تحتوي grounding في system prompt)
+    // جرّب Groq بدون tools
     if (groqKey && isAvailable('groq')) {
       attempts.push('groq-no-tools')
       try {
@@ -155,7 +178,6 @@ export async function hybridRouteChat(
             model: model || 'llama-3.3-70b-versatile',
             maxTokens: maxTokens || 2000,
             temperature,
-            // لا tools — استجابة نصية فقط
           }),
           new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
         ])
@@ -169,7 +191,7 @@ export async function hybridRouteChat(
       }
     }
 
-    // جرّب Pollinations كـ fallback أخير (مجاني، لا يحتاج مفتاح)
+    // جرّب Pollinations كـ fallback أخير
     if (isAvailable('pollinations')) {
       attempts.push('pollinations')
       try {
@@ -195,131 +217,135 @@ export async function hybridRouteChat(
     return { content: null, provider: 'none', attempts }
   }
 
-  // ═══ FIX #7: بدون أدوات — racing حقيقي عبر Promise.any ═══
-  // Previously: sequential fallback 5 × 30s = 150s worst case
-  // Now: 2 waves × 15s = 30s worst case
+  // ═══ FIX: Sequential fallback (no race condition = no wasted API calls) ═══
+  // Previously: Promise.any sent 2+ requests simultaneously → double cost when both succeed.
+  // Now: Try providers in order. Stop at first success.
 
-  // ─── Wave 1: Groq + Pollinations بالتوازي (المزودان المجانيان) ───
-  const wave1: Promise<HybridResult>[] = []
-
+  // ─── Step 1: Groq (supports tools) ───
   const groqKey = env.GROQ_API_KEY
   if (groqKey && isAvailable('groq')) {
     attempts.push('groq')
-    wave1.push(
-      (async () => {
-        const start = Date.now()
-        const result = await Promise.race([
-          groqChat(messages, groqKey, {
-            model: model || 'llama-3.3-70b-versatile',
-            maxTokens: maxTokens || 2000,
-            temperature,
-          }),
-          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
-        ])
-        if (result && result.type === 'message' && result.content) {
-          recordSuccess('groq', Date.now() - start)
+    try {
+      const start = Date.now()
+      const result = await Promise.race([
+        groqChat(messages, groqKey, {
+          model: model || 'llama-3.3-70b-versatile',
+          maxTokens: maxTokens || 2000,
+          temperature,
+          tools,
+          tool_choice,
+        }),
+        new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+      ])
+      if (result) {
+        recordSuccess('groq', Date.now() - start)
+        if (result.type === 'tool_calls') {
+          return { content: null, toolCalls: result.tool_calls, usage: result.usage, provider: 'groq', attempts }
+        }
+        if (result.type === 'message' && result.content) {
           return { content: result.content, usage: result.usage, provider: 'groq', attempts }
         }
-        throw new Error('Groq empty response')
-      })()
-    )
-  }
-
-  if (isAvailable('pollinations')) {
-    attempts.push('pollinations')
-    wave1.push(
-      (async () => {
-        const start = Date.now()
-        const result = await Promise.race([
-          pollinationsChat(messages, {
-            model: model || 'openai',
-            maxTokens: maxTokens || 2000,
-            temperature,
-          }),
-          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
-        ])
-        if (result && typeof result === 'string') {
-          recordSuccess('pollinations', Date.now() - start)
-          return { content: result, provider: 'pollinations', attempts }
-        }
-        throw new Error('Pollinations empty response')
-      })()
-    )
-  }
-
-  if (wave1.length > 0) {
-    try {
-      return await Promise.any(wave1)
+      }
+      recordFailure('groq')
     } catch (e: any) {
-      console.error(`[GATEWAY] Wave 1 failed: ${e.errors?.map((e: any) => e.message).join(', ')}`)
+      recordFailure('groq')
+      console.error(`[GATEWAY] Groq failed: ${e.message}`)
     }
   }
 
-  // ─── Wave 2: NVIDIA + HuggingFace + OpenRouter بالتوازي ───
-  const wave2: Promise<HybridResult>[] = []
-
-  const nvidiaKey = env.NVIDIA_API_KEY
-  if (nvidiaKey && isAvailable('nvidia')) {
-    attempts.push('nvidia')
-    wave2.push(
-      (async () => {
-        const start = Date.now()
-        const result = await Promise.race([
-          nvidiaChat(messages, nvidiaKey, maxTokens || 2000),
-          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
-        ])
-        if (result) {
-          recordSuccess('nvidia', Date.now() - start)
-          return { content: result, provider: 'nvidia', attempts }
-        }
-        throw new Error('NVIDIA empty response')
-      })()
-    )
-  }
-
-  const hfKey = env.HF_API_TOKEN
-  if (hfKey && isAvailable('huggingface')) {
-    attempts.push('huggingface')
-    wave2.push(
-      (async () => {
-        const start = Date.now()
-        const result = await Promise.race([
-          huggingfaceChat(messages, hfKey),
-          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
-        ])
-        if (result) {
-          recordSuccess('huggingface', Date.now() - start)
-          return { content: result, provider: 'huggingface', attempts }
-        }
-        throw new Error('HuggingFace empty response')
-      })()
-    )
-  }
-
+  // ─── Step 2: OpenRouter (supports tools via DeepSeek) ───
   const orKey = env.OPENROUTER_API_KEY
   if (orKey && isAvailable('openrouter')) {
     attempts.push('openrouter')
-    wave2.push(
-      (async () => {
-        const start = Date.now()
-        const result = await Promise.race([
-          openrouterChat(messages, orKey, maxTokens || 2000),
-          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
-        ])
-        if (result) {
-          recordSuccess('openrouter', Date.now() - start)
-          return { content: result, provider: 'openrouter', attempts }
+    try {
+      const start = Date.now()
+      const result = await Promise.race([
+        openrouterChat(messages, orKey, maxTokens || 2000, {
+          tools,
+          tool_choice,
+          temperature,
+        }),
+        new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+      ])
+      if (result) {
+        recordSuccess('openrouter', Date.now() - start)
+        if (result.type === 'tool_calls' && result.tool_calls) {
+          return { content: null, toolCalls: result.tool_calls, usage: result.usage, provider: 'openrouter', attempts }
         }
-        throw new Error('OpenRouter empty response')
-      })()
-    )
+        if (result.type === 'message' && result.content) {
+          return { content: result.content, usage: result.usage, provider: 'openrouter', attempts }
+        }
+      }
+      recordFailure('openrouter')
+    } catch (e: any) {
+      recordFailure('openrouter')
+      console.error(`[GATEWAY] OpenRouter failed: ${e.message}`)
+    }
   }
 
-  if (wave2.length > 0) {
+  // ─── Step 3: Pollinations (no tools, fast) ───
+  if (isAvailable('pollinations')) {
+    attempts.push('pollinations')
     try {
-      return await Promise.any(wave2)
+      const start = Date.now()
+      const result = await Promise.race([
+        pollinationsChat(messages, {
+          model: 'openai',
+          maxTokens: maxTokens || 2000,
+          temperature,
+        }),
+        new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+      ])
+      if (result && typeof result === 'string') {
+        recordSuccess('pollinations', Date.now() - start)
+        return { content: result, provider: 'pollinations', attempts }
+      }
+      recordFailure('pollinations')
     } catch (e: any) {
-      console.error(`[GATEWAY] Wave 2 failed: ${e.errors?.map((e: any) => e.message).join(', ')}`)
+      recordFailure('pollinations')
+      console.error(`[GATEWAY] Pollinations failed: ${e.message}`)
+    }
+  }
+
+  // ─── Step 4: NVIDIA (no tools) ───
+  const nvidiaKey = env.NVIDIA_API_KEY
+  if (nvidiaKey && isAvailable('nvidia')) {
+    attempts.push('nvidia')
+    try {
+      const start = Date.now()
+      const result = await Promise.race([
+        nvidiaChat(messages, nvidiaKey, maxTokens || 2000),
+        new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+      ])
+      if (result) {
+        recordSuccess('nvidia', Date.now() - start)
+        return { content: result, provider: 'nvidia', attempts }
+      }
+      recordFailure('nvidia')
+    } catch (e: any) {
+      recordFailure('nvidia')
+      console.error(`[GATEWAY] NVIDIA failed: ${e.message}`)
+    }
+  }
+
+  // ─── Step 5: HuggingFace (last resort) ───
+  const hfKey = env.HF_API_TOKEN
+  if (hfKey && isAvailable('huggingface')) {
+    attempts.push('huggingface')
+    try {
+      const start = Date.now()
+      const result = await Promise.race([
+        huggingfaceChat(messages, hfKey),
+        new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+      ])
+      if (result) {
+        recordSuccess('huggingface', Date.now() - start)
+        return { content: result, provider: 'huggingface', attempts }
+      }
+      recordFailure('huggingface')
+    } catch (e: any) {
+      recordFailure('huggingface')
+      console.error(`[GATEWAY] HuggingFace failed: ${e.message}`)
     }
   }
 

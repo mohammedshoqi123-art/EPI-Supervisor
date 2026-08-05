@@ -1649,7 +1649,7 @@ serve(async (req) => {
     // LLM CALL — Hybrid Parallel Racing Gateway (Patent-Pending)
     const startMs = Date.now()
 
-    // ─── Smart Escalation: detect frustrated users ───
+    // ─── Smart Escalation: detect frustrated users (simplified) ───
     const escalation = message
       ? analyzeUserMessage(auth.userId, message)
       : { shouldEscalate: false, preferredProvider: undefined, reason: undefined }
@@ -1658,13 +1658,7 @@ serve(async (req) => {
     }
 
     // ═══ GROUNDING ENGINE (NotebookLM-Inspired) ═══
-    // Pre-fetch REAL data BEFORE calling LLM. Inject actual rows/chunks
-    // as grounding sources. Force LLM to cite [n]. Refuse if no data.
-    // This is THE fix for "wrong answers" — LLM hallucinated because it
-    // had no real data when tool-calling failed.
-    //
-    // ⚠️ FIX: Wrap grounding in a 8s timeout — if DB queries are slow,
-    // proceed without grounding instead of blocking the entire request.
+    // FIX: Increased timeout from 8s to 15s for reliability
     let grounding: GroundingResult | null = null
     if (message) {
       console.log(`[GROUNDING] Grounding message: "${message.slice(0, 80)}..."`)
@@ -1672,7 +1666,7 @@ serve(async (req) => {
         grounding = await Promise.race([
           groundMessage(supabase, message, campaignRound),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Grounding timeout (8s)')), 8_000)
+            setTimeout(() => reject(new Error('Grounding timeout (15s)')), 15_000)
           ),
         ])
         console.log(`[GROUNDING] Found ${grounding.sources.length} sources, hasData=${grounding.hasData}, intent=${grounding.detectedIntent}`)
@@ -1696,14 +1690,10 @@ serve(async (req) => {
     }
 
     // Determine if this query needs tool calls (data queries)
-    // Use tools when: Groq key available AND intent suggests data OR analytical keywords
-    // ⚠️ FIX: Removed the '&& (!grounding || !grounding.hasData)' condition.
-    // Previously: if grounding.hasData was true (hardcoded true), tools were skipped
-    // → AI never called get_dynamic_analytics → answered from general knowledge only.
-    // Now: always use tools for analytical questions — grounding supplements but
-    // doesn't replace tool calls.
+    // FIX: Now supports Groq + OpenRouter (both support tool calling)
     const { needsDataTools: checkNeedsData } = await import('./prompts/intents.ts')
-    const needsTools = !!groqKey && (
+    const hasToolsProvider = !!groqKey || !!openrouterKey
+    const needsTools = hasToolsProvider && (
       checkNeedsData(message || '') ||
       /حلل|تقرير|إحصائية|قارن|ترتيب|تنبؤ|توقع|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل|أداء|نسبة|كم/.test(message || '')
     )

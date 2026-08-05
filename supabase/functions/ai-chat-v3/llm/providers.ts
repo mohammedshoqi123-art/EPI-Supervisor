@@ -45,7 +45,9 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'Pollinations',
     tier: 2,
     free: true,
-    models: ['openai', 'openai-fast', 'mistral', 'deepseek', 'gemini', 'grok'],
+    // FIX: Only openai and openai-fast actually work (tested 2026-08-06).
+    // Others return 404 — require auth now.
+    models: ['openai', 'openai-fast'],
     maxTokens: 2000,
     supportsTools: false,
     supportsStreaming: true,
@@ -63,14 +65,10 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'HuggingFace',
     tier: 4,
     free: true,
-    // FIX: استخدمنا سابقاً 'meta-llama/Meta-Llama-3-8B-Instruct' لكنه gated
-    // (يتطلب قبول شروط الاستخدام على HF Hub + قد يُرفض الطلب).
-    // استبدلناه بنماذج مفتوحة بالكامل لا تتطلب قبول شروط:
-    //   - HuggingFaceH4/zephyr-7b-beta: مفتوح، يدعم chat، عربي ضعيف لكنه fallback
-    //   - mistralai/Mistral-7B-Instruct-v0.3: مفتوح (Apache 2.0) — أفضل في العربية
-    // الترتيب من الأفضل للأسوأ في fallback chain.
-    models: ['mistralai/Mistral-7B-Instruct-v0.3', 'HuggingFaceH4/zephyr-7b-beta'],
-    maxTokens: 800,
+    // FIX: Updated to models that actually work and have better Arabic support.
+    // Allam-7B is specifically trained for Arabic. Llama-3.1-8B has decent Arabic.
+    models: ['ALLAM-7B-Instruct', 'meta-llama/Llama-3.1-8B-Instruct'],
+    maxTokens: 1500,  // FIX: Increased from 800
     supportsTools: false,
     supportsStreaming: false,
   },
@@ -213,6 +211,11 @@ export async function groqChat(
 }
 
 // ─── Tier 2: Pollinations (FREE, no key) ───
+// FIX: Only 2 models actually work (openai, openai-fast).
+// All others return 404 (require auth). Removed dead models.
+// Strategy: try openai first, fallback to openai-fast.
+const POLLINATIONS_WORKING_MODELS = ['openai', 'openai-fast']
+
 export async function pollinationsChat(
   messages: any[],
   opts: {
@@ -222,51 +225,70 @@ export async function pollinationsChat(
     stream?: boolean
   } = {},
 ): Promise<string | Response | null> {
-  const model = opts.model || 'openai'
-  const body: Record<string, any> = {
-    model,
-    messages,
-    max_tokens: opts.maxTokens || 2000,
-    temperature: opts.temperature ?? 0.4,
-  }
-  if (opts.stream) body.stream = true
+  // FIX: Only try working models, not dead ones
+  const modelChain = opts.model && POLLINATIONS_WORKING_MODELS.includes(opts.model)
+    ? [opts.model, ...POLLINATIONS_WORKING_MODELS.filter(m => m !== opts.model)]
+    : POLLINATIONS_WORKING_MODELS
 
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 15_000)
-
-  try {
-    const r = await fetch(POLLINATIONS_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Referer': 'https://epi-supervisor.yemen.gov.ye',
-        'X-Source': 'EPI-Supervisor',
-        ...(opts.stream ? { 'Accept': 'text/event-stream' } : {}),
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
-
-    if (!r.ok) {
-      const errBody = await r.text().catch(() => '')
-      console.error(`[POLLINATIONS] ${r.status}: ${errBody.slice(0, 200)}`)
-      throw new Error(`Pollinations ${r.status}: ${errBody.slice(0, 150)}`)
+  for (const model of modelChain) {
+    const body: Record<string, any> = {
+      model,
+      messages,
+      max_tokens: opts.maxTokens || 2000,
+      temperature: opts.temperature ?? 0.4,
     }
+    if (opts.stream) body.stream = true
 
-    if (opts.stream) return r
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 12_000)
 
-    const json = await r.json().catch(() => null)
-    if (!json) throw new Error('Pollinations: invalid JSON')
-    const content = json.choices?.[0]?.message?.content
-    if (!content?.trim()) throw new Error('Pollinations: empty content')
-    return content
-  } catch (e: any) {
-    if (e?.name === 'AbortError') { console.error('Pollinations timeout'); return null }
-    console.error('Pollinations error:', e)
-    throw e
-  } finally {
-    clearTimeout(timeoutId)
+    try {
+      const r = await fetch(POLLINATIONS_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Referer': 'https://epi-supervisor.yemen.gov.ye',
+          'X-Source': 'EPI-Supervisor',
+          ...(opts.stream ? { 'Accept': 'text/event-stream' } : {}),
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      // 404/429 → try next model
+      if (r.status === 404 || r.status === 429) {
+        console.warn(`[POLLINATIONS] ${model} returned ${r.status} — trying next`)
+        continue
+      }
+
+      if (!r.ok) {
+        const errBody = await r.text().catch(() => '')
+        console.error(`[POLLINATIONS] ${model} ${r.status}: ${errBody.slice(0, 200)}`)
+        continue
+      }
+
+      if (opts.stream) return r
+
+      const json = await r.json().catch(() => null)
+      if (!json) { console.warn(`[POLLINATIONS] ${model} invalid JSON`); continue }
+      const content = json.choices?.[0]?.message?.content
+      if (!content?.trim()) { console.warn(`[POLLINATIONS] ${model} empty content`); continue }
+
+      console.log(`[POLLINATIONS] ✓ ${model} succeeded`)
+      return content
+    } catch (e: any) {
+      clearTimeout(timeoutId)
+      if (e?.name === 'AbortError') { console.warn(`[POLLINATIONS] ${model} timeout`); continue }
+      console.warn(`[POLLINATIONS] ${model} error: ${String(e).slice(0, 80)}`)
+      continue
+    }
   }
+
+  // All models failed
+  console.error('[POLLINATIONS] All working models failed')
+  return null
 }
 
 // ─── Tier 3: NVIDIA ───
@@ -324,10 +346,10 @@ export async function huggingfaceChat(
   messages: any[],
   key: string,
 ): Promise<string | null> {
-  // قائمة النماذج المفتوحة بالكامل (لا gated، لا تتطلب قبول شروط)
+  // FIX: Updated model list — Allam-7B for Arabic, Llama-3.1 as fallback
   const OPEN_MODELS = [
-    'mistralai/Mistral-7B-Instruct-v0.3',  // Apache 2.0، الأفضل في العربية
-    'HuggingFaceH4/zephyr-7b-beta',         // مفتوح، chat-tuned
+    'ALLAM-7B-Instruct',                        // Arabic-specialized model
+    'meta-llama/Llama-3.1-8B-Instruct',          // Good multilingual
   ]
 
   const prompt = messages.map((m: any) => `<|${m.role}|>\n${m.content}`).join('\n')
@@ -335,9 +357,8 @@ export async function huggingfaceChat(
   for (const model of OPEN_MODELS) {
     try {
       const controller = new AbortController()
-      // FIX: 6s لكل نموذج بدل 15s — حتى نتمكن من تجربة نموذجين ضمن
-      // الـ timeout الإجمالي 15s في hybridRouteChat.
-      const timeoutId = setTimeout(() => controller.abort(), 6_000)
+      // FIX: 10s per model (was 6s) — better for Arabic models which are slower
+      const timeoutId = setTimeout(() => controller.abort(), 10_000)
 
       const r = await fetch(`${HF_API}/${model}`, {
         method: 'POST',
@@ -380,14 +401,31 @@ export async function huggingfaceChat(
 }
 
 // ─── Tier 5: OpenRouter (DeepSeek) ───
+// FIX: OpenRouter supports tool calling via DeepSeek.
+// This gives us a SECOND provider with tools support as fallback for Groq.
 export async function openrouterChat(
   messages: any[],
   key: string,
   maxTokens = 2000,
-): Promise<string | null> {
+  opts: {
+    tools?: any[]
+    tool_choice?: any
+    temperature?: number
+  } = {},
+): Promise<{ type: 'message' | 'tool_calls'; content?: string; tool_calls?: any[]; usage?: any } | null> {
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15_000)
+    const timeoutId = setTimeout(() => controller.abort(), 18_000)
+
+    const body: Record<string, any> = {
+      model: 'deepseek/deepseek-chat',
+      messages,
+      max_tokens: maxTokens,
+      temperature: opts.temperature ?? 0.4,
+    }
+    // FIX: Pass tools if provided — DeepSeek supports tool calling
+    if (opts.tools) body.tools = opts.tools
+    if (opts.tool_choice) body.tool_choice = opts.tool_choice
 
     const r = await fetch(OPENROUTER_API, {
       method: 'POST',
@@ -396,12 +434,7 @@ export async function openrouterChat(
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://epi-supervisor.yemen.gov.ye',
       },
-      body: JSON.stringify({
-        model: 'deepseek/deepseek-chat',
-        messages,
-        max_tokens: maxTokens,
-        temperature: 0.4,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     })
 
@@ -409,7 +442,13 @@ export async function openrouterChat(
 
     if (!r.ok) return null
     const json = await r.json()
-    return json.choices?.[0]?.message?.content || null
+    const choice = json.choices?.[0]
+    if (!choice) return null
+
+    if (choice.message?.tool_calls) {
+      return { type: 'tool_calls', tool_calls: choice.message.tool_calls, usage: json.usage }
+    }
+    return { type: 'message', content: choice.message?.content || '', usage: json.usage }
   } catch {
     return null
   }
@@ -512,15 +551,26 @@ export async function smartRouteChat(
     }
   }
 
-  // ─── Tier 5: OpenRouter ───
+  // ─── Tier 5: OpenRouter (supports tools via DeepSeek) ───
   const orKey = env.OPENROUTER_API_KEY
-  if (orKey && !needTools) {
+  if (orKey) {
     console.log('[ROUTER] Trying OpenRouter...')
-    const orResult = await openrouterChat(messages, orKey, maxTokens || 2000)
+    const orResult = await openrouterChat(messages, orKey, maxTokens || 2000, {
+      tools: needTools ? tools : undefined,
+      tool_choice: needTools ? tool_choice : undefined,
+      temperature,
+    })
     if (orResult) {
-      console.log('[ROUTER] ✓ OpenRouter')
-      return { content: orResult, provider: 'openrouter', tier: 5 }
+      if (orResult.type === 'tool_calls' && orResult.tool_calls) {
+        console.log('[ROUTER] ✓ OpenRouter (tool calls)')
+        return { content: null, toolCalls: orResult.tool_calls, usage: orResult.usage, provider: 'openrouter', tier: 5 }
+      }
+      if (orResult.type === 'message' && orResult.content) {
+        console.log('[ROUTER] ✓ OpenRouter')
+        return { content: orResult.content, usage: orResult.usage, provider: 'openrouter', tier: 5 }
+      }
     }
+    console.log('[ROUTER] ✗ OpenRouter failed')
   }
 
   // ─── All failed ───

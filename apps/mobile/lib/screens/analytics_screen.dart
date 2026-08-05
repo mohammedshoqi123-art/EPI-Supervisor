@@ -7,6 +7,7 @@ import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import 'analytics_widgets.dart';
 import 'analytics_reports_tab.dart';
+import 'dashboard_report.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  FORM IDs

@@ -376,7 +376,7 @@ const TOOLS = [
 // TOOL EXECUTION
 // ═══════════════════════════════════════════════════════════
 
-async function executeFunction(supa: any, name: string, args: Record<string, any>, context?: { campaignRound?: number | null; campaignType?: string | null }): Promise<any> {
+async function executeFunction(supa: any, name: string, args: Record<string, any>, context?: { campaignRound?: number | null; campaignType?: string | null; form_id?: string | null }): Promise<any> {
   // Confirmation gate
   const confirmationRequired = requireConfirmation(name, args)
   if (confirmationRequired) return confirmationRequired
@@ -1040,7 +1040,7 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
 // TOOL CALLS EXECUTOR
 // ═══════════════════════════════════════════════════════════
 
-async function executeToolCalls(supa: any, toolCalls: any[], userId?: string, context?: { campaignRound?: number | null; campaignType?: string | null }): Promise<any[]> {
+async function executeToolCalls(supa: any, toolCalls: any[], userId?: string, context?: { campaignRound?: number | null; campaignType?: string | null; form_id?: string | null }): Promise<any[]> {
   const results = []
   for (const tc of toolCalls) {
     const fnName = tc.function?.name
@@ -1076,7 +1076,7 @@ async function executeToolCalls(supa: any, toolCalls: any[], userId?: string, co
 
 async function multiStepToolCalling(
   msgs: any[], groqKey: string, supa: any,
-  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null; campaignType?: string | null }
+  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null; campaignType?: string | null; form_id?: string | null }
 ): Promise<{ content: string; toolCallsUsed: string[]; totalTokens: number } | null> {
   const maxSteps = opts.maxSteps ?? 3
   const toolCallsUsed: string[] = []
@@ -1087,7 +1087,7 @@ async function multiStepToolCalling(
     if (!result) return null
 
     if (result.type === 'tool_calls') {
-      const toolResults = await executeToolCalls(supa, result.tool_calls, opts.userId, { campaignRound: opts.campaignRound, campaignType: opts.campaignType })
+      const toolResults = await executeToolCalls(supa, result.tool_calls, opts.userId, { campaignRound: opts.campaignRound, campaignType: opts.campaignType, form_id: opts.form_id })
       msgs.push({ role: 'assistant', content: null, tool_calls: result.tool_calls })
       msgs.push(...toolResults)
       toolCallsUsed.push(...result.tool_calls.map((tc: any) => tc.function?.name))
@@ -1110,7 +1110,7 @@ async function multiStepToolCalling(
 
 async function multiStepToolCallingStream(
   msgs: any[], groqKey: string, supa: any,
-  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null; campaignType?: string | null },
+  opts: { model: string; maxTokens: number; temperature: number; maxSteps?: number; userId?: string; campaignRound?: number | null; campaignType?: string | null; form_id?: string | null },
   origin: string | null,
 ): Promise<Response> {
   const maxSteps = opts.maxSteps ?? 3
@@ -1794,7 +1794,7 @@ serve(async (req) => {
     // ─── If we got tool calls, execute them then ask LLM for final answer ───
     if (hybridResult.toolCalls?.length) {
       console.log(`[MAIN] Got ${hybridResult.toolCalls.length} tool calls from ${hybridResult.provider}`)
-      const toolResults = await executeToolCalls(supabase, hybridResult.toolCalls, auth.userId, { campaignRound, campaignType: context?.campaign_type })
+      const toolResults = await executeToolCalls(supabase, hybridResult.toolCalls, auth.userId, { campaignRound, campaignType: context?.campaign_type, form_id: context?.form_id })
       const toolCallsUsed = hybridResult.toolCalls.map((tc: any) => tc.function?.name)
 
       // Check if any tool result needs confirmation
@@ -1830,6 +1830,7 @@ serve(async (req) => {
         userId: auth.userId,
         campaignRound,
         campaignType: context?.campaign_type,
+        form_id: context?.form_id,
       })
 
       if (finalResult) {
@@ -1951,6 +1952,15 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('AI error:', error)
-    return jsonResponse({ reply: '❌ خطأ غير متوقع. حاول مرة أخرى.', source: 'error', error: String(error).slice(0, 200) }, 500, origin)
+    // ⚠️ FIX: Return 200 with error message instead of 500 — mobile app treats
+    // 500 as "server error" and shows generic retry message. Returning 200 with
+    // a helpful reply lets the user see what went wrong and try again.
+    const errMsg = error instanceof Error ? error.message : String(error)
+    return jsonResponse({
+      reply: `⚠️ تعذّرت المعالجة: ${errMsg.slice(0, 150)}\n\nحاول مرة أخرى أو أعد صياغة سؤالك بشكل أبسط.`,
+      source: 'error',
+      error: errMsg.slice(0, 300),
+      error_stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
+    }, 200, origin)
   }
 })

@@ -823,8 +823,9 @@ class ApiClient {
 
   // ═══ FIX A2: Reduced timeout from 90s to 30s — 90s was too long for mobile users ═══
   // Edge Function cold starts are typically ≤10s. 30s gives headroom without freezing UI.
+  // ⚠️ FIX: ai-chat-v3 increased to 90s for multi-step tool calling.
   static const Map<String, Duration> _functionTimeouts = {
-    'ai-chat-v3': Duration(seconds: 60),
+    'ai-chat-v3': Duration(seconds: 90),
     'submit-form': Duration(seconds: 30),
     'sync-offline': Duration(seconds: 45),
     'get-analytics': Duration(seconds: 45),

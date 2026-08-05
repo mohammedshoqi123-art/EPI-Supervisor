@@ -12,25 +12,6 @@ import 'dashboard_header.dart';
 import 'dashboard_charts.dart';
 import 'dashboard_widgets.dart';
 
-// ═══ PERFORMANCE: Riverpod provider for governorate ranking ═══
-// Replaces FutureBuilder to prevent re-fetching on every rebuild
-final _governorateRankingProvider = FutureProvider.family
-    .autoDispose<List<Map<String, dynamic>>, String>((
-  ref,
-  cacheKey,
-) async {
-  try {
-    final analyticsService = ref.read(analyticsServiceProvider);
-    final campaign = ref.read(campaignProvider);
-    final round = ref.read(campaignRoundProvider);
-    return await analyticsService.getGovernorateRanking(
-      campaignRound: campaign.value == 'integrated_activity' ? round : null,
-    ).timeout(const Duration(seconds: 15));
-  } catch (e) {
-    debugPrint('[Dashboard] Gov ranking failed: $e');
-    return [];
-  }
-});
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -392,73 +373,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           dayData: submissions['byDay'] as Map<String, dynamic>? ?? {},
         ),
         const SizedBox(height: 20),
-        // ═══ P1-4: Governorate ranking — fetch independently ═══
-        _sectionTitle('ترتيب المحافظات'),
-        const SizedBox(height: 12),
-        _buildGovernorateRanking(),
-        const SizedBox(height: 20),
       ]),
-    );
-  }
-
-  /// Fetch governorate ranking independently (not from analytics data)
-  Widget _buildGovernorateRanking() {
-    final rankingAsync = ref.watch(_governorateRankingProvider(
-      '${ref.read(campaignProvider).value}_${ref.read(campaignRoundProvider)}',
-    ));
-
-    return rankingAsync.when(
-      loading: () => Container(
-        height: 180,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: const Center(child: CircularProgressIndicator()),
-      ),
-      error: (e, _) => Container(
-        height: 100,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Center(
-          child: Text('لا توجد بيانات للمحافظات', style: TextStyle(
-            fontFamily: 'Tajawal', fontSize: 13,
-            color: AppTheme.textHint.withValues(alpha: 0.5),
-          )),
-        ),
-      ),
-      data: (data) {
-        if (data.isEmpty) {
-          return Container(
-            height: 100,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Center(
-              child: Text('لا توجد بيانات للمحافظات', style: TextStyle(
-                fontFamily: 'Tajawal', fontSize: 13,
-                color: AppTheme.textHint.withValues(alpha: 0.5),
-              )),
-            ),
-          );
-        }
-
-        final govCounts = <String, int>{};
-        for (final g in data) {
-          final name = g['name_ar'] as String? ?? 'غير محدد';
-          final count = (g['count'] as num?)?.toInt() ?? 0;
-          if (count > 0) govCounts[name] = count;
-        }
-        final sortedGovs = govCounts.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
-
-        return GovernorateRankingChart(governorateData: sortedGovs);
-      },
     );
   }
 

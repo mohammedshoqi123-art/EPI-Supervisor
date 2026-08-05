@@ -12,16 +12,44 @@ export function useAuth() {
       if (sessionError) throw sessionError
       if (!session) return null
 
+      // ⚠️ FIX: Try fetching profile with both .eq('id') and .maybeSingle()
+      // Previously: .single() throws PGRST116 when no row found, which was
+      // treated as "profile not found" → profile=null → "غير مصرح" on every
+      // role-gated route. Now: use .maybeSingle() (returns null without error)
+      // and add an RPC fallback that bypasses RLS for the user's own profile.
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*, governorates(name_ar), districts(name_ar)')
         .eq('id', session.user.id)
-        .single()
+        .maybeSingle()
 
       if (profileError) {
-        // Profile not found is not a fatal error — user may be new
         console.warn('[Auth] Profile fetch error:', profileError.message)
+        // ⚠️ FIX: Try RPC fallback (get_my_profile) which uses SECURITY DEFINER
+        // to bypass RLS — useful when RLS policies are misconfigured.
+        try {
+          const { data: rpcProfile, error: rpcError } = await supabase
+            .rpc('get_my_profile')
+          if (!rpcError && rpcProfile) {
+            return { session, profile: rpcProfile as any }
+          }
+        } catch (e) {
+          console.warn('[Auth] RPC fallback failed:', e)
+        }
         return { session, profile: null }
+      }
+
+      // ⚠️ FIX: If profile is null (no row in profiles table), try RPC fallback
+      if (!profile) {
+        try {
+          const { data: rpcProfile, error: rpcError } = await supabase
+            .rpc('get_my_profile')
+          if (!rpcError && rpcProfile) {
+            return { session, profile: rpcProfile as any }
+          }
+        } catch (e) {
+          console.warn('[Auth] Profile RPC fallback failed:', e)
+        }
       }
 
       return { session, profile }

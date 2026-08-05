@@ -33,11 +33,17 @@ export function AppLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  // ⚠️ FIX: Don't hard-code role:'admin' fallback when profile is null.
+  // Previously: if profile fetch failed (RLS issue), user got role:'admin'
+  // → sidebar showed admin links → every click led to "غير مصرح" because
+  // ProtectedRoute read profile?.role = undefined.
+  // Now: use the real profile role; if null, role stays undefined and
+  // the sidebar only shows "all roles" items.
   const user = authData?.profile || (authData?.session ? {
     id: authData.session.user.id,
     email: authData.session.user.email || '',
     full_name: authData.session.user.email?.split('@')[0] || 'مستخدم',
-    role: 'admin' as const,
+    role: undefined as any,  // ⚠️ no fallback role — ProtectedRoute will show "incomplete profile"
     is_active: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

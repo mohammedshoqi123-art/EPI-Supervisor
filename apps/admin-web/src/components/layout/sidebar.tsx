@@ -51,73 +51,95 @@ interface NavSection {
 }
 
 const navSections: NavSection[] = [
+  // ═══ 1. لوحة القيادة — Operational overview ═══
   {
-    id: 'overview',
-    label: 'الرئيسية',
+    id: 'command',
+    label: 'لوحة القيادة',
     icon: LayoutDashboard,
     items: [
       { icon: LayoutDashboard, label: 'لوحة التحكم', href: '/dashboard' },
       { icon: Globe, label: 'الخريطة التفاعلية', href: '/map' },
+      { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
     ],
   },
+  // ═══ 2. إدارة النماذج — Controls what mobile users can fill ═══
   {
-    id: 'data',
-    label: 'البيانات',
-    icon: FileStack,
+    id: 'forms-mgmt',
+    label: 'إدارة النماذج',
+    icon: FileSearch,
     items: [
       { icon: FileSearch, label: 'النماذج', href: '/forms' },
       { icon: FileStack, label: 'الإرساليات', href: '/submissions' },
+      { icon: BarChart3, label: 'إعدادات التحليلات', href: '/analytics-config', roles: ['admin', 'central'] },
+      { icon: Target, label: 'تحليل المتابعة الميدانية', href: '/field-analysis', roles: ['admin', 'central', 'governorate', 'district'] },
+    ],
+  },
+  // ═══ 3. الحملات والجولات — Controls mobile campaign context ═══
+  {
+    id: 'campaigns',
+    label: 'الحملات والجولات',
+    icon: Calendar,
+    items: [
+      { icon: Calendar, label: 'إدارة الجولات', href: '/campaign-rounds', roles: ['admin', 'central'] },
       { icon: MapPin, label: 'المحافظات', href: '/governorates', roles: ['admin', 'central', 'governorate', 'district'] },
       { icon: AlertTriangle, label: 'النواقص', href: '/shortages', roles: ['admin', 'central', 'governorate', 'district'] },
     ],
   },
+  // ═══ 4. المستخدمون والصلاحيات — Controls who can use the mobile app ═══
   {
-    id: 'analytics',
+    id: 'users-perms',
+    label: 'المستخدمون والصلاحيات',
+    icon: Users,
+    items: [
+      { icon: Users, label: 'المستخدمون', href: '/users', roles: ['admin', 'central'] },
+      { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin'] },
+      { icon: Trash2, label: 'المحذوفات', href: '/trash', roles: ['admin', 'central'] },
+    ],
+  },
+  // ═══ 5. التقارير والتحليلات ═══
+  {
+    id: 'reports',
     label: 'التقارير والتحليلات',
     icon: BarChart3,
     items: [
       { icon: BarChart3, label: 'التحليلات', href: '/insights', roles: ['admin', 'central', 'governorate', 'district'] },
       { icon: FileSpreadsheet, label: 'التقارير والبيانات', href: '/reports', roles: ['admin', 'central', 'governorate', 'district'] },
-      { icon: Target, label: 'تحليل المتابعة الميدانية', href: '/field-analysis', roles: ['admin', 'central', 'governorate', 'district'] },
       { icon: Calendar, label: 'التقارير المجدولة', href: '/scheduled-reports', roles: ['admin', 'central', 'governorate', 'district'] },
     ],
   },
+  // ═══ 6. الاتصال والإشعارات — Push to mobile ═══
   {
     id: 'communication',
-    label: 'مركز الاتصال',
+    label: 'الاتصال والإشعارات',
     icon: MessageSquare,
     items: [
-      { icon: ScrollTextIcon, label: 'التعاميم الرسمية', href: '/memos', roles: ['admin', 'central', 'governorate', 'district', 'data_entry'] },
       { icon: MessageSquare, label: 'مركز الاتصال', href: '/communication', roles: ['admin', 'central'] },
-      { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
+      { icon: ScrollTextIcon, label: 'التعاميم الرسمية', href: '/memos', roles: ['admin', 'central', 'governorate', 'district', 'data_entry'] },
       { icon: MessageCircle, label: 'التغذية الراجعة', href: '/feedback', roles: ['admin', 'central', 'governorate', 'district', 'data_entry'] },
-      { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },
-      { icon: Brain, label: 'معرفة البوت', href: '/bot-knowledge', roles: ['admin', 'central'] },
-      { icon: Sparkles, label: 'استوديو المحتوى', href: '/studio' },
-      { icon: BellRing, label: 'الإشعارات', href: '/notifications' },
+      { icon: MessageSquare, label: 'الشات الداخلي', href: '/chat' },
     ],
   },
+  // ═══ 7. الذكاء الاصطناعي والمحتوى ═══
   {
-    id: 'management',
-    label: 'الإدارة',
-    icon: Users,
+    id: 'ai-content',
+    label: 'الذكاء الاصطناعي والمحتوى',
+    icon: Sparkles,
     items: [
-      { icon: Users, label: 'المستخدمون', href: '/users', roles: ['admin', 'central'] },
-      { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
+      { icon: Sparkles, label: 'مستشار التحصين', href: '/bot' },
+      { icon: Sparkles, label: 'استوديو المحتوى', href: '/studio' },
+      { icon: Brain, label: 'معرفة البوت', href: '/bot-knowledge', roles: ['admin', 'central'] },
+      { icon: Brain, label: 'إعدادات الذكاء الاصطناعي', href: '/ai-settings', roles: ['admin'] },
       { icon: BookOpen, label: 'المراجع والكتب', href: '/references' },
-      { icon: Calendar, label: 'إدارة الجولات', href: '/campaign-rounds', roles: ['admin', 'central'] },
-      { icon: Trash2, label: 'المحذوفات', href: '/trash', roles: ['admin', 'central'] },
-      { icon: BarChart3, label: 'إعدادات التحليلات', href: '/analytics-config', roles: ['admin', 'central'] },
     ],
   },
+  // ═══ 8. النظام ═══
   {
     id: 'system',
     label: 'النظام',
     icon: Cog,
     items: [
-      { icon: ShieldCheck, label: 'سجل التدقيق', href: '/audit', roles: ['admin'] },
-      { icon: Brain, label: 'إعدادات الذكاء الاصطناعي', href: '/ai-settings', roles: ['admin'] },
       { icon: Cog, label: 'الإعدادات', href: '/settings', roles: ['admin'] },
+      { icon: Layout, label: 'إدارة الصفحات', href: '/pages', roles: ['admin'] },
     ],
   },
 ]

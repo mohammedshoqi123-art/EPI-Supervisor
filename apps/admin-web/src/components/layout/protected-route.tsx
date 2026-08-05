@@ -116,7 +116,29 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   // Role check — if allowedRoles is specified, verify user has permission
   if (allowedRoles && allowedRoles.length > 0) {
     const userRole = authData.profile?.role as UserRole | undefined
-    if (!userRole || !allowedRoles.includes(userRole)) {
+    // ⚠️ FIX: Distinguish "no role yet" from "wrong role" — better UX.
+    // Previously: both cases showed generic "غير مصرح" which confused users
+    // whose profile hadn't loaded. Now: show a specific message for missing
+    // profile so the user knows to contact admin to assign a role.
+    if (!userRole) {
+      return (
+        <div className="flex h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+          <div className="flex flex-col items-center gap-4 max-w-md text-center p-8">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center">
+              <ShieldX className="w-8 h-8 text-blue-500" />
+            </div>
+            <h2 className="text-xl font-heading font-bold text-gray-800">الملف الشخصي غير مكتمل</h2>
+            <p className="text-sm text-muted-foreground">
+              تم تسجيل دخولك بنجاح، لكن لا يوجد دور مرتبط بحسابك. يرجى التواصل مع مدير النظام لتعيين دورك (مشرف/مركزي/محافظة/مديرية/مدخل بيانات).
+            </p>
+            <Button variant="outline" onClick={() => window.location.href = '/login'}>
+              تسجيل الخروج
+            </Button>
+          </div>
+        </div>
+      )
+    }
+    if (!allowedRoles.includes(userRole)) {
       return (
         <div className="flex h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
           <div className="flex flex-col items-center gap-4 max-w-md text-center p-8">
@@ -125,7 +147,7 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
             </div>
             <h2 className="text-xl font-heading font-bold text-gray-800">غير مصرح</h2>
             <p className="text-sm text-muted-foreground">
-              ليس لديك صلاحية للوصول إلى هذه الصفحة. يرجى التواصل مع مدير النظام.
+              ليس لديك صلاحية للوصول إلى هذه الصفحة. دورك الحالي: <strong>{userRole}</strong>. يرجى التواصل مع مدير النظام إذا كنت تعتقد أن هذا خطأ.
             </p>
             <Button variant="outline" onClick={() => window.history.back()}>
               العودة

@@ -1001,7 +1001,7 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
             children: [
               Row(
                 children: [
-                  const Icon(Icons.form_library_outlined, size: 20),
+                  const Icon(Icons.assignment_outlined, size: 20),
                   const SizedBox(width: 8),
                   const Text('اختر نموذجاً للتحليل', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold)),
                   const Spacer(),
@@ -1911,7 +1911,7 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
                 const SizedBox(width: 6),
                 // ⚠️ NEW: Form selector — lets user target a specific form
                 _inputActionBtn(
-                  icon: Icons.form_library_outlined,
+                  icon: Icons.assignment_outlined,
                   label: _selectedFormId == null ? 'نموذج' : (_activeForms?.firstWhere(
                     (f) => f['id'] == _selectedFormId,
                     orElse: () => {'title_ar': 'نموذج'},

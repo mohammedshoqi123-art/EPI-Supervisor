@@ -730,7 +730,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     // ═══ FIX: Sync GPS coordinates to _formData ═══
     // Previously: _gpsLat/_gpsLng were separate from _formData
     // Now: ensure GPS data is always in _formData for auto-save
-    if (_gpsLat != null && _gpsLng != null) {
+    // ⚠️ FIX: Don't overwrite GPS if draft already loaded with GPS data
+    // The draft GPS should be preserved — user was at that location when they saved
+    if (_gpsLat != null && _gpsLng != null && !_draftLoadedWithGps) {
       for (final field in _allFields) {
         if (field['type'] == 'gps') {
           final key = field['key'] as String;

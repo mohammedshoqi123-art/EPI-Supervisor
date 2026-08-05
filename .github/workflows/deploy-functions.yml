@@ -60,6 +60,16 @@ jobs:
 
       - name: Deploy database migrations
         run: |
+          # ⚠️ FIX: Repair orphan migration records before pushing.
+          # Production has '055_reduce' registered in schema_migrations without a
+          # matching local file (artifact of a previous manual apply). This blocks
+          # `supabase db push` with "Remote migration versions not found in local".
+          # Mark them as reverted so db push can proceed.
+          for v in 055_reduce 20260722000002; do
+            echo "Repairing migration $v (marking as reverted)..."
+            supabase migration repair --status reverted "$v" 2>&1 || echo "repair $v failed (may not exist) — continuing"
+          done
+
           # Try to push migrations — ignore already-applied ones
           set +e
           OUTPUT=$(supabase db push --include-all 2>&1)

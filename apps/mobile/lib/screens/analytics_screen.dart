@@ -2849,7 +2849,7 @@ class _DynamicAnalyticsTabState extends ConsumerState<_DynamicAnalyticsTab> {
     return formsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
-        message: 'تعذّر تحميل النماذج',
+        msg: 'تعذّر تحميل النماذج',
         onRetry: () => ref.invalidate(formsProvider),
       ),
       data: (forms) {
@@ -2938,7 +2938,7 @@ class _DynamicAnalyticsView extends ConsumerWidget {
     return analyticsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrRetry(
-        message: 'تعذّر تحميل التحليلات: $e',
+        msg: 'تعذّر تحميل التحليلات: $e',
         onRetry: () => ref.invalidate(_dynamicAnalyticsProvider(
           (formId: formId, round: effectiveRound, governorateId: null),
         )),

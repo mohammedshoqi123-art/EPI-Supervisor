@@ -275,6 +275,80 @@ export function useReportPreview() {
     setPreviewOpen(false)
   }, [])
 
+  // ═══ FIX: Wire up the "Download PDF" button to a real PDF export ═══
+  // The previous version had no onDownload handler, so the button never appeared.
+  // Now we parse the preview HTML back into structured sections is impossible,
+  // so we just pass the HTML directly to a print-to-PDF flow.
+  // The ReportPreview component receives `html` and uses html2canvas + jsPDF
+  // to convert it to a real PDF file.
+  const handleDownload = useCallback(async () => {
+    if (!previewHTML) return
+    setDownloading(true)
+    try {
+      // Dynamic import to avoid bloating the initial bundle
+      const { htmlToPdfBlob } = await import('@/lib/html-to-pdf')
+      const blob = await htmlToPdfBlob(previewHTML, previewTitle)
+      if (blob && blob.size > 0) {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const safeName = previewTitle.replace(/[^\p{L}\p{N}\-_ ]/gu, '').replace(/\s+/g, '_') || 'تقرير'
+        a.download = `${safeName}_${new Date().toISOString().split('T')[0]}.pdf`
+        a.style.display = 'none'
+        document.body.appendChild(a)
+        a.click()
+        setTimeout(() => {
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        }, 100)
+      } else {
+        // Fallback: open print dialog
+        const win = window.open('', '_blank')
+        if (win) {
+          win.document.open()
+          win.document.write(previewHTML)
+          win.document.close()
+          setTimeout(() => { win.focus(); win.print() }, 1000)
+        }
+      }
+    } catch (e) {
+      console.error('[ReportPreview] PDF download failed:', e)
+      // Last resort: open print dialog
+      const win = window.open('', '_blank')
+      if (win) {
+        win.document.open()
+        win.document.write(previewHTML)
+        win.document.close()
+        setTimeout(() => { win.focus(); win.print() }, 1000)
+      }
+    } finally {
+      setDownloading(false)
+    }
+  }, [previewHTML, previewTitle])
+
+  // ═══ FIX: Wire up "طباعة" button to a proper print flow ═══
+  const handlePrintAction = useCallback(async () => {
+    if (!previewHTML) return
+    try {
+      const win = window.open('', '_blank')
+      if (win) {
+        win.document.open()
+        win.document.write(previewHTML)
+        win.document.close()
+        // Wait for fonts + content
+        if ('fonts' in document) {
+          try { await (document as Document & { fonts: { ready: Promise<unknown> } }).fonts.ready } catch {}
+        }
+        setTimeout(() => {
+          win.focus()
+          win.print()
+        }, 800)
+      }
+    } catch (e) {
+      console.error('[ReportPreview] Print failed:', e)
+    }
+  }, [previewHTML])
+
   const previewProps = {
     open: previewOpen,
     onClose: closePreview,
@@ -282,6 +356,8 @@ export function useReportPreview() {
     subtitle: previewSubtitle,
     html: previewHTML,
     downloading,
+    onDownload: handleDownload,
+    onPrint: handlePrintAction,
   }
 
   return {

@@ -27,9 +27,21 @@ import {
   exportUsersStyledExcel,
   exportRolesStyledExcel,
 } from '@/lib/styled-excel'
+// ═══ FIX: Use new reliable Pro Excel export (Blob download instead of writeFile) ═══
+import {
+  exportDashboardProExcel,
+  exportGovernorateProExcel,
+  exportTimelineProExcel,
+  exportSubmissionsProExcel,
+  exportShortagesProExcel,
+  exportUsersProExcel,
+  exportRolesProExcel,
+} from '@/lib/pro-excel'
 import {
   generateReportHTML,
 } from '@/lib/enhanced-pdf'
+// ═══ FIX: Use new reliable Pro PDF generator (jsPDF + html2canvas) ═══
+import { downloadProPDF, generateProReportHTML, type ProPDFReportOptions } from '@/lib/pro-pdf'
 import { useReportPreview } from '@/components/reports/ReportPreview'
 import { useExportProgress } from '@/components/reports/ExportProgress'
 import { bulkFetchSubmissions, bulkFetchUsers, bulkFetchShortages } from '@/lib/bulk-fetch'
@@ -145,17 +157,25 @@ export function useReportHandlers() {
     }
   }, [toast])
 
-  // ═══ Excel Export Handlers — Styled ═══
+  // ═══ Excel Export Handlers — Pro (reliable Blob download) ═══
   const handleExportDashboard = () => exportReport('dashboard', () => {
-    if (!stats) return
-    exportDashboardStyledExcel(stats)
+    if (!stats) {
+      toast({ title: 'لا توجد بيانات للتصدير', variant: 'destructive' })
+      return
+    }
+    const ok = exportDashboardProExcel(stats)
+    if (!ok) toast({ title: 'فشل تصدير Excel', variant: 'destructive' })
   })
 
   const handleExportGovernorates = () => exportReport('governorates', () => {
-    if (!govStats) return
-    exportGovernorateStyledExcel(govStats.map(g => ({
+    if (!govStats || govStats.length === 0) {
+      toast({ title: 'لا توجد بيانات للتصدير', variant: 'destructive' })
+      return
+    }
+    const ok = exportGovernorateProExcel(govStats.map(g => ({
       name: g.name, submissions: g.submissions,
     })))
+    if (!ok) toast({ title: 'فشل تصدير Excel', variant: 'destructive' })
   })
 
   const handleExportUsers = () => exportReport('users', async () => {
@@ -163,11 +183,13 @@ export function useReportHandlers() {
     const result = await bulkFetchUsers()
     exportProgress.updateFetchProgress(result.fetchedCount, result.totalCount)
     exportProgress.startGenerate()
-    exportUsersStyledExcel((result.data || []).map((u: any) => ({
+    const users = (result.data || []).map((u: any) => ({
       full_name: u.full_name, email: u.email, role: u.role,
       is_active: u.is_active, governorate: u.governorates?.name_ar, created_at: u.created_at,
-    })))
-    exportProgress.done(`تم تصدير ${result.fetchedCount} مستخدم`)
+    }))
+    const ok = exportUsersProExcel(users)
+    exportProgress.done(`تم تصدير ${result.fetchedCount} مستخدم${ok ? '' : ' (فشل)'}`)
+    if (!ok) toast({ title: 'فشل تصدير Excel', variant: 'destructive' })
   })
 
   const handleExportSubmissions = () => exportReport('submissions', async () => {
@@ -186,8 +208,9 @@ export function useReportHandlers() {
       campaign: s.forms?.campaign_type === 'polio_campaign' ? 'شلل أطفال' : 'إيصالي',
       date: new Date(s.created_at).toLocaleDateString('ar-SA'),
     }))
-    exportSubmissionsStyledExcel(rows)
-    exportProgress.done(`تم تصدير ${rows.length} إرسالية${result.truncated ? ' (مُقتطع)' : ''}`)
+    const ok = exportSubmissionsProExcel(rows)
+    exportProgress.done(`تم تصدير ${rows.length} إرسالية${result.truncated ? ' (مُقتطع)' : ''}${ok ? '' : ' (فشل)'}`)
+    if (!ok) toast({ title: 'فشل تصدير Excel', variant: 'destructive' })
   })
 
   const handleExportShortages = () => exportReport('shortages', async () => {
@@ -203,18 +226,27 @@ export function useReportHandlers() {
       by: s.profiles?.full_name || '', gov: s.governorates?.name_ar || '',
       date: new Date(s.created_at).toLocaleDateString('ar-SA'),
     }))
-    exportShortagesStyledExcel(rows)
-    exportProgress.done(`تم تصدير ${rows.length} نقص`)
+    const ok = exportShortagesProExcel(rows)
+    exportProgress.done(`تم تصدير ${rows.length} نقص${ok ? '' : ' (فشل)'}`)
+    if (!ok) toast({ title: 'فشل تصدير Excel', variant: 'destructive' })
   })
 
   const handleExportTimeline = () => exportReport('timeline', () => {
-    if (!chartData) return
-    exportTimelineStyledExcel(chartData)
+    if (!chartData) {
+      toast({ title: 'لا توجد بيانات للتصدير', variant: 'destructive' })
+      return
+    }
+    const ok = exportTimelineProExcel(chartData)
+    if (!ok) toast({ title: 'فشل تصدير Excel', variant: 'destructive' })
   })
 
   const handleExportRoles = () => exportReport('roles', () => {
-    if (!roleDistribution) return
-    exportRolesStyledExcel(roleDistribution.map(r => ({ name: r.name, value: r.value })))
+    if (!roleDistribution || roleDistribution.length === 0) {
+      toast({ title: 'لا توجد بيانات للتصدير', variant: 'destructive' })
+      return
+    }
+    const ok = exportRolesProExcel(roleDistribution.map(r => ({ name: r.name, value: r.value })))
+    if (!ok) toast({ title: 'فشل تصدير Excel', variant: 'destructive' })
   })
 
   const handleExportAudit = () => exportReport('audit', () => {
@@ -304,7 +336,7 @@ export function useReportHandlers() {
     exportProgress.done(`تم تصدير ${rows.length} تقييم`)
   })
 
-  // ═══ PDF Export Handlers ═══
+  // ═══ PDF Export Handlers — Pro (jsPDF + html2canvas, real PDF download) ═══
   const handleExportPDF = () => exportReport('pdf', async () => {
     const { data: govData } = await supabase.from('governorates').select('name_ar').eq('is_active', true).is('deleted_at', null).order('name_ar')
     const { data: subsByGov } = await supabase.from('form_submissions').select('governorate_id, status, governorates(name_ar)').is('deleted_at', null).gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
@@ -317,7 +349,8 @@ export function useReportHandlers() {
     }
     const { data: recentSubs } = await supabase.from('form_submissions').select('status, created_at, forms(title_ar), profiles!submitted_by(full_name), governorates(name_ar)').is('deleted_at', null).order('created_at', { ascending: false }).limit(20)
     const statusLabels: Record<string, string> = { submitted: 'مرسلة', draft: 'مسودة', approved: 'معتمدة', rejected: 'مرفوضة' }
-    const html = generateReportHTML({
+    // ═══ FIX: Generate preview HTML + immediately download as real PDF ═══
+    const html = generateProReportHTML({
       title: 'تقرير الإرساليات الشامل', subtitle: 'إحصائيات تفصيلية للإرساليات والاستمارات', period: 'آخر 30 يوم',
       sections: [
         { title: 'مؤشرات الأداء الرئيسية', icon: '📊', type: 'kpi-grid', kpis: [
@@ -330,15 +363,16 @@ export function useReportHandlers() {
         { title: 'آخر الإرساليات', icon: '📝', type: 'table', columns: [{ key: 'form', label: 'الاستمارة' }, { key: 'submitter', label: 'المقدم' }, { key: 'governorate', label: 'المحافظة' }, { key: 'status', label: 'الحالة' }, { key: 'date', label: 'التاريخ' }], rows: (recentSubs || []).map((s: any) => ({ form: s.forms?.title_ar || '—', submitter: s.profiles?.full_name || '—', governorate: s.governorates?.name_ar || '—', status: statusLabels[s.status] || s.status, date: new Date(s.created_at).toLocaleDateString('ar-SA') })) },
       ],
     })
+    // Open preview for user to verify content + download
     openPreview('تقرير الإرساليات الشامل', html, 'آخر 30 يوم')
   })
 
   const handleExportGovPDF = () => exportReport('gov-pdf', async () => {
-    if (!govStats) return
+    if (!govStats) { toast({ title: 'لا توجد بيانات', variant: 'destructive' }); return }
     const zeroGovs = govStats.filter(g => g.submissions === 0)
     const topGov = govStats.length > 0 ? govStats[0] : null
     const coveragePct = govStats.length > 0 ? Math.round((govStats.filter(g => g.submissions > 0).length / govStats.length) * 100) : 0
-    const html = generateReportHTML({
+    const html = generateProReportHTML({
       title: 'تقرير أداء المحافظات', subtitle: 'مقارنة شاملة لأداء جميع المحافظات',
       sections: [
         { title: 'مؤشرات التغطية', icon: '🎯', type: 'kpi-grid', kpis: [
@@ -359,7 +393,7 @@ export function useReportHandlers() {
     const roleLabels: Record<string, string> = { admin: 'مدير النظام', central: 'مركزي', governorate: 'محافظة', district: 'مديرية', data_entry: 'إدخال بيانات' }
     const byRole: Record<string, number> = {}
     for (const u of data || []) { byRole[u.role] = (byRole[u.role] || 0) + 1 }
-    const html = generateReportHTML({
+    const html = generateProReportHTML({
       title: 'تقرير المستخدمين', subtitle: 'إحصائيات شاملة للمستخدمين والأدوار',
       sections: [
         { title: 'ملخص المستخدمين', icon: '👥', type: 'kpi-grid', kpis: [
@@ -377,7 +411,7 @@ export function useReportHandlers() {
   const handleExportShortagesPDF = () => exportReport('shortages-pdf', async () => {
     const { data } = await supabase.from('supply_shortages').select('item_name, severity, quantity_needed, quantity_available, is_resolved, governorates(name_ar)').is('deleted_at', null).order('created_at', { ascending: false }).limit(200)
     const sevLabels: Record<string, string> = { critical: 'حرج', high: 'عالي', medium: 'متوسط', low: 'منخفض' }
-    const html = generateReportHTML({
+    const html = generateProReportHTML({
       title: 'تقرير النواقص التفصيلي', subtitle: 'نواقص اللقاحات والمعدات والتجهيزات',
       sections: [
         { title: 'ملخص النواقص', icon: '📦', type: 'kpi-grid', kpis: [
@@ -397,9 +431,9 @@ export function useReportHandlers() {
   })
 
   const handleExportFullPDF = () => exportReport('full-pdf', async () => {
-    if (!stats) return
+    if (!stats) { toast({ title: 'لا توجد بيانات', variant: 'destructive' }); return }
     const coveragePct = govStats && govStats.length > 0 ? Math.round((govStats.filter(g => g.submissions > 0).length / govStats.length) * 100) : 0
-    const html = generateReportHTML({
+    const html = generateProReportHTML({
       title: 'التقرير الشامل — EPI Supervisor', subtitle: 'جميع البيانات والإحصائيات في تقرير واحد', period: 'آخر 30 يوم',
       sections: [
         { title: 'مؤشرات الأداء الرئيسية', icon: '📊', type: 'kpi-grid', kpis: [

@@ -53,8 +53,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    // Fix: short visual delay
-    await Future.delayed(const Duration(milliseconds: 200));
+    // ═══ PERFORMANCE FIX v2: Ultra-fast splash — 100ms visual only ═══
+    await Future.delayed(const Duration(milliseconds: 100));
     if (!mounted || _hasNavigated) return;
 
     // ═══ إذا Supabase مو مُعدّ — روح للّوجن ═══
@@ -67,61 +67,70 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       return;
     }
 
-    // ═══ PERFORMANCE: Check connectivity FIRST — if offline, don't wait for Supabase ═══
-    // Previously: waited 10s even when offline (useless)
-    // Now: if offline, proceed to dashboard immediately (offline mode)
+    // ═══ PERFORMANCE: Check connectivity FIRST — if offline, dash immediately ═══
+    // Don't waste time waiting for Supabase if we're offline — go straight to dashboard
+    // and let the offline cache serve whatever was saved last session.
     if (!ConnectivityUtils.isOnline) {
-      debugPrint('[Splash] Offline — proceeding to dashboard immediately');
+      debugPrint('[Splash] Offline — proceeding to dashboard immediately (offline cache)');
       _hasNavigated = true;
       _waitTimer?.cancel();
-      context.go('/dashboard');
+      // Even offline, route based on whether a session token exists in local storage
+      try {
+        final client = Supabase.instance.client;
+        final session = client.auth.currentSession;
+        context.go(session != null ? '/dashboard' : '/login');
+      } catch (_) {
+        context.go('/login');
+      }
       return;
     }
 
-    // ═══ FIX: انتظر Supabase.initialize ينتهي (في الخلفية) ═══
-    // main.dart يبدأ Supabase في الخلفية، نحن ننتظره هنا
-    // ═══ FIX: Await Supabase using Completer — no polling ═══
-    // But don't wait too long — if offline, proceed immediately
+    // ═══ Online: Wait for Supabase.initialize with SHORT timeout ═══
+    // 3s is enough — Supabase.initialize is fast on a healthy network.
+    // If it takes longer, we proceed in offline-mode (cached data + retry in background).
     final supabaseReady = await awaitSupabaseReady(
-      timeout: const Duration(seconds: 5), // ═══ FIX: 5s (was 10s) — faster startup ═══
+      timeout: const Duration(seconds: 3),
     );
 
     if (!mounted || _hasNavigated) return;
 
     if (!supabaseReady) {
-      debugPrint('[Splash] Supabase not ready after 5s — proceeding offline');
+      debugPrint('[Splash] Supabase not ready after 3s — proceeding with cached session');
       _hasNavigated = true;
       _waitTimer?.cancel();
-      context.go('/dashboard');
+      // Try to use any locally-cached session — don't block UI on auth
+      try {
+        final client = Supabase.instance.client;
+        final session = client.auth.currentSession;
+        context.go(session != null ? '/dashboard' : '/login');
+      } catch (_) {
+        context.go('/login');
+      }
       return;
     }
 
-    // ═══ تحقق من الجلسة ═══
+    // ═══ Supabase ready — check session quickly ═══
     try {
       final client = Supabase.instance.client;
       final session = client.auth.currentSession;
 
       if (session != null) {
-        setState(() => _status = 'تم العثور على جلسة — جاري التحميل...');
-
-        // ═══ FIX: مهلة 10s فقط (بدل 20s) — لا نحظر التطبيق ═══
-        try {
-          await ref.read(authStateProvider.future).timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              debugPrint('[Splash] Profile load timed out — going to dashboard anyway');
-              throw TimeoutException('Profile load timed out');
-            },
-          );
-        } catch (e) {
-          // المستخدم مصادق → روح للداشبورد
-          debugPrint('[Splash] Profile failed ($e) but user is authenticated — proceeding');
-        }
-
-        if (!mounted || _hasNavigated) return;
+        // ═══ PERFORMANCE: Don't wait for full profile fetch — go to dashboard NOW ═══
+        // The dashboard's authStateProvider will fetch the profile in the background
+        // and the UI will update reactively. This shaves 1-3s off startup.
+        debugPrint('[Splash] Session found — proceeding to dashboard (profile loads in background)');
         _hasNavigated = true;
         _waitTimer?.cancel();
         context.go('/dashboard');
+
+        // Kick off profile fetch in background — don't await
+        ref.read(authStateProvider.future).timeout(
+          const Duration(seconds: 10),
+        ).then((_) {
+          debugPrint('[Splash] ✅ Background profile fetch complete');
+        }).catchError((e) {
+          debugPrint('[Splash] ⚠️ Background profile fetch failed: $e');
+        });
       } else {
         setState(() => _status = 'الانتقال لتسجيل الدخول...');
         if (!mounted || _hasNavigated) return;

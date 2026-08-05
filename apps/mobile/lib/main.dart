@@ -138,18 +138,24 @@ Future<void> main() async {
 }
 
 /// Prefetch critical reference data into cache
-/// Runs in background after app starts — doesn't block UI
+/// ═══ PERFORMANCE FIX v2: Gradual prefetch — does NOT block UI ═══
+/// Strategy:
+///   - Phase 1 (immediate): Only governorates — small list (~22 rows), needed everywhere
+///   - Phase 2 (after 5s): Districts — depends on governorates, larger (~300 rows)
+///   - Phase 3 (after 10s): Forms — needed for forms screen only
+/// Each phase has its own timeout and never blocks UI.
+/// If offline, prefetch is skipped entirely (cache from previous session is used).
 Future<void> _prefetchCriticalData() async {
   try {
-    // Wait a bit for the app to fully initialize
-    await Future.delayed(const Duration(seconds: 3));
+    // ═══ FIX: Check connectivity FIRST — don't waste time if offline ═══
+    if (!ConnectivityUtils.isOnline) {
+      debugPrint('[Prefetch] Offline — skipping prefetch (using existing cache)');
+      return;
+    }
 
-    // ═══ FIX: Wait for Supabase to be ready before prefetching ═══
-    // Previously: created new DatabaseService(ApiClient()) which might not be connected
-    // Now: wait for supabaseInitialized flag, then use the global client
+    // ═══ FIX: Wait for Supabase to be ready (max 8s, was 10s) ═══
     if (!supabaseInitialized) {
-      // Wait up to 10 seconds for Supabase
-      for (int i = 0; i < 10; i++) {
+      for (int i = 0; i < 8; i++) {
         if (supabaseInitialized) break;
         await Future.delayed(const Duration(seconds: 1));
       }
@@ -159,34 +165,46 @@ Future<void> _prefetchCriticalData() async {
       }
     }
 
-    // Use a simple approach — just warm up the providers by reading them
-    // The providers handle caching internally
-    debugPrint('[Prefetch] Starting background data prefetch...');
-
-    // These will populate the cache if not already present
-    // Each provider has its own cache, so this is idempotent
+    debugPrint('[Prefetch] Starting gradual background prefetch...');
     final db = DatabaseService(ApiClient());
 
-    // Prefetch in parallel — governorates + districts + forms
-    await Future.wait([
-      db.getGovernorates().then((data) {
-        debugPrint('[Prefetch] ✅ Governorates: ${data.length}');
-      }).catchError((e) {
-        debugPrint('[Prefetch] ❌ Governorates: $e');
-      }),
-      db.getDistricts().then((data) {
-        debugPrint('[Prefetch] ✅ Districts: ${data.length}');
-      }).catchError((e) {
-        debugPrint('[Prefetch] ❌ Districts: $e');
-      }),
-      db.getForms().then((data) {
-        debugPrint('[Prefetch] ✅ Forms: ${data.length}');
-      }).catchError((e) {
-        debugPrint('[Prefetch] ❌ Forms: $e');
-      }),
-    ]).timeout(const Duration(seconds: 15));
+    // ═══ Phase 1: Governorates (immediate) ═══
+    // Small list (~22 rows), needed on every screen — fetch right away
+    try {
+      final data = await db.getGovernorates().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => <Map<String, dynamic>>[],
+      );
+      debugPrint('[Prefetch] ✅ Phase 1 — Governorates: ${data.length}');
+    } catch (e) {
+      debugPrint('[Prefetch] ❌ Phase 1 — Governorates: $e');
+    }
 
-    debugPrint('[Prefetch] ✅ Background prefetch complete');
+    // ═══ Phase 2: Districts (after 5s) — let UI render first ═══
+    await Future.delayed(const Duration(seconds: 5));
+    try {
+      final data = await db.getDistricts().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => <Map<String, dynamic>>[],
+      );
+      debugPrint('[Prefetch] ✅ Phase 2 — Districts: ${data.length}');
+    } catch (e) {
+      debugPrint('[Prefetch] ❌ Phase 2 — Districts: $e');
+    }
+
+    // ═══ Phase 3: Forms (after 10s) — only needed for forms screen ═══
+    await Future.delayed(const Duration(seconds: 5));
+    try {
+      final data = await db.getForms().timeout(
+        const Duration(seconds: 12),
+        onTimeout: () => <Map<String, dynamic>>[],
+      );
+      debugPrint('[Prefetch] ✅ Phase 3 — Forms: ${data.length}');
+    } catch (e) {
+      debugPrint('[Prefetch] ❌ Phase 3 — Forms: $e');
+    }
+
+    debugPrint('[Prefetch] ✅ Gradual prefetch complete');
   } catch (e) {
     debugPrint('[Prefetch] ❌ Background prefetch failed: $e');
   }

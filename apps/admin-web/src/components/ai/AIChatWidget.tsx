@@ -52,6 +52,10 @@ interface Message {
   groundingSources?: GroundingSource[]
   suggestedFollowups?: string[]
   ungrounded?: boolean
+  // ─── NEW: Write-tool confirmation ───
+  needsConfirmation?: boolean
+  confirmationTool?: string
+  confirmationArgs?: Record<string, any>
 }
 
 interface GroundingSource {
@@ -199,6 +203,62 @@ function formatLatency(ms: number) {
 
 // ─── Provider Badge Component ─────────────────────────────────
 
+// ─── Tool display helpers ────────────────────────────────────
+
+function getToolIcon(tool: string): string {
+  const icons: Record<string, string> = {
+    get_dynamic_analytics: '📊',
+    get_submissions: '📋',
+    get_form_schemas: '📝',
+    aggregate_form_data: '🔢',
+    get_form_field_values: '🔎',
+    get_governorate_performance: '🗺️',
+    get_submission_trend: '📈',
+    get_critical_alerts: '🚨',
+    forecast_completion: '🔮',
+    get_smart_alerts: '⚠️',
+    get_recommendations: '💡',
+    detect_anomalies: '🔍',
+    compare_rounds: '⚖️',
+    get_supervisor_insights: '👥',
+    export_report: '📤',
+    generate_chart: '📉',
+    bulk_export: '📥',
+    create_notification: '🔔',
+    execute_sql: '🗄️',
+    get_system_health: '🏥',
+    get_analytics: '📊',
+  }
+  return icons[tool] || '🔧'
+}
+
+function getToolLabel(tool: string): string {
+  const labels: Record<string, string> = {
+    get_dynamic_analytics: 'تحليلات ديناميكية',
+    get_submissions: 'إرساليات',
+    get_form_schemas: 'بنية النماذج',
+    aggregate_form_data: 'تجميع',
+    get_form_field_values: 'قيم الحقول',
+    get_governorate_performance: 'أداء المحافظات',
+    get_submission_trend: 'اتجاه الإرساليات',
+    get_critical_alerts: 'تنبيهات حرجة',
+    forecast_completion: 'تنبؤ الاكتمال',
+    get_smart_alerts: 'تنبيهات ذكية',
+    get_recommendations: 'توصيات',
+    detect_anomalies: 'كشف الشذوذ',
+    compare_rounds: 'مقارنة الجولات',
+    get_supervisor_insights: 'رؤى المشرفين',
+    export_report: 'تصدير تقرير',
+    generate_chart: 'رسم بياني',
+    bulk_export: 'تصدير شامل',
+    create_notification: 'إشعار',
+    execute_sql: 'استعلام SQL',
+    get_system_health: 'صحة النظام',
+    get_analytics: 'تحليلات',
+  }
+  return labels[tool] || tool
+}
+
 function ProviderBadge({ msg }: { msg: Message }) {
   if (msg.role !== 'assistant' || msg.source === 'error' || msg.source === 'offline') return null
   if (!msg.provider && !msg.latencyMs && !msg.providerConfidence) return null
@@ -238,12 +298,20 @@ function ProviderBadge({ msg }: { msg: Message }) {
         </span>
       )}
 
-      {/* Tools used */}
+      {/* Tools used — with names */}
       {msg.toolsUsed && msg.toolsUsed.length > 0 && (
-        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
-          <Database className="w-2.5 h-2.5" />
-          {msg.toolsUsed.length} أداة
-        </span>
+        <div className="flex flex-wrap gap-1">
+          {msg.toolsUsed.map((tool, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20"
+              title={tool}
+            >
+              {getToolIcon(tool)}
+              {getToolLabel(tool)}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -308,16 +376,23 @@ interface QuickCommand {
 // ─── Quick Commands ──────────────────────────────────────────
 
 const QUICK_COMMANDS: QuickCommand[] = [
+  // ═══ Dynamic analytics commands (use get_dynamic_analytics RPC) ═══
+  { id: 'da-supervision', label: 'تحليل الإشراف', icon: '🔬', command: 'حلل أداء استمارة الإشراف للحملة الحالية باستخدام التحليلات الديناميكية', category: 'query', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
+  { id: 'da-readiness', label: 'تحليل الجاهزية', icon: '✅', command: 'حلل استمارة الجاهزية وأظهر نسب الاستيفاء لكل معيار', category: 'query', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
+  { id: 'da-measles', label: 'تحليل الحصبة', icon: '🦠', command: 'حلل أداء استمارة الإشراف لحملة الحصبة', category: 'query', color: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100' },
+  { id: 'da-compliance', label: 'نسب الالتزام', icon: '📋', command: 'احسب نسب الالتزام لكل معايير الإشراف في الجولة الحالية', category: 'query', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
+  // ═══ Predictive analytics ═══
+  { id: 'forecast', label: 'تنبؤ الاكتمال', icon: '🔮', command: 'متى ستكتمل الجولة الحالية؟ استخدم forecast_completion', category: 'report', color: 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100' },
+  { id: 'alerts', label: 'تنبيهات ذكية', icon: '🚨', command: 'استخدم get_smart_alerts لإظهار التنبيهات الاستباقية', category: 'report', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
+  { id: 'anomalies', label: 'كشف الشذوذ', icon: '⚠️', command: 'استخدم detect_anomalies لكشف الأنماط الشاذة في الإرساليات', category: 'report', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' },
+  { id: 'compare', label: 'مقارنة الجولات', icon: '⚖️', command: 'استخدم compare_rounds لمقارنة الجولة 1 والجولة 2', category: 'report', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
+  // ═══ Standard queries ═══
   { id: 'subs', label: 'حالة الإرساليات', icon: '📊', command: 'ما حالة الإرساليات اليوم؟', category: 'query', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
   { id: 'govs', label: 'ترتيب المحافظات', icon: '🗺️', command: 'أي المحافظات الأكثر إرسالاً؟', category: 'query', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
   { id: 'users', label: 'فريق العمل', icon: '👥', command: 'كم مستخدم نشط لدينا؟', category: 'query', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
-  { id: 'quality', label: 'جودة الإدخال', icon: '✅', command: 'حلل جودة الإدخال ونسبة الرفض', category: 'query', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
   { id: 'vaccines', label: 'تطعيمات طفلي', icon: '💉', command: 'وش تطعيمات طفلي؟', category: 'query', color: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100' },
+  // ═══ Reports ═══
   { id: 'daily', label: 'تقرير يومي', icon: '📅', command: 'تقرير يومي شامل', category: 'report', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-  { id: 'compare', label: 'تقرير أسبوعي', icon: '📈', command: 'تقرير أسبوعي', category: 'report', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' },
-  { id: 'alerts', label: 'تنبيهات', icon: '🚨', command: 'أي مشاكل تحتاج انتباهي؟', category: 'report', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
-  { id: 'forecast', label: 'تنبؤ', icon: '🔮', command: 'تنبؤ الإرساليات الأسبوع القادم', category: 'report', color: 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100' },
-  { id: 'inactive', label: 'غير نشطين', icon: '😴', command: 'المستخدمين غير النشطين', category: 'query', color: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100' },
   { id: 'export-excel', label: '📥 إرساليات Excel', icon: '📊', command: 'صدر الإرساليات اليوم كإكسل', category: 'report', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
   { id: 'export-pdf', label: '📥 تقرير PDF', icon: '📄', command: 'اعمل PDF للمستخدمين', category: 'report', color: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100' },
 ]
@@ -944,17 +1019,22 @@ export function AIChatWidget() {
         if (aiResp.text && !aiResp.error) {
           edgeResponse = aiResp.text
           // Capture Hybrid Gateway metadata
+          // ⚠️ FIX: Use real provider_confidence from Edge Function (was hardcoded)
           edgeMetadata = {
             provider: aiResp.provider as string,
             latencyMs: aiResp.latencyMs,
-            // Note: providerConfidence, raced, attemptedProviders are in raw response
-            // We'd need to extend queryAI to return them — for now, derive from source
-            providerConfidence: aiResp.provider === 'groq' ? 90 : aiResp.provider === 'pollinations' ? 75 : 70,
-            // ─── New: Grounding metadata ───
+            providerConfidence: aiResp.providerConfidence ?? (aiResp.provider === 'groq' ? 90 : 70),
+            // ─── NEW: Full tool-calling metadata ───
+            toolsUsed: aiResp.toolsUsed,
+            attemptedProviders: aiResp.attemptedProviders,
+            raced: aiResp.raced,
+            // ─── Grounding metadata ───
             groundedInSources: aiResp.groundedInSources,
             groundingSources: aiResp.groundingSources as any,
             suggestedFollowups: aiResp.suggestedFollowups,
             ungrounded: aiResp.ungrounded,
+            // ─── NEW: Confirmation needed ───
+            needsConfirmation: aiResp.needsConfirmation,
           }
         }
       } catch { /* fall through to local */ }

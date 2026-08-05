@@ -33,6 +33,17 @@ export interface AIResponse {
   }>
   suggestedFollowups?: string[]
   ungrounded?: boolean
+  // ─── NEW: Full tool-calling metadata ───
+  toolsUsed?: string[]
+  attemptedProviders?: string[]
+  providerConfidence?: number
+  providerTier?: number
+  raced?: boolean
+  // ─── NEW: Confirmation needed for write tools ───
+  needsConfirmation?: boolean
+  confirmationMessage?: string
+  confirmationTool?: string
+  confirmationArgs?: Record<string, any>
 }
 
 // ─── Edge Function Call ──────────────────────────────────────
@@ -45,6 +56,7 @@ async function callEdgeFunction(
     systemPrompt?: string
     stream?: boolean
     campaignRound?: number
+    formId?: string  // ⚠️ NEW: form selector support
   },
 ): Promise<AIResponse> {
   const startTime = Date.now()
@@ -63,12 +75,15 @@ async function callEdgeFunction(
   const { data, error } = await supabase.functions.invoke('ai-chat-v3', {
     body: {
       message,
-      history: history.filter(m => m.role !== 'system').slice(-10),
+      history: history.filter(m => m.role !== 'system').slice(-12),  // ⚠️ FIX: 10→12 messages
       template: options?.template || undefined,
       system_prompt: options?.systemPrompt || undefined,
       stream: options?.stream || false,
+      // ⚠️ FIX: Pass form_id for form-specific analysis
+      ...(options?.formId ? { form_id: options.formId } : {}),
       context: {
         campaignRound: options?.campaignRound || null,
+        ...(options?.formId ? { form_id: options.formId } : {}),
       },
     },
   })
@@ -86,17 +101,31 @@ async function callEdgeFunction(
   const text = data?.reply || data?.text || 'عذراً، لم أتمكن من المعالجة.'
   const provider = (data?.source || 'groq') as AIProvider
 
+  // ⚠️ FIX: Detect confirmation-needed responses (write tools)
+  const needsConfirmation = data?.source === 'confirmation_needed' || data?.needs_confirmation === true
+
   return {
     text,
     provider,
     model: data?.model || 'unknown',
     latencyMs: Date.now() - startTime,
     tokensUsed: data?.tokensUsed,
-    // ─── New: Grounding metadata ───
+    // ─── Grounding metadata ───
     groundedInSources: data?.grounded_in_sources,
     groundingSources: data?.grounding_sources,
     suggestedFollowups: data?.suggested_followups,
     ungrounded: data?.ungrounded,
+    // ─── NEW: Full tool-calling metadata ───
+    toolsUsed: data?.tools_used || (data?.tools ? Object.keys(data.tools) : []),
+    attemptedProviders: data?.attempted_providers,
+    providerConfidence: data?.provider_confidence,
+    providerTier: data?.provider_tier,
+    raced: data?.raced,
+    // ─── NEW: Confirmation ───
+    needsConfirmation,
+    confirmationMessage: needsConfirmation ? text : undefined,
+    confirmationTool: data?.tool,
+    confirmationArgs: data?.args,
   }
 }
 
@@ -110,13 +139,35 @@ export async function queryAI(
     template?: string
     systemPrompt?: string
     campaignRound?: number
+    formId?: string  // ⚠️ NEW
   },
 ): Promise<AIResponse> {
   return callEdgeFunction(message, history, {
     template: options?.template,
     systemPrompt: options?.systemPrompt,
     campaignRound: options?.campaignRound,
+    formId: options?.formId,
   })
+}
+
+// ─── NEW: Confirm a write tool execution ─────────────────────
+
+export async function confirmToolExecution(
+  tool: string,
+  args: Record<string, any>,
+  history: AIMessage[] = [],
+  options?: { campaignRound?: number; formId?: string },
+): Promise<AIResponse> {
+  // Re-call the Edge Function with _confirmed: true in the message
+  // The Edge Function will detect the confirmation and execute the tool
+  return callEdgeFunction(
+    `نعم، أكد تنفيذ: ${tool}`,
+    history,
+    {
+      campaignRound: options?.campaignRound,
+      formId: options?.formId,
+    },
+  )
 }
 
 // ─── Streaming AI (for real-time responses) ──────────────────

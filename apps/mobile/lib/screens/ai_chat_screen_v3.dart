@@ -37,6 +37,10 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
   bool _loading = false;
   bool _mounted = true;
 
+  // ═══ Form selector — lets user target a specific form for analysis ═══
+  String? _selectedFormId;  // null = auto-resolve from campaign
+  List<Map<String, dynamic>>? _activeForms;
+
   // ═══ Conversation Threads state ═══
   String? _currentThreadId;
   bool _savingToThread = false;
@@ -232,13 +236,15 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       // ⚠️ FIX: Use NON-STREAMING by default — streaming was causing timeouts
       // because hybridRouteStream doesn't support Pollinations reliably.
       // Non-streaming is more reliable and still fast (<3s via Hybrid Gateway).
+      // ⚠️ FIX: Increased history window from 6×500 to 12×2000 — preserves
+      // context for multi-turn analysis (e.g. "حلل" then "قارن مع الجولة السابقة").
       final history =
-          _msgs.length > 6 ? _msgs.sublist(_msgs.length - 6) : _msgs;
+          _msgs.length > 12 ? _msgs.sublist(_msgs.length - 12) : _msgs;
       final historyJson = history
           .map((m) => {
                 'role': m.role,
-                'content': m.content.length > 500
-                    ? '${m.content.substring(0, 500)}...'
+                'content': m.content.length > 2000
+                    ? '${m.content.substring(0, 2000)}...'
                     : m.content,
               })
           .toList();
@@ -259,9 +265,12 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         'history': historyJson,
         if (template != null) 'template': template,
         if (effectiveRound != null) 'campaign_round': effectiveRound,
+        // ⚠️ FIX: Pass selected form_id so AI targets a specific form
+        if (_selectedFormId != null) 'form_id': _selectedFormId,
         'context': {
           'campaign_type': activeCampaign,
           if (effectiveRound != null) 'campaign_round': effectiveRound,
+          if (_selectedFormId != null) 'form_id': _selectedFormId,
         },
       }).timeout(const Duration(seconds: 45), onTimeout: () {
         throw TimeoutException('انتهت مهلة الطلب');
@@ -282,11 +291,19 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
           ? List<String>.from(resp['tools_used'])
           : null;
       final groundedInSources = (resp['grounded_in_sources'] as num?)?.toInt();
-      final groundingSources = resp['grounding_sources'] != null
-          ? (resp['grounding_sources'] as List)
-              .map((s) => GroundingSource.fromJson(Map<String, dynamic>.from(s)))
-              .toList()
-          : null;
+      // ⚠️ FIX: Wrap grounding sources parsing in try/catch — one bad source
+      // shouldn't discard the entire response.
+      List<GroundingSource>? groundingSources;
+      if (resp['grounding_sources'] != null) {
+        try {
+          groundingSources = (resp['grounding_sources'] as List)
+              .map((s) => GroundingSource.fromJson(Map<String, dynamic>.from(s as Map)))
+              .toList();
+        } catch (e) {
+          debugPrint('[AI Chat] Grounding source parse error: $e');
+          groundingSources = null;
+        }
+      }
       final suggestedFollowups = resp['suggested_followups'] != null
           ? List<String>.from(resp['suggested_followups'])
           : null;
@@ -899,36 +916,145 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
     required ColorScheme cs,
     required VoidCallback onTap,
     bool enabled = true,
+    bool highlight = false,
   }) {
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: enabled
-              ? cs.primaryContainer.withValues(alpha: 0.3)
-              : cs.surfaceContainerHigh,
+          color: highlight
+              ? cs.primary.withValues(alpha: 0.2)
+              : enabled
+                  ? cs.primaryContainer.withValues(alpha: 0.3)
+                  : cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(10),
+          border: highlight ? Border.all(color: cs.primary, width: 1.5) : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 14,
-                color: enabled ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.4)),
+                color: highlight ? cs.primary : (enabled ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.4))),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: enabled ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.4),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 80),
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: highlight ? cs.primary : (enabled ? cs.primary : cs.onSurfaceVariant.withValues(alpha: 0.4)),
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// Load active forms for the form selector
+  Future<void> _loadActiveForms() async {
+    if (_activeForms != null) return; // already loaded
+    try {
+      final db = ref.read(databaseServiceProvider);
+      final forms = await db.getForms(activeOnly: true).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => <Map<String, dynamic>>[],
+      );
+      if (_mounted) {
+        setState(() => _activeForms = forms);
+      }
+    } catch (e) {
+      debugPrint('[AI Chat] Failed to load forms: $e');
+    }
+  }
+
+  /// Show form selector bottom sheet
+  void _showFormSelector() {
+    _loadActiveForms().then((_) {
+      if (!_mounted) return;
+      final forms = _activeForms ?? [];
+      if (forms.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('لا توجد نماذج متاحة. تأكد من اتصالك بالإنترنت.', style: TextStyle(fontFamily: 'Tajawal')),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) => Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.form_library_outlined, size: 20),
+                  const SizedBox(width: 8),
+                  const Text('اختر نموذجاً للتحليل', style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _selectedFormId = null);
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('تلقائي', style: TextStyle(fontFamily: 'Tajawal')),
+                  ),
+                ],
+              ),
+              const Divider(),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: forms.length,
+                  itemBuilder: (ctx, i) {
+                    final f = forms[i];
+                    final id = f['id'] as String?;
+                    final title = f['title_ar'] as String? ?? 'بدون عنوان';
+                    final campaignType = f['campaign_type'] as String? ?? '';
+                    final isSelected = id == _selectedFormId;
+                    return ListTile(
+                      leading: Icon(
+                        campaignType == 'measles_campaign' ? Icons.coronavirus_rounded
+                        : campaignType == 'polio_campaign' ? Icons.vaccines_rounded
+                        : Icons.medical_services_rounded,
+                        size: 20,
+                        color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                      ),
+                      title: Text(title, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+                      trailing: isSelected ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary) : null,
+                      onTap: () {
+                        setState(() => _selectedFormId = id);
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('سيتم تحليل: $title', style: const TextStyle(fontFamily: 'Tajawal')),
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 
   /// Show prompt templates bottom sheet
@@ -1783,6 +1909,18 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
                   onTap: _showPromptTemplates,
                 ),
                 const SizedBox(width: 6),
+                // ⚠️ NEW: Form selector — lets user target a specific form
+                _inputActionBtn(
+                  icon: Icons.form_library_outlined,
+                  label: _selectedFormId == null ? 'نموذج' : (_activeForms?.firstWhere(
+                    (f) => f['id'] == _selectedFormId,
+                    orElse: () => {'title_ar': 'نموذج'},
+                  )['title_ar'] as String? ?? 'نموذج'),
+                  cs: cs,
+                  onTap: _showFormSelector,
+                  highlight: _selectedFormId != null,
+                ),
+                const SizedBox(width: 6),
                 // Export button (export last response)
                 _inputActionBtn(
                   icon: Icons.ios_share_rounded,
@@ -1798,29 +1936,6 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
                   label: _isSpeaking ? 'إيقاف' : 'صوت',
                   cs: cs,
                   onTap: _startVoiceInput,
-                ),
-                const SizedBox(width: 6),
-                // Language toggle
-                _inputActionBtn(
-                  icon: Icons.language_rounded,
-                  label: _language == 'ar' ? 'EN' : 'عربي',
-                  cs: cs,
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    setState(() => _language = _language == 'ar' ? 'en' : 'ar');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          _language == 'ar'
-                              ? 'تم التبديل للعربية'
-                              : 'Switched to English',
-                          style: const TextStyle(fontFamily: 'Tajawal'),
-                        ),
-                        behavior: SnackBarBehavior.floating,
-                        duration: const Duration(seconds: 1),
-                      ),
-                    );
-                  },
                 ),
                 const Spacer(),
                 // Clear conversation button

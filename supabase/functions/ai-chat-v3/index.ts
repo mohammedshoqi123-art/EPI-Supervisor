@@ -415,9 +415,15 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
         // Previously: AI used get_submissions which fetched 2000+ rows and
         // processed client-side → timeouts and freezing.
         // Now: single RPC call returns pre-aggregated analytics per field.
+        // Priority: args.form_id → context.form_id → campaign default.
         let formId = args.form_id as string | undefined
 
-        // If no form_id specified, resolve the default form for the current campaign
+        // ⚠️ FIX: Fall back to context.form_id (set by mobile form selector)
+        if (!formId && context?.form_id) {
+          formId = context.form_id as string
+        }
+
+        // If still no form_id, resolve the default form for the current campaign
         if (!formId) {
           const campaignType = context?.campaignType || 'integrated_activity'
           const { data: forms } = await withTimeout(
@@ -1193,7 +1199,15 @@ serve(async (req) => {
     if (!modelConfig.enabled) return jsonResponse({ error: 'خدمة AI معطلة' }, 503, origin)
 
     const body = await req.json()
-    const { message, history = [], context, mode, template, stream = false, feedback, message_id } = body
+    const { message, history = [], context, mode, template, stream = false, feedback, message_id, form_id } = body
+
+    // ⚠️ FIX: If form_id is passed at top-level, inject it into context so
+    // get_dynamic_analytics tool can use it as the default form.
+    if (form_id && !context?.form_id) {
+      if (context) {
+        context.form_id = form_id
+      }
+    }
 
     // Feedback
     if (mode === 'feedback' && feedback && message_id) {

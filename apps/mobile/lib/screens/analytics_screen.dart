@@ -7,7 +7,6 @@ import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import 'analytics_widgets.dart';
 import 'analytics_reports_tab.dart';
-import 'dashboard_report.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  FORM IDs
@@ -459,7 +458,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
               controller: _tab,
               children: [
                 const _DynamicAnalyticsTab(),
-                ReportsTab(
+                DynamicReportsTab(
                   campaignLabel: ref.watch(campaignProvider).displayLabel,
                   campaignRound: ref.watch(campaignRoundProvider),
                   onGenerate: (type, format, period) =>

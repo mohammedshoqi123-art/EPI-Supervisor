@@ -32,13 +32,13 @@ jobs:
         working-directory: apps/mobile
         env:
           STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
-          STAGING_SUPABASE_ANON_KEY: *** secrets.STAGING_SUPABASE_ANON_KEY }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
         run: |
           flutter build web --release \
             --dart-define=SUPABASE_URL=$STAGING_SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$STAGI…_KEY \
+            --dart-define=SUPABASE_ANON_KEY=$STAGING_SUPABASE_ANON_KEY \
             --dart-define=APP_ENV=development \
-            --dart-define=ENCRYPTION_KEY=*** secrets.ENCRYPTION_KEY }} \
+            --dart-define=ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }} \
             --source-maps
 
       - name: Deploy to GitHub Pages (app/staging)

@@ -1210,5 +1210,5 @@ final _formAnalyticsProvider = FutureProvider.family<
     'p_campaign_round': params.campaignRound,
     'p_governorate_id': null,
   });
-  return Map<String, dynamic>.from(result);
+  return Map<String, dynamic>.from(result ?? {});
 });

@@ -28,7 +28,7 @@ class FormFillScreen extends ConsumerStatefulWidget {
   ConsumerState<FormFillScreen> createState() => _FormFillScreenState();
 }
 
-class _FormFillScreenState extends ConsumerState<FormFillScreen> {
+class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final Map<String, dynamic> _formData = {};
   final Map<String, TextEditingController> _textControllers = {};
@@ -48,6 +48,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   // Auto-save timer
   Timer? _autoSaveTimer;
+  // ═══ FIX: Debounce save after field changes ═══
+  Timer? _debounceSaveTimer;
 
   // ═══ Section Navigation ═══
   late PageController _pageController;
@@ -69,15 +71,25 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
     super.initState();
     _draftId = widget.draftId ?? const Uuid().v4();
     _pageController = PageController();
+    // ═══ FIX: Register lifecycle observer for background save ═══
+    WidgetsBinding.instance.addObserver(this);
     _loadForm();
-    // ═══ FIX #2: 240 ثانية (4 دقائق) — تقليل تجميد UI ═══
-    // Previously: 60s → PBKDF2 encryption كل دقيقة = freeze 1-3s
-    // Now: 240s → 4× أقل تجميد، مع حفظ عند كل تغيير مهم أيضاً
     _autoSaveTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (_hasUnsavedChanges && _formData.isNotEmpty) {
         _autoSave(showFeedback: false);
       }
     });
+  }
+
+  // ═══ FIX: Save when app goes to background ═══
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (_hasUnsavedChanges && _formData.isNotEmpty) {
+        debugPrint('[FormFill] App going to background — saving draft');
+        _autoSave(showFeedback: false);
+      }
+    }
   }
 
   Future<void> _loadForm() async {
@@ -553,6 +565,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
 
   @override
   void dispose() {
+    // ═══ FIX: Remove lifecycle observer and cancel timers ═══
+    WidgetsBinding.instance.removeObserver(this);
+    _autoSaveTimer?.cancel();
+    _debounceSaveTimer?.cancel();
     // FIX: احفظ التغييرات غير المحفوظة قبل التخلص من الـ widget
     // ملاحظة: dispose لا يمكن أن يكون async. offlineManagerProvider هو
     // FutureProvider<OfflineManager> — ref.read يُرجع AsyncValue<OfflineManager>،
@@ -590,7 +606,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
         debugPrint('[FormFillScreen] Save-on-dispose failed: $e');
       }
     }
-    _autoSaveTimer?.cancel();
     _pageController.dispose();
     for (final controller in _textControllers.values) {
       controller.dispose();
@@ -1281,13 +1296,25 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
   }
 
   void _markChanged() {
-    // ═══ setState ضروري لإعادة بناء الحقول الشرطية (showIf) ═══
-    // بدون setState: buildFormSections ما تعيد تقييم showIf
-    // → الحقول المشرطية (مثل: هل تمت مراجعتها؟) ما تظهر/تختفي
     setState(() {
       _hasUnsavedChanges = true;
     });
+    // ═══ FIX: Debounce save — 3 seconds after last change ═══
+    _debounceSaveTimer?.cancel();
+    _debounceSaveTimer = Timer(const Duration(seconds: 3), () {
+      if (_hasUnsavedChanges && _formData.isNotEmpty && mounted) {
+        _autoSave(showFeedback: false);
+      }
+    });
   }
+
+
+
+
+
+
+
+
 
   /// Build review sections for the review bottom sheet
   List<SectionReview> _buildReviewSections() {
@@ -1686,6 +1713,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> {
                                 itemCount: _sectionPages.length,
                                 onPageChanged: (index) {
                                   setState(() => _currentSectionIndex = index);
+                                  // ═══ FIX: Save draft when navigating between sections ═══
+                                  // Natural stop point — user is moving to next section
+                                  if (_hasUnsavedChanges && _formData.isNotEmpty) {
+                                    _autoSave(showFeedback: false);
+                                  }
                                 },
                                 itemBuilder: (context, pageIndex) {
                                   return _buildPageView(pageIndex);

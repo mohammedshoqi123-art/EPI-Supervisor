@@ -223,6 +223,52 @@ class MainShell extends ConsumerStatefulWidget {
 class _MainShellState extends ConsumerState<MainShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastNavTap;
+  bool _autoSyncDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // ═══ FIX: Auto-sync forms in background after first frame ═══
+    // Previously: user had to manually press sync button
+    // Now: forms are cached automatically so offline works from first launch
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _autoSyncInBackground();
+    });
+  }
+
+  Future<void> _autoSyncInBackground() async {
+    if (_autoSyncDone) return;
+    _autoSyncDone = true;
+    try {
+      // Wait 3 seconds for app to settle
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
+      if (!ConnectivityUtils.isOnline) return;
+
+      final cache = await ref.read(offlineDataCacheProvider.future).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw Exception('cache timeout'),
+      );
+
+      // Check if forms are already cached
+      final campaign = ref.read(campaignProvider);
+      final cachedForms = cache.getCachedDataList('forms_${campaign.value}');
+      if (cachedForms != null && cachedForms.isNotEmpty) {
+        debugPrint('[AutoSync] Forms already cached — skipping');
+        return;
+      }
+
+      // Trigger full sync in background
+      debugPrint('[AutoSync] Forms not cached — starting background sync');
+      await ref.read(fullSyncProvider.notifier).syncAll().timeout(
+        const Duration(seconds: 60),
+        onTimeout: () => const FullSyncResult(error: 'timeout'),
+      );
+      debugPrint('[AutoSync] Background sync completed');
+    } catch (e) {
+      debugPrint('[AutoSync] Background sync failed: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

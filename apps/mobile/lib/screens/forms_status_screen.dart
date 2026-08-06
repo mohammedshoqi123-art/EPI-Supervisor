@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
+import '../services/cloud_draft_service.dart';
 import '../router/app_router.dart';
 import 'forms_status_widgets.dart';
 
@@ -218,6 +220,40 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
       allDrafts.removeWhere((d) => d['_recovered'] == true);
 
       debugPrint('[FormsStatusScreen] Loaded ${allDrafts.length} drafts + ${_recoveredDraftItems.length} recovered from Hive');
+
+      // ═══ FIX: جلب المسودات السحابية المفقودة محلياً ═══
+      // إذا Hive تالف أو الجهاز تغيّر → المسودات في السحابة فقط
+      // نعرضها كمسودات مستردة مع زر "استعادة محلياً"
+      try {
+        final cloudService = CloudDraftService(Supabase.instance.client);
+        final cloudDrafts = await cloudService.fetchAllDrafts();
+        if (cloudDrafts.isNotEmpty) {
+          // IDs الموجودة محلياً
+          final localIds = allDrafts.map((d) => d['draft_id'] as String?).toSet();
+          localIds.addAll(_recoveredDraftItems.map((d) => d['draft_id'] as String?));
+
+          // أضف فقط المسودات السحابية غير الموجودة محلياً
+          final cloudOnly = cloudDrafts.where((cd) =>
+            !localIds.contains(cd['draft_id'])
+          ).toList();
+
+          if (cloudOnly.isNotEmpty) {
+            _recoveredDraftItems.addAll(cloudOnly.map((cd) => {
+              'draft_id': cd['draft_id'],
+              'form_id': cd['form_id'],
+              'data': cd['data'] ?? {},
+              'saved_at': cd['saved_at'],
+              'form_title': 'مسودة سحابية ☁️',
+              '_recovered': true,
+              '_source': 'cloud',
+            }));
+            _recoveredDraftTotal = _recoveredDraftItems.length;
+            debugPrint('[FormsStatusScreen] Found ${cloudOnly.length} cloud-only drafts');
+          }
+        }
+      } catch (e) {
+        debugPrint('[FormsStatusScreen] Cloud drafts fetch failed: $e');
+      }
 
       // Enrich drafts with form titles from forms provider
       // ═══ FIX: تحميل النماذج من multiple sources لضمان ظهور الأسماء ═══

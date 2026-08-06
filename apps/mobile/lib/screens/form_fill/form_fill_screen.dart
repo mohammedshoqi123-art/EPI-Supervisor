@@ -36,6 +36,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   bool _isSavingDraft = false;
   bool _isGettingLocation = false;
   bool _hasUnsavedChanges = false;
+  bool _isSubmitting = false; // ═══ FIX: منع race condition في dispose ═══
   Map<String, dynamic>? _formSchema;
 
   // Support both formats: sections (new) and flat fields (old)
@@ -48,6 +49,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
 
   // ═══ PERF: Removed _autoSaveTimer (60s periodic) — debounce is enough ═══
   Timer? _debounceSaveTimer;
+  Timer? _debounceCloudSave; // ═══ FIX: debounce للنسخة السحابية فقط ═══
 
   // ═══ Section Navigation ═══
   late PageController _pageController;
@@ -221,9 +223,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
       final draft = offline.getDraft(_draftId);
 
       // ═══ FIX N-C3: فحص _needs_migration قبل تحميل البيانات ═══
-      // Previously: getDraft يُرجع placeholder بـ data:{} → UI يعرض استمارة فارغة
-      //   → المستخدم يحفظ → يُغطّي البيانات القديمة بـ {} → ضياع دائم!
-      // Now: نكتشف الـ placeholder ونُهاجر المسودة في الخلفية
       if (draft != null && draft['_needs_migration'] == true) {
         debugPrint('[FormFill] Draft needs migration — attempting background migration...');
         if (mounted) {
@@ -237,7 +236,6 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
         }
         final migrated = await offline.migrateDraft(_draftId);
         if (migrated != null && migrated['data'] != null) {
-          // Migration succeeded — use migrated data
           final draftData = Map<String, dynamic>.from(migrated['data']);
           setState(() {
             _formData.addAll(draftData);
@@ -259,7 +257,23 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
           }
           return;
         } else {
-          // Migration failed — show error and DON'T load empty form
+          // ═══ FIX: Migration failed → جلب من السحابة ═══
+          debugPrint('[FormFill] Migration failed — trying cloud backup...');
+          final cloudData = await _fetchFromCloud(_draftId);
+          if (cloudData != null) {
+            await offline.saveDraft(_draftId, widget.formId, cloudData);
+            _restoreDraftData(cloudData);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('تم استعادة المسودة من السحابة ☁️', style: TextStyle(fontFamily: 'Tajawal')),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+            return;
+          }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -270,17 +284,30 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
               ),
             );
           }
-          // Don't load empty form — keep current state
           return;
         }
       }
 
       if (draft != null && draft['data'] != null) {
         // ⚠️ FIX: Refuse to load a corrupted draft (data:{} with _corrupted flag).
-        // Loading an empty form would let save-on-dispose overwrite the real
-        // (encrypted) draft with empty data → permanent data loss.
         if (draft['_corrupted'] == true || draft['_needs_migration'] == true) {
-          debugPrint('[FormFill] Draft ${_draftId.substring(0, 8)} is corrupted — refusing to load empty form');
+          debugPrint('[FormFill] Draft ${_draftId.substring(0, 8)} is corrupted — trying cloud...');
+          // ═══ FIX: جلب من السحابة بدلاً من رسالة خطأ ═══
+          final cloudData = await _fetchFromCloud(_draftId);
+          if (cloudData != null) {
+            await offline.saveDraft(_draftId, widget.formId, cloudData);
+            _restoreDraftData(cloudData);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('تم استعادة المسودة من السحابة ☁️', style: TextStyle(fontFamily: 'Tajawal')),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+            return;
+          }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -293,65 +320,132 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
           }
           return;
         }
+
         final draftData = Map<String, dynamic>.from(draft['data']);
-        setState(() {
-          _formData.addAll(draftData);
-          _hasUnsavedChanges = false;
-        });
-        for (final entry in draftData.entries) {
-          if (_textControllers.containsKey(entry.key)) {
-            _textControllers[entry.key]!.text = entry.value?.toString() ?? '';
+
+        // ═══ FIX: رفض تحميل مسودة فارغة — محاولة السحابة ═══
+        if (draftData.isEmpty) {
+          debugPrint('[FormFill] Draft data is empty — trying cloud backup...');
+          final cloudData = await _fetchFromCloud(_draftId);
+          if (cloudData != null) {
+            await offline.saveDraft(_draftId, widget.formId, cloudData);
+            _restoreDraftData(cloudData);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('تم استعادة المسودة من السحابة ☁️', style: TextStyle(fontFamily: 'Tajawal')),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+            return;
           }
+          debugPrint('[FormFill] No cloud backup found — starting fresh');
+          return;
         }
 
-        // ═══ FIX: Restore GPS coordinates from draft data ═══
-        // GPS fields store "lat, lng" as a string in _formData
-        // We must restore _gpsLat/_gpsLng so the UI shows "تم تحديد الموقع ✓"
-        // ═══ FIX: Support both String ("lat, lng") and Map ({lat, lng, accuracy}) formats ═══
-        // Old drafts may have Map format from _getCurrentLocationForField()
-        for (final field in _allFields) {
-          if (field['type'] == 'gps') {
-            final key = field['key'] as String;
-            final gpsData = _formData[key];
-            double? lat, lng;
-
-            if (gpsData is String && gpsData.contains(',')) {
-              // Format: "33.300000, 44.300000"
-              final parts = gpsData.split(',').map((s) => s.trim()).toList();
-              if (parts.length == 2) {
-                lat = double.tryParse(parts[0]);
-                lng = double.tryParse(parts[1]);
-              }
-            } else if (gpsData is Map) {
-              // Format: {lat: 33.3, lng: 44.3, accuracy: 10} (legacy)
-              lat = (gpsData['lat'] as num?)?.toDouble();
-              lng = (gpsData['lng'] as num?)?.toDouble();
-              // Normalize to String format for consistency
-              if (lat != null && lng != null) {
-                _formData[key] =
-                    '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
-              }
-            } else if (gpsData is num) {
-              // Edge case: stored as single number (shouldn't happen but be safe)
-              debugPrint('[Draft] Unexpected GPS format: $gpsData');
-            }
-
-            if (lat != null && lng != null) {
-              _gpsLat = lat;
-              _gpsLng = lng;
-              _draftLoadedWithGps = true; // Prevent async auto-detect from overwriting
-            }
-          }
-        }
+        _restoreDraftData(draftData);
 
         if (mounted) {
           context.showInfo('تم استعادة المسودة السابقة');
         }
+      } else {
+        // ═══ FIX: لا مسودة محلية → محاولة السحابة ═══
+        debugPrint('[FormFill] No local draft — trying cloud backup...');
+        final cloudData = await _fetchFromCloud(_draftId);
+        if (cloudData != null) {
+          await offline.saveDraft(_draftId, widget.formId, cloudData);
+          _restoreDraftData(cloudData);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('تم استعادة المسودة من السحابة ☁️', style: TextStyle(fontFamily: 'Tajawal')),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
       }
     } on TimeoutException {
-      // Non-critical
-    } catch (_) {
-      // Non-critical
+      // ═══ FIX: Timeout → محاولة السحابة ═══
+      debugPrint('[FormFill] OfflineManager timeout — trying cloud...');
+      final cloudData = await _fetchFromCloud(_draftId);
+      if (cloudData != null && mounted) {
+        _restoreDraftData(cloudData);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم استعادة المسودة من السحابة ☁️', style: TextStyle(fontFamily: 'Tajawal')),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[FormFill] Load draft error: $e');
+    }
+  }
+
+  /// ═══ جلب مسودة من السحابة ═══
+  Future<Map<String, dynamic>?> _fetchFromCloud(String draftId) async {
+    try {
+      final cloudDraft = ref.read(cloudDraftServiceProvider);
+      if (cloudDraft == null) return null;
+
+      final result = await cloudDraft.fetchDraft(draftId);
+      if (result != null && result['data'] != null) {
+        final data = result['data'];
+        if (data is Map && data.isNotEmpty) {
+          return Map<String, dynamic>.from(data);
+        }
+      }
+    } catch (e) {
+      debugPrint('[CloudFetch] Failed: $e');
+    }
+    return null;
+  }
+
+  /// ═══ استعادة بيانات المسودة إلى الحالة المحلية ═══
+  void _restoreDraftData(Map<String, dynamic> draftData) {
+    setState(() {
+      _formData.addAll(draftData);
+      _hasUnsavedChanges = false;
+    });
+    for (final entry in draftData.entries) {
+      if (_textControllers.containsKey(entry.key)) {
+        _textControllers[entry.key]!.text = entry.value?.toString() ?? '';
+      }
+    }
+
+    // ═══ Restore GPS coordinates ═══
+    for (final field in _allFields) {
+      if (field['type'] == 'gps') {
+        final key = field['key'] as String;
+        final gpsData = _formData[key];
+        double? lat, lng;
+
+        if (gpsData is String && gpsData.contains(',')) {
+          final parts = gpsData.split(',').map((s) => s.trim()).toList();
+          if (parts.length == 2) {
+            lat = double.tryParse(parts[0]);
+            lng = double.tryParse(parts[1]);
+          }
+        } else if (gpsData is Map) {
+          lat = (gpsData['lat'] as num?)?.toDouble();
+          lng = (gpsData['lng'] as num?)?.toDouble();
+          if (lat != null && lng != null) {
+            _formData[key] =
+                '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
+          }
+        }
+
+        if (lat != null && lng != null) {
+          _gpsLat = lat;
+          _gpsLng = lng;
+          _draftLoadedWithGps = true;
+        }
+      }
     }
   }
 
@@ -562,20 +656,30 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
     // ═══ FIX: Remove lifecycle observer and cancel timers ═══
     WidgetsBinding.instance.removeObserver(this);
     _debounceSaveTimer?.cancel();
-    // FIX: احفظ التغييرات غير المحفوظة قبل التخلص من الـ widget
-    // ملاحظة: dispose لا يمكن أن يكون async. offlineManagerProvider هو
-    // FutureProvider<OfflineManager> — ref.read يُرجع AsyncValue<OfflineManager>،
-    // لذا نستخدم .value للوصول للمدير بشكل متزامن (قد يكون null إذا لم يكتمل التهيئة).
+    _debounceCloudSave?.cancel();
+
+    // ═══ FIX: لا تحفظ أثناء الإرسال — الإرسال هو الحفظ ═══
+    // سابقاً: dispose يحاول الحفظ حتى أثناء الإرسال → race condition → مسودة فارغة
+    // الآن: إذا الإرسال جاري → تخطي الحفظ (الإرسال يحفظ محلياً + سحابياً)
+    if (_isSubmitting) {
+      debugPrint('[Dispose] Submit in progress — skipping save-on-dispose');
+      _pageController.dispose();
+      for (final controller in _textControllers.values) {
+        controller.dispose();
+      }
+      _textControllers.clear();
+      super.dispose();
+      return;
+    }
+
     // ⚠️ FIX: Guard against overwriting a real draft with an all-empty form.
-    // If _formData only contains empty values (no actual user input), don't save —
-    // this prevents a corrupted/empty draft from replacing a real one on dispose.
     final hasNonEmptyValue = _formData.values.any((v) {
       if (v == null) return false;
       if (v is String) return v.trim().isNotEmpty;
       if (v is List) return v.isNotEmpty;
       if (v is Map) return v.isNotEmpty;
       if (v is num) return v != 0;
-      if (v is bool) return true; // booleans are intentional choices
+      if (v is bool) return true;
       return true;
     });
     if (_hasUnsavedChanges && _formData.isNotEmpty && hasNonEmptyValue) {
@@ -590,6 +694,16 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
             Map<String, dynamic>.from(_formData),
           );
           _hasUnsavedChanges = false;
+
+          // ═══ FIX: نسخة احتياطية سحابية في الخلفية ═══
+          final cloudDraft = ref.read(cloudDraftServiceProvider);
+          if (cloudDraft != null) {
+            cloudDraft.backupDraft(
+              draftId: _draftId,
+              formId: widget.formId,
+              data: Map<String, dynamic>.from(_formData),
+            );
+          }
         } else {
           debugPrint(
             '[FormFillScreen] Save-on-dispose skipped — OfflineManager not ready yet',
@@ -856,7 +970,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
       }
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _isSubmitting = true; // ═══ FIX: منع dispose من الحفظ أثناء الإرسال ═══
+    });
 
     // ═══ WEB: Submit directly to Supabase (bypass offline storage) ═══
     if (kIsWeb) {
@@ -881,6 +998,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
         if (mounted) {
           try { ref.invalidate(formStatsProvider); } catch (_) {}
           _hasUnsavedChanges = false;
+          // ═══ FIX: حذف النسخة السحابية بعد الإرسال الناجح ═══
+          try {
+            final cloudDraft = ref.read(cloudDraftServiceProvider);
+            cloudDraft?.deleteDraft(_draftId);
+          } catch (_) {}
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('تم الإرسال بنجاح ✅', style: TextStyle(fontFamily: 'Tajawal')),
@@ -892,7 +1014,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
         }
       } catch (e) {
         if (mounted) {
-          setState(() => _isLoading = false);
+          setState(() {
+            _isLoading = false;
+            _isSubmitting = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('فشل الإرسال: $e', style: const TextStyle(fontFamily: 'Tajawal')),
@@ -902,7 +1027,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
           );
         }
       } finally {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) setState(() {
+          _isLoading = false;
+          _isSubmitting = false;
+        });
       }
       return;
     }
@@ -1090,6 +1218,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
             syncSucceeded = true;
             try {
               await offline.removeDraft(_draftId);
+              // ═══ FIX: حذف النسخة السحابية بعد الإرسال الناجح ═══
+              final cloudDraft = ref.read(cloudDraftServiceProvider);
+              cloudDraft?.deleteDraft(_draftId);
             } catch (_) {}
           }
         } catch (e) {
@@ -1123,7 +1254,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
         context.showError('فشل حفظ البيانات محلياً: ${e.toString()}');
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() {
+        _isLoading = false;
+        _isSubmitting = false; // ═══ FIX: إعادة تفعيل dispose ═══
+      });
     }
   }
 
@@ -1143,15 +1277,32 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
       return false;
     }
 
-    // ═══ WEB: لا يمكن حفظ مسودة على الويب (لا Hive) ═══
+    // ═══ WEB: حفظ في السحابة فقط (لا Hive) ═══
     if (kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('على الويب: استخدم زر الإرسال مباشرة (لا يوجد حفظ محلي)', style: TextStyle(fontFamily: 'Tajawal')),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      try {
+        final cloudDraft = ref.read(cloudDraftServiceProvider);
+        if (cloudDraft != null) {
+          await cloudDraft.backupDraft(
+            draftId: _draftId,
+            formId: widget.formId,
+            data: Map<String, dynamic>.from(_formData),
+          );
+          _hasUnsavedChanges = false;
+          if (mounted) context.showSuccess('تم الحفظ في السحابة ☁️');
+          return true;
+        }
+      } catch (e) {
+        debugPrint('[WebSave] Cloud backup failed: $e');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('فشل الحفظ — تحقق من الاتصال', style: TextStyle(fontFamily: 'Tajawal')),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return false;
     }
 
@@ -1169,6 +1320,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
         Map<String, dynamic>.from(_formData),
       );
       _hasUnsavedChanges = false;
+
+      // ═══ FIX: نسخة احتياطية سحابية ═══
+      _backupToCloud();
+
       if (mounted) context.showSuccess(AppStrings.draftSaved);
       return true;
     } on TimeoutException {
@@ -1200,27 +1355,23 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   int _lastSavedVersion = 0;
 
   Future<void> _autoSave({bool showFeedback = false}) async {
-    // ═══ PERF: Skip _syncControllersToFormData — controllers already sync on change ═══
     if (_formData.isEmpty) return;
-
-    // ═══ PERF: Skip save if nothing changed (version check — O(1)) ═══
     if (_saveVersion == _lastSavedVersion) return;
-
     if (!mounted) return;
 
+    // ═══ PERF: _syncControllersToFormData ═══
+    _syncControllersToFormData();
+
     // ═══ FIX 2.2: Retry logic — 3 attempts with exponential backoff ═══
-    // Previously: single attempt, silent failure
-    // Now: 3 attempts (immediate, 1s, 3s), then show warning
     for (int attempt = 0; attempt < 3; attempt++) {
       try {
         if (attempt > 0) {
-          // Exponential backoff: 1s, 3s
           await Future.delayed(Duration(seconds: attempt == 1 ? 1 : 3));
           if (!mounted) return;
         }
 
         final offline = await ref.read(offlineManagerProvider.future).timeout(
-          const Duration(seconds: 5),  // ═══ FIX: 5s (was 10s) ═══
+          const Duration(seconds: 5),
           onTimeout: () {
             throw TimeoutException('Offline storage not ready for auto-save');
           },
@@ -1232,12 +1383,16 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
           Map<String, dynamic>.from(_formData),
         );
         _hasUnsavedChanges = false;
-        _lastSavedVersion = _saveVersion; // Track saved state
-        _autoSaveFailCount = 0; // Reset on success
+        _lastSavedVersion = _saveVersion;
+        _autoSaveFailCount = 0;
+
+        // ═══ FIX: نسخة احتياطية سحابية في الخلفية ═══
+        _backupToCloud();
+
         if (showFeedback && mounted) {
           context.showSuccess('تم الحفظ التلقائي');
         }
-        return; // Success — exit retry loop
+        return;
       } on TimeoutException {
         _autoSaveFailCount++;
         debugPrint('[AutoSave] Attempt ${attempt + 1}/3 timed out');
@@ -1261,13 +1416,62 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
       _hasUnsavedChanges = true;
       _saveVersion++; // Bump version for change detection
     });
-    // ═══ FIX: Debounce save — 3 seconds after last change ═══
-    _debounceSaveTimer?.cancel();
-    _debounceSaveTimer = Timer(const Duration(seconds: 3), () {
+
+    // ═══ FIX: حفظ فوري في Hive — لا debounce ═══
+    // سابقاً: debounce 3 ثوانٍ → crash خلالها = ضياع آخر تغييرات
+    // الآن: حفظ فوري fire-and-forget (لا ي_blocking UI)
+    _saveDraftImmediate();
+
+    // ═══ Debounce للسحابة فقط — تقليل API calls ═══
+    _debounceCloudSave?.cancel();
+    _debounceCloudSave = Timer(const Duration(seconds: 10), () {
       if (_hasUnsavedChanges && _formData.isNotEmpty && mounted) {
-        _autoSave(showFeedback: false);
+        _backupToCloud();
       }
     });
+  }
+
+  /// ═══ حفظ فوري في Hive (fire-and-forget) ═══
+  /// لا ي_blocking UI — يعمل في microtask
+  void _saveDraftImmediate() {
+    if (_formData.isEmpty) return;
+    if (!mounted) return;
+
+    try {
+      _syncControllersToFormData();
+      final asyncValue = ref.read(offlineManagerProvider);
+      final offline = asyncValue.value;
+      if (offline != null) {
+        offline.saveDraft(
+          _draftId,
+          widget.formId,
+          Map<String, dynamic>.from(_formData),
+        );
+        _hasUnsavedChanges = false;
+        _lastSavedVersion = _saveVersion;
+      }
+    } catch (e) {
+      debugPrint('[ImmediateSave] Failed: $e');
+    }
+  }
+
+  /// ═══ نسخة احتياطية سحابية (non-blocking) ═══
+  void _backupToCloud() {
+    if (_formData.isEmpty) return;
+    if (!mounted) return;
+
+    try {
+      final cloudDraft = ref.read(cloudDraftServiceProvider);
+      if (cloudDraft != null) {
+        cloudDraft.backupDraft(
+          draftId: _draftId,
+          formId: widget.formId,
+          data: Map<String, dynamic>.from(_formData),
+        );
+      }
+    } catch (e) {
+      debugPrint('[CloudBackup] Failed: $e');
+    }
   }
 
 

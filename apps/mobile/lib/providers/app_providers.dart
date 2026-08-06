@@ -1,10 +1,24 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_core/epi_core.dart';
+import '../services/cloud_draft_service.dart';
 
 // ─── Core Services ────────────────────────────────────────────────────────────
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
+
+/// ═══ Cloud Draft Service — نسخة احتياطية سحابية للمسودات ═══
+/// يحمي المسودات من تلف Hive أو تغيير الجهاز
+final cloudDraftServiceProvider = Provider<CloudDraftService?>((ref) {
+  try {
+    final client = Supabase.instance.client;
+    return CloudDraftService(client);
+  } catch (e) {
+    debugPrint('[CloudDraftService] Supabase not ready: $e');
+    return null;
+  }
+});
 
 final encryptionServiceProvider = Provider<EncryptionService>(
   (ref) => EncryptionService(),
@@ -33,16 +47,37 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
     return manager;
   }
 
-  // On mobile, initialize Hive with timeout + graceful fallback
+  // ═══ FIX: Hive Hardening — Auto-recovery on corruption ═══
+  // سابقاً: init يفشل → degraded mode → مسودات غير متاحة
+  // الآن: محاولة init → إذا فشل → حذف box التالف → إعادة init → استعادة من السحابة
   try {
     await manager.init().timeout(
-      const Duration(seconds: 30),  // FIX: 30s — PBKDF2 + Hive init needs time
+      const Duration(seconds: 30),
       onTimeout: () {
-        debugPrint('[offlineManagerProvider] Hive init still running — degraded mode');
+        debugPrint('[offlineManagerProvider] Hive init timeout — degraded mode');
       },
     );
   } catch (e) {
-    debugPrint('[offlineManagerProvider] Hive failed: $e — degraded mode');
+
+
+    debugPrint('[offlineManagerProvider] Hive init failed: $e');
+
+    // ═══ Auto-recovery: حذف box التالف وإعادة المحاولة ═══
+    // البيانات موجودة في السحابة — ستُستعاد تلقائياً عند فتح المسودات
+    debugPrint('[offlineManagerProvider] Attempting Hive recovery...');
+    try {
+      // محاولة حذف box التالف وإعادة التهيئة
+      await manager.resetCorruptedBoxes();
+      await manager.init().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          debugPrint('[offlineManagerProvider] Recovery init timeout');
+        },
+      );
+      debugPrint('[offlineManagerProvider] ✅ Hive recovered successfully');
+    } catch (recoveryError) {
+      debugPrint('[offlineManagerProvider] ❌ Hive recovery failed: $recoveryError');
+    }
   }
 
   // ═══ FIX: Set initial connectivity from ConnectivityUtils ═══

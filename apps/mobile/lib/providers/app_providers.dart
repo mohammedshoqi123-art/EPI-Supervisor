@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:epi_core/epi_core.dart';
 import '../services/cloud_draft_service.dart';
 
@@ -66,8 +67,17 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
     // البيانات موجودة في السحابة — ستُستعاد تلقائياً عند فتح المسودات
     debugPrint('[offlineManagerProvider] Attempting Hive recovery...');
     try {
-      // محاولة حذف box التالف وإعادة التهيئة
-      await manager.resetCorruptedBoxes();
+      // ═══ محاولة حذف box التالف وإعادة التهيئة ═══
+      // نستخدم Hive مباشرة لأن OfflineManager قد لا يملك resetCorruptedBoxes
+      try {
+        final hive = Hive;
+        await hive.deleteBoxFromDisk('drafts');
+        await hive.deleteBoxFromDisk('sync_queue');
+        await hive.deleteBoxFromDisk('cache');
+        debugPrint('[offlineManagerProvider] Deleted corrupted Hive boxes');
+      } catch (hiveError) {
+        debugPrint('[offlineManagerProvider] Box deletion failed: $hiveError');
+      }
       await manager.init().timeout(
         const Duration(seconds: 15),
         onTimeout: () {

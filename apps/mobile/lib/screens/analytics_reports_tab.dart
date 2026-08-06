@@ -50,8 +50,16 @@ String _getCampaignLabel(String? type) =>
 
 class DynamicReportsTab extends ConsumerStatefulWidget {
   final int? campaignRound;
-  final Future<void> Function(String type, String format, String period)?
-      onGenerate;
+  /// ═══ FIX: onGenerate signature now supports formId + formTitle for 'form_report' type ═══
+  /// Signature: (type, format, period, {formId, formTitle})
+  /// When type == 'form_report', formId and formTitle MUST be provided.
+  final Future<void> Function(
+    String type,
+    String format,
+    String period, {
+    String? formId,
+    String? formTitle,
+  })? onGenerate;
 
   const DynamicReportsTab({
     super.key,
@@ -458,8 +466,14 @@ class _FormReportSheet extends ConsumerStatefulWidget {
   final String formTitle;
   final String? campaignType;
   final int? campaignRound;
-  final Future<void> Function(String type, String format, String period)?
-      onExport;
+  /// ═══ FIX: Updated signature to support formId + formTitle ═══
+  final Future<void> Function(
+    String type,
+    String format,
+    String period, {
+    String? formId,
+    String? formTitle,
+  })? onExport;
 
   const _FormReportSheet({
     required this.formId,
@@ -718,7 +732,12 @@ class _FormReportSheetState extends ConsumerState<_FormReportSheet> {
               label: 'PDF',
               color: const Color(0xFFE53935),
               onTap: () => widget.onExport?.call(
-                  'form_report', 'pdf', '30'),
+                'form_report',
+                'pdf',
+                '30',
+                formId: widget.formId,
+                formTitle: widget.formTitle,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -728,7 +747,12 @@ class _FormReportSheetState extends ConsumerState<_FormReportSheet> {
               label: 'Excel',
               color: const Color(0xFF43A047),
               onTap: () => widget.onExport?.call(
-                  'form_report', 'excel', '30'),
+                'form_report',
+                'excel',
+                '30',
+                formId: widget.formId,
+                formTitle: widget.formTitle,
+              ),
             ),
           ),
         ],

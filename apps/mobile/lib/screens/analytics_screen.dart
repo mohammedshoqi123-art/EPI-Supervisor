@@ -461,8 +461,14 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                 const _DynamicAnalyticsTab(),
                 DynamicReportsTab(
                   campaignRound: ref.watch(campaignRoundProvider),
-                  onGenerate: (type, format, period) =>
-                      _generateReport(type, format, period),
+                  onGenerate: (type, format, period, {formId, formTitle}) =>
+                      _generateReport(
+                        type,
+                        format,
+                        period,
+                        formId: formId,
+                        formTitle: formTitle,
+                      ),
                 ),
               ],
             ),
@@ -487,7 +493,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   ];
 
   /// Main report generation entry point — called from ReportsTab.onGenerate
-  Future<void> _generateReport(String type, String format, String period) async {
+  /// ═══ FIX: Added optional formId + formTitle for 'form_report' type ═══
+  /// When type == 'form_report', this generates a dynamic report using
+  /// get_form_analytics RPC with the provided formId.
+  Future<void> _generateReport(
+    String type,
+    String format,
+    String period, {
+    String? formId,
+    String? formTitle,
+  }) async {
     // ═══ FIX: فحص isOnline — لا نحظر التطبيق بالاوفلاين ═══
     if (!ConnectivityUtils.isOnline) {
       if (mounted) {
@@ -502,6 +517,29 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       }
       return;
     }
+
+    // ═══ Dynamic Form Report (uses get_form_analytics RPC) ═══
+    if (type == 'form_report') {
+      if (formId == null || formId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('معرف الاستمارة مفقود — لا يمكن توليد التقرير',
+                  style: TextStyle(fontFamily: 'Tajawal')),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      await _generateDynamicFormReport(
+        formId: formId,
+        formTitle: formTitle ?? 'تقرير الاستمارة',
+        format: format,
+      );
+      return;
+    }
+
     // ═══ Route specialized reports ═══
     if (type == 'supervisor_leaderboard') {
       await _generateSupervisorLeaderboard();
@@ -512,15 +550,15 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       return;
     }
     if (type == 'readiness_report') {
-      await _generateFormReport('readiness', 'استمارة الجاهزية');
+      await _generateFormReport('readiness', 'استمارة الجاهزية', format: format);
       return;
     }
     if (type == 'supervision_report') {
-      await _generateFormReport('supervision', 'استمارة الإشراف');
+      await _generateFormReport('supervision', 'استمارة الإشراف', format: format);
       return;
     }
     if (type == 'assessment_report') {
-      await _generateFormReport('assessment', 'استمارة تقييم المرافق');
+      await _generateFormReport('assessment', 'استمارة تقييم المرافق', format: format);
       return;
     }
 
@@ -534,22 +572,47 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
 
     if (!mounted) return;
 
+    // ═══ FIX: Wait for analytics data if not yet loaded ═══
+    // Previously: .valueOrNull returned null if provider was still loading →
+    // report was generated with empty {} → all zeros in PDF/Excel.
+    // Now: explicitly await the provider to ensure data is loaded.
+    Map<String, dynamic>? analyticsData;
+    try {
+      analyticsData = await ref.read(
+        dashboardAnalyticsProvider(
+          AnalyticsFilter(
+            campaignType: ref.read(campaignProvider).value,
+            campaignRound: _effectiveRound,
+          ),
+        ).future,
+      ).timeout(const Duration(seconds: 15), onTimeout: () {
+        debugPrint('[Report] Analytics load timed out — proceeding with empty data');
+        return <String, dynamic>{};
+      });
+    } catch (e) {
+      debugPrint('[Report] Analytics load failed: $e — proceeding with empty data');
+      analyticsData = <String, dynamic>{};
+    }
+
+    if (!mounted) return;
+
     await DashboardReportExporter.generateAndShare(
       context: context,
       type: type,
-      analyticsData: ref
-          .read(
-            dashboardAnalyticsProvider(
-              AnalyticsFilter(
-                campaignType: ref.read(campaignProvider).value,
-                campaignRound: _effectiveRound,
-              ),
-            ),
-          )
-          .valueOrNull,
+      format: format,
+      analyticsData: analyticsData,
       fetchGovRanking: () async {
         try {
           return await ref.read(analyticsServiceProvider).getGovernorateRanking(
+            campaignRound: _effectiveRound,
+          );
+        } catch (_) {
+          return null;
+        }
+      },
+      fetchShortages: () async {
+        try {
+          return await ref.read(databaseServiceProvider).getShortages(
             campaignRound: _effectiveRound,
           );
         } catch (_) {
@@ -614,8 +677,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     }
   }
 
-  /// ═══ Per-Form PDF Report ═══
-  Future<void> _generateFormReport(String formType, String formName) async {
+  /// ═══ Per-Form Report (supports PDF / Excel / CSV formats) ═══
+  Future<void> _generateFormReport(String formType, String formName, {String format = 'pdf'}) async {
     if (!mounted) return;
     try {
       final db = ref.read(databaseServiceProvider);
@@ -688,16 +751,24 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
 
       if (!mounted) return;
 
-      // Generate PDF
+      // Generate report in the selected format
       await DashboardReportExporter.generateAndShare(
         context: context,
         type: 'full',
+        format: format,
         analyticsData: analyticsData,
         fetchGovRanking: () async {
           try {
             return await ref.read(analyticsServiceProvider).getGovernorateRanking(
               campaignRound: round,
             );
+          } catch (_) {
+            return null;
+          }
+        },
+        fetchShortages: () async {
+          try {
+            return await db.getShortages(campaignRound: round);
           } catch (_) {
             return null;
           }
@@ -711,6 +782,127 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// ═══ Dynamic Form Report — uses get_form_analytics RPC ═══
+  /// Generates a PDF/Excel/CSV report for a specific form using the
+  /// dynamic analytics data from the server (get_form_analytics RPC).
+  ///
+  /// This is the correct way to export dynamic analytics — the previous
+  /// code path was generating a generic 'full' report with empty data.
+  Future<void> _generateDynamicFormReport({
+    required String formId,
+    required String formTitle,
+    required String format,
+  }) async {
+    if (!mounted) return;
+    final round = _effectiveRound;
+
+    // Show progress
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Text('جاري توليد تقرير $formTitle...',
+                style: const TextStyle(fontFamily: 'Tajawal')),
+          ]),
+          duration: const Duration(seconds: 30),
+          backgroundColor: AppTheme.primaryColor,
+        ),
+      );
+    }
+
+    try {
+      final db = ref.read(databaseServiceProvider);
+
+      // ═══ 1. Call get_form_analytics RPC for dynamic data ═══
+      final rpcResult = await db
+          .rpcSingle('get_form_analytics', params: {
+        'p_form_id': formId,
+        'p_campaign_round': round,
+        'p_governorate_id': null,
+      })
+          .timeout(const Duration(seconds: 20), onTimeout: () {
+        throw Exception('انتهت مهلة تحميل البيانات');
+      });
+
+      final totalSubmissions = (rpcResult['total_submissions'] as num?)?.toInt() ?? 0;
+      final analyticsArray = (rpcResult['analytics'] as List?) ?? [];
+
+      // ═══ 2. Build analyticsData in the format ReportGenerator/ExcelReportGenerator expect ═══
+      final analyticsData = <String, dynamic>{
+        'submissions': {
+          'total': totalSubmissions,
+          'today': 0, // RPC doesn't return today count
+          'byStatus': {
+            'submitted': totalSubmissions, // assume all submitted
+          },
+        },
+        'shortages': {
+          'total': 0,
+          'resolved': 0,
+        },
+        // ═══ Custom section for dynamic field analytics ═══
+        'dynamic_analytics': {
+          'form_id': formId,
+          'form_title': formTitle,
+          'campaign_round': round,
+          'total_submissions': totalSubmissions,
+          'fields': analyticsArray
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList(),
+        },
+      };
+
+      if (!mounted) return;
+
+      // ═══ 3. Generate the file via DashboardReportExporter ═══
+      await DashboardReportExporter.generateAndShare(
+        context: context,
+        type: 'form_report',
+        format: format,
+        analyticsData: analyticsData,
+        fetchGovRanking: () async {
+          try {
+            return await ref.read(analyticsServiceProvider).getGovernorateRanking(
+                  campaignRound: round,
+                );
+          } catch (_) {
+            return null;
+          }
+        },
+        fetchShortages: () async {
+          try {
+            return await db.getShortages(campaignRound: round);
+          } catch (_) {
+            return null;
+          }
+        },
+        // Pass form metadata so the generator can build a custom title
+        readinessData: null,
+        complianceData: null,
+        serviceNumbersData: null,
+        challengesData: null,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل توليد تقرير $formTitle: $e',
+                style: const TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }

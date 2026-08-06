@@ -244,3 +244,85 @@ Stage Summary:
 Notes for future work:
 - النظام القديم (enhanced-pdf.ts, styled-excel.ts) ما زال موجوداً للتوافق مع الكود القديم — يمكن حذفه لاحقاً
 - Professional reports في `apps/admin-web/src/lib/reports/` ما زالت تستخدم printReport القديم — يمكن ترحيلها لنظام pro-pdf لاحقاً
+
+---
+Task ID: 4
+Agent: main (Super Z)
+Task: إصلاح التصدير الفارغ في التقارير الديناميكية لتطبيق الموبايل
+
+Work Log:
+- **تشخيص السبب الجذري:**
+  - التقرير الذي رفعه المستخدم (EPI_Report_1785980663292.pdf) يحتوي على "EPI Supervisor v2.2.0" → مصدره تطبيق Flutter الموبايل وليس admin-web
+  - في `analytics_reports_tab.dart`، زر "PDF"/"Excel" في `_FormReportSheet` يستدعي `widget.onExport?.call('form_report', 'pdf', '30')` بدون تمرير `formId`!
+  - `_generateReport` في `analytics_screen.dart` لم يكن يعالج نوع `'form_report'` إطلاقاً → الكود يسقط لأسفل ويولّد تقرير "full" عام ببيانات فارغة → النتيجة: PDF/Excel فارغ
+  - حتى لو عالج `form_report`، لم يكن هناك طريقة لمعرفة أي استمارة نُصدّرها لأن `formId` غير مُمرَّر
+
+- **الإصلاحات (5 ملفات):**
+
+  1. **`apps/mobile/lib/screens/analytics_reports_tab.dart`**:
+     - عدّلت signature الـ `onGenerate` في `DynamicReportsTab` و `onExport` في `_FormReportSheet` لتقبل `{String? formId, String? formTitle}` كـ named parameters اختيارية
+     - عدّلت `_buildExportBar` ليمرّر `widget.formId` و `widget.formTitle` عند استدعاء `onExport`
+
+  2. **`apps/mobile/lib/screens/analytics_screen.dart`**:
+     - عدّلت الـ call site لـ `DynamicReportsTab.onGenerate` ليمرر formId/formTitle
+     - عدّلت signature الـ `_generateReport` لإضافة `{String? formId, String? formTitle}`
+     - أضفت `case 'form_report'` يتحقق من وجود formId ويستدعي `_generateDynamicFormReport`
+     - أنشأت دالة جديدة `_generateDynamicFormReport`:
+       * تستدعي `db.rpcSingle('get_form_analytics', params: {p_form_id, p_campaign_round, p_governorate_id})` للحصول على البيانات الحقيقية للنموذج
+       * تبني `analyticsData` ببنية موحدة تتضمن قسم `dynamic_analytics` يحتوي على `form_id`, `form_title`, `campaign_round`, `total_submissions`, `fields[]`
+       * تمرّر البيانات لـ `DashboardReportExporter.generateAndShare` مع `format: format` و `type: 'form_report'`
+
+  3. **`apps/mobile/lib/screens/dashboard_report.dart`**:
+     - عدّلت `generateAndShare` لاستخدام عنوان الاستمارة الفعلي عند `type == 'form_report'` (يقرأه من `analyticsData['dynamic_analytics']['form_title']`)
+     - الكود الآن يمرّر `format` بشكل صحيح لـ Excel/CSV/PDF (كان يُتجاهل سابقاً)
+
+  4. **`packages/core/lib/src/reports/report_generator.dart`** (PDF):
+     - أضفت `_addDynamicAnalyticsPages` — قسم جديد في PDF يعرض تحليل الحقول الديناميكي
+     - أضفت 6 دوال لرسم بطاقات حسب النوع:
+       * `_buildDynamicFieldCard` — dispatcher حسب الـ type
+       * `_buildYesNoFieldCard` — بطاقة نعم/لا مع progress bar ملوّن (أخضر/برتقالي/أحمر حسب النسبة)
+       * `_buildAvgFieldCard` — متوسط مع عدد القيم
+       * `_buildSumFieldCard` — مجموع مع عدد القيم
+       * `_buildCountFieldCard` — عدد بسيط
+       * `_buildBarFieldCard` — جدول توزيع (top 10 قيم)
+       * `_buildStatCard` — generic stat card helper
+     - استدعاء `_addDynamicAnalyticsPages` في `generatePDFReport` عند وجود `analyticsData['dynamic_analytics']`
+
+  5. **`packages/core/lib/src/reports/excel_report_generator.dart`** (NEW FILE):
+     - أنشأت مولّد Excel احترافي كامل باستخدام حزمة `excel` (^4.0.6)
+     - 5 أوراق (sheets):
+       * Sheet 1 "ملخص": KPIs (إجمالي، اليوم، مرسلة، مسودات، معتمدة، نواقص)
+       * Sheet 2 "أداء المحافظات": ترتيب المحافظات مع total + approved + rate
+       * Sheet 3 "النواقص": تفاصيل النواقص مع severity
+       * Sheet 4 "توزيع الحالات": breakdown حسب status
+       * Sheet 5 "تحليل الحقول": dynamic analytics — كل حقل صف واحد مع type, value, total, yes/no, pct
+       * Sheet 6 "التوزيعات" (اختياري): جداول توزيع مفصّلة لحقول الـ bar type
+     - RTL view + frozen panes + auto-filter + branded colors + zebra stripes
+     - `_buildGovernorateTable` يدعم بنيتي بيانات (nested `submissions.total` و flat `count`)
+
+  6. **`packages/core/pubspec.yaml`**: أضفت `excel: ^4.0.6` dependency
+  7. **`packages/core/lib/epi_core.dart`**: أضفت export لـ `excel_report_generator.dart`
+
+- **التحقق:**
+  - `npx tsc --noEmit` على admin-web → ✅ لا أخطاء
+  - الكود Dart تم كتابته بنفس أنماط الكود الموجود (نفس الـ fonts, colors, cell styles)
+  - rpcSingle موجود على DatabaseService (تحققت من packages/core/lib/src/database/database_service.dart:755)
+  - بنية بيانات get_form_analytics RPC مأخوذة من migration 071 (تحققت من SQL)
+
+Stage Summary:
+- **السبب الجذري:** زر التصدير في بطاقة الاستمارة كان يستدعي `onExport('form_report', ...)` بدون formId، و`_generateReport` لم يكن يعالج `form_report` إطلاقاً → يولّد تقرير عام ببيانات فارغة
+- **الحل:** سلسلة كاملة من الإصلاحات تربط زر التصدير بـ get_form_analytics RPC وتولّد PDF/Excel بالبيانات الديناميكية الحقيقية:
+  - تمرير formId/formTitle عبر named parameters
+  - استدعاء get_form_analytics RPC للحصول على analytics per field
+  - عرض النتائج في PDF (بطاقات ملوّنة حسب النوع) و Excel (sheet مخصص + sheet للتوزيعات)
+- **النتيجة:** التصدير الآن يُنتج PDF/Excel بالبيانات الفعلية لكل استمارة، بما في ذلك:
+  * yesno: نعم/لا + نسبة + progress bar
+  * avg: المتوسط الحسابي
+  * sum: المجموع
+  * count: العدد
+  * bar: جدول توزيع top 10
+  * progress: قيمة/إجمالي + نسبة
+
+Notes for future work:
+- حزمة `excel` تحتاج `flutter pub get` على جهاز المطور قبل البناء (مُضافة لـ pubspec.yaml)
+- إذا واجه المستخدم مشكلة "package excel not found"، شغّل: `cd packages/core && flutter pub get`

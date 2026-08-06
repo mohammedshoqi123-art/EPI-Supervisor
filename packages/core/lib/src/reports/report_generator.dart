@@ -303,6 +303,15 @@ class ReportGenerator {
       _addAssessmentPages(pdf, assessmentMetrics, title, dateStr);
     }
 
+    // ═══ Section: Dynamic Field Analytics (get_form_analytics RPC) ═══
+    // This is the new dynamic analytics system — each form has its own
+    // analytics config (form_analytics_config table) and the get_form_analytics
+    // RPC returns aggregated data per field.
+    final dynamicAnalytics = analyticsData['dynamic_analytics'] as Map<String, dynamic>?;
+    if (dynamicAnalytics != null && dynamicAnalytics.isNotEmpty) {
+      _addDynamicAnalyticsPages(pdf, dynamicAnalytics, title, dateStr);
+    }
+
     // ═══ Governorate Performance ═══
     if (governorateData != null && governorateData.isNotEmpty) {
       pdf.addPage(
@@ -1028,6 +1037,304 @@ class ReportGenerator {
     );
   }
 
+  // ═══ Dynamic Field Analytics Pages (get_form_analytics RPC) ═══
+  /// Renders dynamic analytics from the get_form_analytics RPC.
+  /// Each field has a type (yesno, avg, sum, count, bar, progress) and
+  /// is rendered with its own visualization.
+  static void _addDynamicAnalyticsPages(
+    pw.Document pdf,
+    Map<String, dynamic> dynamicAnalytics,
+    String title,
+    String dateStr,
+  ) {
+    final formTitle = dynamicAnalytics['form_title'] as String? ?? title;
+    final totalSubs = (dynamicAnalytics['total_submissions'] as num?)?.toInt() ?? 0;
+    final campaignRound = dynamicAnalytics['campaign_round'];
+    final fields = (dynamicAnalytics['fields'] as List?) ?? [];
+
+    if (fields.isEmpty && totalSubs == 0) return;
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        theme: pw.ThemeData.withFont(base: _font!, bold: _boldFont!),
+        header: (ctx) => _buildHeader(title, dateStr),
+        footer: (ctx) => _buildFooter(ctx),
+        build: (ctx) => [
+          pw.Directionality(
+            textDirection: pw.TextDirection.rtl,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // ═══ Section header ═══
+                _sectionHeader('تحليل الحقول الديناميكي'),
+                pw.SizedBox(height: 8),
+                // Form info
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(12),
+                  decoration: pw.BoxDecoration(
+                    color: _bgLight,
+                    borderRadius: pw.BorderRadius.circular(8),
+                    border: pw.Border.all(color: PdfColor.fromInt(0xFFE0E0E0)),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'الاستمارة: $formTitle',
+                        style: pw.TextStyle(
+                          font: _boldFont,
+                          fontSize: 13,
+                          color: _textDark,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'إجمالي الإرساليات: $totalSubs${campaignRound != null ? '  •  الجولة: $campaignRound' : ''}',
+                        style: pw.TextStyle(
+                          font: _font,
+                          fontSize: 11,
+                          color: _textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 16),
+
+                // ═══ Field analytics cards ═══
+                ...fields.map< pw.Widget>((fieldObj) {
+                  final field = fieldObj as Map<String, dynamic>;
+                  return _buildDynamicFieldCard(field);
+                }),
+
+                if (fields.isEmpty)
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(20),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromInt(0xFFFFF8E1),
+                      borderRadius: pw.BorderRadius.circular(8),
+                    ),
+                    child: pw.Text(
+                      'لا توجد حقلات مُهيّأة للتحليل في هذه الاستمارة. يمكن للمدير إضافة حقلات من لوحة التحكم.',
+                      style: pw.TextStyle(font: _font, fontSize: 11, color: _textMuted),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build a single dynamic field analytics card based on field type
+  static pw.Widget _buildDynamicFieldCard(Map<String, dynamic> field) {
+    final type = field['type'] as String? ?? 'unknown';
+    final label = field['field_label'] as String? ??
+        field['field_key'] as String? ??
+        'حقل بدون اسم';
+
+    switch (type) {
+      case 'yesno':
+      case 'progress':
+        return _buildYesNoFieldCard(label, field);
+
+      case 'avg':
+        return _buildAvgFieldCard(label, field);
+
+      case 'sum':
+        return _buildSumFieldCard(label, field);
+
+      case 'count':
+        return _buildCountFieldCard(label, field);
+
+      case 'bar':
+        return _buildBarFieldCard(label, field);
+
+      default:
+        return _buildGenericFieldCard(label, field);
+    }
+  }
+
+  static pw.Widget _buildYesNoFieldCard(String label, Map<String, dynamic> field) {
+    final yes = (field['yes'] as num?)?.toInt() ?? 0;
+    final no = (field['no'] as num?)?.toInt() ?? 0;
+    final total = (field['total'] as num?)?.toInt() ?? 0;
+    final yesPct = (field['yes_pct'] as num?)?.toInt() ??
+        (total > 0 ? ((yes / total) * 100).round() : 0);
+    final progressValue = (field['value'] as num?)?.toInt();
+    final progressPct = (field['percentage'] as num?)?.toInt();
+    // For 'progress' type
+    final isProgress = progressValue != null;
+    final displayValue = isProgress ? progressValue : yes;
+    final displayTotal = isProgress ? total : total;
+    final displayPct = isProgress ? (progressPct ?? yesPct) : yesPct;
+
+    final barColor = displayPct >= 80
+        ? PdfColor.fromInt(0xFF43A047)
+        : displayPct >= 50
+            ? PdfColor.fromInt(0xFFFF9800)
+            : PdfColor.fromInt(0xFFE53935);
+
+    return pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(bottom: 12),
+      padding: const pw.EdgeInsets.all(14),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(8),
+        border: pw.Border.all(color: PdfColor.fromInt(0xFFE0E0E0)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(font: _boldFont, fontSize: 12, color: _textDark),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              if (!isProgress) ...[
+                pw.Text('نعم: $yes', style: pw.TextStyle(font: _font, fontSize: 10, color: PdfColor.fromInt(0xFF43A047))),
+                pw.Text('لا: $no', style: pw.TextStyle(font: _font, fontSize: 10, color: PdfColor.fromInt(0xFFE53935))),
+              ] else ...[
+                pw.Text('القيمة: $displayValue / $displayTotal', style: pw.TextStyle(font: _font, fontSize: 10, color: _textDark)),
+              ],
+              pw.Text('$displayPct%', style: pw.TextStyle(font: _boldFont, fontSize: 14, color: barColor)),
+            ],
+          ),
+          pw.SizedBox(height: 6),
+          // Progress bar
+          pw.ClipRRect(
+            horizontalRadius: 4,
+            verticalRadius: 4,
+            child: pw.Container(
+              height: 8,
+              width: double.infinity,
+              color: PdfColor.fromInt(0xFFE0E0E0),
+              child: pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Container(
+                  height: 8,
+                  width: (displayPct / 100) * 450,
+                  color: barColor,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildAvgFieldCard(String label, Map<String, dynamic> field) {
+    final avg = field['average'] ?? 0;
+    final total = (field['total'] as num?)?.toInt() ?? 0;
+    return _buildStatCard(label, 'المتوسط', avg.toString(), 'من $total قيمة');
+  }
+
+  static pw.Widget _buildSumFieldCard(String label, Map<String, dynamic> field) {
+    final sum = field['sum'] ?? 0;
+    final total = (field['total'] as num?)?.toInt() ?? 0;
+    return _buildStatCard(label, 'المجموع', sum.toString(), 'من $total قيمة');
+  }
+
+  static pw.Widget _buildCountFieldCard(String label, Map<String, dynamic> field) {
+    final count = (field['count'] as num?)?.toInt() ?? 0;
+    return _buildStatCard(label, 'العدد', count.toString(), '');
+  }
+
+  static pw.Widget _buildStatCard(String label, String statLabel, String value, String sub) {
+    return pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(bottom: 12),
+      padding: const pw.EdgeInsets.all(14),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(8),
+        border: pw.Border.all(color: PdfColor.fromInt(0xFFE0E0E0)),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(label, style: pw.TextStyle(font: _boldFont, fontSize: 12, color: _textDark)),
+              if (sub.isNotEmpty) ...[
+                pw.SizedBox(height: 2),
+                pw.Text(sub, style: pw.TextStyle(font: _font, fontSize: 9, color: _textMuted)),
+              ],
+            ],
+          ),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Text(statLabel, style: pw.TextStyle(font: _font, fontSize: 9, color: _textMuted)),
+              pw.Text(value, style: pw.TextStyle(font: _boldFont, fontSize: 20, color: _primaryColor)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildBarFieldCard(String label, Map<String, dynamic> field) {
+    final dist = field['distribution'] as Map<String, dynamic>? ?? {};
+    final total = (field['total'] as num?)?.toInt() ?? 0;
+    if (dist.isEmpty) {
+      return _buildStatCard(label, 'التوزيع', '—', 'لا توجد بيانات');
+    }
+    final entries = dist.entries.toList()
+      ..sort((a, b) => ((b.value as num?)?.toInt() ?? 0).compareTo((a.value as num?)?.toInt() ?? 0));
+    final topEntries = entries.take(10).toList();
+
+    return pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(bottom: 12),
+      padding: const pw.EdgeInsets.all(14),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(8),
+        border: pw.Border.all(color: PdfColor.fromInt(0xFFE0E0E0)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(label, style: pw.TextStyle(font: _boldFont, fontSize: 12, color: _textDark)),
+          pw.SizedBox(height: 4),
+          pw.Text('إجمالي القيم: $total', style: pw.TextStyle(font: _font, fontSize: 9, color: _textMuted)),
+          pw.SizedBox(height: 8),
+          // Table for distribution
+          pw.TableHelper.fromTextArray(
+            border: pw.TableBorder.all(color: PdfColor.fromInt(0xFFE0E0E0), width: 0.5),
+            headerStyle: pw.TextStyle(font: _boldFont, fontSize: 10, color: PdfColors.white),
+            headerDecoration: const pw.BoxDecoration(color: _primaryColor),
+            cellStyle: pw.TextStyle(font: _font, fontSize: 10),
+            cellAlignment: pw.Alignment.centerRight,
+            headerAlignment: pw.Alignment.centerRight,
+            headers: ['القيمة', 'العدد', 'النسبة'],
+            data: topEntries.map((e) {
+              final count = (e.value as num?)?.toInt() ?? 0;
+              final pct = total > 0 ? ((count / total) * 100).round() : 0;
+              return [e.key, count.toString(), '$pct%'];
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildGenericFieldCard(String label, Map<String, dynamic> field) {
+    final total = (field['total'] as num?)?.toInt() ?? 0;
+    return _buildStatCard(label, 'القيم', total.toString(), '');
+  }
+
   static pw.Widget _buildHeader(String title, String date) {
     return pw.Container(
       padding: const pw.EdgeInsets.only(bottom: 8),
@@ -1113,12 +1420,40 @@ class ReportGenerator {
 
   static pw.Widget _buildGovernorateTable(List<Map<String, dynamic>> data) {
     final rows = data.take(30).map((gov) {
-      final name = gov['name_ar'] as String? ?? '-';
-      final subs = gov['submissions'] as Map<String, dynamic>? ?? {};
-      final total = '${subs['total'] ?? 0}';
-      final approved = '${subs['approved'] ?? 0}';
-      final rate = '${subs['approval_rate'] ?? 0}%';
-      return [rate, approved, total, name];
+      final name = gov['name_ar'] as String? ?? gov['name'] as String? ?? '-';
+
+      // ═══ FIX: Handle both data formats ═══
+      // Format 1 (getGovernorateRanking): flat { name_ar, count, approved?, approval_rate? }
+      // Format 2 (legacy/dashboard): nested { name_ar, submissions: { total, approved, approval_rate } }
+      int total;
+      int approved;
+      int rate;
+
+      final subs = gov['submissions'] as Map<String, dynamic>?;
+      if (subs != null) {
+        // Nested format
+        total = (subs['total'] as num?)?.toInt() ?? 0;
+        approved = (subs['approved'] as num?)?.toInt() ?? 0;
+        rate = (subs['approval_rate'] as num?)?.toInt() ?? 0;
+      } else {
+        // Flat format (what getGovernorateRanking actually returns)
+        total = (gov['count'] as num?)?.toInt() ??
+            (gov['total'] as num?)?.toInt() ??
+            (gov['submissions_count'] as num?)?.toInt() ?? 0;
+        approved = (gov['approved'] as num?)?.toInt() ??
+            (gov['approved_count'] as num?)?.toInt() ?? 0;
+        final rateNum = (gov['approval_rate'] as num?)?.toInt() ??
+            (gov['rate'] as num?)?.toInt();
+        if (rateNum != null) {
+          rate = rateNum;
+        } else if (total > 0) {
+          rate = ((approved / total) * 100).round();
+        } else {
+          rate = 0;
+        }
+      }
+
+      return ['$rate%', '$approved', '$total', name];
     }).toList();
 
     return pw.TableHelper.fromTextArray(

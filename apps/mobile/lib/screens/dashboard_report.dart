@@ -35,17 +35,21 @@ class DashboardReportExporter {
   }
 
   /// ═══ Generate and share report (called by standard report types) ═══
+  /// ═══ FIX: Now supports format = 'pdf' | 'excel' | 'csv' ═══
+  /// Previously: format parameter was IGNORED — always generated PDF.
+  /// Now: generates the correct format based on user selection.
   static Future<void> generateAndShare({
     required BuildContext context,
     required String type,
+    String format = 'pdf',
     Map<String, dynamic>? analyticsData,
     Future<List<Map<String, dynamic>>?> Function()? fetchGovRanking,
+    Future<List<Map<String, dynamic>>?> Function()? fetchShortages,
     List? readinessData,
     List? complianceData,
     List? serviceNumbersData,
     List? challengesData,
   }) async {
-    // Delegate to ReportGenerator in core package
     try {
       // Show progress
       if (context.mounted) {
@@ -62,25 +66,65 @@ class DashboardReportExporter {
         );
       }
 
-      // Fetch gov ranking if needed
+      // Fetch supporting data (governorate ranking + shortages)
       List<Map<String, dynamic>>? govRanking;
+      List<Map<String, dynamic>>? shortagesData;
       if (fetchGovRanking != null) {
         govRanking = await fetchGovRanking();
       }
+      if (fetchShortages != null) {
+        shortagesData = await fetchShortages();
+      }
 
-      // Generate PDF report via core package
       final reportInfo = getReportInfo(type);
-      final reportFile = await ReportGenerator.generatePDFReport(
-        title: reportInfo['title']!,
-        subtitle: reportInfo['subtitle']!,
-        period: reportInfo['period']!,
-        analyticsData: analyticsData ?? {},
-        governorateData: govRanking,
-        readinessData: readinessData as List<ReadinessGovData>?,
-        complianceData: complianceData as List<ComplianceSectionData>?,
-        serviceNumbersData: serviceNumbersData as List<ServiceNumberData>?,
-        challengesData: challengesData as List<ChallengeData>?,
-      );
+      // ═══ FIX: For 'form_report' type, use dynamic title from analyticsData ═══
+      final dynamicAnalytics = (analyticsData ?? {})['dynamic_analytics'] as Map<String, dynamic>?;
+      final title = type == 'form_report' && dynamicAnalytics != null
+          ? (dynamicAnalytics['form_title'] as String? ?? 'تقرير الاستمارة')
+          : reportInfo['title']!;
+      final subtitle = type == 'form_report'
+          ? 'تقرير ديناميكي للاستمارة'
+          : reportInfo['subtitle']!;
+      final period = reportInfo['period']!;
+      final safeAnalytics = analyticsData ?? {};
+
+      // ═══ Generate the file based on format ═══
+      File reportFile;
+      String fileLabel;
+
+      if (format == 'excel') {
+        reportFile = await ExcelReportGenerator.generateExcelReport(
+          title: title,
+          subtitle: subtitle,
+          period: period,
+          analyticsData: safeAnalytics,
+          governorateData: govRanking,
+          shortagesData: shortagesData,
+        );
+        fileLabel = 'Excel';
+      } else if (format == 'csv') {
+        reportFile = await ExcelReportGenerator.generateCSVReport(
+          title: title,
+          analyticsData: safeAnalytics,
+          governorateData: govRanking,
+        );
+        fileLabel = 'CSV';
+      } else {
+        // PDF (default)
+        reportFile = await ReportGenerator.generatePDFReport(
+          title: title,
+          subtitle: subtitle,
+          period: period,
+          analyticsData: safeAnalytics,
+          governorateData: govRanking,
+          shortagesData: shortagesData,
+          readinessData: readinessData as List<ReadinessGovData>?,
+          complianceData: complianceData as List<ComplianceSectionData>?,
+          serviceNumbersData: serviceNumbersData as List<ServiceNumberData>?,
+          challengesData: challengesData as List<ChallengeData>?,
+        );
+        fileLabel = 'PDF';
+      }
 
       // Share the file
       await SharePlus.instance.share(ShareParams(files: [XFile(reportFile.path)]));
@@ -89,7 +133,7 @@ class DashboardReportExporter {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ تم توليد التقرير بنجاح'),
+            content: Text('✅ تم توليد تقرير $fileLabel بنجاح'),
             backgroundColor: AppTheme.successColor,
           ),
         );

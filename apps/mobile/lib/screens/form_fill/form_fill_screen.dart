@@ -1414,45 +1414,27 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   void _markChanged() {
     setState(() {
       _hasUnsavedChanges = true;
-      _saveVersion++; // Bump version for change detection
+      _saveVersion++;
     });
 
-    // ═══ FIX: حفظ فوري في Hive — لا debounce ═══
-    // سابقاً: debounce 3 ثوانٍ → crash خلالها = ضياع آخر تغييرات
-    // الآن: حفظ فوري fire-and-forget (لا ي_blocking UI)
-    _saveDraftImmediate();
+    // ═══ FIX: debounce ثاني واحد للحفظ ═══
+    // سابقاً: debounce 3 ثوانٍ طويل
+    // ثم صار حفظ فوري على كل ضغطة = بطء شديد
+    // الآن: debounce ثاني واحد = توازن بين الأمان والسرعة
+    _debounceSaveTimer?.cancel();
+    _debounceSaveTimer = Timer(const Duration(seconds: 1), () {
+      if (_hasUnsavedChanges && _formData.isNotEmpty && mounted) {
+        _autoSave(showFeedback: false);
+      }
+    });
 
-    // ═══ Debounce للسحابة فقط — تقليل API calls ═══
+    // ═══ Debounce للسحابة — 10 ثوانٍ ═══
     _debounceCloudSave?.cancel();
     _debounceCloudSave = Timer(const Duration(seconds: 10), () {
       if (_hasUnsavedChanges && _formData.isNotEmpty && mounted) {
         _backupToCloud();
       }
     });
-  }
-
-  /// ═══ حفظ فوري في Hive (fire-and-forget) ═══
-  /// لا ي_blocking UI — يعمل في microtask
-  void _saveDraftImmediate() {
-    if (_formData.isEmpty) return;
-    if (!mounted) return;
-
-    try {
-      _syncControllersToFormData();
-      final asyncValue = ref.read(offlineManagerProvider);
-      final offline = asyncValue.value;
-      if (offline != null) {
-        offline.saveDraft(
-          _draftId,
-          widget.formId,
-          Map<String, dynamic>.from(_formData),
-        );
-        _hasUnsavedChanges = false;
-        _lastSavedVersion = _saveVersion;
-      }
-    } catch (e) {
-      debugPrint('[ImmediateSave] Failed: $e');
-    }
   }
 
   /// ═══ نسخة احتياطية سحابية (non-blocking) ═══

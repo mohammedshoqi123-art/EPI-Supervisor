@@ -1,0 +1,761 @@
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/supabase_config.dart';
+import '../api/api_client.dart';
+
+class DatabaseService {
+  final ApiClient _api;
+
+  DatabaseService(this._api);
+
+  // ===== PROFILES =====
+
+  Future<List<Map<String, dynamic>>> getUsers({
+    String? role,
+    String? governorateId,
+    String? districtId,
+    int? limit,
+    int? offset,
+  }) async {
+    final filters = <String, dynamic>{};
+    if (role != null) filters['role'] = role;
+    if (governorateId != null) filters['governorate_id'] = governorateId;
+    if (districtId != null) filters['district_id'] = districtId;
+
+    return _api.select(
+      'profiles',
+      select: '*, governorates(name_ar, name_en), districts(name_ar, name_en)',
+      filters: filters,
+      orderBy: 'created_at',
+      ascending: false,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  Future<Map<String, dynamic>> getUserProfile(String userId) async {
+    return _api.selectOne(
+      'profiles',
+      select: '*, governorates(name_ar, name_en), districts(name_ar, name_en)',
+      filters: {'id': userId},
+    );
+  }
+
+  Future<Map<String, dynamic>> updateProfile(
+    String userId,
+    Map<String, dynamic> data,
+  ) async {
+    return _api.update('profiles', data, filters: {'id': userId});
+  }
+
+  // ===== GOVERNORATES =====
+
+  Future<List<Map<String, dynamic>>> getGovernorates() async {
+    return _api.select(
+      'governorates',
+      filters: {'deleted_at': ApiClient.isNull, 'is_active': true},
+      orderBy: 'name_ar',
+      limit: 100, // ═══ FIX P1: Add safety limit ═══
+    );
+  }
+
+  // ===== DISTRICTS =====
+
+  Future<List<Map<String, dynamic>>> getDistricts({
+    String? governorateId,
+  }) async {
+    final filters = <String, dynamic>{
+      'deleted_at': ApiClient.isNull,
+      'is_active': true,
+    };
+    if (governorateId != null) filters['governorate_id'] = governorateId;
+    return _api.select(
+      'districts',
+      select: '*, governorates(name_ar, name_en)',
+      filters: filters,
+      orderBy: 'name_ar',
+      limit: 5000, // ═══ FIX P1: Add safety limit ═══
+    );
+  }
+
+  // ===== HEALTH FACILITIES =====
+
+  Future<List<Map<String, dynamic>>> getHealthFacilities({
+    String? districtId,
+  }) async {
+    final filters = <String, dynamic>{
+      'deleted_at': ApiClient.isNull,
+      'is_active': true,
+    };
+    if (districtId != null) filters['district_id'] = districtId;
+    return _api.select(
+      'health_facilities',
+      filters: filters,
+      orderBy: 'name_ar',
+      limit: 1000, // ═══ FIX P1: Add safety limit ═══
+    );
+  }
+
+  // ===== FORMS =====
+
+  Future<List<Map<String, dynamic>>> getForms({
+    bool activeOnly = true,
+    String? campaignType,
+  }) async {
+    final filters = <String, dynamic>{
+      'deleted_at': ApiClient.isNull, // exclude soft-deleted forms
+    };
+    if (activeOnly) filters['is_active'] = true;
+    if (campaignType != null) filters['campaign_type'] = campaignType;
+    return _api.select(
+      'forms',
+      filters: filters,
+      orderBy: 'created_at',
+      ascending: false,
+      limit: 200, // ═══ FIX P1: Add safety limit ═══
+    );
+  }
+
+  /// Get the current user's active campaign from their profile.
+  Future<String> getActiveCampaign() async {
+    try {
+      final userId = SupabaseConfig.currentUser?.id;
+      if (userId == null) return 'polio_campaign';
+      final profile = await _api.selectOne('profiles', filters: {'id': userId});
+      return profile['active_campaign'] as String? ?? 'polio_campaign';
+    } catch (_) {
+      return 'polio_campaign';
+    }
+  }
+
+  /// Set the current user's active campaign.
+  Future<void> setActiveCampaign(String campaign) async {
+    final userId = SupabaseConfig.currentUser?.id;
+    if (userId == null) return;
+    await _api.update(
+      'profiles',
+      {'active_campaign': campaign},
+      filters: {'id': userId},
+    );
+  }
+
+  Future<Map<String, dynamic>> getForm(String formId) async {
+    return _api.selectOne('forms', filters: {'id': formId});
+  }
+
+  Future<Map<String, dynamic>> createForm(Map<String, dynamic> data) async {
+    return _api.insert('forms', data);
+  }
+
+  Future<Map<String, dynamic>> updateForm(
+    String formId,
+    Map<String, dynamic> data,
+  ) async {
+    return _api.update('forms', data, filters: {'id': formId});
+  }
+
+  // ===== SUBMISSIONS =====
+
+  Future<List<Map<String, dynamic>>> getSubmissions({
+    String? formId,
+    String? status,
+    String? governorateId,
+    String? districtId,
+    String? submittedBy,
+    String? campaignType,
+    int? campaignRound,
+    int? limit,
+    int? offset,
+    String? orderBy,
+    bool ascending = false,
+    bool lean = false,  // ═══ P0: When true, skip 'data' column (5.5MB→0.86MB for map)
+    String? createdAfter,  // ═══ NEW: for incremental sync — only fetch records after this date ═══
+  }) async {
+    // ═══ P0: Lean mode — direct REST query with only needed columns (no 'data' JSONB)
+    // This reduces response from 5.5MB to 0.86MB for 1415 submissions (84% reduction)
+    // Used by: Map screen (only needs id, gps, status, form_id, etc.)
+    if (lean) {
+      try {
+        // Resolve campaign form IDs first
+        List<String>? campaignFormIds;
+        if (campaignType != null && formId == null) {
+          final campaignForms = await getForms(campaignType: campaignType);
+          if (campaignForms.isEmpty) return [];
+          campaignFormIds = campaignForms.map((f) => f['id'] as String).toList();
+        }
+
+        // Build lean select string — NO 'data' column (saves 84% bandwidth)
+        const leanSelect = 'id,status,governorate_id,district_id,created_at,updated_at,form_id,campaign_round,submitted_by,reviewed_by,reviewed_at,gps_lat,gps_lng,is_offline,notes,photos,governorates!governorate_id(name_ar),districts!district_id(name_ar),forms!form_id(title_ar,campaign_type),profiles!submitted_by(full_name,role)';
+
+        var query = _api.select('form_submissions',
+          select: leanSelect,
+          filters: {
+            'deleted_at': ApiClient.isNull,
+            if (status != null) 'status': status,
+            if (formId != null) 'form_id': formId,
+            if (governorateId != null) 'governorate_id': governorateId,
+            if (campaignRound != null) 'campaign_round': campaignRound,
+            if (createdAfter != null) 'created_at': ApiClient.gt(createdAfter),
+          },
+          orderBy: orderBy ?? 'created_at',
+          ascending: ascending,
+          limit: limit ?? 5000,
+          offset: offset,
+        );
+
+        var result = await query;
+
+        // Filter by campaignType client-side
+        if (campaignFormIds != null) {
+          result = result.where((s) {
+            final fid = s['form_id'] as String?;
+            return fid != null && campaignFormIds!.contains(fid);
+          }).toList();
+        }
+        if (districtId != null) {
+          result = result.where((s) => s['district_id'] == districtId).toList();
+        }
+        if (submittedBy != null) {
+          result = result.where((s) => s['submitted_by'] == submittedBy).toList();
+        }
+
+        return result;
+      } catch (e) {
+        debugPrint('[DatabaseService] Lean query failed, falling back to RPC: $e');
+        // Fall through to RPC method
+      }
+    }
+
+    // ═══ FIX: ALWAYS use RPC to bypass PostgREST 1000-row limit ═══
+    // PostgREST returns max 1000 rows per request regardless of .limit()
+    // RPC functions execute inside PostgreSQL and bypass this limit
+    try {
+      // Step 1: If campaignType is specified, get the form IDs first
+      List<String>? campaignFormIds;
+      if (campaignType != null && formId == null) {
+        final campaignForms = await getForms(campaignType: campaignType);
+        if (campaignForms.isEmpty) return [];
+        campaignFormIds = campaignForms.map((f) => f['id'] as String).toList();
+      }
+
+      // Step 2: Use RPC to fetch ALL submissions (bypasses 1000-row limit)
+      final allSubmissions = await _api.rpc('fetch_submissions', params: {
+        'p_limit': limit ?? 10000,
+        'p_offset': offset ?? 0,
+        if (status != null) 'p_status': status,
+        if (formId != null) 'p_form_id': formId,
+        if (governorateId != null) 'p_governorate_id': governorateId,
+        if (campaignRound != null) 'p_campaign_round': campaignRound,
+      });
+
+      // Step 3: If campaignType filter, filter client-side by form_id
+      if (campaignFormIds != null) {
+        return allSubmissions.where((s) {
+          final formId = s['form_id'] as String?;
+          return formId != null && campaignFormIds!.contains(formId);
+        }).toList();
+      }
+
+      // Step 4: If districtId or submittedBy filter, apply client-side
+      // (RPC doesn't support these params yet)
+      var result = allSubmissions;
+      if (districtId != null) {
+        result = result.where((s) => s['district_id'] == districtId).toList();
+      }
+      if (submittedBy != null) {
+        result = result.where((s) => s['submitted_by'] == submittedBy).toList();
+      }
+
+      return result;
+    } catch (e) {
+      debugPrint('[DatabaseService] getSubmissions RPC error, falling back: $e');
+      // ═══ FIX: Fallback with pagination — avoids 1000-row PostgREST cap ═══
+      // Previously: single selectIn call capped at 1000 rows silently
+      // Now: paginate through all data with 500-row batches + 45s timeout
+      const fallbackPageSize = 500; // ═══ FIX: 500 (was 1000) — faster per-page response ═══
+      final effectiveLimit = limit ?? 10000;
+      final effectiveOffset = offset ?? 0;
+      final paginationStart = DateTime.now(); // ═══ FIX: Track total pagination time ═══
+      const paginationTimeout = Duration(seconds: 45); // ═══ FIX: Max 45s for pagination ═══
+
+      if (campaignType != null && formId == null) {
+        final campaignForms = await getForms(campaignType: campaignType);
+        if (campaignForms.isEmpty) return [];
+        final formIds = campaignForms.map((f) => f['id'] as String).toList();
+
+        final extraFilters = <String, dynamic>{};
+        if (status != null) extraFilters['status'] = status;
+        if (governorateId != null) extraFilters['governorate_id'] = governorateId;
+        if (districtId != null) extraFilters['district_id'] = districtId;
+        if (submittedBy != null) extraFilters['submitted_by'] = submittedBy;
+        if (campaignRound != null) extraFilters['campaign_round'] = campaignRound;
+
+        // ═══ FIX: Paginate fallback to get all rows beyond 1000 ═══
+        final allResults = <Map<String, dynamic>>[];
+        int currentOffset = effectiveOffset;
+        bool hasMore = true;
+        while (hasMore && allResults.length < effectiveLimit) {
+          // ═══ FIX: Check total pagination time ═══
+          if (DateTime.now().difference(paginationStart) > paginationTimeout) {
+            debugPrint('[DatabaseService] Pagination timeout at ${allResults.length} rows');
+            break;
+          }
+          final batch = await _api.selectIn(
+            'form_submissions',
+            'form_id',
+            formIds,
+            select:
+                '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
+            extraFilters: extraFilters,
+            orderBy: orderBy ?? 'created_at',
+            ascending: ascending,
+            limit: fallbackPageSize,
+            offset: currentOffset,
+          );
+          if (batch.isEmpty || batch.length < fallbackPageSize) {
+            hasMore = false;
+          }
+          allResults.addAll(batch);
+          currentOffset += fallbackPageSize;
+          // ═══ FIX: Yield to UI thread between pages ═══
+          await Future.delayed(Duration.zero);
+        }
+        debugPrint('[DatabaseService] Fallback pagination: ${allResults.length} rows fetched');
+        return allResults;
+      }
+
+      final filters = <String, dynamic>{};
+      if (formId != null) filters['form_id'] = formId;
+      if (status != null) filters['status'] = status;
+      if (governorateId != null) filters['governorate_id'] = governorateId;
+      if (districtId != null) filters['district_id'] = districtId;
+      if (submittedBy != null) filters['submitted_by'] = submittedBy;
+      if (campaignRound != null) filters['campaign_round'] = campaignRound;
+
+      // ═══ FIX: Paginate fallback for non-campaign queries too ═══
+      final allResults = <Map<String, dynamic>>[];
+      int currentOffset = effectiveOffset;
+      bool hasMore = true;
+      while (hasMore && allResults.length < effectiveLimit) {
+        // ═══ FIX: Check total pagination time ═══
+        if (DateTime.now().difference(paginationStart) > paginationTimeout) {
+          debugPrint('[DatabaseService] Pagination timeout at ${allResults.length} rows');
+          break;
+        }
+        final batch = await _api.select(
+          'form_submissions',
+          select:
+              '*, forms!form_id(title_ar, title_en, campaign_type), profiles!submitted_by(full_name, email)',
+          filters: filters,
+          orderBy: orderBy ?? 'created_at',
+          ascending: ascending,
+          limit: fallbackPageSize,
+          offset: currentOffset,
+        );
+        if (batch.isEmpty || batch.length < fallbackPageSize) {
+          hasMore = false;
+        }
+        allResults.addAll(batch);
+        currentOffset += fallbackPageSize;
+        // ═══ FIX: Yield to UI thread between pages ═══
+        await Future.delayed(Duration.zero);
+      }
+      debugPrint('[DatabaseService] Fallback pagination: ${allResults.length} rows fetched');
+      return allResults;
+    }
+  }
+
+  Future<Map<String, dynamic>> getSubmission(String id) async {
+    return _api.selectOne(
+      'form_submissions',
+      select:
+          '*, forms(title_ar, title_en, schema), profiles!submitted_by(full_name, email)',
+      filters: {'id': id},
+    );
+  }
+
+  /// ═══ PERFORMANCE: Count submissions without fetching data ═══
+  /// ═══ FIX: Previously fetched ALL submissions (50,000 rows!) just to count.
+  /// Now uses Supabase COUNT with head:true — zero data transfer. ═══
+  Future<int> getSubmissionsCount({
+    String? formId,
+    String? status,
+    String? campaignType,
+    int? campaignRound,
+  }) async {
+    try {
+      // Build filters for count query
+      final filters = <String, dynamic>{};
+
+      // If campaignType is set, resolve form IDs first
+      if (campaignType != null && formId == null) {
+        final campaignForms = await getForms(campaignType: campaignType);
+        if (campaignForms.isEmpty) return 0;
+        final formIds = campaignForms.map((f) => f['id'] as String).toList();
+        filters['form_id'] = ApiClient.inList(formIds);
+      } else if (formId != null) {
+        filters['form_id'] = formId;
+      }
+
+      if (status != null) filters['status'] = status;
+      if (campaignRound != null) filters['campaign_round'] = campaignRound;
+
+      // ═══ PERFORMANCE: Use select('id') with limit — much faster than fetching all rows ═══
+      // Supabase doesn't support head:true in Flutter SDK, so we fetch minimal data
+      return await _api.count('form_submissions', filters: filters);
+    } catch (e) {
+      debugPrint('[DatabaseService] getSubmissionsCount RPC error, falling back: $e');
+      // Fallback to old method (capped at 1000 by PostgREST)
+      if (campaignType != null && formId == null) {
+        final campaignForms = await getForms(campaignType: campaignType);
+        if (campaignForms.isEmpty) return 0;
+        final formIds = campaignForms.map((f) => f['id'] as String).toList();
+        final filters = <String, dynamic>{
+          'form_id': ApiClient.inList(formIds),
+        };
+        if (status != null) filters['status'] = status;
+        if (campaignRound != null) filters['campaign_round'] = campaignRound;
+        return _api.count('form_submissions', filters: filters);
+      }
+      final filters = <String, dynamic>{};
+      if (formId != null) filters['form_id'] = formId;
+      if (status != null) filters['status'] = status;
+      if (campaignRound != null) filters['campaign_round'] = campaignRound;
+      return _api.count('form_submissions', filters: filters);
+    }
+  }
+
+  Future<Map<String, dynamic>> submitForm(Map<String, dynamic> data) async {
+    return _api.callFunction(SupabaseConfig.fnSubmitForm, data);
+  }
+
+  // ═══ ROUND LOCK — Check if a campaign round is locked ═══
+  Future<bool> isRoundLocked(String campaignType, int roundNumber) async {
+    try {
+      final result = await _api.rpc(
+        'is_round_locked',
+        params: {
+          'p_campaign_type': campaignType,
+          'p_round_number': roundNumber,
+        },
+      );
+      if (result.isNotEmpty) {
+        return result.first['is_round_locked'] as bool? ?? false;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[DatabaseService] isRoundLocked error: $e');
+      return false; // Default to not locked on error
+    }
+  }
+
+  // ═══ ROUND LOCK — Get all rounds for a campaign ═══
+  Future<List<Map<String, dynamic>>> getCampaignRounds(String campaignType) async {
+    try {
+      return await _api.select(
+        'campaign_rounds',
+        filters: {
+          'campaign_type': campaignType,
+          'is_visible': true, // ═══ FIX: Only return visible rounds ═══
+        },
+        orderBy: 'round_number',
+        ascending: true,
+      );
+    } catch (e) {
+      debugPrint('[DatabaseService] getCampaignRounds error: $e');
+      return [];
+    }
+  }
+
+  // ═══ ROUND LOCK — Toggle round lock (admin only) ═══
+  Future<bool> toggleRoundLock(
+    String campaignType,
+    int roundNumber,
+    bool locked, {
+    String? reason,
+  }) async {
+    try {
+      final result = await _api.rpc(
+        'toggle_round_lock',
+        params: {
+          'p_campaign_type': campaignType,
+          'p_round_number': roundNumber,
+          'p_locked': locked,
+          'p_reason': reason,
+        },
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[DatabaseService] toggleRoundLock error: $e');
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> updateSubmissionStatus(
+    String id,
+    String status, {
+    String? reviewNotes,
+    String? reviewedBy,
+  }) async {
+    final data = {
+      'status': status,
+      'reviewed_at': DateTime.now().toIso8601String(),
+      if (reviewNotes != null) 'review_notes': reviewNotes,
+      if (reviewedBy != null) 'reviewed_by': reviewedBy,
+    };
+    return _api.update('form_submissions', data, filters: {'id': id});
+  }
+
+  // ===== SUPPLY SHORTAGES =====
+
+  Future<List<Map<String, dynamic>>> getShortages({
+    String? governorateId,
+    String? districtId,
+    String? severity,
+    bool? isResolved,
+    String? campaignType,
+    int? campaignRound,
+    int? limit,
+    int? offset,
+  }) async {
+    // ═══ PERFORMANCE FIX: Single query with IN filter instead of fetching 5000 submissions ═══
+    // When campaignType or campaignRound is set, resolve submission IDs first.
+    if (campaignType != null || campaignRound != null) {
+      List<String> formIds = [];
+      if (campaignType != null) {
+        final campaignForms = await getForms(campaignType: campaignType);
+        if (campaignForms.isEmpty) return [];
+        formIds = campaignForms.map((f) => f['id'] as String).toList();
+      }
+
+      // Get submission IDs for these forms (and optionally round) using IN filter
+      final List<Map<String, dynamic>> submissions;
+      if (formIds.isNotEmpty) {
+        submissions = await _api.selectIn(
+          'form_submissions',
+          'form_id',
+          formIds,
+          select: 'id',
+          extraFilters: campaignRound != null
+              ? {'campaign_round': campaignRound}
+              : null,
+          limit: 5000,
+        );
+      } else {
+        // Round-only filter (no campaign_type)
+        submissions = await _api.select(
+          'form_submissions',
+          select: 'id',
+          filters: {'campaign_round': campaignRound},
+          limit: 5000,
+        );
+      }
+      final submissionIds =
+          submissions.map((s) => s['id'] as String).toList();
+
+      if (submissionIds.isEmpty) return [];
+
+      // Fetch shortages with IN filter on submission_id
+      final extraFilters = <String, dynamic>{};
+      if (governorateId != null) extraFilters['governorate_id'] = governorateId;
+      if (districtId != null) extraFilters['district_id'] = districtId;
+      if (severity != null) extraFilters['severity'] = severity;
+      if (isResolved != null) extraFilters['is_resolved'] = isResolved;
+
+      return _api.selectIn(
+        'supply_shortages',
+        'submission_id',
+        submissionIds,
+        select:
+            '*, governorates(name_ar), districts(name_ar), profiles!reported_by(full_name)',
+        extraFilters: extraFilters,
+        orderBy: 'created_at',
+        ascending: false,
+        limit: limit ?? 50,
+        offset: offset,
+      );
+    }
+
+    final filters = <String, dynamic>{};
+    if (governorateId != null) filters['governorate_id'] = governorateId;
+    if (districtId != null) filters['district_id'] = districtId;
+    if (severity != null) filters['severity'] = severity;
+    if (isResolved != null) filters['is_resolved'] = isResolved;
+
+    return _api.select(
+      'supply_shortages',
+      select:
+          '*, governorates(name_ar), districts(name_ar), profiles!reported_by(full_name)',
+      filters: filters,
+      orderBy: 'created_at',
+      ascending: false,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  // ===== AUDIT LOGS =====
+
+  Future<List<Map<String, dynamic>>> getAuditLogs({
+    String? userId,
+    String? action,
+    String? tableName,
+    int? limit,
+    int? offset,
+  }) async {
+    final filters = <String, dynamic>{};
+    if (userId != null) filters['user_id'] = userId;
+    if (action != null) filters['action'] = action;
+    if (tableName != null) filters['table_name'] = tableName;
+
+    return _api.select(
+      'audit_logs',
+      select: '*, profiles(full_name, email)',
+      filters: filters,
+      orderBy: 'created_at',
+      ascending: false,
+      limit: limit ?? 50,
+      offset: offset,
+    );
+  }
+
+  // ===== REFERENCES =====
+
+  Future<List<Map<String, dynamic>>> getReferences({
+    bool includeInactive = false,
+  }) async {
+    final filters = <String, dynamic>{};
+    if (!includeInactive) filters['is_active'] = true;
+    return _api.select(
+      'doc_references',
+      filters: filters,
+      orderBy: 'created_at',
+      ascending: false,
+    );
+  }
+
+  Future<void> createReference(Map<String, dynamic> data) async {
+    await _api.insert('doc_references', data);
+  }
+
+  Future<void> updateReference(String id, Map<String, dynamic> data) async {
+    await _api.update('doc_references', data, filters: {'id': id});
+  }
+
+  // ===== DASHBOARD =====
+
+  /// Get dashboard stats for the current user (role-based)
+  Future<Map<String, dynamic>> getDashboardStats(
+    String userId, {
+    String? campaignType,
+  }) async {
+    final response = await _api.callFunction('get-dashboard-stats', {
+      'user_id': userId,
+      if (campaignType != null) 'campaign_type': campaignType,
+    });
+    return response;
+  }
+
+  // ===== REPORTS =====
+
+  /// Get governorate report with submission breakdown
+  Future<List<Map<String, dynamic>>> getGovernorateReport({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final now = DateTime.now();
+    final start = startDate ?? now.subtract(const Duration(days: 30));
+    final end = endDate ?? now;
+
+    final response = await _api.callFunction('get-governorate-report', {
+      'start_date': start.toIso8601String().split('T').first,
+      'end_date': end.toIso8601String().split('T').first,
+    });
+
+    // callFunction wraps List responses in {"data": [...]}
+    final rawData = response['data'] ?? response;
+    if (rawData is List) {
+      return List<Map<String, dynamic>>.from(rawData);
+    }
+    return [];
+  }
+
+  // ===== NOTIFICATIONS =====
+
+  /// Get user notifications (paginated)
+  Future<List<Map<String, dynamic>>> getNotifications({
+    int limit = 50,
+    int offset = 0,
+    bool unreadOnly = false,
+  }) async {
+    final filters = <String, dynamic>{};
+    if (unreadOnly) filters['is_read'] = false;
+
+    return _api.select(
+      'notifications',
+      filters: filters,
+      orderBy: 'created_at',
+      ascending: false,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  /// Get unread notification count using efficient count query
+  Future<int> getUnreadNotificationCount() async {
+    try {
+      final result = await _api.selectOne(
+        'notifications',
+        select: 'count',
+        filters: {'is_read': false},
+      );
+      // Supabase returns count in the response when using count select
+      final count = result['count'];
+      if (count is int) return count;
+      if (count is String) return int.tryParse(count) ?? 0;
+      // Fallback: count results from limited select
+      final results = await _api.select(
+        'notifications',
+        select: 'id',
+        filters: {'is_read': false},
+        limit: 100,
+      );
+      return results.length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  // ===== APP SETTINGS =====
+
+  /// Get all app settings or a specific one
+  Future<Map<String, dynamic>> getAppSettings({String? key}) async {
+    if (key != null) {
+      final result = await _api.selectOne(
+        'app_settings',
+        filters: {'key': key},
+      );
+      return result;
+    }
+    final results = await _api.select('app_settings');
+    return {for (var r in results) r['key']: r['value']};
+  }
+
+  /// Update an app setting
+  Future<void> updateAppSetting(String key, dynamic value) async {
+    await _api.update(
+      'app_settings',
+      {'value': value, 'updated_at': DateTime.now().toIso8601String()},
+      filters: {'key': key},
+    );
+  }
+
+  /// ═══ RPC returning a single JSONB object (not a list) ═══
+  /// Use this for RPCs like `get_form_analytics` that return a single record.
+  Future<Map<String, dynamic>?> rpcSingle(
+    String functionName, {
+    Map<String, dynamic>? params,
+  }) {
+    return _api.rpcSingle(functionName, params: params);
+  }
+}

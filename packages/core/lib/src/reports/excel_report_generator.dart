@@ -39,6 +39,15 @@ class ExcelReportGenerator {
     return ExcelColor.fromValue(value);
   }
 
+  /// ═══ FIX: Safely set RTL on a sheet (sheetProperties may be null) ═══
+  /// In excel ^4.0.6, Sheet.sheetProperties is initialized when the sheet
+  /// is created via excel['name'], but to be defensive we use null-aware access.
+  static void _setRtl(Sheet sheet) {
+    sheet.sheetProperties.sheetViews = [
+      SheetView(rightToLeft: true),
+    ];
+  }
+
   /// Generate a comprehensive Excel report with multiple sheets.
   ///
   /// [title] - Report title (used in cover sheet and file name)
@@ -124,9 +133,7 @@ class ExcelReportGenerator {
     final sheet = excel[sheetName];
 
     // Set RTL
-    sheet.sheetProperties.sheetViews = [
-      SheetView(rightToLeft: true),
-    ];
+    _setRtl(sheet);
 
     // ═══ Title row ═══
     sheet.appendRow([
@@ -276,9 +283,7 @@ class ExcelReportGenerator {
     const sheetName = 'أداء المحافظات';
     final sheet = excel[sheetName];
 
-    sheet.sheetProperties.sheetViews = [
-      SheetView(rightToLeft: true),
-    ];
+    _setRtl(sheet);
 
     // Title
     sheet.appendRow([TextCellValue('أداء المحافظات — EPI Supervisor')]);
@@ -394,9 +399,7 @@ class ExcelReportGenerator {
     const sheetName = 'النواقص';
     final sheet = excel[sheetName];
 
-    sheet.sheetProperties.sheetViews = [
-      SheetView(rightToLeft: true),
-    ];
+    _setRtl(sheet);
 
     sheet.appendRow([TextCellValue('تفاصيل النواقص — EPI Supervisor')]);
     sheet.cell(CellIndex.indexByString('A1')).cellStyle = CellStyle(
@@ -486,9 +489,7 @@ class ExcelReportGenerator {
     const sheetName = 'توزيع الحالات';
     final sheet = excel[sheetName];
 
-    sheet.sheetProperties.sheetViews = [
-      SheetView(rightToLeft: true),
-    ];
+    _setRtl(sheet);
 
     sheet.appendRow([TextCellValue('توزيع الإرساليات حسب الحالة')]);
     sheet.cell(CellIndex.indexByString('A1')).cellStyle = CellStyle(
@@ -594,9 +595,7 @@ class ExcelReportGenerator {
     const sheetName = 'تحليل الحقول';
     final sheet = excel[sheetName];
 
-    sheet.sheetProperties.sheetViews = [
-      SheetView(rightToLeft: true),
-    ];
+    _setRtl(sheet);
 
     final formTitle = dynamicAnalytics['form_title'] as String? ?? 'تقرير';
     final totalSubs = (dynamicAnalytics['total_submissions'] as num?)?.toInt() ?? 0;
@@ -783,9 +782,7 @@ class ExcelReportGenerator {
     const sheetName = 'التوزيعات';
     final sheet = excel[sheetName];
 
-    sheet.sheetProperties.sheetViews = [
-      SheetView(rightToLeft: true),
-    ];
+    _setRtl(sheet);
 
     sheet.appendRow([TextCellValue('توزيع القيم للحقول المتعددة')]);
     sheet.cell(CellIndex.indexByString('A1')).cellStyle = CellStyle(

@@ -835,8 +835,12 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         throw Exception('انتهت مهلة تحميل البيانات');
       });
 
-      final totalSubmissions = (rpcResult['total_submissions'] as num?)?.toInt() ?? 0;
-      final analyticsArray = (rpcResult['analytics'] as List?) ?? [];
+      // rpcSingle returns Map<String, dynamic>? — guard against null
+      final safeRpcResult = rpcResult ?? <String, dynamic>{};
+      final totalSubmissions =
+          (safeRpcResult['total_submissions'] as num?)?.toInt() ?? 0;
+      final analyticsArray =
+          (safeRpcResult['analytics'] as List?) ?? [];
 
       // ═══ 2. Build analyticsData in the format ReportGenerator/ExcelReportGenerator expect ═══
       final analyticsData = <String, dynamic>{

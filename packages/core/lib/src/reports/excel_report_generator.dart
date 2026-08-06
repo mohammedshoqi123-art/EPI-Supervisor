@@ -116,16 +116,19 @@ class ExcelReportGenerator {
               : TextCellValue(value?.toString() ?? ''),
     );
     final cell = sheet.cell(cellIndex);
+    // ═══ FIX: excel 4.0.6 CellStyle expects ExcelColor (non-nullable) ═══
+    // ExcelColor.fromHexString returns ExcelColor?, so use fallback to white
+    final fColor = fontColorHex != null
+        ? (ExcelColor.fromHexString(fontColorHex) ?? ExcelColor.fromHexString(_textDark)!)
+        : ExcelColor.fromHexString(_textDark)!;
+    final bgColor = bgColorHex != null
+        ? (ExcelColor.fromHexString(bgColorHex) ?? ExcelColor.fromHexString(_white)!)
+        : ExcelColor.fromHexString(_white)!;
     cell.cellStyle = CellStyle(
       bold: bold,
       fontSize: fontSize.toInt(),
-      // ═══ FIX: excel 4.0.6 expects ExcelColor, not String ═══
-      fontColorHex: fontColorHex != null
-          ? ExcelColor.fromHexString(fontColorHex)
-          : null,
-      backgroundColorHex: bgColorHex != null
-          ? ExcelColor.fromHexString(bgColorHex)
-          : null,
+      fontColorHex: fColor,
+      backgroundColorHex: bgColor,
       horizontalAlign: HorizontalAlign.Left,
       verticalAlign: VerticalAlign.Center,
     );

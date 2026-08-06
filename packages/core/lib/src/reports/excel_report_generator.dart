@@ -118,9 +118,14 @@ class ExcelReportGenerator {
     final cell = sheet.cell(cellIndex);
     cell.cellStyle = CellStyle(
       bold: bold,
-      fontSize: fontSize,
-      fontColorHex: fontColorHex,
-      backgroundColorHex: bgColorHex,
+      fontSize: fontSize.toInt(),
+      // ═══ FIX: excel 4.0.6 expects ExcelColor, not String ═══
+      fontColorHex: fontColorHex != null
+          ? ExcelColor.fromHexString(fontColorHex)
+          : null,
+      backgroundColorHex: bgColorHex != null
+          ? ExcelColor.fromHexString(bgColorHex)
+          : null,
       horizontalAlign: HorizontalAlign.Left,
       verticalAlign: VerticalAlign.Center,
     );

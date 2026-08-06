@@ -1,7 +1,9 @@
 name: Build APK (Staging)
 
 on:
-  workflow_dispatch:
+  # DISABLED — staging builds disabled, use CI/CD workflow
+  # workflow_dispatch:
+  workflow_dispatch: null
 
 permissions:
   contents: write

@@ -6,56 +6,24 @@ import 'package:excel/excel.dart';
 ///  Excel Report Generator for EPI Supervisor (Flutter Mobile)
 ///  مُولّد تقارير Excel لتطبيق EPI Supervisor الموبايل
 /// ═══════════════════════════════════════════════════════════════
-///  Generates professional .xlsx files with:
-///  - Branded header colors (matching EPI teal theme)
-///  - RTL sheet direction
-///  - Auto-width columns
-///  - Frozen header row
-///  - Auto-filter
-///  - Multiple sheets support
-///
-///  Why this exists:
-///    - The mobile app previously only supported PDF reports.
-///      When user selected "Excel" or "CSV" format in the export sheet,
-///      the format parameter was IGNORED and a PDF was generated instead.
-///    - This module provides real .xlsx generation using the `excel` package.
+///  Uses the `excel` (^4.0.6) package to generate .xlsx files.
+///  Multiple sheets, RTL support, branded colors, frozen headers.
 /// ═══════════════════════════════════════════════════════════════
 
 class ExcelReportGenerator {
-  // Brand colors (matching ReportGenerator)
-  static const _primaryColorHex = '#00897B';
-  static const _primaryDarkHex = '#00695C';
-  static const _accentColorHex = '#E53935';
-  static const _successColorHex = '#43A047';
-  static const _warningColorHex = '#FF8F00';
-  static const _bgLightHex = '#F5F7FA';
-  static const _textDarkHex = '#212121';
-  static const _textMutedHex = '#757575';
-
-  /// Convert hex color (#RRGGBB) to ExcelColor
-  static ExcelColor _hexToExcelColor(String hex) {
-    final clean = hex.replaceAll('#', '');
-    final value = int.parse('FF$clean', radix: 16);
-    return ExcelColor.fromValue(value);
-  }
-
-  /// ═══ FIX: Safely set RTL on a sheet (sheetProperties may be null) ═══
-  /// In excel ^4.0.6, Sheet.sheetProperties is initialized when the sheet
-  /// is created via excel['name'], but to be defensive we use null-aware access.
-  static void _setRtl(Sheet sheet) {
-    sheet.sheetProperties.sheetViews = [
-      SheetView(rightToLeft: true),
-    ];
-  }
+  // Brand colors as hex strings (with FF alpha prefix for Excel)
+  static const _primaryColor = 'FF00897B';
+  static const _primaryDark = 'FF00695C';
+  static const _accentColor = 'FFE53935';
+  static const _successColor = 'FF43A047';
+  static const _warningColor = 'FFFF8F00';
+  static const _bgLight = 'FFF5F7FA';
+  static const _textDark = 'FF212121';
+  static const _textMuted = 'FF757575';
+  static const _white = 'FFFFFFFF';
+  static const _borderColor = 'FFE0E0E0';
 
   /// Generate a comprehensive Excel report with multiple sheets.
-  ///
-  /// [title] - Report title (used in cover sheet and file name)
-  /// [subtitle] - Report subtitle
-  /// [period] - Time period covered
-  /// [analyticsData] - Analytics data from dashboardAnalyticsProvider
-  /// [governorateData] - List of governorate rankings from getGovernorateRanking
-  /// [shortagesData] - Optional shortages data
   static Future<File> generateExcelReport({
     required String title,
     required String subtitle,
@@ -67,13 +35,13 @@ class ExcelReportGenerator {
   }) async {
     final excel = Excel.createExcel();
 
-    // ═══ Remove default sheet, we'll add our own ═══
+    // Delete default sheet
     final defaultSheet = excel.getDefaultSheet();
     if (defaultSheet != null) {
       excel.delete(defaultSheet);
     }
 
-    // ═══ Sheet 1: Cover / Summary ═══
+    // ═══ Sheet 1: Summary ═══
     _buildSummarySheet(excel, title, subtitle, period, analyticsData);
 
     // ═══ Sheet 2: Governorate Performance ═══
@@ -86,26 +54,29 @@ class ExcelReportGenerator {
       _buildShortagesSheet(excel, shortagesData);
     }
 
-    // ═══ Sheet 4: Submissions by Status ═══
+    // ═══ Sheet 4: Status Distribution ═══
     _buildStatusSheet(excel, analyticsData);
 
-    // ═══ Sheet 5: Dynamic Field Analytics (get_form_analytics RPC) ═══
-    final dynamicAnalytics = analyticsData['dynamic_analytics'] as Map<String, dynamic>?;
+    // ═══ Sheet 5: Dynamic Field Analytics ═══
+    final dynamicAnalytics =
+        analyticsData['dynamic_analytics'] as Map<String, dynamic>?;
     if (dynamicAnalytics != null && dynamicAnalytics.isNotEmpty) {
       _buildDynamicAnalyticsSheet(excel, dynamicAnalytics);
     }
 
-    // Encode to bytes
+    // Encode
     final bytes = excel.encode();
     if (bytes == null) {
       throw Exception('فشل توليد ملف Excel — encoding returned null');
     }
 
-    // Save to file
+    // Save
     final now = DateTime.now();
     final dateStr =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final safeTitle = title.replaceAll(RegExp(r'[^\u0600-\u06FF\w\s\-]'), '').replaceAll(RegExp(r'\s+'), '_');
+    final safeTitle = title
+        .replaceAll(RegExp(r'[^\u0600-\u06FF\w\s\-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
     final fileName = 'EPI_${safeTitle}_$dateStr.xlsx';
 
     Directory dir;
@@ -121,7 +92,41 @@ class ExcelReportGenerator {
     return file;
   }
 
-  /// ═══ Sheet 1: Summary / Cover ═══
+  // ═══════════════════════════════════════════════════════════════
+  // Helper: write a styled cell
+  // ═══════════════════════════════════════════════════════════════
+  static void _writeCell(
+    Sheet sheet,
+    String cellRef,
+    dynamic value, {
+    bool bold = false,
+    double fontSize = 11,
+    String? fontColorHex,
+    String? bgColorHex,
+    String horizontalAlign = 'right',
+    String verticalAlign = 'center',
+  }) {
+    final cellIndex = CellIndex.indexByString(cellRef);
+    sheet.updateCell(
+      cellIndex,
+      value is int
+          ? IntCellValue(value)
+          : value is double
+              ? DoubleCellValue(value)
+              : TextCellValue(value?.toString() ?? ''),
+    );
+    final cell = sheet.cell(cellIndex);
+    cell.cellStyle = CellStyle(
+      bold: bold,
+      fontSize: fontSize,
+      fontColorHex: fontColorHex,
+      backgroundColorHex: bgColorHex,
+      horizontalAlign: HorizontalAlign.Left,
+      verticalAlign: VerticalAlign.Center,
+    );
+  }
+
+  // ═══ Sheet 1: Summary ═══
   static void _buildSummarySheet(
     Excel excel,
     String title,
@@ -132,30 +137,25 @@ class ExcelReportGenerator {
     const sheetName = 'ملخص';
     final sheet = excel[sheetName];
 
-    // Set RTL
-    _setRtl(sheet);
-
     // ═══ Title row ═══
-    sheet.appendRow([
-      TextCellValue('EPI Supervisor\'s — $title'),
-    ]);
-    sheet.cell(CellIndex.indexByString('A1')).cellStyle = CellStyle(
+    _writeCell(
+      sheet,
+      'A1',
+      "EPI Supervisor's — $title",
       bold: true,
-      fontSize: 18,
-      fontColorHex: _hexToExcelColor(_primaryColorHex),
-      backgroundColorHex: _hexToExcelColor(_bgLightHex),
-      horizontalAlign: HorizontalAlign.Center,
-      verticalAlign: VerticalAlign.Center,
+      fontSize: 16,
+      fontColorHex: _primaryColor,
+      bgColorHex: _bgLight,
     );
     sheet.merge(CellIndex.indexByString('A1'), CellIndex.indexByString('D1'));
-    sheet.setRowHeight(0, 36);
 
     // ═══ Subtitle row ═══
-    sheet.appendRow([TextCellValue(subtitle)]);
-    sheet.cell(CellIndex.indexByString('A2')).cellStyle = CellStyle(
-      fontSize: 12,
-      fontColorHex: _hexToExcelColor(_textMutedHex),
-      horizontalAlign: HorizontalAlign.Center,
+    _writeCell(
+      sheet,
+      'A2',
+      subtitle,
+      fontSize: 11,
+      fontColorHex: _textMuted,
     );
     sheet.merge(CellIndex.indexByString('A2'), CellIndex.indexByString('D2'));
 
@@ -163,44 +163,30 @@ class ExcelReportGenerator {
     final now = DateTime.now();
     final dateStr =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    sheet.appendRow([
-      TextCellValue('الفترة: $period'),
-      TextCellValue(''),
-      TextCellValue('تاريخ الإنشاء:'),
-      TextCellValue(dateStr),
-    ]);
-    sheet.cell(CellIndex.indexByString('A3')).cellStyle = CellStyle(
-      fontSize: 11,
-      fontColorHex: _hexToExcelColor(_textMutedHex),
-    );
-    sheet.cell(CellIndex.indexByString('C3')).cellStyle = CellStyle(
-      fontSize: 11,
-      fontColorHex: _hexToExcelColor(_textMutedHex),
-      bold: true,
-      horizontalAlign: HorizontalAlign.Right,
-    );
-    sheet.cell(CellIndex.indexByString('D3')).cellStyle = CellStyle(
-      fontSize: 11,
-      fontColorHex: _hexToExcelColor(_textDarkHex),
-    );
+    _writeCell(sheet, 'A3', 'الفترة: $period', fontSize: 11, fontColorHex: _textMuted);
+    _writeCell(sheet, 'C3', 'تاريخ الإنشاء:', bold: true, fontColorHex: _textMuted);
+    _writeCell(sheet, 'D3', dateStr, fontSize: 11, fontColorHex: _textDark);
 
     // Empty row
-    sheet.appendRow([TextCellValue('')]);
+    _writeCell(sheet, 'A4', '');
 
     // ═══ KPI Section Header ═══
-    sheet.appendRow([TextCellValue('مؤشرات الأداء الرئيسية')]);
-    sheet.cell(CellIndex.indexByString('A5')).cellStyle = CellStyle(
+    _writeCell(
+      sheet,
+      'A5',
+      'مؤشرات الأداء الرئيسية',
       bold: true,
       fontSize: 14,
-      fontColorHex: _hexToExcelColor(_primaryDarkHex),
-      backgroundColorHex: _hexToExcelColor(_bgLightHex),
+      fontColorHex: _primaryDark,
+      bgColorHex: _bgLight,
     );
     sheet.merge(CellIndex.indexByString('A5'), CellIndex.indexByString('D5'));
-    sheet.setRowHeight(4, 28);
 
-    // ═══ Extract analytics data ═══
-    final submissions = analyticsData['submissions'] as Map<String, dynamic>? ?? {};
-    final shortages = analyticsData['shortages'] as Map<String, dynamic>? ?? {};
+    // ═══ Extract analytics ═══
+    final submissions =
+        analyticsData['submissions'] as Map<String, dynamic>? ?? {};
+    final shortages =
+        analyticsData['shortages'] as Map<String, dynamic>? ?? {};
     final total = (submissions['total'] as num?)?.toInt() ?? 0;
     final today = (submissions['today'] as num?)?.toInt() ?? 0;
     final byStatus = submissions['byStatus'] as Map<String, dynamic>? ?? {};
@@ -208,60 +194,50 @@ class ExcelReportGenerator {
     final draft = (byStatus['draft'] as num?)?.toInt() ?? 0;
     final approved = (byStatus['approved'] as num?)?.toInt() ?? 0;
     final shortagesTotal = (shortages['total'] as num?)?.toInt() ?? 0;
-    final shortagesResolved = (shortages['resolved'] as num?)?.toInt() ?? 0;
-    final completionRate = total > 0 ? ((approved / total) * 100).round() : 0;
+    final shortagesResolved =
+        (shortages['resolved'] as num?)?.toInt() ?? 0;
+    final completionRate =
+        total > 0 ? ((approved / total) * 100).round() : 0;
 
-    // ═══ KPI Table ═══
-    sheet.appendRow([
-      TextCellValue('المؤشر'),
-      TextCellValue('القيمة'),
-      TextCellValue('النسبة'),
-      TextCellValue('ملاحظات'),
-    ]);
-    final headerRow = sheet.rows.last;
-    for (final cell in headerRow.cells) {
-      if (cell != null) {
-        cell.cellStyle = CellStyle(
-          bold: true,
-          fontSize: 12,
-          fontColorHex: _hexToExcelColor('#FFFFFF'),
-          backgroundColorHex: _hexToExcelColor(_primaryColorHex),
-          horizontalAlign: HorizontalAlign.Center,
-          verticalAlign: VerticalAlign.Center,
-          borderColorHexLeft: _hexToExcelColor(_primaryDarkHex),
-          borderColorHexRight: _hexToExcelColor(_primaryDarkHex),
-          borderColorHexTop: _hexToExcelColor(_primaryDarkHex),
-          borderColorHexBottom: _hexToExcelColor(_primaryDarkHex),
-        );
-      }
+    // ═══ KPI Table header ═══
+    final kpiHeaders = ['المؤشر', 'القيمة', 'النسبة', 'ملاحظات'];
+    for (var i = 0; i < kpiHeaders.length; i++) {
+      final col = String.fromCharCode('A'.codeUnitAt(0) + i);
+      _writeCell(
+        sheet,
+        '${col}6',
+        kpiHeaders[i],
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryColor,
+      );
     }
-    sheet.setRowHeight(5, 24);
 
-    // KPI rows
+    // ═══ KPI rows ═══
     final kpiRows = [
-      ['إجمالي الإرساليات', '$total', '100%', 'الإجمالي الكلي'],
-      ['إرساليات اليوم', '$today', '${total > 0 ? ((today / total) * 100).round() : 0}%', 'إرساليات اليوم الحالي'],
-      ['مرسلة (submitted)', '$submitted', '${total > 0 ? ((submitted / total) * 100).round() : 0}%', 'تم إرسالها للخادم'],
-      ['مسودات (draft)', '$draft', '${total > 0 ? ((draft / total) * 100).round() : 0}%', 'لم تُرسل بعد'],
-      ['معتمدة (approved)', '$approved', '$completionRate%', 'معتمدة من الإدارة'],
-      ['إجمالي النواقص', '$shortagesTotal', '100%', 'نواقص اللقاحات والمعدات'],
-      ['نواقص محلولة', '$shortagesResolved', '${shortagesTotal > 0 ? ((shortagesResolved / shortagesTotal) * 100).round() : 0}%', 'تم حلها'],
+      ['إجمالي الإرساليات', total, '100%', 'الإجمالي الكلي'],
+      ['إرساليات اليوم', today, total > 0 ? ((today / total) * 100).round() : 0, 'إرساليات اليوم الحالي'],
+      ['مرسلة', submitted, total > 0 ? ((submitted / total) * 100).round() : 0, 'تم إرسالها'],
+      ['مسودات', draft, total > 0 ? ((draft / total) * 100).round() : 0, 'لم تُرسل'],
+      ['معتمدة', approved, completionRate, 'معتمدة'],
+      ['إجمالي النواقص', shortagesTotal, '100%', 'النواقص'],
+      ['نواقص محلولة', shortagesResolved, shortagesTotal > 0 ? ((shortagesResolved / shortagesTotal) * 100).round() : 0, 'تم حلها'],
     ];
 
-    for (var i = 0; i < kpiRows.length; i++) {
-      sheet.appendRow(kpiRows[i].map((v) => TextCellValue(v)).toList());
-      final row = sheet.rows.last;
-      final isEven = i % 2 == 0;
-      for (final cell in row.cells) {
-        if (cell != null) {
-          cell.cellStyle = CellStyle(
-            fontSize: 11,
-            backgroundColorHex: _hexToExcelColor(isEven ? _bgLightHex : '#FFFFFF'),
-            horizontalAlign: i == 0 ? HorizontalAlign.Right : HorizontalAlign.Center,
-            verticalAlign: VerticalAlign.Center,
-            borderColorHexBottom: _hexToExcelColor('#E0E0E0'),
-          );
-        }
+    for (var r = 0; r < kpiRows.length; r++) {
+      final row = kpiRows[r];
+      final rowNum = 7 + r;
+      final isEven = r % 2 == 0;
+      for (var c = 0; c < row.length; c++) {
+        final col = String.fromCharCode('A'.codeUnitAt(0) + c);
+        _writeCell(
+          sheet,
+          '$col$rowNum',
+          row[c],
+          fontSize: 11,
+          bgColorHex: isEven ? _bgLight : _white,
+        );
       }
     }
 
@@ -270,12 +246,9 @@ class ExcelReportGenerator {
     sheet.setColumnWidth(1, 12);
     sheet.setColumnWidth(2, 12);
     sheet.setColumnWidth(3, 28);
-
-    // Freeze header row (row 6 = index 5)
-    sheet.setFreezePane(0, 6);
   }
 
-  /// ═══ Sheet 2: Governorate Performance ═══
+  // ═══ Sheet 2: Governorate Performance ═══
   static void _buildGovernorateSheet(
     Excel excel,
     List<Map<String, dynamic>> data,
@@ -283,115 +256,92 @@ class ExcelReportGenerator {
     const sheetName = 'أداء المحافظات';
     final sheet = excel[sheetName];
 
-    _setRtl(sheet);
-
-    // Title
-    sheet.appendRow([TextCellValue('أداء المحافظات — EPI Supervisor')]);
-    sheet.cell(CellIndex.indexByString('A1')).cellStyle = CellStyle(
+    _writeCell(
+      sheet,
+      'A1',
+      'أداء المحافظات — EPI Supervisor',
       bold: true,
       fontSize: 16,
-      fontColorHex: _hexToExcelColor(_primaryColorHex),
-      horizontalAlign: HorizontalAlign.Center,
+      fontColorHex: _primaryColor,
     );
     sheet.merge(CellIndex.indexByString('A1'), CellIndex.indexByString('D1'));
-    sheet.setRowHeight(0, 30);
 
-    // Empty row
-    sheet.appendRow([TextCellValue('')]);
+    _writeCell(sheet, 'A2', '');
 
     // Headers
-    sheet.appendRow([
-      TextCellValue('المحافظة'),
-      TextCellValue('الإجمالي'),
-      TextCellValue('مقبول'),
-      TextCellValue('نسبة القبول'),
-    ]);
-    final headerRow = sheet.rows.last;
-    for (final cell in headerRow.cells) {
-      if (cell != null) {
-        cell.cellStyle = CellStyle(
-          bold: true,
-          fontSize: 12,
-          fontColorHex: _hexToExcelColor('#FFFFFF'),
-          backgroundColorHex: _hexToExcelColor(_primaryColorHex),
-          horizontalAlign: HorizontalAlign.Center,
-          verticalAlign: VerticalAlign.Center,
-        );
-      }
+    final headers = ['المحافظة', 'الإجمالي', 'مقبول', 'نسبة القبول'];
+    for (var i = 0; i < headers.length; i++) {
+      final col = String.fromCharCode('A'.codeUnitAt(0) + i);
+      _writeCell(
+        sheet,
+        '${col}3',
+        headers[i],
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryColor,
+      );
     }
-    sheet.setRowHeight(2, 24);
 
-    // Data rows
+    // Sort by total descending
     final sorted = List<Map<String, dynamic>>.from(data)
-      ..sort((a, b) {
-        final aCount = _extractCount(a);
-        final bCount = _extractCount(b);
-        return bCount.compareTo(aCount);
-      });
+      ..sort((a, b) => _extractCount(b).compareTo(_extractCount(a)));
 
     for (var i = 0; i < sorted.length; i++) {
       final gov = sorted[i];
-      final name = gov['name_ar'] as String? ?? gov['name'] as String? ?? 'غير محدد';
+      final name =
+          gov['name_ar'] as String? ?? gov['name'] as String? ?? 'غير محدد';
       final total = _extractCount(gov);
       final approved = _extractApproved(gov);
       final rate = total > 0 ? ((approved / total) * 100).round() : 0;
-
-      sheet.appendRow([
-        TextCellValue(name),
-        IntCellValue(total),
-        IntCellValue(approved),
-        TextCellValue('$rate%'),
-      ]);
-
-      final row = sheet.rows.last;
+      final rowNum = 4 + i;
       final isEven = i % 2 == 0;
-      for (final cell in row.cells) {
-        if (cell != null) {
-          cell.cellStyle = CellStyle(
-            fontSize: 11,
-            backgroundColorHex: _hexToExcelColor(isEven ? _bgLightHex : '#FFFFFF'),
-            horizontalAlign: cell == row.cells.first
-                ? HorizontalAlign.Right
-                : HorizontalAlign.Center,
-            verticalAlign: VerticalAlign.Center,
-          );
-        }
-      }
+
+      _writeCell(sheet, 'A$rowNum', name,
+          fontSize: 11, bgColorHex: isEven ? _bgLight : _white);
+      _writeCell(sheet, 'B$rowNum', total,
+          fontSize: 11, bgColorHex: isEven ? _bgLight : _white);
+      _writeCell(sheet, 'C$rowNum', approved,
+          fontSize: 11, bgColorHex: isEven ? _bgLight : _white);
+      _writeCell(sheet, 'D$rowNum', '$rate%',
+          fontSize: 11, bgColorHex: isEven ? _bgLight : _white);
     }
 
     // Total row
-    final totalSum = sorted.fold<int>(0, (sum, g) => sum + _extractCount(g));
-    final approvedSum = sorted.fold<int>(0, (sum, g) => sum + _extractApproved(g));
-    final overallRate = totalSum > 0 ? ((approvedSum / totalSum) * 100).round() : 0;
-    sheet.appendRow([
-      TextCellValue('الإجمالي'),
-      IntCellValue(totalSum),
-      IntCellValue(approvedSum),
-      TextCellValue('$overallRate%'),
-    ]);
-    final totalRow = sheet.rows.last;
-    for (final cell in totalRow.cells) {
-      if (cell != null) {
-        cell.cellStyle = CellStyle(
-          bold: true,
-          fontSize: 12,
-          fontColorHex: _hexToExcelColor('#FFFFFF'),
-          backgroundColorHex: _hexToExcelColor(_primaryDarkHex),
-          horizontalAlign: HorizontalAlign.Center,
-          verticalAlign: VerticalAlign.Center,
-        );
-      }
-    }
+    final totalSum = sorted.fold<int>(0, (s, g) => s + _extractCount(g));
+    final approvedSum =
+        sorted.fold<int>(0, (s, g) => s + _extractApproved(g));
+    final overallRate =
+        totalSum > 0 ? ((approvedSum / totalSum) * 100).round() : 0;
+    final totalRowNum = 4 + sorted.length;
+    _writeCell(sheet, 'A$totalRowNum', 'الإجمالي',
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryDark);
+    _writeCell(sheet, 'B$totalRowNum', totalSum,
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryDark);
+    _writeCell(sheet, 'C$totalRowNum', approvedSum,
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryDark);
+    _writeCell(sheet, 'D$totalRowNum', '$overallRate%',
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryDark);
 
     sheet.setColumnWidth(0, 24);
     sheet.setColumnWidth(1, 14);
     sheet.setColumnWidth(2, 14);
     sheet.setColumnWidth(3, 14);
-
-    sheet.setFreezePane(0, 3);
   }
 
-  /// ═══ Sheet 3: Shortages ═══
+  // ═══ Sheet 3: Shortages ═══
   static void _buildShortagesSheet(
     Excel excel,
     List<Map<String, dynamic>> data,
@@ -399,38 +349,30 @@ class ExcelReportGenerator {
     const sheetName = 'النواقص';
     final sheet = excel[sheetName];
 
-    _setRtl(sheet);
-
-    sheet.appendRow([TextCellValue('تفاصيل النواقص — EPI Supervisor')]);
-    sheet.cell(CellIndex.indexByString('A1')).cellStyle = CellStyle(
+    _writeCell(
+      sheet,
+      'A1',
+      'تفاصيل النواقص — EPI Supervisor',
       bold: true,
       fontSize: 16,
-      fontColorHex: _hexToExcelColor(_primaryColorHex),
-      horizontalAlign: HorizontalAlign.Center,
+      fontColorHex: _primaryColor,
     );
     sheet.merge(CellIndex.indexByString('A1'), CellIndex.indexByString('F1'));
 
-    sheet.appendRow([TextCellValue('')]);
+    _writeCell(sheet, 'A2', '');
 
-    sheet.appendRow([
-      TextCellValue('الصنف'),
-      TextCellValue('الخطورة'),
-      TextCellValue('المطلوب'),
-      TextCellValue('المتاح'),
-      TextCellValue('المحافظة'),
-      TextCellValue('محلول'),
-    ]);
-    final headerRow = sheet.rows.last;
-    for (final cell in headerRow.cells) {
-      if (cell != null) {
-        cell.cellStyle = CellStyle(
-          bold: true,
-          fontSize: 12,
-          fontColorHex: _hexToExcelColor('#FFFFFF'),
-          backgroundColorHex: _hexToExcelColor(_primaryColorHex),
-          horizontalAlign: HorizontalAlign.Center,
-        );
-      }
+    final headers = ['الصنف', 'الخطورة', 'المطلوب', 'المتاح', 'المحافظة', 'محلول'];
+    for (var i = 0; i < headers.length; i++) {
+      final col = String.fromCharCode('A'.codeUnitAt(0) + i);
+      _writeCell(
+        sheet,
+        '${col}3',
+        headers[i],
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryColor,
+      );
     }
 
     final severityLabels = {
@@ -442,33 +384,28 @@ class ExcelReportGenerator {
 
     for (var i = 0; i < data.length; i++) {
       final s = data[i];
-      final item = s['item_name'] as String? ?? s['item'] as String? ?? '-';
-      final severity = severityLabels[s['severity'] as String?] ?? s['severity'] as String? ?? '-';
+      final item =
+          s['item_name'] as String? ?? s['item'] as String? ?? '-';
+      final severity = severityLabels[s['severity'] as String?] ??
+          s['severity'] as String? ??
+          '-';
       final needed = (s['quantity_needed'] as num?)?.toInt() ?? 0;
       final available = (s['quantity_available'] as num?)?.toInt() ?? 0;
-      final gov = (s['governorates'] as Map?)?['name_ar'] as String? ?? s['governorate'] as String? ?? 'غير محدد';
+      final gov = (s['governorates'] as Map?)?['name_ar'] as String? ??
+          s['governorate'] as String? ??
+          'غير محدد';
       final resolved = (s['is_resolved'] as bool?) == true ? 'نعم' : 'لا';
 
-      sheet.appendRow([
-        TextCellValue(item),
-        TextCellValue(severity),
-        IntCellValue(needed),
-        IntCellValue(available),
-        TextCellValue(gov),
-        TextCellValue(resolved),
-      ]);
-
-      final row = sheet.rows.last;
+      final rowNum = 4 + i;
       final isEven = i % 2 == 0;
-      for (final cell in row.cells) {
-        if (cell != null) {
-          cell.cellStyle = CellStyle(
-            fontSize: 11,
-            backgroundColorHex: _hexToExcelColor(isEven ? _bgLightHex : '#FFFFFF'),
-            horizontalAlign: HorizontalAlign.Center,
-          );
-        }
-      }
+      final bg = isEven ? _bgLight : _white;
+
+      _writeCell(sheet, 'A$rowNum', item, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'B$rowNum', severity, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'C$rowNum', needed, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'D$rowNum', available, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'E$rowNum', gov, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'F$rowNum', resolved, fontSize: 11, bgColorHex: bg);
     }
 
     sheet.setColumnWidth(0, 24);
@@ -477,11 +414,9 @@ class ExcelReportGenerator {
     sheet.setColumnWidth(3, 12);
     sheet.setColumnWidth(4, 16);
     sheet.setColumnWidth(5, 10);
-
-    sheet.setFreezePane(0, 3);
   }
 
-  /// ═══ Sheet 4: Submissions by Status ═══
+  // ═══ Sheet 4: Status Distribution ═══
   static void _buildStatusSheet(
     Excel excel,
     Map<String, dynamic> analyticsData,
@@ -489,39 +424,36 @@ class ExcelReportGenerator {
     const sheetName = 'توزيع الحالات';
     final sheet = excel[sheetName];
 
-    _setRtl(sheet);
-
-    sheet.appendRow([TextCellValue('توزيع الإرساليات حسب الحالة')]);
-    sheet.cell(CellIndex.indexByString('A1')).cellStyle = CellStyle(
+    _writeCell(
+      sheet,
+      'A1',
+      'توزيع الإرساليات حسب الحالة',
       bold: true,
       fontSize: 16,
-      fontColorHex: _hexToExcelColor(_primaryColorHex),
-      horizontalAlign: HorizontalAlign.Center,
+      fontColorHex: _primaryColor,
     );
     sheet.merge(CellIndex.indexByString('A1'), CellIndex.indexByString('C1'));
 
-    sheet.appendRow([TextCellValue('')]);
+    _writeCell(sheet, 'A2', '');
 
-    sheet.appendRow([
-      TextCellValue('الحالة'),
-      TextCellValue('العدد'),
-      TextCellValue('النسبة'),
-    ]);
-    final headerRow = sheet.rows.last;
-    for (final cell in headerRow.cells) {
-      if (cell != null) {
-        cell.cellStyle = CellStyle(
-          bold: true,
-          fontSize: 12,
-          fontColorHex: _hexToExcelColor('#FFFFFF'),
-          backgroundColorHex: _hexToExcelColor(_primaryColorHex),
-          horizontalAlign: HorizontalAlign.Center,
-        );
-      }
+    final headers = ['الحالة', 'العدد', 'النسبة'];
+    for (var i = 0; i < headers.length; i++) {
+      final col = String.fromCharCode('A'.codeUnitAt(0) + i);
+      _writeCell(
+        sheet,
+        '${col}3',
+        headers[i],
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryColor,
+      );
     }
 
-    final submissions = analyticsData['submissions'] as Map<String, dynamic>? ?? {};
-    final byStatus = submissions['byStatus'] as Map<String, dynamic>? ?? {};
+    final submissions =
+        analyticsData['submissions'] as Map<String, dynamic>? ?? {};
+    final byStatus =
+        submissions['byStatus'] as Map<String, dynamic>? ?? {};
     final total = (submissions['total'] as num?)?.toInt() ?? 0;
 
     final statusLabels = {
@@ -531,63 +463,48 @@ class ExcelReportGenerator {
       'rejected': 'مرفوضة',
     };
 
-    final statusEntries = byStatus.entries.toList()
-      ..sort((a, b) => ((b.value as num?)?.toInt() ?? 0).compareTo((a.value as num?)?.toInt() ?? 0));
+    final entries = byStatus.entries.toList()
+      ..sort((a, b) =>
+          ((b.value as num?)?.toInt() ?? 0).compareTo((a.value as num?)?.toInt() ?? 0));
 
-    for (var i = 0; i < statusEntries.length; i++) {
-      final entry = statusEntries[i];
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
       final count = (entry.value as num?)?.toInt() ?? 0;
       final pct = total > 0 ? ((count / total) * 100).round() : 0;
       final label = statusLabels[entry.key] ?? entry.key;
-
-      sheet.appendRow([
-        TextCellValue(label),
-        IntCellValue(count),
-        TextCellValue('$pct%'),
-      ]);
-
-      final row = sheet.rows.last;
+      final rowNum = 4 + i;
       final isEven = i % 2 == 0;
-      for (final cell in row.cells) {
-        if (cell != null) {
-          cell.cellStyle = CellStyle(
-            fontSize: 11,
-            backgroundColorHex: _hexToExcelColor(isEven ? _bgLightHex : '#FFFFFF'),
-            horizontalAlign: HorizontalAlign.Center,
-          );
-        }
-      }
+      final bg = isEven ? _bgLight : _white;
+
+      _writeCell(sheet, 'A$rowNum', label, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'B$rowNum', count, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'C$rowNum', '$pct%', fontSize: 11, bgColorHex: bg);
     }
 
-    // Total
-    sheet.appendRow([
-      TextCellValue('الإجمالي'),
-      IntCellValue(total),
-      TextCellValue('100%'),
-    ]);
-    final totalRow = sheet.rows.last;
-    for (final cell in totalRow.cells) {
-      if (cell != null) {
-        cell.cellStyle = CellStyle(
-          bold: true,
-          fontSize: 12,
-          fontColorHex: _hexToExcelColor('#FFFFFF'),
-          backgroundColorHex: _hexToExcelColor(_primaryDarkHex),
-          horizontalAlign: HorizontalAlign.Center,
-        );
-      }
-    }
+    // Total row
+    final totalRowNum = 4 + entries.length;
+    _writeCell(sheet, 'A$totalRowNum', 'الإجمالي',
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryDark);
+    _writeCell(sheet, 'B$totalRowNum', total,
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryDark);
+    _writeCell(sheet, 'C$totalRowNum', '100%',
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryDark);
 
     sheet.setColumnWidth(0, 18);
     sheet.setColumnWidth(1, 12);
     sheet.setColumnWidth(2, 12);
-
-    sheet.setFreezePane(0, 3);
   }
 
-  /// ═══ Sheet 5: Dynamic Field Analytics (get_form_analytics RPC) ═══
-  /// Renders all field analytics from the dynamic analytics system.
-  /// Each row is one field with its type-appropriate metrics.
+  // ═══ Sheet 5: Dynamic Field Analytics ═══
   static void _buildDynamicAnalyticsSheet(
     Excel excel,
     Map<String, dynamic> dynamicAnalytics,
@@ -595,73 +512,45 @@ class ExcelReportGenerator {
     const sheetName = 'تحليل الحقول';
     final sheet = excel[sheetName];
 
-    _setRtl(sheet);
-
-    final formTitle = dynamicAnalytics['form_title'] as String? ?? 'تقرير';
-    final totalSubs = (dynamicAnalytics['total_submissions'] as num?)?.toInt() ?? 0;
+    final formTitle =
+        dynamicAnalytics['form_title'] as String? ?? 'تقرير';
+    final totalSubs =
+        (dynamicAnalytics['total_submissions'] as num?)?.toInt() ?? 0;
     final campaignRound = dynamicAnalytics['campaign_round'];
     final fields = (dynamicAnalytics['fields'] as List?) ?? [];
 
-    // Title
-    sheet.appendRow([TextCellValue('تحليل الحقول الديناميكي — $formTitle')]);
-    sheet.cell(CellIndex.indexByString('A1')).cellStyle = CellStyle(
+    _writeCell(
+      sheet,
+      'A1',
+      'تحليل الحقول الديناميكي — $formTitle',
       bold: true,
       fontSize: 16,
-      fontColorHex: _hexToExcelColor(_primaryColorHex),
-      horizontalAlign: HorizontalAlign.Center,
+      fontColorHex: _primaryColor,
     );
     sheet.merge(CellIndex.indexByString('A1'), CellIndex.indexByString('G1'));
-    sheet.setRowHeight(0, 30);
 
-    // Info row
-    sheet.appendRow([
-      TextCellValue('الاستمارة: $formTitle'),
-      TextCellValue(''),
-      TextCellValue('إجمالي الإرساليات:'),
-      IntCellValue(totalSubs),
-      TextCellValue(''),
-      TextCellValue('الجولة:'),
-      TextCellValue(campaignRound != null ? '$campaignRound' : 'الكل'),
-    ]);
-    for (final cellRefStr in ['A2', 'C2', 'D2', 'F2', 'G2']) {
-      final cell = sheet.cell(CellIndex.indexByString(cellRefStr));
-      cell.cellStyle = CellStyle(
-        fontSize: 11,
-        bold: cellRefStr == 'C2' || cellRefStr == 'F2',
-        fontColorHex: _hexToExcelColor(_textMutedHex),
-        horizontalAlign: HorizontalAlign.Right,
+    _writeCell(sheet, 'A2', 'الاستمارة: $formTitle', fontSize: 11, fontColorHex: _textMuted);
+    _writeCell(sheet, 'C2', 'إجمالي الإرساليات:', bold: true, fontColorHex: _textMuted);
+    _writeCell(sheet, 'D2', totalSubs, fontSize: 11);
+    _writeCell(sheet, 'F2', 'الجولة:', bold: true, fontColorHex: _textMuted);
+    _writeCell(sheet, 'G2', campaignRound != null ? '$campaignRound' : 'الكل', fontSize: 11);
+
+    _writeCell(sheet, 'A3', '');
+
+    final headers = ['الحقل', 'النوع', 'القيمة الرئيسية', 'الإجمالي', 'نعم', 'لا', 'النسبة %'];
+    for (var i = 0; i < headers.length; i++) {
+      final col = String.fromCharCode('A'.codeUnitAt(0) + i);
+      _writeCell(
+        sheet,
+        '${col}4',
+        headers[i],
+        bold: true,
+        fontSize: 12,
+        fontColorHex: _white,
+        bgColorHex: _primaryColor,
       );
     }
 
-    // Empty row
-    sheet.appendRow([TextCellValue('')]);
-
-    // Headers
-    sheet.appendRow([
-      TextCellValue('الحقل'),
-      TextCellValue('النوع'),
-      TextCellValue('القيمة الرئيسية'),
-      TextCellValue('الإجمالي'),
-      TextCellValue('نعم'),
-      TextCellValue('لا'),
-      TextCellValue('النسبة %'),
-    ]);
-    final headerRow = sheet.rows.last;
-    for (final cell in headerRow.cells) {
-      if (cell != null) {
-        cell.cellStyle = CellStyle(
-          bold: true,
-          fontSize: 12,
-          fontColorHex: _hexToExcelColor('#FFFFFF'),
-          backgroundColorHex: _hexToExcelColor(_primaryColorHex),
-          horizontalAlign: HorizontalAlign.Center,
-          verticalAlign: VerticalAlign.Center,
-        );
-      }
-    }
-    sheet.setRowHeight(3, 24);
-
-    // Type labels
     final typeLabels = {
       'yesno': 'نعم/لا',
       'progress': 'تقدم',
@@ -671,7 +560,6 @@ class ExcelReportGenerator {
       'bar': 'توزيع',
     };
 
-    // Data rows
     for (var i = 0; i < fields.length; i++) {
       final field = fields[i] as Map<String, dynamic>;
       final label = field['field_label'] as String? ??
@@ -685,7 +573,6 @@ class ExcelReportGenerator {
           (field['percentage'] as num?)?.toInt() ??
           (total > 0 ? ((yes / total) * 100).round() : 0);
 
-      // Compute primary value based on type
       String primaryValue;
       switch (type) {
         case 'yesno':
@@ -704,12 +591,14 @@ class ExcelReportGenerator {
           primaryValue = '${field['count'] ?? 0}';
           break;
         case 'bar':
-          final dist = field['distribution'] as Map<String, dynamic>? ?? {};
+          final dist =
+              field['distribution'] as Map<String, dynamic>? ?? {};
           if (dist.isEmpty) {
             primaryValue = 'لا توجد بيانات';
           } else {
             final entries = dist.entries.toList()
-              ..sort((a, b) => ((b.value as num?)?.toInt() ?? 0).compareTo((a.value as num?)?.toInt() ?? 0));
+              ..sort((a, b) =>
+                  ((b.value as num?)?.toInt() ?? 0).compareTo((a.value as num?)?.toInt() ?? 0));
             final top = entries.take(3).map((e) => '${e.key} (${e.value})').join('، ');
             primaryValue = top;
           }
@@ -718,42 +607,19 @@ class ExcelReportGenerator {
           primaryValue = '$total';
       }
 
-      sheet.appendRow([
-        TextCellValue(label),
-        TextCellValue(typeLabels[type] ?? type),
-        TextCellValue(primaryValue),
-        IntCellValue(total),
-        type == 'yesno' || type == 'progress' ? IntCellValue(yes) : TextCellValue(''),
-        type == 'yesno' ? IntCellValue(no) : TextCellValue(''),
-        TextCellValue('$pct%'),
-      ]);
-
-      final row = sheet.rows.last;
+      final rowNum = 5 + i;
       final isEven = i % 2 == 0;
-      for (final cell in row.cells) {
-        if (cell != null) {
-          cell.cellStyle = CellStyle(
-            fontSize: 11,
-            backgroundColorHex: _hexToExcelColor(isEven ? _bgLightHex : '#FFFFFF'),
-            horizontalAlign: HorizontalAlign.Center,
-            verticalAlign: VerticalAlign.Center,
-          );
-        }
-      }
-      // Make label column right-aligned
-      final labelCell = row.cells.first;
-      if (labelCell != null) {
-        labelCell.cellStyle = CellStyle(
-          fontSize: 11,
-          bold: true,
-          backgroundColorHex: _hexToExcelColor(isEven ? _bgLightHex : '#FFFFFF'),
-          horizontalAlign: HorizontalAlign.Right,
-          verticalAlign: VerticalAlign.Center,
-        );
-      }
+      final bg = isEven ? _bgLight : _white;
+
+      _writeCell(sheet, 'A$rowNum', label, bold: true, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'B$rowNum', typeLabels[type] ?? type, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'C$rowNum', primaryValue, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'D$rowNum', total, fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'E$rowNum', (type == 'yesno' || type == 'progress') ? yes : '', fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'F$rowNum', type == 'yesno' ? no : '', fontSize: 11, bgColorHex: bg);
+      _writeCell(sheet, 'G$rowNum', '$pct%', fontSize: 11, bgColorHex: bg);
     }
 
-    // Column widths
     sheet.setColumnWidth(0, 30);
     sheet.setColumnWidth(1, 14);
     sheet.setColumnWidth(2, 36);
@@ -761,120 +627,6 @@ class ExcelReportGenerator {
     sheet.setColumnWidth(4, 10);
     sheet.setColumnWidth(5, 10);
     sheet.setColumnWidth(6, 12);
-
-    sheet.setFreezePane(0, 4);
-
-    // ═══ Distribution sheet for 'bar' type fields ═══
-    final barFields = fields
-        .where((f) => (f as Map<String, dynamic>)['type'] == 'bar')
-        .cast<Map<String, dynamic>>()
-        .toList();
-    if (barFields.isNotEmpty) {
-      _buildDistributionSheet(excel, barFields);
-    }
-  }
-
-  /// Sheet 6 (optional): Distribution tables for 'bar' type fields
-  static void _buildDistributionSheet(
-    Excel excel,
-    List<Map<String, dynamic>> barFields,
-  ) {
-    const sheetName = 'التوزيعات';
-    final sheet = excel[sheetName];
-
-    _setRtl(sheet);
-
-    sheet.appendRow([TextCellValue('توزيع القيم للحقول المتعددة')]);
-    sheet.cell(CellIndex.indexByString('A1')).cellStyle = CellStyle(
-      bold: true,
-      fontSize: 16,
-      fontColorHex: _hexToExcelColor(_primaryColorHex),
-      horizontalAlign: HorizontalAlign.Center,
-    );
-    sheet.merge(CellIndex.indexByString('A1'), CellIndex.indexByString('D1'));
-
-    sheet.appendRow([TextCellValue('')]);
-
-    for (final field in barFields) {
-      final label = field['field_label'] as String? ?? field['field_key'] ?? 'حقل';
-      final dist = field['distribution'] as Map<String, dynamic>? ?? {};
-      final total = (field['total'] as num?)?.toInt() ?? 0;
-
-      // Field header
-      sheet.appendRow([
-        TextCellValue('📊 $label'),
-        TextCellValue(''),
-        TextCellValue('الإجمالي:'),
-        IntCellValue(total),
-      ]);
-      final fieldHeaderRow = sheet.rows.last;
-      for (final cell in fieldHeaderRow.cells) {
-        if (cell != null) {
-          cell.cellStyle = CellStyle(
-            bold: true,
-            fontSize: 12,
-            fontColorHex: _hexToExcelColor(_primaryDarkHex),
-            backgroundColorHex: _hexToExcelColor(_bgLightHex),
-            horizontalAlign: HorizontalAlign.Right,
-          );
-        }
-      }
-
-      // Column headers
-      sheet.appendRow([
-        TextCellValue('القيمة'),
-        TextCellValue('العدد'),
-        TextCellValue('النسبة'),
-        TextCellValue(''),
-      ]);
-      final colHeaderRow = sheet.rows.last;
-      for (final cell in colHeaderRow.cells.take(3)) {
-        if (cell != null) {
-          cell.cellStyle = CellStyle(
-            bold: true,
-            fontSize: 11,
-            fontColorHex: _hexToExcelColor('#FFFFFF'),
-            backgroundColorHex: _hexToExcelColor(_primaryColorHex),
-            horizontalAlign: HorizontalAlign.Center,
-          );
-        }
-      }
-
-      // Distribution entries
-      final entries = dist.entries.toList()
-        ..sort((a, b) => ((b.value as num?)?.toInt() ?? 0).compareTo((a.value as num?)?.toInt() ?? 0));
-
-      for (var i = 0; i < entries.length; i++) {
-        final e = entries[i];
-        final count = (e.value as num?)?.toInt() ?? 0;
-        final pct = total > 0 ? ((count / total) * 100).round() : 0;
-        sheet.appendRow([
-          TextCellValue(e.key),
-          IntCellValue(count),
-          TextCellValue('$pct%'),
-          TextCellValue(''),
-        ]);
-        final row = sheet.rows.last;
-        final isEven = i % 2 == 0;
-        for (final cell in row.cells) {
-          if (cell != null) {
-            cell.cellStyle = CellStyle(
-              fontSize: 11,
-              backgroundColorHex: _hexToExcelColor(isEven ? _bgLightHex : '#FFFFFF'),
-              horizontalAlign: HorizontalAlign.Center,
-            );
-          }
-        }
-      }
-
-      // Empty separator row
-      sheet.appendRow([TextCellValue('')]);
-    }
-
-    sheet.setColumnWidth(0, 30);
-    sheet.setColumnWidth(1, 14);
-    sheet.setColumnWidth(2, 12);
-    sheet.setColumnWidth(3, 12);
   }
 
   // ═══ Helpers ═══
@@ -910,23 +662,27 @@ class ExcelReportGenerator {
     buffer.write('\uFEFF');
 
     // Title
-    buffer.writeln('EPI Supervisor\'s — $title');
+    buffer.writeln("EPI Supervisor's — $title");
     buffer.writeln('');
 
     // KPI section
     buffer.writeln('مؤشرات الأداء الرئيسية');
     buffer.writeln('المؤشر,القيمة');
 
-    final submissions = analyticsData['submissions'] as Map<String, dynamic>? ?? {};
-    final shortages = analyticsData['shortages'] as Map<String, dynamic>? ?? {};
+    final submissions =
+        analyticsData['submissions'] as Map<String, dynamic>? ?? {};
+    final shortages =
+        analyticsData['shortages'] as Map<String, dynamic>? ?? {};
     final total = (submissions['total'] as num?)?.toInt() ?? 0;
     final today = (submissions['today'] as num?)?.toInt() ?? 0;
-    final byStatus = submissions['byStatus'] as Map<String, dynamic>? ?? {};
+    final byStatus =
+        submissions['byStatus'] as Map<String, dynamic>? ?? {};
     final submitted = (byStatus['submitted'] as num?)?.toInt() ?? 0;
     final draft = (byStatus['draft'] as num?)?.toInt() ?? 0;
     final approved = (byStatus['approved'] as num?)?.toInt() ?? 0;
     final shortagesTotal = (shortages['total'] as num?)?.toInt() ?? 0;
-    final shortagesResolved = (shortages['resolved'] as num?)?.toInt() ?? 0;
+    final shortagesResolved =
+        (shortages['resolved'] as num?)?.toInt() ?? 0;
 
     buffer.writeln('إجمالي الإرساليات,$total');
     buffer.writeln('إرساليات اليوم,$today');
@@ -945,15 +701,61 @@ class ExcelReportGenerator {
         final name = gov['name_ar'] as String? ?? 'غير محدد';
         final govTotal = _extractCount(gov);
         final govApproved = _extractApproved(gov);
-        final rate = govTotal > 0 ? ((govApproved / govTotal) * 100).round() : 0;
+        final rate = govTotal > 0
+            ? ((govApproved / govTotal) * 100).round()
+            : 0;
         buffer.writeln('$name,$govTotal,$govApproved,$rate%');
+      }
+      buffer.writeln('');
+    }
+
+    // Dynamic analytics section
+    final dynamicAnalytics =
+        analyticsData['dynamic_analytics'] as Map<String, dynamic>?;
+    if (dynamicAnalytics != null && dynamicAnalytics.isNotEmpty) {
+      final formTitle =
+          dynamicAnalytics['form_title'] as String? ?? 'تقرير';
+      final fields = (dynamicAnalytics['fields'] as List?) ?? [];
+      buffer.writeln('تحليل الحقول الديناميكي — $formTitle');
+      buffer.writeln('الحقل,النوع,القيمة الرئيسية,الإجمالي,نعم,لا,النسبة');
+      for (final f in fields) {
+        final field = f as Map<String, dynamic>;
+        final label = field['field_label'] as String? ??
+            field['field_key'] as String? ??
+            '';
+        final type = field['type'] as String? ?? '';
+        final total = (field['total'] as num?)?.toInt() ?? 0;
+        final yes = (field['yes'] as num?)?.toInt() ?? 0;
+        final no = (field['no'] as num?)?.toInt() ?? 0;
+        final pct = (field['yes_pct'] as num?)?.toInt() ??
+            (total > 0 ? ((yes / total) * 100).round() : 0);
+        String value;
+        switch (type) {
+          case 'yesno':
+            value = 'نعم: $yes / لا: $no';
+            break;
+          case 'avg':
+            value = 'المتوسط: ${field['average'] ?? 0}';
+            break;
+          case 'sum':
+            value = 'المجموع: ${field['sum'] ?? 0}';
+            break;
+          case 'count':
+            value = '${field['count'] ?? 0}';
+            break;
+          default:
+            value = '$total';
+        }
+        buffer.writeln('$label,$type,$value,$total,$yes,$no,$pct%');
       }
     }
 
     final now = DateTime.now();
     final dateStr =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final safeTitle = title.replaceAll(RegExp(r'[^\u0600-\u06FF\w\s\-]'), '').replaceAll(RegExp(r'\s+'), '_');
+    final safeTitle = title
+        .replaceAll(RegExp(r'[^\u0600-\u06FF\w\s\-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
     final fileName = 'EPI_${safeTitle}_$dateStr.csv';
 
     final dir = await getTemporaryDirectory();

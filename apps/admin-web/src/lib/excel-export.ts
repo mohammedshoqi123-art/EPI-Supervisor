@@ -377,8 +377,17 @@ export function exportEnhancedExcel(options: EnhancedExportOptions): void {
   // ── Add sheet to workbook ──
   XLSX.utils.book_append_sheet(wb, ws, sheetName)
 
-  // ── Download ──
-  XLSX.writeFile(wb, `${fileName}.xlsx`)
+  // ── Download (reliable Blob method) ──
+  const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  setTimeout(() => { if (document.body.contains(a)) document.body.removeChild(a); URL.revokeObjectURL(url) }, 200)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -501,7 +510,17 @@ export function exportMultiSheetExcel(options: MultiSheetExportOptions): void {
     XLSX.utils.book_append_sheet(wb, ws, sheet.name)
   }
 
-  XLSX.writeFile(wb, `${options.fileName}.xlsx`)
+  // ── Download (reliable Blob method) ──
+  const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = options.fileName.endsWith('.xlsx') ? options.fileName : `${options.fileName}.xlsx`
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  setTimeout(() => { if (document.body.contains(a)) document.body.removeChild(a); URL.revokeObjectURL(url) }, 200)
 }
 
 // ═══════════════════════════════════════════════════════════════

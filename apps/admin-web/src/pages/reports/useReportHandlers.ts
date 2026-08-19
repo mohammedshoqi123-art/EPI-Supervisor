@@ -36,6 +36,7 @@ import {
   exportShortagesProExcel,
   exportUsersProExcel,
   exportRolesProExcel,
+  exportProExcel,
 } from '@/lib/pro-excel'
 import {
   generateReportHTML,
@@ -468,7 +469,7 @@ export function useReportHandlers() {
       let offset = 0
       const pageSize = 1000
       while (true) {
-        const { data, error } = await supabase.from('form_submissions').select(`id, status, data, created_at, profiles!submitted_by(full_name), governorates(name_ar), districts(name_ar)`).eq('form_id', form.id).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + pageSize - 1)
+        const { data, error } = await supabase.from('form_submissions').select(`id, status, data, created_at, campaign_round, profiles!submitted_by(full_name), governorates(name_ar), districts(name_ar)`).eq('form_id', form.id).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + pageSize - 1)
         if (error) throw error
         if (!data || data.length === 0) break
         allSubmissions.push(...data)
@@ -479,7 +480,7 @@ export function useReportHandlers() {
       const mapped = allSubmissions.map((s: any) => ({
         id: s.id, status: s.status, submitted_by: s.profiles?.full_name || '',
         governorate: s.governorates?.name_ar || '', district: s.districts?.name_ar || '',
-        created_at: s.created_at, data: s.data || {},
+        created_at: s.created_at, campaign_round: s.campaign_round || 1, data: s.data || {},
       }))
       if (mapped.length === 0) { toast({ title: 'لا توجد إرساليات', variant: 'destructive' }); return }
       if (format === 'csv') {
@@ -532,6 +533,158 @@ export function useReportHandlers() {
   const handleMapReport = () => { generateMapReport({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound }) }
   const handleHealthFacilityAssessmentReport = () => exportReport('health-facility-assessment-pdf', () => captureAndPreview('تقرير تقييم المرافق الصحية', 'تقييم جودة أداء المرافق الصحية — الجاهزية، الخطط، التغطية', () => generateHealthFacilityAssessmentReport({ governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
   const handleFieldAnalysisReport = () => exportReport('field-analysis-report', () => captureAndPreview('تحليل المتابعة الميدانية', 'تحليل حقول نعم/لا + تحديات الإشراف الميداني + توصيات ذكية', () => generateFieldAnalysisReport({ governorateId: selectedGovFilter !== 'all' ? selectedGovFilter : undefined, campaignRound: effectiveRound })))
+
+  // ═══ Central Supervision Quick Report (Excel) ═══
+  const handleCentralSupervisionExcel = () => exportReport('central-supervision-excel', async () => {
+    exportProgress.startFetch()
+    const supervisionFormId = '97a4f2b3-c573-4812-b58c-5b0acf814e24'
+    const round = effectiveRound || 2
+    const { data: subs, error } = await supabase
+      .from('form_submissions')
+      .select(`id, status, data, created_at, submitted_at, campaign_round, submitted_by,
+        profiles:submitted_by(full_name, email, role),
+        governorates(name_ar), districts(name_ar)`)  
+      .eq('form_id', supervisionFormId)
+      .eq('campaign_round', round)
+      .eq('status', 'submitted')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(50000)
+    if (error) throw error
+    exportProgress.updateFetchProgress(subs?.length || 0, subs?.length || 0)
+    exportProgress.startGenerate()
+
+    // Build supervisor summary
+    const supervisorMap = new Map<string, {
+      name: string; title: string; position: string; phone: string;
+      governorates: Set<string>; districts: Set<string>;
+      forms: number; days: Set<string>; records: any[]
+    }>()
+
+    for (const sub of subs || []) {
+      const d = sub.data || {}
+      const name = (d.supervisor_name || '').trim()
+      if (!name) continue
+      const profile = (sub as any).profiles
+      const profileName = profile?.full_name?.trim() || ''
+      const key = profileName || name
+      if (!supervisorMap.has(key)) {
+        supervisorMap.set(key, {
+          name: profileName || name, title: d.supervisor_title || '',
+          position: d.supervisor_position || '', phone: d.supervisor_phone || '',
+          governorates: new Set(), districts: new Set(),
+          forms: 0, days: new Set(), records: []
+        })
+      }
+      const entry = supervisorMap.get(key)!
+      entry.forms++
+      if (d.supervisor_title) entry.title = d.supervisor_title
+      if (d.supervisor_position) entry.position = d.supervisor_position
+      if (d.supervisor_phone) entry.phone = d.supervisor_phone
+      const gov = (sub as any).governorates?.name_ar || ''
+      const dist = (sub as any).districts?.name_ar || ''
+      if (gov) entry.governorates.add(gov)
+      if (dist) entry.districts.add(dist)
+      if (d.supervision_date) entry.days.add(d.supervision_date)
+      entry.records.push({ governorate: gov, district: dist, facility: d.health_facility || '', date: d.supervision_date || '', formNumber: d.form_number || '', activity: d.activity_name || '', time: d.visit_time || '' })
+    }
+
+    // Sort by forms desc
+    const sorted = [...supervisorMap.values()].sort((a, b) => b.forms - a.forms)
+
+    // Sheet 1: Summary
+    const summaryRows = sorted.map((s, i) => ({
+      index: i + 1, name: s.name, title: s.title, position: s.position, phone: s.phone,
+      govCount: s.governorates.size, distCount: s.districts.size,
+      governorates: [...s.governorates].join(' | '),
+      districts: [...s.districts].join(' | '),
+      forms: s.forms, days: s.days.size,
+    }))
+
+    // Sheet 2: Detail
+    const detailRows: any[] = []
+    let idx = 0
+    for (const s of sorted) {
+      for (const r of s.records) {
+        idx++
+        detailRows.push({ index: idx, name: s.name, governorate: r.governorate, district: r.district, facility: r.facility, date: r.date, formNumber: r.formNumber, activity: r.activity, time: r.time })
+      }
+    }
+
+    // Sheet 3: By Governorate
+    const govData = new Map<string, { supervisors: Set<string>; forms: number }>()
+    for (const s of sorted) {
+      for (const gov of s.governorates) {
+        if (!govData.has(gov)) govData.set(gov, { supervisors: new Set(), forms: 0 })
+        const g = govData.get(gov)!
+        g.supervisors.add(s.name)
+        g.forms += s.records.filter(r => r.governorate === gov).length
+      }
+    }
+    const govRows = [...govData.entries()].sort((a, b) => b[1].forms - a[1].forms).map(([gov, d], i) => ({
+      index: i + 1, governorate: gov, supervisorCount: d.supervisors.size, forms: d.forms,
+      supervisors: [...d.supervisors].join(' | ')
+    }))
+
+    const ok = exportProExcel({
+      sheets: [
+        {
+          name: 'ملخص المشرفين',
+          title: `المشرفين المركزيين — الجولة ${round} — النشاط الإيصالي التكاملي`,
+          subtitle: `${summaryRows.length} مشرف — ${subs?.length || 0} استمارة`,
+          columns: [
+            { header: '#', key: 'index', width: 5, align: 'center' },
+            { header: 'اسم المشرف', key: 'name', width: 30 },
+            { header: 'الصفة', key: 'title', width: 15 },
+            { header: 'المسمى', key: 'position', width: 25 },
+            { header: 'الجوال', key: 'phone', width: 14 },
+            { header: 'المحافظات', key: 'govCount', width: 10, align: 'center' },
+            { header: 'المديريات', key: 'distCount', width: 10, align: 'center' },
+            { header: 'أسماء المحافظات', key: 'governorates', width: 30 },
+            { header: 'أسماء المديريات', key: 'districts', width: 40 },
+            { header: 'الاستمارات', key: 'forms', width: 10, align: 'center' },
+            { header: 'الأيام', key: 'days', width: 8, align: 'center' },
+          ],
+          data: summaryRows,
+          showTotal: true,
+          totalColumns: ['forms'],
+        },
+        {
+          name: 'تفاصيل الاستمارات',
+          title: 'تفاصيل الاستمارات — المشرفين المركزيين',
+          columns: [
+            { header: '#', key: 'index', width: 5, align: 'center' },
+            { header: 'المشرف', key: 'name', width: 25 },
+            { header: 'المحافظة', key: 'governorate', width: 15 },
+            { header: 'المديرية', key: 'district', width: 18 },
+            { header: 'المنشأة', key: 'facility', width: 20 },
+            { header: 'التاريخ', key: 'date', width: 15 },
+            { header: 'رقم الاستمارة', key: 'formNumber', width: 25 },
+            { header: 'النشاط', key: 'activity', width: 15 },
+            { header: 'الوقت', key: 'time', width: 10 },
+          ],
+          data: detailRows,
+        },
+        {
+          name: 'حسب المحافظة',
+          title: 'توزيع المشرفين المركزيين حسب المحافظة',
+          columns: [
+            { header: '#', key: 'index', width: 5, align: 'center' },
+            { header: 'المحافظة', key: 'governorate', width: 20 },
+            { header: 'عدد المشرفين', key: 'supervisorCount', width: 12, align: 'center' },
+            { header: 'عدد الاستمارات', key: 'forms', width: 12, align: 'center' },
+            { header: 'المشرفين', key: 'supervisors', width: 50 },
+          ],
+          data: govRows,
+          showTotal: true,
+          totalColumns: ['supervisorCount', 'forms'],
+        },
+      ],
+      fileName: `central_supervision_round${round}_${new Date().toISOString().split('T')[0]}`,
+    })
+    exportProgress.done(`تم تصدير ${summaryRows.length} مشرف — ${subs?.length || 0} استمارة${ok ? '' : ' (فشل)'}`)
+    if (!ok) toast({ title: 'فشل تصدير Excel', variant: 'destructive' })
+  })
 
   // ═══ Charts data ═══
   const govChartData = useMemo(() => {
@@ -588,6 +741,7 @@ export function useReportHandlers() {
     handleMapReport,
     handleHealthFacilityAssessmentReport,
     handleFieldAnalysisReport,
+    handleCentralSupervisionExcel,
     handleExportHealthFacilityAssessment,
     // Charts
     govChartData, statusPieData,

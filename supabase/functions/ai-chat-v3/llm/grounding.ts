@@ -2095,6 +2095,11 @@ export async function groundMessage(
     contextText += '4. إذا لم توجد أرقام في المصادر، أعطِ التحليل النوعي والتوصيات\n'
     contextText += '5. ركّز على التحليل والتوصيات العملية، ليس فقط سرد الأرقام\n\n'
 
+    // ⚠️ T5-SCRUB: strip control characters — some submission rows contain
+    // raw control bytes that make providers 400-reject the whole request.
+    const scrub = (s: string) => s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+    contextText = scrub(contextText)
+
     // ⚠️ T5-FIX: Cap total contextText to ~8000 chars (was 12000). Prefill size
     // is the dominant latency driver for tool decisions on Groq — a 12K context
     // pushed tool-call prefill past the 6s per-model timeout. 8K keeps quality
@@ -2102,7 +2107,8 @@ export async function groundMessage(
     const MAX_CONTEXT_CHARS = 8000
     let totalChars = contextText.length
     for (const src of sources) {
-      const entry = `[${src.id}] ${src.summary}\n${src.quote}\n\n`
+      // ⚠️ T5-SCRUB: sanitize each entry individually
+      const entry = scrub(`[${src.id}] ${src.summary}\n${src.quote}\n\n`)
       if (totalChars + entry.length > MAX_CONTEXT_CHARS) {
         const remaining = MAX_CONTEXT_CHARS - totalChars
         if (remaining > 200) {

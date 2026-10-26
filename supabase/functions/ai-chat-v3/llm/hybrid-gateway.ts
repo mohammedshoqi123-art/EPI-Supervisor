@@ -283,12 +283,12 @@ export async function hybridRouteChat(
           const result = await Promise.race([
             groqChat(messages, groqKey, {
               model: model || 'llama-3.1-8b-instant',
-              maxTokens: maxTokens || 2000,
+              maxTokens: Math.min(maxTokens || 2000, 1500),
               temperature,
               tools,
               tool_choice,
             }),
-            new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 14_000)),
+            new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 16_000)),
           ])
           if (result?.type === 'tool_calls') {
             return null as null // tool calls handled by caller via needTools
@@ -313,10 +313,10 @@ export async function hybridRouteChat(
           const result = await Promise.race([
             pollinationsChat(messages, {
               model: 'openai',
-              maxTokens: maxTokens || 2000,
+              maxTokens: Math.min(maxTokens || 2000, 1500),
               temperature,
             }),
-            new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 11_000)),
+            new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15_000)),
           ])
           if (result && typeof result === 'string') {
             recordSuccess('pollinations', Date.now() - start)

@@ -1960,6 +1960,30 @@ serve(async (req) => {
       timeoutMs: raceTimeout,
     })
 
+    // ═══ T5-RELIABILITY: emergency direct Groq attempt ═══
+    // If the gateway exhausted everything (e.g. Groq was health-blocked on this
+    // isolate), make ONE direct attempt that bypasses the health state — the
+    // user must never leave without an AI answer when Groq is reachable.
+    if (!hybridResult.content && !hybridResult.toolCalls?.length && groqKey) {
+      try {
+        console.warn('[MAIN] Emergency direct Groq attempt (bypassing health state)')
+        const emergency = await Promise.race([
+          groqChat(messages, groqKey, {
+            model: dbModelId || 'llama-3.1-8b-instant',
+            maxTokens: dbMaxTokens,
+            temperature: dbTemperature,
+          }),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 12_000)),
+        ])
+        if (emergency?.type === 'message' && emergency.content) {
+          hybridResult.content = emergency.content
+          hybridResult.provider = 'groq_emergency'
+          hybridResult.usage = emergency.usage
+          hybridResult.attempts = [...(hybridResult.attempts || []), 'groq-emergency']
+        }
+      } catch { /* fall through to direct-data fallback */ }
+    }
+
     // ─── If we got tool calls, execute them then ask LLM for final answer ───
     if (hybridResult.toolCalls?.length) {
       console.log(`[MAIN] Got ${hybridResult.toolCalls.length} tool calls from ${hybridResult.provider}`)
@@ -2095,7 +2119,14 @@ serve(async (req) => {
     // analytics into a useful Arabic response directly.
     // This is the "nuclear option" — when all 5 providers fail,
     // the user still gets real data from the database.
-    await logUsage(supabase, 'none', 0, Date.now() - startMs, false, `All providers failed (attempted: ${(hybridResult.attempts || []).join(',')})`, 'all_failed')
+    // ⚠️ T5-DIAG: include per-attempt error details in the log for diagnosis.
+    const attemptDetail = getRecentAttempts()
+      .slice(0, 8)
+      .map(a => `${a.provider}(${a.ok ? 'ok' : (a.error || 'fail').slice(0, 40)})`)
+      .join(' | ')
+    await logUsage(supabase, 'none', 0, Date.now() - startMs, false,
+      `All providers failed (attempted: ${(hybridResult.attempts || []).join(',')}) ${attemptDetail}`,
+      'all_failed')
 
     let fallbackAnswer = ''
 

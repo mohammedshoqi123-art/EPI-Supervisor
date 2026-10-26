@@ -34,8 +34,10 @@ const health: Record<string, ProviderHealth> = {
   openrouter: { name: 'OpenRouter', tier: 5, successes: 0, failures: 0, totalLatency: 0, lastUsed: 0, blocked: false, blockedUntil: 0 },
 }
 
-const BLOCK_DURATION = 5 * 60 * 1000 // 5 minutes
-const MAX_FAILURES = 3
+const BLOCK_DURATION = 90 * 1000 // ⚠️ T5-FIX: 5min→90s — 5-minute blocks turned
+// one bad request into a 5-minute outage of the whole chain on that isolate.
+const MAX_FAILURES = 6 // ⚠️ T5-FIX: 3→6 — Groq's 2-model internal retries count
+// as ONE gateway failure each; 3 failures is too few across rotating isolates.
 
 // ⚠️ T5-DIAG: in-memory ring buffer of recent attempts (survives between
 // requests on warm instances) — exposed via gateway_health for live debugging.
@@ -135,6 +137,9 @@ export async function hybridRouteChat(
     const orKey = env.OPENROUTER_API_KEY
 
     // ─── Try Groq with tools first (fastest) ───
+    // ⚠️ T5-FIX: outer race 22s (was 15s) — groqChat's internal chain is
+    // 2 models × 9s = 18s worst case; a 15s outer race killed healthy
+    // second-model attempts and poisoned provider health.
     if (groqKey && isAvailable('groq')) {
       attempts.push('groq')
       try {
@@ -146,7 +151,7 @@ export async function hybridRouteChat(
             tools,
             tool_choice,
           }),
-          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), Math.max(timeoutMs, 22_000))),
         ])
         if (result) {
           recordSuccess('groq', Date.now() - start)

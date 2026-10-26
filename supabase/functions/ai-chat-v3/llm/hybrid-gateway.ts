@@ -122,7 +122,7 @@ export async function hybridRouteChat(
       try {
         const result = await Promise.race([
           groqChat(messages, groqKey, {
-            model: model || 'openai/gpt-oss-120b',
+            model: model || 'llama-3.1-8b-instant',
             maxTokens: maxTokens || 2000,
             temperature,
             tools,
@@ -183,7 +183,7 @@ export async function hybridRouteChat(
       try {
         const result = await Promise.race([
           groqChat(messages, groqKey, {
-            model: model || 'openai/gpt-oss-120b',
+            model: model || 'llama-3.1-8b-instant',
             maxTokens: maxTokens || 2000,
             temperature,
           }),
@@ -237,7 +237,7 @@ export async function hybridRouteChat(
       const start = Date.now()
       const result = await Promise.race([
         groqChat(messages, groqKey, {
-          model: model || 'openai/gpt-oss-120b',
+          model: model || 'llama-3.1-8b-instant',
           maxTokens: maxTokens || 2000,
           temperature,
           tools,
@@ -386,7 +386,7 @@ export async function hybridRouteStream(
     attempts.push('groq')
     try {
       const result = await groqChat(messages, groqKey, {
-        model: model || 'openai/gpt-oss-120b',
+        model: model || 'llama-3.1-8b-instant',
         maxTokens: maxTokens || 2000,
         temperature,
         tools,

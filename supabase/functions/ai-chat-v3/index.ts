@@ -1323,7 +1323,7 @@ serve(async (req) => {
       try {
         const { groqChat } = await import('./llm/providers.ts')
         const t1 = Date.now()
-        const r = await groqChat(testMsg, groqKey || '', { model: 'openai/gpt-oss-120b', maxTokens: 50 })
+        const r = await groqChat(testMsg, groqKey || '', { model: 'llama-3.1-8b-instant', maxTokens: 50 })
         results.groq = { ok: r?.type === 'message', latency: Date.now() - t1, type: r?.type, reply: r?.content?.slice(0, 100) }
       } catch (e: any) {
         results.groq = { ok: false, error: String(e).slice(0, 200) }
@@ -1382,7 +1382,7 @@ serve(async (req) => {
         const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${groqKey || ''}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'openai/gpt-oss-120b', messages: testMsg, max_tokens: 300, tools: TOOLS }),
+          body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: testMsg, max_tokens: 300, tools: TOOLS }),
           signal: controller.signal,
         })
         clearTimeout(timeoutId)
@@ -1406,7 +1406,7 @@ serve(async (req) => {
       try {
         const { groqChat } = await import('./llm/providers.ts')
         const t1 = Date.now()
-        const r2 = await groqChat(testMsg, groqKey || '', { model: 'openai/gpt-oss-120b', maxTokens: 300, tools: TOOLS })
+        const r2 = await groqChat(testMsg, groqKey || '', { model: 'llama-3.1-8b-instant', maxTokens: 300, tools: TOOLS })
         out.helper_type = (r2 as any)?.type
         out.helper_latency = Date.now() - t1
         out.helper_tools = (r2 as any)?.tool_calls?.map((t: any) => t.function?.name)
@@ -1726,12 +1726,59 @@ serve(async (req) => {
     }
 
     if (template) {
+      // ⚠️ T5-QUALITY: rich structured template prompts (were one-liners that
+      // produced vague, useless reports). Each template now demands a full
+      // report structure with real numbers, analysis, and recommendations.
       const T: Record<string, string> = {
-        daily: 'أنشئ تقريراً يومياً مختصراً', weekly: 'حلل أداء الأسبوع', governorate: 'حلل أداء المحافظات',
-        shortages: 'حلل النواقص', quality: 'حلل جودة البيانات', coverage: 'حلل التغطية',
-        polio: 'حلل حملات الشلل', supervision: 'حلل الإشراف', targets: 'حلل المستهدفات',
+        daily: `أنشئ **تقريراً يومياً تنفيذياً** بالبنية التالية:
+1. 📊 ملخص الأرقام: إرساليات اليوم (حسب نوع الحملة)، بانتظار المراجعة، المرفوضة
+2. 📈 مقارنة باليوم السابق (ارتفاع/انخفاض ونسبة التغير)
+3. ⚠️ نقاط تحتاج انتباه: نواقص حرجة، إرساليات متأخرة، جودة بيانات منخفضة
+4. 💡 3 توصيات عملية لأمسيات اليوم
+استخدم أرقاماً حقيقية من الأدوات، وجدولاً ماركداون إذا قارنت أرقاماً.`,
+        weekly: `أنشئ **تقريراً أسبوعياً شاملاً** بالبنية التالية:
+1. 📊 إجمالي الإرساليات هذا الأسبوع مقارنة بالأسبوع الماضي (نسبة التغير)
+2. 🏆 أعلى 3 محافظات أداءً وأدنى 3 مع الأرقام
+3. 📉 اتجاه الإرساليات اليومي خلال الأسبوع (جدول: اليوم | العدد | التغيير)
+4. ⚠️ مشاكل متكررة: رفض، تأخير مراجعة، نواقص
+5. 💡 توصيات للأسبوع القادم مرتبة حسب الأولوية`,
+        governorate: `حلل **أداء المحافظات** بالمقارنة:
+1. 🏆 جدول ترتيب المحافظات: المحافظة | الإرساليات | التغطية % | الاتجاه
+2. 📉 المحافظات الأدنى من المستهدف (95%) وأسبابها المحتملة
+3. 🔍 فجوات الأداء بين أعلى وأدنى محافظة
+4. 💡 خطة تحليل لأدنى 3 محافظات بخطوات عملية`,
+        shortages: `حلل **النواقص** بالبنية التالية:
+1. ⚠️ إجمالي النواقص النشطة (حرجة / عالية / متوسطة) في جدول
+2. 📍 توزيع النواقص: أي المحافظات/المديريات الأكثر تضرراً
+3. 💉 أي اللقاحات/المستلزمات الأكثر نقصاً والأثر المتوقع على التغطية
+4. 💡 خطة معالجة مرتبة: إجراء فوري، خلال أسبوع، خلال شهر`,
+        quality: `حلل **جودة البيانات**:
+1. 📊 نسبة الرفض والأخطاء الشائعة (حقول ناقصة، أرقام غير منطقية، صور مفقودة)
+2. 🏆 جدول: المحافظة | نسبة القبول | أكثر خطأ متكرر
+3. 🔍 تحليل جذري لأهم 3 مشاكل جودة
+4. 💡 توصيات تدريب وتحسين للنماذج نفسها`,
+        coverage: `حلل **مؤشرات التغطية التحصينية**:
+1. 📊 التغطية الحالية مقابل المستهدف 95% (Penta3، الحصبة، شلل) في جدول
+2. 📉 مؤشر Dropout (Penta1→Penta3) وأي مناطق تجاوز 10%
+3. 🗺️ الفجوات الجغرافية: المحافظات/المديريات دون المستوى
+4. 💡 خطوات لرفع التغطية في المناطق الضعيفة + مخاطر التفشي إن استمرت الفجوة`,
+        polio: `حلل **حملات شلل الأطفال**:
+1. 📊 أرقام الحملة: الإرساليات، التغطية، الحملة النشطة حالياً
+2. 🗺️ الأداء حسب المحافظات (جدول مع الاتجاه)
+3. ⚠️ مناطق الرفض المجتمعي أو التغطية المنخفضة وخطة الاستجابة
+4. 💡 توصيات للجولة القادمة بناءً على الأداء الحالي`,
+        supervision: `حلل **أداء الإشراف الميداني**:
+1. 👥 عدد المشرفين النشطين vs الخاملين (بلا إرساليات آخر 7 أيام)
+2. 🏆 جدول أعلى المشرفين إنتاجية وأدناهم
+3. 🔍 تحليل أنماط الإشراف: أيام الذروة، توزيع الزيارات
+4. 💡 خطة تفعيل للمشرفين الخاملين ورفع جودة الزيارات`,
+        targets: `حلل **المستهدفات مقابل المنجز**:
+1. 🎯 جدول: المستهدف | المنجز | نسبة الإنجاز | المتبقي — لكل مؤشر رئيسي
+2. 📈 معدل التقدم اليومي المطلوب لبلوغ المستهدف في الوقت
+3. ⚠️ المؤشرات المهددة بالتعثر وأسبابها
+4. 💡 إعادة توزيع مقترحة للموارد على المناطق المتعثرة`,
       }
-      messages.push({ role: 'user', content: T[template] || 'أنشئ تقريراً مفصلاً.' })
+      messages.push({ role: 'user', content: T[template] || 'أنشئ تقريراً تنفيذياً مفصلاً بالأرقام الحقيقية: خلاصة، جدول أرقام، تحليل، توصيات.' })
     } else {
       messages.push({ role: 'user', content: message ?? '' })
     }
@@ -1845,7 +1892,7 @@ serve(async (req) => {
       if (needsTools && groqKey) {
         console.log('[STREAM] Tool query → multiStepToolCallingStream')
         const toolStreamResp = await multiStepToolCallingStream(messages, groqKey, supabase, {
-          model: dbModelId || 'openai/gpt-oss-120b',
+          model: dbModelId || 'llama-3.1-8b-instant',
           maxTokens: dbMaxTokens,
           temperature: dbTemperature,
           maxSteps: 2,
@@ -1943,7 +1990,7 @@ serve(async (req) => {
 
       // Use Groq for the final answer (best tool-calling support)
       const finalResult = await multiStepToolCalling(messages, groqKey || '', supabase, {
-        model: dbModelId || 'openai/gpt-oss-120b',
+        model: dbModelId || 'llama-3.1-8b-instant',
         maxTokens: dbMaxTokens,
         temperature: dbTemperature,
         maxSteps: 2,  // ⚠️ FIX: 3→2 to reduce latency and avoid mobile timeout

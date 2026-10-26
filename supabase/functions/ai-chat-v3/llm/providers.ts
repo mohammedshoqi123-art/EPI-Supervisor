@@ -35,7 +35,7 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     free: true,
     // ⚠️ T5-FIX: llama-3.3-70b-versatile REMOVED by Groq (404 as of 2026-10-26).
     // gpt-oss-120b proven working with tools; 8b-instant as fast secondary.
-    models: ['openai/gpt-oss-120b', 'llama-3.1-8b-instant'],
+    models: ['llama-3.1-8b-instant', 'openai/gpt-oss-120b'],
     maxTokens: 4000,
     supportsTools: true,
     supportsStreaming: true,
@@ -100,18 +100,14 @@ const PROVIDERS: Record<string, ProviderConfig> = {
 // الـ race الخارجي كان يرفض الطلب بعد 15s قبل إكمال التجارب.
 // الآن: نموذجان فقط × 6s = 12s كحد أقصى (هامش 3s للشبكة).
 //
-// ترتيب النماذج من الأفضل (الأذكى) إلى الأسوأ (الأسرع):
-// ⚠️ T5-FIX: llama-3.3-70b-versatile was REMOVED by Groq (404) — the whole
-// tools path was silently limping through fallbacks. gpt-oss-120b is the
-// proven primary now; 8b-instant is the fast secondary.
+// ترتيب النماذج — ⚠️ T5-SPEED: 8b-instant أولاً (غير استدلالي، يقرر الأدوات
+// في أقل من ثانيتين حتى مع سياق 10K) ثم gpt-oss-120b للعمق عند الحاجة.
 const GROQ_FALLBACK_CHAIN = [
-  'openai/gpt-oss-120b',           // PRIMARY — أذكى، يدعم tools (مؤكد حياً)
-  'llama-3.1-8b-instant',          // fallback — أسرع بكثير للسياق الكبير
+  'llama-3.1-8b-instant',          // PRIMARY — الأسرع (غير استدلالي، يدعم tools)
+  'openai/gpt-oss-120b',           // fallback — أذكى لكن أبطأ (استدلالي)
 ]
 
-// Timeout لكل محاولة نموذج — ⚠️ T5-FIX: 6s→9s. Tool decisions with the full
-// system prompt + 8K grounding context need prefill time on gpt-oss-120b;
-// 6s aborted healthy requests and pushed the gateway into slow fallbacks.
+// Timeout لكل محاولة نموذج — 9s يعطي هامشاً للسياق الكبير دون تعطيل السلسلة
 const GROQ_PER_MODEL_TIMEOUT_MS = 9_000
 
 export async function groqChat(
@@ -146,6 +142,9 @@ export async function groqChat(
       max_tokens: opts.maxTokens || 2000,
       temperature: opts.temperature ?? 0.4,
     }
+    // ⚠️ T5-SPEED: gpt-oss models are reasoning models — default reasoning eats
+    // seconds + token budget before any tool decision. Cap it to 'low'.
+    if (model.includes('gpt-oss')) body.reasoning_effort = 'low'
     if (opts.tools) body.tools = opts.tools
     if (opts.tool_choice) body.tool_choice = opts.tool_choice
     if (opts.stream) body.stream = true

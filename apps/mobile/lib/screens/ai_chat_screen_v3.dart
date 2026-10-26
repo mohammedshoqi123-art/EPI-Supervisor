@@ -1257,59 +1257,170 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
   /// Show prompt templates bottom sheet
   void _showPromptTemplates() {
     HapticFeedback.lightImpact();
-    // ⚠️ قوالب محدثة — عملية ومفيدة لمدير EPI
-    final templates = [
-      ('📊', 'حلل أداء الجولة الحالية'),
-      ('🏆', 'تقييم أداء المشرفين الشامل'),
-      ('📈', 'تحليلات النظام — جميع التبويبات'),
-      ('🗺️', 'ما توزيع الإرساليات حسب المحافظات؟'),
-      ('⚠️', 'ما النواقص الحرجة في النظام؟'),
-      ('👥', 'من هم المشرفون الخاملون؟'),
-      ('💉', 'اشرح لي عن لقاح شلل الأطفال OPV'),
-      ('📋', 'ما هي معايير التغطية المقبولة؟'),
-      ('🎯', 'كيف نتعامل مع الرفض المجتمعي للتطعيم؟'),
-      ('📊', 'حلل أداء محافظة تعز'),
+    final cs = Theme.of(context).colorScheme;
+    // ⚠️ T5-UX: templates grouped by purpose, each phrased as a concrete
+    // data-driven question the bot can actually answer with tools.
+    final groups = <({String title, IconData icon, Color color, List<({String emoji, String title, String query})> items})>[
+      (
+        title: 'تقارير فورية',
+        icon: Icons.description_rounded,
+        color: const Color(0xFF2196F3),
+        items: [
+          (emoji: '📅', title: 'تقرير اليوم التنفيذي', query: 'أنشئ تقرير اليوم التنفيذي: إرساليات اليوم مقارنة بالأمس، بانتظار المراجعة، وأهم 3 توصيات'),
+          (emoji: '🗓️', title: 'تقرير الأسبوع الشامل', query: 'أنشئ تقريراً أسبوعياً شاملاً: إجمالي الإرساليات مقارنة بالأسبوع الماضي، أعلى وأدنى المحافظات، والمشاكل المتكررة'),
+          (emoji: '🏆', title: 'ترتيب المحافظات', query: 'رتب المحافظات حسب الإرساليات والتغطية في جدول، وحدد الأدنى من مستهدف 95% مع أسبابه وتوصياته'),
+        ],
+      ),
+      (
+        title: 'أسئلة البيانات',
+        icon: Icons.query_stats_rounded,
+        color: const Color(0xFF9C27B0),
+        items: [
+          (emoji: '📊', title: 'إرساليات اليوم', query: 'كم عدد الإرساليات اليوم وحسب نوع الحملة؟'),
+          (emoji: '💉', title: 'مؤشرات التغطية', query: 'ما هي مؤشرات التغطية التحصينية الحالية مقابل مستهدف 95%؟'),
+          (emoji: '⚠️', title: 'النواقص الحرجة', query: 'ما النواقص الحرجة النشطة الآن وأين تتركز وأيها أشد أثراً على التغطية؟'),
+          (emoji: '📉', title: 'مؤشر Dropout', query: 'ما مؤشر الانقطاع Dropout بين Penta1 و Penta3 وأي المناطق تجاوز حد 10%؟'),
+        ],
+      ),
+      (
+        title: 'الإشراف والفريق',
+        icon: Icons.groups_rounded,
+        color: const Color(0xFF4CAF50),
+        items: [
+          (emoji: '👥', title: 'المشرفون الخاملون', query: 'من هم المشرفون الخاملون بلا إرساليات آخر 7 أيام وكيف نفعّلهم؟'),
+          (emoji: '✅', title: 'أداء المشرفين', query: 'قيّم أداء المشرفين: أعلى المنتجين، أدناهم، وأنماط توزيع الزيارات'),
+          (emoji: '📋', title: 'بانتظار المراجعة', query: 'كم إرسالية بانتظار المراجعة الآن ومنذ متى أقدمها؟'),
+        ],
+      ),
+      (
+        title: 'معرفة فنية',
+        icon: Icons.school_rounded,
+        color: const Color(0xFF795548),
+        items: [
+          (emoji: '🧊', title: 'سلسلة التبريد', query: 'ما هي سلسلة التبريد للقاحات وما معايير الحفظ الصحيحة؟'),
+          (emoji: '🚨', title: 'التعامل مع AEFI', query: 'كيف أتعامل مع حالة AEFI خطيرة وما إجراءات الإبلاغ خلال 24 ساعة؟'),
+          (emoji: '🎯', title: 'الرفض المجتمعي', query: 'كيف نتعامل مع الرفض المجتمعي للتطعيم بخطوات ميدانية عملية؟'),
+        ],
+      ),
     ];
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40, height: 4,
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
+      isScrollControlled: true,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.72,
+        minChildSize: 0.5,
+        maxChildSize: 0.92,
+        builder: (ctx, scrollCtrl) => Container(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 10),
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: Text('قوالب جاهزة',
-                  style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800)),
-            ),
-            ...templates.map((t) => ListTile(
-                  leading: Text(t.$1, style: const TextStyle(fontSize: 24)),
-                  title: Text(t.$2,
-                      style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _ctrl.text = t.$2;
-                    _send(t.$2);
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.bolt_rounded, color: cs.primary, size: 20),
+                    const SizedBox(width: 6),
+                    Text('قوالب جاهزة — اضغط للتنفيذ الفوري',
+                        style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: groups.length,
+                  itemBuilder: (ctx, gi) {
+                    final g = groups[gi];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12, bottom: 8),
+                          child: Row(children: [
+                            Container(
+                              width: 28, height: 28,
+                              decoration: BoxDecoration(
+                                color: g.color.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(g.icon, size: 16, color: g.color),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(g.title,
+                                style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: g.color)),
+                          ]),
+                        ),
+                        ...g.items.map((t) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Material(
+                                color: cs.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(14),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(14),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    _send(t.query);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: g.color.withValues(alpha: 0.12)),
+                                    ),
+                                    child: Row(children: [
+                                      Text(t.emoji,
+                                          style: const TextStyle(fontSize: 22)),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(t.title,
+                                            style: TextStyle(
+                                                fontFamily: 'Tajawal',
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: cs.onSurface)),
+                                      ),
+                                      Icon(Icons.arrow_back_ios_rounded,
+                                          size: 13,
+                                          color: cs.onSurfaceVariant
+                                              .withValues(alpha: 0.4)),
+                                    ]),
+                                  ),
+                                ),
+                              ),
+                            )),
+                      ],
+                    );
                   },
-                )),
-            const SizedBox(height: 16),
-          ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -1682,14 +1793,24 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
           ),
         ),
         const SizedBox(height: 16),
-        Text('مرحباً بك أيها المشرف الداعم 👋',
-            style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                fontFamily: 'Cairo',
-                color: cs.onSurface)),
+        Builder(builder: (_) {
+          final h = DateTime.now().hour;
+          final greeting = h < 12
+              ? 'صباح الخير 👋'
+              : h < 17
+                  ? 'طاب يومك 👋'
+                  : h < 21
+                      ? 'مساء الخير 👋'
+                      : 'ليلة موفقة 🌙';
+          return Text('$greeting، جاهز لخدمتك',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Cairo',
+                  color: cs.onSurface));
+        }),
         const SizedBox(height: 6),
-        Text('اسألني عن بيانات النظام، التغطية، أو أدلة سير العمل',
+        Text('اسألني عن بيانات النظام والتغطية والنواقص — أو اختر قالباً جاهزاً',
             style: TextStyle(
                 fontSize: 12,
                 fontFamily: 'Tajawal',
@@ -1700,40 +1821,40 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
         _buildStudioPromo(cs),
         const SizedBox(height: 18),
 
-        // Quick queries — محدثة لتكون عملية ومفيدة
-        _sectionLabel('📊 التحصين والبيانات', cs),
+        // Quick queries — T5: أسئلة ملموسة يجيب عنها البوت بأدوات البيانات الفعلية
+        _sectionLabel('📊 بياناتك الآن', cs),
         const SizedBox(height: 10),
-        _quickCard(cs, Icons.bar_chart_rounded, 'حلل أداء الجولة الحالية',
-            'حلل أداء الجولة الحالية', const Color(0xFF2196F3)),
-        _quickCard(cs, Icons.map_rounded, 'توزيع الإرساليات حسب المحافظات',
-            'ما توزيع الإرساليات حسب المحافظات؟', const Color(0xFF9C27B0)),
-        _quickCard(cs, Icons.warning_amber_rounded, 'النواقص الحرجة',
-            'ما النواقص الحرجة في النظام؟', const Color(0xFFFF5722)),
-        _quickCard(cs, Icons.people_alt_rounded, 'المشرفون الخاملون',
-            'من هم المشرفون الخاملون؟', const Color(0xFFFF9800)),
+        _quickCard(cs, Icons.bar_chart_rounded, 'كم إرسالية وصلت اليوم؟',
+            'كم عدد الإرساليات اليوم وحسب نوع الحملة؟', const Color(0xFF2196F3)),
+        _quickCard(cs, Icons.map_rounded, 'ترتيب المحافظات حسب الأداء',
+            'رتب المحافظات حسب الإرساليات والتغطية في جدول وحدد الأدنى من المستهدف', const Color(0xFF9C27B0)),
+        _quickCard(cs, Icons.warning_amber_rounded, 'النواقص الحرجة الآن',
+            'ما النواقص الحرجة النشطة الآن وأين تتركز؟', const Color(0xFFFF5722)),
+        _quickCard(cs, Icons.pending_actions_rounded, 'بانتظار المراجعة',
+            'كم إرسالية بانتظار المراجعة الآن ومنذ متى؟', const Color(0xFFFF9800)),
 
         const SizedBox(height: 18),
-        _sectionLabel('📋 الإشراف الداعم', cs),
+        _sectionLabel('🩺 المؤشرات الفنية', cs),
         const SizedBox(height: 10),
         _quickCard(
             cs,
-            Icons.assignment_turned_in_rounded,
-            'تقييم أداء المشرفين الشامل',
-            'تقييم أداء المشرفين الشامل',
+            Icons.monitor_heart_rounded,
+            'مؤشرات التغطية مقابل 95%',
+            'ما هي مؤشرات التغطية التحصينية الحالية مقابل مستهدف 95%؟',
             const Color(0xFF4CAF50)),
-        _quickCard(cs, Icons.analytics_rounded, 'تحليلات النظام',
-            'تحليلات النظام — جميع التبويبات', const Color(0xFF00897B)),
+        _quickCard(cs, Icons.trending_down_rounded, 'مؤشر الانقطاع Dropout',
+            'ما مؤشر الانقطاع بين Penta1 و Penta3 وأي المناطق تجاوز 10%؟', const Color(0xFF00897B)),
         _quickCard(
             cs,
-            Icons.vaccines_rounded,
-            'لقاح شلل الأطفال OPV',
-            'اشرح لي عن لقاح شلل الأطفال OPV',
+            Icons.groups_rounded,
+            'المشرفون الخاملون',
+            'من هم المشرفون الخاملون بلا إرساليات آخر 7 أيام وكيف نفعّلهم؟',
             const Color(0xFF795548)),
         _quickCard(
             cs,
             Icons.medical_information_rounded,
-            'معايير التغطية المقبولة',
-            'ما هي معايير التغطية المقبولة في برنامج التحصين؟',
+            'كيف أتعامل مع AEFI؟',
+            'كيف أتعامل مع حالة AEFI خطيرة وما إجراءات الإبلاغ خلال 24 ساعة؟',
             const Color(0xFF607D8B)),
         const SizedBox(height: 28),
       ]),

@@ -2051,6 +2051,33 @@ serve(async (req) => {
           attempted_providers: hybridResult.attempts,
         }, 200, origin)
       }
+
+      // ═══ T5-RECOVERY: multi-step synthesis failed after tools ran ═══
+      // The tool results ARE in the messages + grounding context — one
+      // no-tools gateway pass (Groq/Pollinations) still produces a full
+      // AI answer from that data instead of dumping raw fallback text.
+      console.warn('[MAIN] multiStep failed — final no-tools synthesis pass')
+      const synthRetry = await hybridRouteChat(messages, gatewayEnv, {
+        model: dbModelId,
+        maxTokens: dbMaxTokens,
+        temperature: dbTemperature,
+        needTools: false,
+        timeoutMs: Math.min(raceTimeout, 12_000),
+      }).catch(() => null)
+      if (synthRetry?.content) {
+        await logUsage(supabase, dbModel?.id || 'hybrid-gateway', synthRetry.usage?.total_tokens || 0, Date.now() - startMs, true, undefined, `hybrid_${synthRetry.provider}_tools_recovery`)
+        return jsonResponse({
+          reply: synthRetry.content,
+          source: `hybrid_${synthRetry.provider}_tools_recovery`,
+          model: dbModelId,
+          intent, confidence,
+          messageId: crypto.randomUUID(),
+          toolsUsed: toolCallsUsed,
+          provider: synthRetry.provider,
+          latency_ms: Date.now() - startMs,
+          attempted_providers: [...(hybridResult.attempts || []), ...(synthRetry.attempts || [])],
+        }, 200, origin)
+      }
     }
 
     // ─── Got a direct text answer from the race ───

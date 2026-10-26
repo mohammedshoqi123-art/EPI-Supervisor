@@ -921,7 +921,13 @@ class OfflineManager {
   }
 
   /// Save a draft — encrypts ONLY this draft (not all drafts)
-  Future<void> saveDraft(
+  ///
+  /// ═══ FIX D-3 ═══
+  /// Returns `true` when the draft had to be stored UNENCRYPTED (plaintext)
+  /// so callers can warn the user; `false` when stored encrypted.
+  /// Plaintext blobs are also self-tagged with `'_unencrypted': true` so the
+  /// state is discoverable later (see [isDraftUnencrypted]).
+  Future<bool> saveDraft(
       String draftId, String formId, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
       final draftData = {
@@ -934,17 +940,23 @@ class OfflineManager {
       // Previously: tried encrypt() with ephemeral key → data encrypted with wrong key
       //   → can't decrypt on restart → permanent data loss!
       // Now: when _encryptionAvailable is false, save as plain JSON directly.
+      // ═══ FIX D-3: plaintext fallback is now TAGGED + reported to the caller. ═══
       String encrypted;
+      bool storedPlain = false;
       if (!_encryptionAvailable) {
-        debugPrint('[OfflineManager] ⚠️ M-3: Encryption not available — saving as plain JSON');
+        debugPrint('[OfflineManager] ⚠️ M-3: Encryption not available — saving as TAGGED plain JSON');
+        draftData['_unencrypted'] = true;
         encrypted = jsonEncode(draftData);
+        storedPlain = true;
       } else {
         try {
           final json = jsonEncode(draftData);
           encrypted = _encryption.encrypt(json);
         } catch (e) {
-          debugPrint('[OfflineManager] Encrypt failed — saving draft as plain JSON: $e');
+          debugPrint('[OfflineManager] ⚠️ D-3: Encrypt failed — saving as TAGGED plain JSON: $e');
+          draftData['_unencrypted'] = true;
           encrypted = jsonEncode(draftData);
+          storedPlain = true;
         }
       }
 
@@ -974,7 +986,38 @@ class OfflineManager {
           await _box?.put(_draftsIndexKey, jsonEncode(index));
         }
       }
+
+      return storedPlain;
     });
+  }
+
+  /// ═══ FIX D-3: whether THIS draft blob is stored unencrypted (tagged). ═══
+  bool isDraftUnencrypted(String draftId) {
+    final data = _box?.get('drafts/$draftId');
+    if (data == null || data.isEmpty) return false;
+    if (data.contains('"_unencrypted":true')) return true;
+    try {
+      final map = jsonDecode(data);
+      return map is Map && map['_unencrypted'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// ═══ FIX D-3: ids of all drafts currently stored unencrypted — for UI banners. ═══
+  List<String> getUnencryptedDraftIds() {
+    final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
+    List<String> ids;
+    try {
+      try {
+        ids = List<String>.from(jsonDecode(_encryption.decrypt(indexStr)));
+      } catch (_) {
+        ids = List<String>.from(jsonDecode(indexStr));
+      }
+    } catch (_) {
+      ids = [];
+    }
+    return ids.where(isDraftUnencrypted).toList();
   }
 
   /// Get a single draft — decrypts ONLY this draft (not all)

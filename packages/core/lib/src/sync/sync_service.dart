@@ -390,7 +390,11 @@ class SyncService {
       // Reference data (governorates, districts, forms, facilities, references)
       // is refreshed by the user via the drawer's sync button, not automatically.
       if (result.synced > 0 || result.duplicates > 0) {
-        _offline.updateConnectivity(true);
+        // ═══ FIX D-6: do NOT force connectivity=true from sync outcomes. ═══
+        // Previously a successful sync overwrote the connectivity flag,
+        // making OfflineManager.isOnline reflect "server+auth worked" rather
+        // than actual connectivity. ConnectivityUtils is the single source of
+        // truth and is wired in app_providers.
 
         final cache = _dataCache;
         if (cache != null) {
@@ -434,7 +438,9 @@ class SyncService {
           errorStr.contains('connection') ||
           errorStr.contains('failed host') ||
           errorStr.contains('timeout')) {
-        _offline.updateConnectivity(false);
+        // ═══ FIX D-6: leave connectivity signalling to ConnectivityUtils ═══
+        // (was: _offline.updateConnectivity(false) — auth/server failures must
+        // not masquerade as an offline device).
       }
     } finally {
       _isSyncing = false;

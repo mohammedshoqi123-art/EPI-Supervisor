@@ -688,11 +688,13 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
         final asyncValue = ref.read(offlineManagerProvider);
         final offline = asyncValue.value;
         if (offline != null) {
-          offline.saveDraft(
-            _draftId,
-            widget.formId,
-            Map<String, dynamic>.from(_formData),
-          );
+          offline
+              .saveDraft(
+                _draftId,
+                widget.formId,
+                Map<String, dynamic>.from(_formData),
+              )
+              .then(_warnIfStoredUnencrypted);
           _hasUnsavedChanges = false;
 
           // ═══ FIX: نسخة احتياطية سحابية في الخلفية ═══
@@ -1189,11 +1191,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
       // Previously: addToSyncQueue returned ID but it was discarded
       // Now: stored and used to verify THIS submission was synced (not just any item)
       final offlineId = await offline.addToSyncQueue(submissionData);
-      await offline.saveDraft(
+      _warnIfStoredUnencrypted(await offline.saveDraft(
         _draftId,
         widget.formId,
         Map<String, dynamic>.from(_formData),
-      );
+      ));
 
       // ═══ FIX O2: Await sync result before showing success message ═══
       // Previously: sync was fire-and-forget, showing "sent ✅" even if sync failed
@@ -1261,6 +1263,29 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
     }
   }
 
+  // ═══ FIX D-3: warn the user when a draft had to be stored UNENCRYPTED ═══
+  // Throttled so repeated auto-saves don't spam snackbars (max once / 90s).
+  DateTime? _lastUnencryptedWarn;
+  void _warnIfStoredUnencrypted(bool storedPlain) {
+    if (!storedPlain) return;
+    final now = DateTime.now();
+    if (_lastUnencryptedWarn != null &&
+        now.difference(_lastUnencryptedWarn!) < const Duration(seconds: 90)) {
+      return;
+    }
+    _lastUnencryptedWarn = now;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          '⚠️ تعذر التشفير — حُفظت المسودة محلياً دون تشفير مؤقتاً. ستُشفَّر تلقائياً في الحفظ القادم.',
+        ),
+        backgroundColor: Colors.orange.shade800,
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
   /// ═══ FIX R-C2: Returns true if save succeeded, false otherwise ═══
   /// Previously: returned void → caller couldn't know if save failed
   /// Now: returns bool → PopScope can prevent page close on failure
@@ -1314,11 +1339,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
           throw TimeoutException('Offline storage not ready');
         },
       );
-      await offline.saveDraft(
+      _warnIfStoredUnencrypted(await offline.saveDraft(
         _draftId,
         widget.formId,
         Map<String, dynamic>.from(_formData),
-      );
+      ));
       _hasUnsavedChanges = false;
 
       // ═══ FIX: نسخة احتياطية سحابية ═══

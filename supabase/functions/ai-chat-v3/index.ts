@@ -1370,6 +1370,52 @@ serve(async (req) => {
 
       return jsonResponse({ debug: results, timestamp: new Date().toISOString() }, 200, origin)
     }
+    if (mode === 'debug_tools') {
+      // ⚠️ T5-DEBUG: test Groq WITH the real TOOLS array + capture raw error/status.
+      // This isolates why the tools path fails while no-tools Groq works.
+      const testMsg = [{ role: 'user', content: message || 'كم عدد الإرساليات هذا الأسبوع؟' }]
+      const out: any = { tools_count: TOOLS?.length || 0 }
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 12_000)
+        const t1 = Date.now()
+        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${groqKey || ''}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: testMsg, max_tokens: 300, tools: TOOLS }),
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+        out.status = r.status
+        out.latency = Date.now() - t1
+        const txt = await r.text()
+        try {
+          const j = JSON.parse(txt)
+          const choice = j.choices?.[0]
+          out.finish_reason = choice?.finish_reason
+          out.has_tool_calls = !!choice?.message?.tool_calls
+          out.content_preview = (choice?.message?.content || '').slice(0, 120)
+          out.tool_names = choice?.message?.tool_calls?.map((t: any) => t.function?.name) || []
+        } catch {
+          out.raw = txt.slice(0, 400)
+        }
+      } catch (e: any) {
+        out.exception = String(e).slice(0, 200)
+      }
+      // Also test the wrapped groqChat helper with tools
+      try {
+        const { groqChat } = await import('./llm/providers.ts')
+        const t1 = Date.now()
+        const r2 = await groqChat(testMsg, groqKey || '', { model: 'llama-3.3-70b-versatile', maxTokens: 300, tools: TOOLS })
+        out.helper_type = (r2 as any)?.type
+        out.helper_latency = Date.now() - t1
+        out.helper_tools = (r2 as any)?.tool_calls?.map((t: any) => t.function?.name)
+        out.helper_content = ((r2 as any)?.content || '').slice(0, 80)
+      } catch (e: any) {
+        out.helper_exception = String(e).slice(0, 200)
+      }
+      return jsonResponse({ debug_tools: out, timestamp: new Date().toISOString() }, 200, origin)
+    }
     if (mode === 'pollinations_health') {
       // ⚠️ Check Pollinations model lockout state
       try {

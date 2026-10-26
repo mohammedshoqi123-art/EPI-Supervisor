@@ -2095,11 +2095,11 @@ export async function groundMessage(
     contextText += '4. إذا لم توجد أرقام في المصادر، أعطِ التحليل النوعي والتوصيات\n'
     contextText += '5. ركّز على التحليل والتوصيات العملية، ليس فقط سرد الأرقام\n\n'
 
-    // ⚠️ FIX: Cap total contextText to ~12000 chars to avoid token overflow on
-    // providers with smaller context windows (Groq 1024 tokens, Pollinations free tier).
-    // The "100% data" update made contextText huge (sample rows + JSON data + analysis),
-    // causing 400/413 errors on providers. Truncate gracefully.
-    const MAX_CONTEXT_CHARS = 12000
+    // ⚠️ T5-FIX: Cap total contextText to ~8000 chars (was 12000). Prefill size
+    // is the dominant latency driver for tool decisions on Groq — a 12K context
+    // pushed tool-call prefill past the 6s per-model timeout. 8K keeps quality
+    // while cutting prefill time ~33%.
+    const MAX_CONTEXT_CHARS = 8000
     let totalChars = contextText.length
     for (const src of sources) {
       const entry = `[${src.id}] ${src.summary}\n${src.quote}\n\n`

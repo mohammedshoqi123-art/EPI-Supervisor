@@ -128,7 +128,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     });
   }
 
-  // ═══ SEND MESSAGE ═══
+  // ═══ SEND MESSAGE (T5: split into UI wrapper + AI dispatcher) ═══
 
   Future<void> _send(String text, {String? template}) async {
     if (text.trim().isEmpty || _loading) return;
@@ -152,6 +152,79 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
     // Save user message to thread
     unawaited(_saveMessageToThread(role: 'user', content: text));
 
+    await _dispatch(text, template: template);
+  }
+
+  // ═══ T5: Regenerate — re-run the last user question, drop the old answer ═══
+  Future<void> _regenerateLast() async {
+    if (_loading) return;
+    final userIdx = _msgs.lastIndexWhere((m) => m.role == 'user');
+    if (userIdx < 0) return;
+    final userText = _msgs[userIdx].content;
+    HapticFeedback.lightImpact();
+    setState(() {
+      // Drop every assistant reply that came after that user message
+      if (_msgs.length > userIdx + 1) _msgs.removeRange(userIdx + 1, _msgs.length);
+      _loading = true;
+    });
+    _typingAnimCtrl.repeat();
+    _scrollDown();
+    _debouncedSave();
+    await _dispatch(userText);
+  }
+
+  // ═══ T5: Feedback (thumbs up/down) — feeds the server-side learning loop ═══
+  final Map<String, bool> _ratedMsgIds = {};
+
+  Future<void> _rateMessage(ChatMsg msg, bool up) async {
+    HapticFeedback.lightImpact();
+    final already = _ratedMsgIds[msg.id];
+    setState(() {
+      if (already == up) {
+        _ratedMsgIds.remove(msg.id); // toggle off
+      } else {
+        _ratedMsgIds[msg.id] = up;
+      }
+    });
+    if (already == up) return; // un-rated — no server call
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(children: [
+          Icon(up ? Icons.thumb_up_alt_rounded : Icons.info_outline,
+              color: Colors.white, size: 18),
+          const SizedBox(width: 8),
+          Text(up ? 'شكراً لتقييمك الإيجابي!' : 'شكراً — سنعمل على تحسين الإجابات.',
+              style: const TextStyle(fontFamily: 'Tajawal')),
+        ]),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        backgroundColor: const Color(0xFF00897B),
+      ),
+    );
+    try {
+      final api = ref.read(apiClientProvider);
+      final msgIndex = _msgs.indexOf(msg);
+      final prevUserIdx = msgIndex > 0
+          ? _msgs.lastIndexWhere((m) => m.role == 'user', msgIndex - 1)
+          : -1;
+      await api.callFunction('ai-chat-v3', {
+        'mode': 'feedback',
+        'message_id': msg.id,
+        'feedback': {
+          'rating': up ? 'up' : 'down',
+          'intent': msg.source,
+          'original_message':
+              prevUserIdx >= 0 ? _msgs[prevUserIdx].content : null,
+        },
+      });
+    } catch (_) {
+      // Feedback is best-effort — never bother the user about it
+    }
+  }
+
+  Future<void> _dispatch(String text, {String? template}) async {
     try {
       // ═══ OFFLINE CHECK ═══
       if (!ConnectivityUtils.isOnline) {
@@ -196,7 +269,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 _msgs.add(
                     ChatMsg(role: 'assistant', content: resp, source: 'zai'));
                 _loading = false;
-      _typingAnimCtrl.stop();
+                _typingAnimCtrl.stop();
               });
               _debouncedSave();
             }
@@ -222,7 +295,7 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
                 _msgs.add(ChatMsg(
                     role: 'assistant', content: resp, source: 'openrouter'));
                 _loading = false;
-      _typingAnimCtrl.stop();
+                _typingAnimCtrl.stop();
               });
               _debouncedSave();
             }
@@ -233,45 +306,123 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
         }
       }
 
-      // ⚠️ FIX: Use NON-STREAMING by default — streaming was causing timeouts
-      // because hybridRouteStream doesn't support Pollinations reliably.
-      // Non-streaming is more reliable and still fast (<3s via Hybrid Gateway).
-      // ⚠️ FIX: Increased history window from 6×500 to 12×2000 — preserves
-      // context for multi-turn analysis (e.g. "حلل" then "قارن مع الجولة السابقة").
-      final history =
-          _msgs.length > 12 ? _msgs.sublist(_msgs.length - 12) : _msgs;
-      final historyJson = history
-          .map((m) => {
-                'role': m.role,
-                'content': m.content.length > 2000
-                    ? '${m.content.substring(0, 2000)}...'
-                    : m.content,
-              })
-          .toList();
+      // ═══ T5-SPEED: STREAMING FIRST (graceful fallback to non-streaming) ═══
+      // The server now streams BOTH paths: plain answers (raw provider SSE) and
+      // tool queries (progress events + final answer). If the stream yields
+      // nothing within 12s we remove the placeholder and fall back below.
+      final history = _buildHistory(text);
+      final payloadCtx = _buildPayloadContext();
 
-      // ═══ Pass active campaign round to AI so it filters data correctly ═══
-      final activeRound = ref.read(campaignRoundProvider);
-      final activeCampaign = ref.read(campaignProvider).value;
+      final sw = Stopwatch()..start();
+      final buffer = StringBuffer();
+      var gotAnyToken = false;
+      var lastUiUpdate = DateTime.now().subtract(const Duration(seconds: 1));
 
-      // ⚠️ FIX: Only propagate campaign_round for integrated_activity.
-      // Polio and measles campaigns don't have real rounds; sending round=N
-      // filters out all submissions (which have round=NULL or round=1) → empty results.
-      final effectiveRound =
-          (activeCampaign == 'integrated_activity') ? activeRound : null;
+      try {
+        final streamBody = <String, dynamic>{
+          'message': text,
+          'history': history,
+          'stream': true,
+          if (template != null) 'template': template,
+          'context': payloadCtx,
+          if (payloadCtx['campaign_round'] != null) 'campaign_round': payloadCtx['campaign_round'],
+          if (_selectedFormId != null) 'form_id': _selectedFormId,
+        };
 
-      // ⚠️ FIX: Direct non-streaming call — more reliable than streaming
+        // Idle timeout: if no token arrives within 12s → treat as stream failure.
+        Stream<String> tokens = api.callFunctionStream('ai-chat-v3', streamBody);
+
+        if (_mounted) {
+          setState(() {
+            _msgs.add(ChatMsg(role: 'assistant', content: '', source: 'streaming'));
+          });
+        }
+
+        await for (final token
+            in tokens.timeout(const Duration(seconds: 12), onTimeout: (sink) {
+          sink.addError(TimeoutException('stream-idle'));
+        })) {
+          gotAnyToken = true;
+          buffer.write(token);
+          // Throttle rebuilds to ~33fps during streaming
+          if (DateTime.now().difference(lastUiUpdate).inMilliseconds >= 30) {
+            lastUiUpdate = DateTime.now();
+            if (_mounted) {
+              setState(() {
+                _msgs[_msgs.length - 1] = ChatMsg(
+                    role: 'assistant',
+                    content: buffer.toString(),
+                    source: 'streaming');
+              });
+              _scrollDownDuringStream();
+            }
+          }
+        }
+
+        // Stream ended normally with content → finalize
+        if (gotAnyToken && buffer.toString().trim().isNotEmpty && _mounted) {
+          setState(() {
+            _msgs[_msgs.length - 1] = ChatMsg(
+              role: 'assistant',
+              content: buffer.toString(),
+              source: 'groq_stream',
+              latencyMs: sw.elapsedMilliseconds,
+            );
+            _loading = false;
+            _typingAnimCtrl.stop();
+          });
+          _debouncedSave();
+          _scrollDown();
+          unawaited(_saveMessageToThread(
+            role: 'assistant',
+            content: buffer.toString(),
+            source: 'groq_stream',
+            latencyMs: sw.elapsedMilliseconds,
+          ));
+          return;
+        }
+        // Stream yielded nothing → remove placeholder, fall through to non-streaming
+        if (_mounted && _msgs.isNotEmpty && _msgs.last.source == 'streaming') {
+          setState(() => _msgs.removeLast());
+        }
+      } catch (_) {
+        // Stream failed mid-answer → KEEP the partial content (better than nothing)
+        if (gotAnyToken && buffer.toString().trim().isNotEmpty && _mounted) {
+          setState(() {
+            _msgs[_msgs.length - 1] = ChatMsg(
+              role: 'assistant',
+              content: buffer.toString(),
+              source: 'groq_stream',
+              latencyMs: sw.elapsedMilliseconds,
+            );
+            _loading = false;
+            _typingAnimCtrl.stop();
+          });
+          _debouncedSave();
+          _scrollDown();
+          unawaited(_saveMessageToThread(
+            role: 'assistant',
+            content: buffer.toString(),
+            source: 'groq_stream',
+            latencyMs: sw.elapsedMilliseconds,
+          ));
+          return;
+        }
+        // Nothing arrived → remove placeholder, fall through to non-streaming
+        if (_mounted && _msgs.isNotEmpty && _msgs.last.source == 'streaming') {
+          setState(() => _msgs.removeLast());
+        }
+      }
+
+      // ═══ NON-STREAMING FALLBACK (unchanged reliable path) ═══
+      final historyJson = _buildHistory(text);
       final resp = await api.callFunction('ai-chat-v3', {
         'message': text,
         'history': historyJson,
         if (template != null) 'template': template,
-        if (effectiveRound != null) 'campaign_round': effectiveRound,
-        // ⚠️ FIX: Pass selected form_id so AI targets a specific form
+        if (payloadCtx['campaign_round'] != null) 'campaign_round': payloadCtx['campaign_round'],
         if (_selectedFormId != null) 'form_id': _selectedFormId,
-        'context': {
-          'campaign_type': activeCampaign,
-          if (effectiveRound != null) 'campaign_round': effectiveRound,
-          if (_selectedFormId != null) 'form_id': _selectedFormId,
-        },
+        'context': payloadCtx,
       }).timeout(const Duration(seconds: 90), onTimeout: () {
         throw TimeoutException('انتهت مهلة الطلب — حاول إعادة صياغة سؤالك بشكل أقصر');
       });
@@ -408,6 +559,52 @@ class _AiChatScreenV3State extends ConsumerState<AiChatScreenV3>
       _debouncedSave();
     }
     _scrollDown();
+  }
+
+  /// ═══ T5 helpers: history + context builders (shared by stream & non-stream) ═══
+  /// History excludes the CURRENT user message (it's sent separately as
+  /// `message`) — previously it was duplicated in both fields.
+  List<Map<String, String>> _buildHistory(String currentText) {
+    List<ChatMsg> hist = _msgs;
+    if (hist.isNotEmpty &&
+        hist.last.role == 'user' &&
+        hist.last.content == currentText) {
+      hist = hist.sublist(0, hist.length - 1);
+    }
+    final trimmed = hist.length > 12 ? hist.sublist(hist.length - 12) : hist;
+    return trimmed
+        .map((m) => {
+              'role': m.role,
+              'content': m.content.length > 2000
+                  ? '${m.content.substring(0, 2000)}...'
+                  : m.content,
+            })
+        .toList();
+  }
+
+  Map<String, dynamic> _buildPayloadContext() {
+    final activeRound = ref.read(campaignRoundProvider);
+    final activeCampaign = ref.read(campaignProvider).value;
+    // ⚠️ FIX: Only propagate campaign_round for integrated_activity.
+    final effectiveRound =
+        (activeCampaign == 'integrated_activity') ? activeRound : null;
+    return {
+      'campaign_type': activeCampaign,
+      if (effectiveRound != null) 'campaign_round': effectiveRound,
+      if (_selectedFormId != null) 'form_id': _selectedFormId,
+    };
+  }
+
+  /// T5: auto-scroll during streaming — only pins to bottom if the user is
+  /// already near it (doesn't fight manual scrolling).
+  void _scrollDownDuringStream() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      final pos = _scroll.position;
+      if (pos.maxScrollExtent - pos.pixels < 260) {
+        _scroll.jumpTo(pos.maxScrollExtent);
+      }
+    });
   }
 
   // ═══ Language preference ═══
@@ -1767,6 +1964,13 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
               // ─── New: Low confidence warning ───
               if (!isUser && msg.isLowConfidence)
                 LowConfidenceBanner(msg: msg, cs: cs),
+              // ─── T5: Message actions (copy / regenerate / rate) ───
+              if (!isUser &&
+                  !isStreaming &&
+                  msg.content.isNotEmpty &&
+                  msg.source != 'error' &&
+                  msg.source != 'streaming')
+                _buildMessageActions(msg, cs),
             ],
           )),
           if (isUser) ...[
@@ -1785,6 +1989,62 @@ Rules: concise (≤120 words). numbers from data. practical recommendations. Eng
           ],
         ],
       ),
+    );
+  }
+
+  // ═══ T5: Message action buttons (copy / regenerate / thumbs feedback) ═══
+
+  Widget _actionIcon(IconData icon, String tooltip, VoidCallback onTap,
+      ColorScheme cs,
+      {bool active = false, bool accent = false}) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(
+            icon,
+            size: 16,
+            color: active
+                ? cs.primary
+                : accent
+                    ? cs.primary.withValues(alpha: 0.85)
+                    : cs.onSurfaceVariant.withValues(alpha: 0.55),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageActions(ChatMsg msg, ColorScheme cs) {
+    final isLastAssistant =
+        _msgs.isNotEmpty && identical(_msgs.last, msg) && !_loading;
+    final rated = _ratedMsgIds[msg.id];
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        _actionIcon(Icons.copy_rounded, 'نسخ', () => _copyMessage(msg), cs),
+        if (isLastAssistant)
+          _actionIcon(Icons.refresh_rounded, 'إعادة توليد الإجابة',
+              _regenerateLast, cs,
+              accent: true),
+        _actionIcon(
+            rated == true
+                ? Icons.thumb_up_alt_rounded
+                : Icons.thumb_up_outlined,
+            'إجابة مفيدة',
+            () => _rateMessage(msg, true), cs,
+            active: rated == true),
+        _actionIcon(
+            rated == false
+                ? Icons.thumb_down_alt_rounded
+                : Icons.thumb_down_outlined,
+            'إجابة غير مفيدة',
+            () => _rateMessage(msg, false), cs,
+            active: rated == false),
+      ]),
     );
   }
 

@@ -112,6 +112,39 @@ class ChatMsg {
   /// Whether this message is from the user (vs. assistant/bot)
   bool get isUser => role == 'user';
 
+  /// ═══ T5: Immutable copy helper — used by the streaming pipeline to update
+  /// the in-flight bubble content without mutating final fields. ═══
+  ChatMsg copyWith({
+    String? content,
+    String? source,
+    String? provider,
+    int? providerTier,
+    int? providerConfidence,
+    int? latencyMs,
+    List<String>? toolsUsed,
+    int? groundedInSources,
+    List<GroundingSource>? groundingSources,
+    List<String>? suggestedFollowups,
+  }) =>
+      ChatMsg(
+        role: role,
+        content: content ?? this.content,
+        source: source ?? this.source,
+        time: time,
+        id: id,
+        provider: provider ?? this.provider,
+        providerTier: providerTier ?? this.providerTier,
+        providerConfidence: providerConfidence ?? this.providerConfidence,
+        latencyMs: latencyMs ?? this.latencyMs,
+        raced: raced,
+        attemptedProviders: attemptedProviders,
+        toolsUsed: toolsUsed ?? this.toolsUsed,
+        groundedInSources: groundedInSources ?? this.groundedInSources,
+        groundingSources: groundingSources ?? this.groundingSources,
+        suggestedFollowups: suggestedFollowups ?? this.suggestedFollowups,
+        ungrounded: ungrounded,
+      );
+
   /// Whether this message is from an AI service (vs. local bot)
   bool get isFromAI => source != null && source != 'local' && source != 'greeting_handler';
 

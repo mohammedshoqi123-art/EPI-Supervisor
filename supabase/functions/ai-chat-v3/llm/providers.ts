@@ -56,7 +56,9 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'NVIDIA',
     tier: 3,
     free: false,
-    models: ['meta/llama-3.3-70b-instruct', 'deepseek-ai/deepseek-r1'],
+    // ⚠️ T5-FIX: meta/llama-3.3-70b-instruct reached EOL on 2026-08-26 (HTTP 410).
+    // Updated to currently-available models (verified via /v1/models listing).
+    models: ['nvidia/llama-3.1-nemotron-70b-instruct', 'openai/gpt-oss-20b'],
     maxTokens: 4000,
     supportsTools: false,
     supportsStreaming: false,
@@ -65,10 +67,11 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'HuggingFace',
     tier: 4,
     free: true,
-    // FIX: Updated to models that actually work and have better Arabic support.
-    // Allam-7B is specifically trained for Arabic. Llama-3.1-8B has decent Arabic.
-    models: ['ALLAM-7B-Instruct', 'meta-llama/Llama-3.1-8B-Instruct'],
-    maxTokens: 1500,  // FIX: Increased from 800
+    // ⚠️ T5-FIX: switched to the new Router API (OpenAI-compatible) — the old
+    // api-inference.huggingface.co/models/{model} endpoint is dead (instant fail).
+    // Llama-3.1-8B: decent Arabic. Qwen2.5-7B: strong multilingual incl. Arabic.
+    models: ['meta-llama/Llama-3.1-8B-Instruct', 'Qwen/Qwen2.5-7B-Instruct'],
+    maxTokens: 1500,
     supportsTools: false,
     supportsStreaming: false,
   },
@@ -76,9 +79,10 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'OpenRouter',
     tier: 5,
     free: false,
-    models: ['deepseek/deepseek-chat'],
+    // ⚠️ T5-FIX: model chain — paid primary, free fallback (key may have no credit).
+    models: ['deepseek/deepseek-chat', 'deepseek/deepseek-chat-v3-0324:free'],
     maxTokens: 2000,
-    supportsTools: false,
+    supportsTools: true,
     supportsStreaming: false,
   },
 }
@@ -193,9 +197,18 @@ export async function groqChat(
           usage: json.usage,
         }
       }
+      // ⚠️ T5-FIX: EMPTY CONTENT = FAILURE. Llama-3.3-70b returns content:"" for
+      // data questions when tools are absent (it wants to call tools). Treating
+      // empty as success made the gateway return an empty reply to the user.
+      // Now: fall through to the next model in the chain.
+      const content = choice.message?.content || ''
+      if (!content.trim()) {
+        console.warn(`[GROQ] ${model} returned EMPTY content (finish=${choice.finish_reason}) — trying next model`)
+        continue
+      }
       return {
         type: 'message',
-        content: choice.message?.content || '',
+        content,
         usage: json.usage,
       }
     } catch (e: any) {
@@ -239,8 +252,10 @@ export async function pollinationsChat(
     }
     if (opts.stream) body.stream = true
 
+    // ⚠️ T5-FIX: 12s→9s per model — Pollinations is slow (~10s) and two models
+    // at 12s each blew the outer race budget (15s) before fallbacks could try.
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 12_000)
+    const timeoutId = setTimeout(() => controller.abort(), 9_000)
 
     try {
       const r = await fetch(POLLINATIONS_API, {
@@ -292,6 +307,14 @@ export async function pollinationsChat(
 }
 
 // ─── Tier 3: NVIDIA ───
+// ⚠️ T5-FIX: model chain + EOL retry. meta/llama-3.3-70b-instruct died 2026-08-26
+// (HTTP 410) and nvidiaChat had a single hardcoded model → NVIDIA was dead weight.
+// Chain: nemotron-70b (strong) → gpt-oss-20b (fast). 410/404/400 → next model.
+const NVIDIA_MODEL_CHAIN = [
+  'nvidia/llama-3.1-nemotron-70b-instruct',
+  'openai/gpt-oss-20b',
+]
+
 export async function nvidiaChat(
   messages: any[],
   key?: string,
@@ -299,95 +322,106 @@ export async function nvidiaChat(
 ): Promise<string | null> {
   if (!key) return null
 
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15_000)
-
-    const r = await fetch(NVIDIA_API, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'meta/llama-3.3-70b-instruct',
-        messages,
-        max_tokens: maxTokens,
-        temperature: 0.4,
-      }),
-      signal: controller.signal,
-    })
-
-    clearTimeout(timeoutId)
-
-    if (!r.ok) {
-      console.error(`[NVIDIA] ${r.status}`)
-      return null
-    }
-
-    const json = await r.json()
-    return json.choices?.[0]?.message?.content || null
-  } catch (e) {
-    console.error('[NVIDIA] Error:', e)
-    return null
-  }
-}
-
-// ─── Tier 4: HuggingFace ───
-// FIX: كان يستخدم نموذج gated (meta-llama/Meta-Llama-3-8B-Instruct) الذي
-// يتطلب قبول شروط الاستخدام على HF Hub — الطلبات تُرفض دون مفتاح مع القبول.
-// الآن نجرب عدة نماذج مفتوحة بالكامل، نُرجع أول استجابة ناجحة.
-//
-// ⚠️ FIX #2 (timeout mismatch): hybridRouteChat يحيط huggingfaceChat بـ Promise.race
-// مع timeout 15s. النسخة السابقة جرّبت نموذجين × 15s = 30s محتملة، لكن
-// الـ race الخارجي كان يرفض الطلب بعد 15s قبل إكمال التجربة الثانية.
-// الآن: timeout 6s لكل نموذج = 12s كحد أقصى (هامش 3s للشبكة).
-export async function huggingfaceChat(
-  messages: any[],
-  key: string,
-): Promise<string | null> {
-  // FIX: Updated model list — Allam-7B for Arabic, Llama-3.1 as fallback
-  const OPEN_MODELS = [
-    'ALLAM-7B-Instruct',                        // Arabic-specialized model
-    'meta-llama/Llama-3.1-8B-Instruct',          // Good multilingual
-  ]
-
-  const prompt = messages.map((m: any) => `<|${m.role}|>\n${m.content}`).join('\n')
-
-  for (const model of OPEN_MODELS) {
+  for (const model of NVIDIA_MODEL_CHAIN) {
     try {
       const controller = new AbortController()
-      // FIX: 10s per model (was 6s) — better for Arabic models which are slower
-      const timeoutId = setTimeout(() => controller.abort(), 10_000)
+      const timeoutId = setTimeout(() => controller.abort(), 12_000)
 
-      const r = await fetch(`${HF_API}/${model}`, {
+      const r = await fetch(NVIDIA_API, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${key}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          inputs: prompt,
-          parameters: { max_new_tokens: 500, temperature: 0.4 },
+          model,
+          messages,
+          max_tokens: maxTokens,
+          temperature: 0.4,
         }),
         signal: controller.signal,
       })
 
       clearTimeout(timeoutId)
 
-      // 401/403 → المفتاح غير صالح أو النموذج gated — جرّب التالي
-      // 429 → rate limited — جرّب التالي
-      // 503 → النموذج يحمل (loading) — جرّب التالي
       if (!r.ok) {
-        console.warn(`[HF] ${model} returned ${r.status} — trying next model`)
+        const errBody = await r.text().catch(() => '')
+        // 410 = EOL model, 404/400 = bad model, 429 = rate limit → try next
+        if (r.status === 410 || r.status === 404 || r.status === 400 || r.status === 429) {
+          console.warn(`[NVIDIA] ${model} → ${r.status} — trying next model`)
+          continue
+        }
+        console.error(`[NVIDIA] ${model} ${r.status}: ${errBody.slice(0, 120)}`)
+        return null // auth/other errors — same key, no point trying more models
+      }
+
+      const json = await r.json()
+      const content = json.choices?.[0]?.message?.content || null
+      if (content && String(content).trim()) return content
+      console.warn(`[NVIDIA] ${model} empty content — trying next model`)
+      continue
+    } catch (e) {
+      console.warn(`[NVIDIA] ${model} error: ${String(e).slice(0, 80)}`)
+      continue
+    }
+  }
+  return null
+}
+
+// ─── Tier 4: HuggingFace ───
+// ⚠️ T5-FIX: REWRITTEN for the new HF Router API (OpenAI-compatible).
+// The old endpoint api-inference.huggingface.co/models/{model} is DEAD —
+// requests failed in ~9ms regardless of key validity. The router endpoint is
+// https://router.huggingface.co/v1/chat/completions and accepts {model, messages}.
+const HF_ROUTER_API = 'https://router.huggingface.co/v1/chat/completions'
+
+const HF_MODELS = [
+  'meta-llama/Llama-3.1-8B-Instruct',   // multilingual incl. Arabic
+  'Qwen/Qwen2.5-7B-Instruct',           // strong multilingual fallback
+]
+
+export async function huggingfaceChat(
+  messages: any[],
+  key: string,
+): Promise<string | null> {
+  for (const model of HF_MODELS) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10_000)
+
+      const r = await fetch(HF_ROUTER_API, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          max_tokens: 800,
+          temperature: 0.4,
+        }),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!r.ok) {
+        const errBody = await r.text().catch(() => '')
+        // 401/403 → token invalid/revoked — same token for all models, bail out
+        if (r.status === 401 || r.status === 403) {
+          console.warn(`[HF] token rejected (${r.status}) — skipping remaining HF models`)
+          return null
+        }
+        console.warn(`[HF] ${model} → ${r.status}: ${errBody.slice(0, 100)} — trying next`)
         continue
       }
 
       const json = await r.json()
-      const text = json[0]?.generated_text || null
-      if (text && text.trim().length > 0) {
+      const content = json.choices?.[0]?.message?.content || null
+      if (content && String(content).trim()) {
         console.log(`[HF] ✓ ${model} succeeded`)
-        return text
+        return content
       }
       // استجابة فارغة — جرّب التالي
     } catch (e: any) {
@@ -403,6 +437,13 @@ export async function huggingfaceChat(
 // ─── Tier 5: OpenRouter (DeepSeek) ───
 // FIX: OpenRouter supports tool calling via DeepSeek.
 // This gives us a SECOND provider with tools support as fallback for Groq.
+// ⚠️ T5-FIX: model chain — paid DeepSeek first, free variant as fallback.
+// A key without credit gets 402 on the paid model; the :free variant still works.
+const OR_MODEL_CHAIN = [
+  'deepseek/deepseek-chat',
+  'deepseek/deepseek-chat-v3-0324:free',
+]
+
 export async function openrouterChat(
   messages: any[],
   key: string,
@@ -413,45 +454,60 @@ export async function openrouterChat(
     temperature?: number
   } = {},
 ): Promise<{ type: 'message' | 'tool_calls'; content?: string; tool_calls?: any[]; usage?: any } | null> {
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 18_000)
+  for (const model of OR_MODEL_CHAIN) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 12_000)
 
-    const body: Record<string, any> = {
-      model: 'deepseek/deepseek-chat',
-      messages,
-      max_tokens: maxTokens,
-      temperature: opts.temperature ?? 0.4,
+      const body: Record<string, any> = {
+        model,
+        messages,
+        max_tokens: maxTokens,
+        temperature: opts.temperature ?? 0.4,
+      }
+      // FIX: Pass tools if provided — DeepSeek supports tool calling
+      if (opts.tools) body.tools = opts.tools
+      if (opts.tool_choice) body.tool_choice = opts.tool_choice
+
+      const r = await fetch(OPENROUTER_API, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://epi-supervisor.yemen.gov.ye',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!r.ok) {
+        const errBody = await r.text().catch(() => '')
+        // 401/403 → key invalid — same key for all models, bail out
+        if (r.status === 401 || r.status === 403) {
+          console.warn(`[OR] key rejected (${r.status}) — skipping remaining OR models`)
+          return null
+        }
+        // 402 no credit / 404 bad model / 429 rate → try next model
+        console.warn(`[OR] ${model} → ${r.status}: ${errBody.slice(0, 100)} — trying next`)
+        continue
+      }
+      const json = await r.json()
+      const choice = json.choices?.[0]
+      if (!choice) continue
+
+      if (choice.message?.tool_calls) {
+        return { type: 'tool_calls', tool_calls: choice.message.tool_calls, usage: json.usage }
+      }
+      const content = choice.message?.content || ''
+      if (!content.trim()) continue // empty → next model (same T5 fix as Groq)
+      return { type: 'message', content, usage: json.usage }
+    } catch {
+      continue
     }
-    // FIX: Pass tools if provided — DeepSeek supports tool calling
-    if (opts.tools) body.tools = opts.tools
-    if (opts.tool_choice) body.tool_choice = opts.tool_choice
-
-    const r = await fetch(OPENROUTER_API, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://epi-supervisor.yemen.gov.ye',
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
-
-    clearTimeout(timeoutId)
-
-    if (!r.ok) return null
-    const json = await r.json()
-    const choice = json.choices?.[0]
-    if (!choice) return null
-
-    if (choice.message?.tool_calls) {
-      return { type: 'tool_calls', tool_calls: choice.message.tool_calls, usage: json.usage }
-    }
-    return { type: 'message', content: choice.message?.content || '', usage: json.usage }
-  } catch {
-    return null
   }
+  return null
 }
 
 // ═══════════════════════════════════════════════════════════

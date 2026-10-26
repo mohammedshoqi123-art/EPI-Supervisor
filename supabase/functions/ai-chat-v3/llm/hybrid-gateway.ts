@@ -44,6 +44,10 @@ function recordSuccess(name: string, latencyMs: number) {
   h.totalLatency += latencyMs
   h.lastUsed = Date.now()
   h.blocked = false
+  // ⚠️ T5-FIX: reset failure counter on success. Previously failures accumulated
+  // forever (only cleared after a block expired), so 2 old failures + 1 new one
+  // would block a healthy provider for 5 minutes.
+  h.failures = 0
 }
 
 function recordFailure(name: string) {
@@ -143,12 +147,14 @@ export async function hybridRouteChat(
     }
 
     // ─── Try OpenRouter with tools (DeepSeek supports tool calling) ───
+    // ⚠️ T5-FIX: 12s budget (was full timeoutMs=15s) — leaves room for the
+    // no-tools fallbacks inside the caller's expectations.
     if (orKey && isAvailable('openrouter')) {
       attempts.push('openrouter')
       try {
         const result = await Promise.race([
           openrouterChat(messages, orKey, maxTokens || 2000, { tools, tool_choice, temperature }),
-          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), Math.min(timeoutMs, 12_000))),
         ])
         if (result) {
           recordSuccess('openrouter', Date.now() - start)
@@ -166,10 +172,36 @@ export async function hybridRouteChat(
       }
     }
 
-    // ═══ FIX: fallback للنص العادي بدون tools عندما يفشل كلاهما ═══
+    // ═══ T5-FIX: no-tools fallback order — Pollinations BEFORE Groq-retry ═══
+    // Groq already failed with tools moments ago; retrying it immediately with
+    // no-tools usually wastes another 12s. Pollinations is an independent
+    // service — try it first, then give Groq one last chance.
     console.warn('[GATEWAY] Tools path failed — falling back to no-tools chat with grounding context')
 
-    // جرّب Groq بدون tools
+    // جرّب Pollinations كأول احتياط (مستقل عن Groq)
+    if (isAvailable('pollinations')) {
+      attempts.push('pollinations')
+      try {
+        const result = await Promise.race([
+          pollinationsChat(messages, {
+            model: 'openai',
+            maxTokens: maxTokens || 2000,
+            temperature,
+          }),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), Math.min(timeoutMs, 12_000))),
+        ])
+        if (result && typeof result === 'string') {
+          recordSuccess('pollinations', Date.now() - start)
+          console.log('[GATEWAY] ✓ Pollinations no-tools fallback succeeded')
+          return { content: result, provider: 'pollinations', attempts }
+        }
+      } catch (e: any) {
+        recordFailure('pollinations')
+        console.error(`[GATEWAY] Pollinations no-tools fallback failed: ${e.message}`)
+      }
+    }
+
+    // جرّب Groq بدون tools كاحتياط أخير
     if (groqKey && isAvailable('groq')) {
       attempts.push('groq-no-tools')
       try {
@@ -188,29 +220,6 @@ export async function hybridRouteChat(
         }
       } catch (e: any) {
         console.error(`[GATEWAY] Groq no-tools fallback failed: ${e.message}`)
-      }
-    }
-
-    // جرّب Pollinations كـ fallback أخير
-    if (isAvailable('pollinations')) {
-      attempts.push('pollinations')
-      try {
-        const result = await Promise.race([
-          pollinationsChat(messages, {
-            model: 'openai',
-            maxTokens: maxTokens || 2000,
-            temperature,
-          }),
-          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
-        ])
-        if (result && typeof result === 'string') {
-          recordSuccess('pollinations', Date.now() - start)
-          console.log('[GATEWAY] ✓ Pollinations fallback succeeded')
-          return { content: result, provider: 'pollinations', attempts }
-        }
-      } catch (e: any) {
-        recordFailure('pollinations')
-        console.error(`[GATEWAY] Pollinations fallback failed: ${e.message}`)
       }
     }
 

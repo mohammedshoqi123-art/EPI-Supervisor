@@ -209,6 +209,36 @@ async function logUsage(supa: any, modelId: string, tokens: number, latencyMs: n
 }
 
 // ═══════════════════════════════════════════════════════════
+// STREAM USAGE LOGGING
+// ═══════════════════════════════════════════════════════════
+// ⚠️ T5-FIX: the streaming path previously returned the provider's raw SSE body
+// untouched — usage was NEVER logged for streamed answers (analytics showed 0
+// tokens). This wrapper tees chunks, counts characters, and logs an estimated
+// token count on stream close. Arabic averages ≈3 chars/token.
+function attachStreamUsageLogging(
+  body: ReadableStream<Uint8Array>,
+  supa: any,
+  modelId: string,
+  startMs: number,
+  provider: string,
+): ReadableStream<Uint8Array> {
+  const dec = new TextDecoder()
+  let charCount = 0
+  const transform = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      charCount += dec.decode(chunk, { stream: true }).length
+      controller.enqueue(chunk)
+    },
+    flush() {
+      // Rough estimate: 1 token ≈ 3 chars (Arabic-heavy content)
+      const estTokens = Math.round(charCount / 3)
+      logUsage(supa, modelId, estTokens, Date.now() - startMs, true, undefined, `stream_${provider}`).catch(() => {})
+    },
+  })
+  return body.pipeThrough(transform)
+}
+
+// ═══════════════════════════════════════════════════════════
 // LIVE DATA
 // ═══════════════════════════════════════════════════════════
 
@@ -1116,6 +1146,7 @@ async function multiStepToolCallingStream(
   const maxSteps = opts.maxSteps ?? 3
   const toolCallsUsed: string[] = []
   const enc = new TextEncoder()
+  const streamStartMs = Date.now()
   const { readable, writable } = new TransformStream()
   const writer = writable.getWriter()
   const send = async (event: any) => { await writer.write(enc.encode(`data: ${JSON.stringify(event)}\n\n`)) }
@@ -1145,6 +1176,9 @@ async function multiStepToolCallingStream(
             toolCallsUsed.push(fnName)
           }
         } else if (result.type === 'message') {
+          // ⚠️ T5-FIX: log usage for tool-stream answers (was never logged)
+          const tokens = result.usage?.total_tokens || Math.round(String(result.content).length / 3)
+          logUsage(supa, opts.model, tokens, Date.now() - streamStartMs, true, undefined, 'stream_groq_tools').catch(() => {})
           await send({ type: 'answer', content: result.content, toolsUsed: toolCallsUsed })
           await send({ type: 'done' }); await writer.close(); return
         }
@@ -1152,7 +1186,12 @@ async function multiStepToolCallingStream(
       await send({ type: 'thinking', message: 'جاري تجميع الإجابة...' })
       msgs.push({ role: 'user', content: 'قدم الإجابة النهائية.' })
       const final = await groqChat(msgs, groqKey, { model: opts.model, maxTokens: opts.maxTokens, temperature: opts.temperature })
-      if (final?.type === 'message') await send({ type: 'answer', content: final.content, toolsUsed: toolCallsUsed })
+      if (final?.type === 'message') {
+        // ⚠️ T5-FIX: log usage here too
+        const tokens = final.usage?.total_tokens || Math.round(String(final.content).length / 3)
+        logUsage(supa, opts.model, tokens, Date.now() - streamStartMs, true, undefined, 'stream_groq_tools').catch(() => {})
+        await send({ type: 'answer', content: final.content, toolsUsed: toolCallsUsed })
+      }
       else await send({ type: 'error', message: 'لم أتمكن من توليد إجابة' })
       await send({ type: 'done' })
     } catch (e) { await send({ type: 'error', message: String(e) }) }
@@ -1178,28 +1217,30 @@ serve(async (req) => {
     const auth = await authenticateRequest(supabase, authHeader)
     if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401, origin)
 
-    // Rate limit — use modelConfig.rateLimit from DB (default 25)
-    // ⚠️ CRITICAL FIX: Was returning 429 on ANY DB error (connection timeout, pool full, etc.)
-    // Now: fail-open on DB errors — allow the request through but log the warning
-    const modelConfig = await getModelConfig(supabase).catch(() => ({ defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 20, rateLimit: 25 }))
-    try {
-      const rl = await supabase.rpc('check_and_increment_rate_limit', {
+    // ⚠️ T5-SPEED: parse body IMMEDIATELY + run modelConfig + profile + rate-limit
+    // in PARALLEL. Previously these were 4 sequential awaits (~1.5-3s of pure
+    // overhead before any AI work started).
+    const body = await req.json()
+    const { message, history = [], context, mode, template, stream = false, feedback, message_id, form_id } = body
+
+    const [modelConfig, profile, rlResult] = await Promise.all([
+      getModelConfig(supabase).catch(() => ({ defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 20, rateLimit: 25 })),
+      getUserProfile(supabase, auth.userId),
+      // Rate limit — fail-open on DB errors (allow through, log warning)
+      supabase.rpc('check_and_increment_rate_limit', {
         p_user_id: auth.userId,
         p_endpoint: 'ai-chat-v3',
         p_window_seconds: 60,
-        p_max_requests: modelConfig.rateLimit || 25,
-      })
-      if (!rl.data?.[0]?.allowed) return jsonResponse({ error: 'تم تجاوز الحد — حاول بعد دقيقة' }, 429, origin)
-    } catch (rlErr) {
-      // ⚠️ FIX: Don't block the user on DB errors — fail open
-      console.warn('[RATE_LIMIT] RPC failed, fail-open:', String(rlErr).slice(0, 100))
+        p_max_requests: 25,
+      }).catch((rlErr: any) => {
+        console.warn('[RATE_LIMIT] RPC failed, fail-open:', String(rlErr).slice(0, 100))
+        return { data: [{ allowed: true }] }
+      }),
+    ])
+    if (rlResult?.data?.[0]?.allowed === false) {
+      return jsonResponse({ error: 'تم تجاوز الحد — حاول بعد دقيقة' }, 429, origin)
     }
-
-    const profile = await getUserProfile(supabase, auth.userId)
     if (!modelConfig.enabled) return jsonResponse({ error: 'خدمة AI معطلة' }, 503, origin)
-
-    const body = await req.json()
-    const { message, history = [], context, mode, template, stream = false, feedback, message_id, form_id } = body
 
     // ⚠️ FIX: If form_id is passed at top-level, inject it into context so
     // get_dynamic_analytics tool can use it as the default form.
@@ -1504,27 +1545,28 @@ serve(async (req) => {
       if (cached) return jsonResponse({ reply: cached, source: 'response_cache', model: dbModelId, intent, confidence, messageId: crypto.randomUUID() }, 200, origin)
     }
 
-    // ═══ FIX: PARALLEL PREP — was sequential (5+ queries × ~6s = 30s+) ═══
-    // Previously these 5 operations awaited one after another:
-    //   1. fetchLiveData        (~6s, multiple DB queries inside)
-    //   2. getConversationSummary (~3s, optional Groq call)
-    //   3. getFeedbackContext   (~2s, DB query)
-    //   4. forms schema query   (~5s, withTimeout 5s)
-    //   5. campaign_types query (~3s, withTimeout 3s)
-    //   6. getActiveCampaignRound (only if body/context missing — ~2s)
-    // Total: ~20-30s sequential → now runs in parallel ≈ 6s (slowest wins).
-    //
-    // Each operation already has its own .catch(() => '') / try-catch so
-    // failures don't break the others. Promise.all waits for all settled.
+    // ═══ T5-SPEED: GROUNDING OVERLAP ═══
+    // Previously grounding started AFTER all prep (auth + rate-limit + profile +
+    // fetchLiveData + forms + campaigns ≈ 2-6s) and THEN blocked up to 15s more.
+    // Now: kick it off immediately and let it run WHILE prep executes.
+    // The authoritative round may only be resolved after prep — if it differs from
+    // the early guess we re-ground once (rare, capped at 5s).
     const bodyRound = Number(body.campaign_round)
-    // Accept both camelCase and snake_case from frontend
-    const contextRound = context?.campaign_round 
-      ? Number(context.campaign_round) 
+    const contextRound = context?.campaign_round
+      ? Number(context.campaign_round)
       : (context?.campaignRound ? Number(context.campaignRound) : NaN)
     const roundFromRequest = !isNaN(bodyRound) && bodyRound > 0
       ? bodyRound
       : (!isNaN(contextRound) && contextRound > 0 ? contextRound : NaN)
+    const groundRound = !isNaN(roundFromRequest) ? roundFromRequest : null
+    const groundStart = Date.now()
+    const groundingPromise: Promise<GroundingResult | null> = message
+      ? groundMessage(supabase, message, groundRound).catch(() => null)
+      : Promise.resolve(null)
 
+    // ═══ T5-SPEED: PARALLEL PREP (was sequential, now parallel — max ≈ 6s) ═══
+    // fetchLiveData / summary / feedback / forms / campaigns / active-round all run
+    // concurrently. Each has its own catch so failures don't break the others.
     const [
       liveDataResult,
       conversationSummaryResult,
@@ -1657,22 +1699,32 @@ serve(async (req) => {
       console.log(`[ESCALATION] User ${auth.userId} escalated: ${escalation.reason}`)
     }
 
-    // ═══ GROUNDING ENGINE (NotebookLM-Inspired) ═══
-    // FIX: Increased timeout from 8s to 15s for reliability
+    // ═══ GROUNDING — await the early-started promise with a hard 8s cap ═══
+    // (T5-SPEED: was a blocking 15s race AFTER prep; now overlapped with prep)
     let grounding: GroundingResult | null = null
     if (message) {
-      console.log(`[GROUNDING] Grounding message: "${message.slice(0, 80)}..."`)
-      try {
-        grounding = await Promise.race([
-          groundMessage(supabase, message, campaignRound),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Grounding timeout (15s)')), 15_000)
-          ),
-        ])
-        console.log(`[GROUNDING] Found ${grounding.sources.length} sources, hasData=${grounding.hasData}, intent=${grounding.detectedIntent}`)
-      } catch (groundErr) {
-        console.warn(`[GROUNDING] ⚠️ Grounding failed/timed out: ${String(groundErr).slice(0, 100)} — proceeding without grounding`)
-        grounding = null
+      const groundElapsed = Date.now() - groundStart
+      const groundBudget = Math.max(0, 8_000 - groundElapsed)
+      grounding = await Promise.race([
+        groundingPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), groundBudget)),
+      ])
+      if (grounding) {
+        console.log(`[GROUNDING] Found ${grounding.sources.length} sources in ${Date.now() - groundStart}ms, hasData=${grounding.hasData}`)
+      } else {
+        console.warn(`[GROUNDING] timeout/failure after ${Date.now() - groundStart}ms — proceeding without grounding`)
+      }
+
+      // Round correction: if the authoritative round (resolved after prep) differs
+      // from the early guess AND grounding found nothing, re-ground once (5s cap).
+      if (grounding && !grounding.hasData && campaignRound != null && campaignRound !== groundRound) {
+        try {
+          const reground = await Promise.race([
+            groundMessage(supabase, message, campaignRound),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
+          ])
+          if (reground) grounding = reground
+        } catch { /* keep first result */ }
       }
 
       // Add grounding context to messages — this is what the LLM sees
@@ -1736,8 +1788,35 @@ serve(async (req) => {
       }
     }
 
-    // Streaming mode — use hybrid streaming gateway
+    // Streaming mode
     if (stream && modelConfig.streamEnabled) {
+      // ⚠️ T5-FIX (root cause of "streaming causes timeouts"): tool queries CANNOT
+      // stream raw provider SSE — tool_call deltas are invisible to the client, so
+      // the stream sat silent until the client gave up. Route tool queries through
+      // the multi-step streamer which emits progress events + the final answer.
+      if (needsTools && groqKey) {
+        console.log('[STREAM] Tool query → multiStepToolCallingStream')
+        const toolStreamResp = await multiStepToolCallingStream(messages, groqKey, supabase, {
+          model: dbModelId || 'llama-3.3-70b-versatile',
+          maxTokens: dbMaxTokens,
+          temperature: dbTemperature,
+          maxSteps: 2,
+          userId: auth.userId,
+          campaignRound,
+          campaignType: context?.campaign_type,
+          form_id: context?.form_id,
+        }, origin)
+        return new Response(toolStreamResp.body, {
+          status: 200,
+          headers: {
+            ...corsHeaders(origin),
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'X-AI-Provider': 'groq_tools_stream',
+          },
+        })
+      }
+
       const streamResult = await hybridRouteStream(messages, gatewayEnv, {
         model: dbModelId,
         maxTokens: dbMaxTokens,
@@ -1748,17 +1827,20 @@ serve(async (req) => {
       })
 
       if (streamResult.response) {
-        return new Response(streamResult.response.body, {
-          status: 200,
-          headers: {
-            ...corsHeaders(origin),
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'X-AI-Provider': streamResult.provider,
-            'X-AI-Tier': String(streamResult.tier),
-            'X-AI-Confidence': String(streamResult.confidence),
+        return new Response(
+          attachStreamUsageLogging(streamResult.response.body, supabase, dbModel?.id || `hybrid-${streamResult.provider}`, startMs, streamResult.provider),
+          {
+            status: 200,
+            headers: {
+              ...corsHeaders(origin),
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'X-AI-Provider': streamResult.provider,
+              'X-AI-Tier': String(streamResult.tier),
+              'X-AI-Confidence': String(streamResult.confidence),
+            },
           },
-        })
+        )
       }
       // Streaming failed → fall through to non-streaming hybrid
       console.warn('[MAIN] Streaming failed, falling back to non-streaming hybrid')

@@ -1227,12 +1227,14 @@ serve(async (req) => {
       getModelConfig(supabase).catch(() => ({ defaultModel: null, enabled: true, fallbackEnabled: true, streamEnabled: true, maxHistory: 20, rateLimit: 25 })),
       getUserProfile(supabase, auth.userId),
       // Rate limit — fail-open on DB errors (allow through, log warning)
-      supabase.rpc('check_and_increment_rate_limit', {
+      // ⚠️ T5-HOTFIX: supabase-js PostgrestBuilder is a thenable without .catch —
+      // wrap in Promise.resolve() first or the whole handler 500s.
+      Promise.resolve(supabase.rpc('check_and_increment_rate_limit', {
         p_user_id: auth.userId,
         p_endpoint: 'ai-chat-v3',
         p_window_seconds: 60,
         p_max_requests: 25,
-      }).catch((rlErr: any) => {
+      })).catch((rlErr: any) => {
         console.warn('[RATE_LIMIT] RPC failed, fail-open:', String(rlErr).slice(0, 100))
         return { data: [{ allowed: true }] }
       }),

@@ -2164,15 +2164,17 @@ serve(async (req) => {
     let fallbackAnswer = ''
 
     try {
-      // 1. Start with grounding data (already fetched)
-      if (grounding && grounding.sources.length > 0) {
-        fallbackAnswer = formatGroundingAsReport(grounding)
-      }
-
-      // 2. If no grounding data, try dynamic analytics RPC directly
+      // ⚠️ T5-ORDER: dynamic analytics FIRST — count questions (كم عدد...)
+      // get REAL numbers here, while grounding sources are often knowledge
+      // docs that don't answer the actual count.
       if (!fallbackAnswer && message) {
         const dynamicData = await fetchDynamicAnalyticsDirect(supabase, message, campaignRound)
         if (dynamicData) fallbackAnswer = dynamicData
+      }
+
+      // 2. grounding report as backup
+      if (!fallbackAnswer && grounding && grounding.sources.length > 0) {
+        fallbackAnswer = formatGroundingAsReport(grounding)
       }
 
       // 3. If still nothing, try system health

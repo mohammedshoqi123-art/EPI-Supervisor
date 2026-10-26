@@ -1323,7 +1323,7 @@ serve(async (req) => {
       try {
         const { groqChat } = await import('./llm/providers.ts')
         const t1 = Date.now()
-        const r = await groqChat(testMsg, groqKey || '', { model: 'llama-3.3-70b-versatile', maxTokens: 50 })
+        const r = await groqChat(testMsg, groqKey || '', { model: 'openai/gpt-oss-120b', maxTokens: 50 })
         results.groq = { ok: r?.type === 'message', latency: Date.now() - t1, type: r?.type, reply: r?.content?.slice(0, 100) }
       } catch (e: any) {
         results.groq = { ok: false, error: String(e).slice(0, 200) }
@@ -1382,7 +1382,7 @@ serve(async (req) => {
         const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${groqKey || ''}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: testMsg, max_tokens: 300, tools: TOOLS }),
+          body: JSON.stringify({ model: 'openai/gpt-oss-120b', messages: testMsg, max_tokens: 300, tools: TOOLS }),
           signal: controller.signal,
         })
         clearTimeout(timeoutId)
@@ -1406,7 +1406,7 @@ serve(async (req) => {
       try {
         const { groqChat } = await import('./llm/providers.ts')
         const t1 = Date.now()
-        const r2 = await groqChat(testMsg, groqKey || '', { model: 'llama-3.3-70b-versatile', maxTokens: 300, tools: TOOLS })
+        const r2 = await groqChat(testMsg, groqKey || '', { model: 'openai/gpt-oss-120b', maxTokens: 300, tools: TOOLS })
         out.helper_type = (r2 as any)?.type
         out.helper_latency = Date.now() - t1
         out.helper_tools = (r2 as any)?.tool_calls?.map((t: any) => t.function?.name)
@@ -1845,7 +1845,7 @@ serve(async (req) => {
       if (needsTools && groqKey) {
         console.log('[STREAM] Tool query → multiStepToolCallingStream')
         const toolStreamResp = await multiStepToolCallingStream(messages, groqKey, supabase, {
-          model: dbModelId || 'llama-3.3-70b-versatile',
+          model: dbModelId || 'openai/gpt-oss-120b',
           maxTokens: dbMaxTokens,
           temperature: dbTemperature,
           maxSteps: 2,
@@ -1943,7 +1943,7 @@ serve(async (req) => {
 
       // Use Groq for the final answer (best tool-calling support)
       const finalResult = await multiStepToolCalling(messages, groqKey || '', supabase, {
-        model: dbModelId || 'llama-3.3-70b-versatile',
+        model: dbModelId || 'openai/gpt-oss-120b',
         maxTokens: dbMaxTokens,
         temperature: dbTemperature,
         maxSteps: 2,  // ⚠️ FIX: 3→2 to reduce latency and avoid mobile timeout

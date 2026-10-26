@@ -33,10 +33,9 @@ const PROVIDERS: Record<string, ProviderConfig> = {
     name: 'Groq',
     tier: 1,
     free: true,
-    // FIX: قائمة النماذج الاحتياطية — إذا أُلغي النموذج الأساسي، نحاول الباقي.
-    // الترتيب من الأذكى للأسوأ (انظر GROQ_FALLBACK_CHAIN في groqChat).
-    // ⚠️ تم تقليل القائمة لنموذجين فقط لتجنب timeout mismatch مع hybridRouteChat.
-    models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'],
+    // ⚠️ T5-FIX: llama-3.3-70b-versatile REMOVED by Groq (404 as of 2026-10-26).
+    // gpt-oss-120b proven working with tools; 8b-instant as fast secondary.
+    models: ['openai/gpt-oss-120b', 'llama-3.1-8b-instant'],
     maxTokens: 4000,
     supportsTools: true,
     supportsStreaming: true,
@@ -102,15 +101,18 @@ const PROVIDERS: Record<string, ProviderConfig> = {
 // الآن: نموذجان فقط × 6s = 12s كحد أقصى (هامش 3s للشبكة).
 //
 // ترتيب النماذج من الأفضل (الأذكى) إلى الأسوأ (الأسرع):
+// ⚠️ T5-FIX: llama-3.3-70b-versatile was REMOVED by Groq (404) — the whole
+// tools path was silently limping through fallbacks. gpt-oss-120b is the
+// proven primary now; 8b-instant is the fast secondary.
 const GROQ_FALLBACK_CHAIN = [
-  'llama-3.3-70b-versatile',      // PRIMARY — أذكى، يدعم tools
-  'openai/gpt-oss-120b',           // fallback — يدعم tools، مفتوح المصدر
-  // أزلت llama-3.1-8b-instant و llama3-70b-8192 لأنهما يسببان timeout mismatch
+  'openai/gpt-oss-120b',           // PRIMARY — أذكى، يدعم tools (مؤكد حياً)
+  'llama-3.1-8b-instant',          // fallback — أسرع بكثير للسياق الكبير
 ]
 
-// Timeout لكل محاولة نموذج — أقل من الـ timeout الخارجي في hybridRouteChat (15s)
-// لنتمكن من تجربة نموذجين على الأقل قبل أن يرفض الـ race الخارجي.
-const GROQ_PER_MODEL_TIMEOUT_MS = 6_000
+// Timeout لكل محاولة نموذج — ⚠️ T5-FIX: 6s→9s. Tool decisions with the full
+// system prompt + 8K grounding context need prefill time on gpt-oss-120b;
+// 6s aborted healthy requests and pushed the gateway into slow fallbacks.
+const GROQ_PER_MODEL_TIMEOUT_MS = 9_000
 
 export async function groqChat(
   messages: any[],
@@ -549,7 +551,7 @@ export async function smartRouteChat(
   if (groqKey) {
     console.log('[ROUTER] Trying Groq...')
     const groqResult = await groqChat(messages, groqKey, {
-      model: model || 'llama-3.3-70b-versatile',
+      model: model || 'openai/gpt-oss-120b',
       maxTokens: maxTokens || 2000,
       temperature,
       tools,
@@ -646,7 +648,7 @@ export async function smartRouteStream(
   if (groqKey) {
     console.log('[STREAM] Trying Groq...')
     const result = await groqChat(messages, groqKey, {
-      model: model || 'llama-3.3-70b-versatile',
+      model: model || 'openai/gpt-oss-120b',
       maxTokens: maxTokens || 2000,
       temperature,
       tools,

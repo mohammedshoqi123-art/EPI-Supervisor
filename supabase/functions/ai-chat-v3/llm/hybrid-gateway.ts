@@ -122,7 +122,7 @@ export async function hybridRouteChat(
       try {
         const result = await Promise.race([
           groqChat(messages, groqKey, {
-            model: model || 'llama-3.3-70b-versatile',
+            model: model || 'openai/gpt-oss-120b',
             maxTokens: maxTokens || 2000,
             temperature,
             tools,
@@ -172,13 +172,34 @@ export async function hybridRouteChat(
       }
     }
 
-    // ═══ T5-FIX: no-tools fallback order — Pollinations BEFORE Groq-retry ═══
-    // Groq already failed with tools moments ago; retrying it immediately with
-    // no-tools usually wastes another 12s. Pollinations is an independent
-    // service — try it first, then give Groq one last chance.
+    // ═══ T5-FIX v2: no-tools fallback order — Groq-retry BEFORE Pollinations ═══
+    // Live evidence: Pollinations hangs 9-12s from the Edge while Groq-no-tools
+    // answers in ~2-3s. (gpt-oss-120b as primary usually avoids this path.)
     console.warn('[GATEWAY] Tools path failed — falling back to no-tools chat with grounding context')
 
-    // جرّب Pollinations كأول احتياط (مستقل عن Groq)
+    // جرّب Groq بدون tools أولاً (الأسرع مؤكداً)
+    if (groqKey && isAvailable('groq')) {
+      attempts.push('groq-no-tools')
+      try {
+        const result = await Promise.race([
+          groqChat(messages, groqKey, {
+            model: model || 'openai/gpt-oss-120b',
+            maxTokens: maxTokens || 2000,
+            temperature,
+          }),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+        ])
+        if (result && result.type === 'message' && result.content) {
+          recordSuccess('groq', Date.now() - start)
+          console.log('[GATEWAY] ✓ Groq no-tools fallback succeeded')
+          return { content: result.content, usage: result.usage, provider: 'groq-no-tools', attempts }
+        }
+      } catch (e: any) {
+        console.error(`[GATEWAY] Groq no-tools fallback failed: ${e.message}`)
+      }
+    }
+
+    // ثم Pollinations (مستقل عن Groq)
     if (isAvailable('pollinations')) {
       attempts.push('pollinations')
       try {
@@ -201,28 +222,6 @@ export async function hybridRouteChat(
       }
     }
 
-    // جرّب Groq بدون tools كاحتياط أخير
-    if (groqKey && isAvailable('groq')) {
-      attempts.push('groq-no-tools')
-      try {
-        const result = await Promise.race([
-          groqChat(messages, groqKey, {
-            model: model || 'llama-3.3-70b-versatile',
-            maxTokens: maxTokens || 2000,
-            temperature,
-          }),
-          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
-        ])
-        if (result && result.type === 'message' && result.content) {
-          recordSuccess('groq', Date.now() - start)
-          console.log('[GATEWAY] ✓ Groq no-tools fallback succeeded')
-          return { content: result.content, usage: result.usage, provider: 'groq-no-tools', attempts }
-        }
-      } catch (e: any) {
-        console.error(`[GATEWAY] Groq no-tools fallback failed: ${e.message}`)
-      }
-    }
-
     return { content: null, provider: 'none', attempts }
   }
 
@@ -238,7 +237,7 @@ export async function hybridRouteChat(
       const start = Date.now()
       const result = await Promise.race([
         groqChat(messages, groqKey, {
-          model: model || 'llama-3.3-70b-versatile',
+          model: model || 'openai/gpt-oss-120b',
           maxTokens: maxTokens || 2000,
           temperature,
           tools,
@@ -387,7 +386,7 @@ export async function hybridRouteStream(
     attempts.push('groq')
     try {
       const result = await groqChat(messages, groqKey, {
-        model: model || 'llama-3.3-70b-versatile',
+        model: model || 'openai/gpt-oss-120b',
         maxTokens: maxTokens || 2000,
         temperature,
         tools,

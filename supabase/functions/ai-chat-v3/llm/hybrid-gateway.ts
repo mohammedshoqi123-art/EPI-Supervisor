@@ -99,6 +99,24 @@ function getSuccessRate(name: string): number {
   return total > 0 ? Math.round((h.successes / total) * 100) : 100
 }
 
+// ═══ T5-SPEED: helper — resolve with the FIRST non-null promise result ═══
+// (Promise.race settles on the first completion even if it's null; we need
+// the first SUCCESS for parallel provider racing)
+function firstNonNull<T>(ps: Promise<T | null>[]): Promise<T | null> {
+  return new Promise((resolve) => {
+    let pending = ps.length
+    if (pending === 0) { resolve(null); return }
+    for (const p of ps) {
+      p.then(v => {
+        if (v != null && v !== undefined) resolve(v)
+        else { pending--; if (pending === 0) resolve(null) }
+      }).catch(() => {
+        pending--; if (pending === 0) resolve(null)
+      })
+    }
+  })
+}
+
 // ═══════════════════════════════════════════════════════════
 // HYBRID ROUTE — Chat (non-streaming)
 // ═══════════════════════════════════════════════════════════
@@ -248,9 +266,122 @@ export async function hybridRouteChat(
     return { content: null, provider: 'none', attempts }
   }
 
-  // ═══ FIX: Sequential fallback (no race condition = no wasted API calls) ═══
-  // Previously: Promise.any sent 2+ requests simultaneously → double cost when both succeed.
-  // Now: Try providers in order. Stop at first success.
+  // ═══ T5-SPEED: no-tools path — PARALLEL RACE Groq ∥ Pollinations ═══
+  // Sequential ordering wasted 18s on Groq timeouts before Pollinations
+  // even started. Racing both halves worst-case latency and doubles the
+  // success odds (evidence: Pollinations succeeds whenever Groq stalls).
+  if (!needTools) {
+    const groqKey = env.GROQ_API_KEY
+    const start = Date.now()
+
+    const racers: Promise<{ content: string; provider: string; usage?: any } | null>[] = []
+
+    if (groqKey && isAvailable('groq')) {
+      attempts.push('groq')
+      racers.push((async () => {
+        try {
+          const result = await Promise.race([
+            groqChat(messages, groqKey, {
+              model: model || 'llama-3.1-8b-instant',
+              maxTokens: maxTokens || 2000,
+              temperature,
+              tools,
+              tool_choice,
+            }),
+            new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 14_000)),
+          ])
+          if (result?.type === 'tool_calls') {
+            return null as null // tool calls handled by caller via needTools
+          }
+          if (result?.type === 'message' && result.content) {
+            recordSuccess('groq', Date.now() - start)
+            return { content: result.content, provider: 'groq', usage: result.usage }
+          }
+          recordFailure('groq', 'empty/invalid')
+          return null
+        } catch (e: any) {
+          recordFailure('groq', e?.message)
+          return null
+        }
+      })())
+    }
+
+    if (isAvailable('pollinations')) {
+      attempts.push('pollinations')
+      racers.push((async () => {
+        try {
+          const result = await Promise.race([
+            pollinationsChat(messages, {
+              model: 'openai',
+              maxTokens: maxTokens || 2000,
+              temperature,
+            }),
+            new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 11_000)),
+          ])
+          if (result && typeof result === 'string') {
+            recordSuccess('pollinations', Date.now() - start)
+            return { content: result, provider: 'pollinations' }
+          }
+          recordFailure('pollinations', 'empty/invalid')
+          return null
+        } catch (e: any) {
+          recordFailure('pollinations', e?.message)
+          return null
+        }
+      })())
+    }
+
+    const winner = await firstNonNull(racers)
+    if (winner) {
+      return { content: winner.content, usage: winner.usage, provider: winner.provider, attempts }
+    }
+
+    // ─── Both racers failed → NVIDIA → HuggingFace (sequential) ───
+    const nvidiaKey = env.NVIDIA_API_KEY
+    if (nvidiaKey && isAvailable('nvidia')) {
+      attempts.push('nvidia')
+      try {
+        const startN = Date.now()
+        const result = await Promise.race([
+          nvidiaChat(messages, nvidiaKey, maxTokens || 2000),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+        ])
+        if (result) {
+          recordSuccess('nvidia', Date.now() - startN)
+          return { content: result, provider: 'nvidia', attempts }
+        }
+        recordFailure('nvidia', 'null')
+      } catch (e: any) {
+        recordFailure('nvidia', e?.message)
+        console.error(`[GATEWAY] NVIDIA failed: ${e.message}`)
+      }
+    }
+
+    const hfKey = env.HF_API_TOKEN
+    if (hfKey && isAvailable('huggingface')) {
+      attempts.push('huggingface')
+      try {
+        const startH = Date.now()
+        const result = await Promise.race([
+          huggingfaceChat(messages, hfKey),
+          new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+        ])
+        if (result) {
+          recordSuccess('huggingface', Date.now() - startH)
+          return { content: result, provider: 'huggingface', attempts }
+        }
+        recordFailure('huggingface', 'null')
+      } catch (e: any) {
+        recordFailure('huggingface', e?.message)
+        console.error(`[GATEWAY] HuggingFace failed: ${e.message}`)
+      }
+    }
+
+    console.error(`[GATEWAY] ❌ All providers failed! Attempts: ${attempts.join(', ')}`)
+    return { content: null, provider: 'none', attempts }
+  }
+
+  // ─── Sequential fallback for tools path ───
 
   // ─── Step 1: Groq (supports tools) ───
   const groqKey = env.GROQ_API_KEY
@@ -277,7 +408,7 @@ export async function hybridRouteChat(
           return { content: result.content, usage: result.usage, provider: 'groq', attempts }
         }
       }
-      recordFailure('groq')
+      recordFailure('groq', 'null result')
     } catch (e: any) {
       recordFailure('groq', e?.message)
       console.error(`[GATEWAY] Groq failed: ${e.message}`)

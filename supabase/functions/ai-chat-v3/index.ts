@@ -1114,7 +1114,10 @@ async function multiStepToolCalling(
 
   for (let step = 0; step < maxSteps; step++) {
     const result = await groqChat(msgs, groqKey, { model: opts.model, maxTokens: opts.maxTokens, temperature: opts.temperature, tools: TOOLS })
-    if (!result) return null
+    // ⚠️ T5-FIX: was `return null` — a single failed mid-step threw away ALL
+    // the tool results already gathered. Break to the final no-tools answer
+    // which uses the accumulated data instead.
+    if (!result) break
 
     if (result.type === 'tool_calls') {
       const toolResults = await executeToolCalls(supa, result.tool_calls, opts.userId, { campaignRound: opts.campaignRound, campaignType: opts.campaignType, form_id: opts.form_id })

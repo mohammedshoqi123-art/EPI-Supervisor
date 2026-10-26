@@ -198,12 +198,35 @@ export async function groqChat(
           usage: json.usage,
         }
       }
-      // ⚠️ T5-FIX: EMPTY CONTENT = FAILURE. Llama-3.3-70b returns content:"" for
-      // data questions when tools are absent (it wants to call tools). Treating
-      // empty as success made the gateway return an empty reply to the user.
-      // Now: fall through to the next model in the chain.
+      // ⚠️ T5-FIX: EMPTY CONTENT = FAILURE. Llama-3.1-8b returns content:"" for
+      // data questions in some states even WITH tools (freeze on tool choice).
+      // T5-RECOVERY: if tools were passed, retry the SAME model once WITHOUT
+      // tools — it then answers from the grounding context already in the prompt.
       const content = choice.message?.content || ''
       if (!content.trim()) {
+        if (opts.tools) {
+          try {
+            const retryBody: Record<string, any> = { model, messages, max_tokens: opts.maxTokens || 2000, temperature: opts.temperature ?? 0.4 }
+            if (model.includes('gpt-oss')) retryBody.reasoning_effort = 'low'
+            const controller2 = new AbortController()
+            const timeoutId2 = setTimeout(() => controller2.abort(), perModelTimeout)
+            const r2 = await fetch(GROQ_API, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(retryBody),
+              signal: controller2.signal,
+            })
+            clearTimeout(timeoutId2)
+            if (r2.ok) {
+              const j2 = await r2.json()
+              const c2 = j2.choices?.[0]?.message?.content || ''
+              if (c2.trim()) {
+                console.log(`[GROQ] ${model} empty-with-tools → no-tools retry SUCCEEDED (${c2.length} chars)`)
+                return { type: 'message', content: c2, usage: j2.usage }
+              }
+            }
+          } catch { /* fall through to next model */ }
+        }
         console.warn(`[GROQ] ${model} returned EMPTY content (finish=${choice.finish_reason}) — trying next model`)
         continue
       }

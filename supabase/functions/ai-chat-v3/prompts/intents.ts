@@ -42,7 +42,10 @@ const INTENT_RULES: [IntentName, RegExp][] = [
 // ═══ LLM-based classification hints (used when regex is ambiguous) ═══
 // These patterns suggest the user needs data analysis → use tools
 export const DATA_QUERY_PATTERNS = [
-  /كم\s+(عدد|نسبة|معدل|مجموع|متوسط)/i,
+  // ⚠️ T5-ROUTING: count queries (كم عدد/نسبة/معدل...) REMOVED — the grounding
+  // engine already fetches those numbers and the no-tools LLM answers them
+  // reliably in 1-4s; the tools path was the fragile link (8b-instant freezes).
+  // Tools stay reserved for explicit analysis verbs below.
   /أيش\s+(الوضع|الأداء|النتيجة|الإحصائيات)/i,
   /كيف\s+(الوضع|الأداء|النتيجة)/i,
   /وش\s+(الأخبار|الوضع|الأداء)/i,

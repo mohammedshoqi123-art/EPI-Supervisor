@@ -1843,11 +1843,14 @@ serve(async (req) => {
 
     // Determine if this query needs tool calls (data queries)
     // FIX: Now supports Groq + OpenRouter (both support tool calling)
+    // ⚠️ T5-ROUTING: removed bare "كم" from the regex — count questions are
+    // answered from grounding sources by the fast no-tools path (100% success,
+    // 1-4s). Tools stay for explicit analysis verbs only.
     const { needsDataTools: checkNeedsData } = await import('./prompts/intents.ts')
     const hasToolsProvider = !!groqKey || !!openrouterKey
     const needsTools = hasToolsProvider && (
       checkNeedsData(message || '') ||
-      /حلل|تقرير|إحصائية|قارن|ترتيب|تنبؤ|توقع|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل|أداء|نسبة|كم/.test(message || '')
+      /حلل|تحليل|تقرير|إحصائية|قارن|مقارنة|ترتيب|رتب|تنبؤ|توقع|أفضل|أسوأ|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل|أداء/.test(message || '')
     )
 
     // Predict best provider

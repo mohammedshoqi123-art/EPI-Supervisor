@@ -1068,6 +1068,75 @@ class OfflineManager {
     }
   }
 
+  /// ═══ ميزة الحذف اليدوي: حذف مسودة مستردة نهائياً بواسطة المستخدم ═══
+  /// تُستدعى من FormsStatusScreen عند ضغط زر الحذف على مسودة مستردة.
+  /// يحذف فقط هذه المسودة — لا يمس بقية المخزن.
+  Future<void> removeRecoveredDraft(String draftId) async {
+    final data = _box?.get('_recovered_drafts');
+    if (data == null || data.isEmpty) return;
+    try {
+      final map = Map<String, dynamic>.from(jsonDecode(data));
+      if (!map.containsKey(draftId)) return;
+      map.remove(draftId);
+      await _box?.put('_recovered_drafts', jsonEncode(map));
+      if (kDebugMode) {
+        debugPrint('[OfflineManager] 🗑️ Recovered draft deleted by user: $draftId');
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[OfflineManager] removeRecoveredDraft failed: $e');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ═══ FIX D-4: تثبيت طابور النسخ السحابي في Hive ═══
+  // Previously: the pending cloud-backup queue lived in memory only —
+  // app kill/close dropped the queue and the last save was lost.
+  // Now: the queue is flushed to Hive on app pause and restored on startup.
+  // ═══════════════════════════════════════════════════════════════════════
+  static const String _cloudBackupQueueKey = '_cloud_backup_queue';
+
+  /// Serialize the pending cloud-backup queue into Hive (encrypted, with
+  /// plain-JSON fallback consistent with the rest of this class).
+  Future<void> savePendingCloudQueue(List<Map<String, dynamic>> items) async {
+    if (_box == null || !_box!.isOpen) return;
+    final json = jsonEncode(items);
+    try {
+      await _box?.put(_cloudBackupQueueKey, _encryption.encrypt(json));
+    } catch (_) {
+      try {
+        await _box?.put(_cloudBackupQueueKey, json);
+      } catch (e) {
+        if (kDebugMode) debugPrint('[OfflineManager] savePendingCloudQueue failed: $e');
+      }
+    }
+  }
+
+  /// Restore a previously flushed cloud-backup queue (empty list if none).
+  List<Map<String, dynamic>> getPendingCloudQueue() {
+    final data = _box?.get(_cloudBackupQueueKey);
+    if (data == null || data.isEmpty) return [];
+    List<dynamic> decoded;
+    try {
+      decoded = jsonDecode(_encryption.decrypt(data)) as List<dynamic>;
+    } catch (_) {
+      try {
+        decoded = jsonDecode(data) as List<dynamic>;
+      } catch (_) {
+        return [];
+      }
+    }
+    return decoded
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  /// Remove the persisted cloud-backup queue after successful processing.
+  Future<void> clearPendingCloudQueue() async {
+    if (_box == null || !_box!.isOpen) return;
+    await _box?.delete(_cloudBackupQueueKey);
+  }
+
   /// Get all drafts — decrypts each individually (not one giant blob)
   List<Map<String, dynamic>> getAllDrafts() {
     final indexStr = _box?.get(_draftsIndexKey) ?? '[]';
@@ -1524,19 +1593,33 @@ class OfflineManager {
   /// Max Hive box size — 200MB. If exceeded, non-reference cache is cleared.
   static const int _maxBoxSizeBytes = 200 * 1024 * 1024; // 200MB
 
+  /// ═══ FIX D-1: سقف مخزن المسودات المستردة — رُفع من 10 إلى 50 ═══
+  /// Previously: 10 only → older recovered drafts silently dropped forever.
+  /// Now: 50 → practical ceiling for supervisors with many corrupted drafts.
+  static const int _maxRecoveredDrafts = 50;
+
   /// Cleanup old data to prevent storage bloat.
   /// Called once on init. Removes:
-  ///   1. Drafts older than 30 days
-  ///   2. Failed submissions older than 30 days
-  ///   3. Non-reference cache entries older than 30 days
-  ///   4. If total box size > 200MB, clears non-reference cache
+  ///   1. Failed submissions older than 30 days
+  ///   2. Non-reference cache entries older than 30 days
+  ///   3. If total box size > 200MB, clears non-reference cache
+  ///
+  /// ═══ FIX D-2: الحذف التلقائي للمسودات بالعمر أُلغي كلياً ═══
+  /// Previously: drafts older than 30 days were force-archived out of the
+  ///   active index (user sees them vanish from المسودات tab).
+  /// Now: drafts are NEVER removed by age. Deletion is manual-only by the
+  ///   user (edit/delete UI in FormsStatusScreen), or via repair path for
+  ///   corrupted/unmigratable drafts (preserved in _recovered_drafts).
+  /// Storage bloat is still guarded by the 200MB box-size check below.
   Future<void> _cleanupOldData() async {
     if (_box == null || !_box!.isOpen) return;
 
     try {
       int removedCount = 0;
 
-      // 1. Clean old drafts (older than 30 days)
+      // ═══ FIX D-2: (was section 1 — age-based draft cleanup REMOVED) ═══
+      // Only the decryption-repair pass below remains: drafts that fail all
+      // decryption attempts are preserved into _recovered_drafts (never lost).
       final now = DateTime.now();
       final indexStr = _box!.get(_draftsIndexKey) ?? '[]';
       List<String> draftIndex;
@@ -1612,13 +1695,11 @@ class OfflineManager {
             draftsToRemove.add(draftId);
             continue;
           }
-          final draft = jsonDecode(decrypted);
-          final savedAt = DateTime.tryParse(draft['saved_at'] ?? '');
-          if (savedAt != null && now.difference(savedAt).inDays > 30) {
-            // FIX: انقل لـ recovered بدل الحذف الدائم
-            draftsToPreserve[draftId] = data;
-            draftsToRemove.add(draftId);
-          }
+          // ═══ FIX D-2: لا نحذف المسودات القديمة بالعمر أبداً ═══
+          // Previously: savedAt > 30 days → archived out of the drafts list.
+          // Now: age is irrelevant — the draft stays until the user deletes it
+          // (manual delete UI) or submits it. Only unreadable drafts are moved
+          // to the recovery store below.
         } catch (_) {
           // ═══ FIX R-C1: Don't delete corrupted drafts — preserve for recovery ═══
           // Previously: draftsToRemove.add(draftId) → deleted forever
@@ -1639,8 +1720,8 @@ class OfflineManager {
           recoveryMap = {};
         }
         recoveryMap.addAll(draftsToPreserve);
-        // FIX: احذف الأقدم إذا تجاوز 10
-        while (recoveryMap.length > 10) {
+        // ═══ FIX D-1: احذف الأقدم إذا تجاوز 50 (كان 10) ═══
+        while (recoveryMap.length > _maxRecoveredDrafts) {
           recoveryMap.remove(recoveryMap.keys.first);
         }
         await _box!.put('_recovered_drafts', jsonEncode(recoveryMap));

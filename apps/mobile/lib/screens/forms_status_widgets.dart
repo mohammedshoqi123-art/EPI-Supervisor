@@ -673,6 +673,9 @@ class DraftTile extends StatelessWidget {
   final String? date;
   final Map<String, dynamic>? draftData;
   final VoidCallback onTap;
+  /// ═══ ميزة الحذف اليدوي: عند تمريرها يظهر زر حذف في البطاقة ═══
+  /// اختيارية للحفاظ على التوافق الخلفي مع الاختبارات.
+  final VoidCallback? onDelete;
 
   const DraftTile({
     super.key,
@@ -681,6 +684,7 @@ class DraftTile extends StatelessWidget {
     this.date,
     this.draftData,
     required this.onTap,
+    this.onDelete,
   });
 
   /// Build a preview of the draft data fields
@@ -857,20 +861,72 @@ class DraftTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primarySurface,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.edit,
-                    size: 16,
-                    color: AppTheme.primaryColor,
-                  ),
+                // ═══ ميزة تعديل/حذف المسودة بواسطة المستخدم ═══
+                // زرّان صريحان: تعديل (يفتح النموذج) وحذف (مع تأكيد).
+                // حذف = حذف محلي + سحابي معاً عبر onDelete في الشاشة.
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _DraftActionButton(
+                      tooltip: 'تعديل المسودة',
+                      icon: Icons.edit,
+                      color: AppTheme.primaryColor,
+                      background: AppTheme.primarySurface,
+                      onTap: onTap,
+                    ),
+                    if (onDelete != null) ...[
+                      const SizedBox(width: 6),
+                      _DraftActionButton(
+                        tooltip: 'حذف المسودة',
+                        icon: Icons.delete_outline,
+                        color: const Color(0xFFD32F2F),
+                        background: const Color(0xFFD32F2F).withValues(alpha: 0.08),
+                        onTap: onDelete!,
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// زر صغير موحّد لأفعال بطاقة المسودة (تعديل / حذف)
+class _DraftActionButton extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final Color color;
+  final Color background;
+  final VoidCallback onTap;
+
+  const _DraftActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.color,
+    required this.background,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: color),
           ),
         ),
       ),

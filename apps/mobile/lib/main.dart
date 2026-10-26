@@ -19,7 +19,8 @@ import 'package:epi_shared/epi_shared.dart';
 import 'router/app_router.dart';
 import 'screens/onboarding_screen.dart';
 import 'providers/realtime_sync_provider.dart';
-import 'providers/app_providers.dart';  // For offlineManagerProvider
+import 'providers/app_providers.dart';  // For offlineManagerProvider + cloudDraftServiceProvider
+import 'services/cloud_draft_service.dart';  // FIX D-4: flush/restore cloud-backup queue
 
 final themeModeProvider = StateProvider<ThemeMode>((_) => ThemeMode.system);
 
@@ -308,6 +309,11 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
     _checkOnboarding();
     // ═══ Start Realtime Sync — listen for admin dashboard changes ═══
     _initRealtimeSync();
+    // ═══ FIX D-4: استرجاع طابور النسخ السحابي المثبت في Hive ═══
+    // أي نسخ معلقة لم تُرسل قبل إغلاق التطبيق تُرسل الآن بعد جاهزية Hive.
+    Future.delayed(const Duration(seconds: 8), () {
+      if (mounted) _restoreCloudDraftQueue('startup');
+    });
   }
 
   @override
@@ -326,6 +332,12 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
 
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    // ═══ FIX D-4: إفراغ طابور النسخ السحابي إلى Hive قبل أي إيقاف ═══
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      _flushCloudDraftQueue('lifecycle:$state');
+    }
     if (state == AppLifecycleState.resumed) {
       // ═══ FIX #17: debounce — تخطي إذا آخر init كان قبل أقل من 10 ثوانٍ ═══
       final now = DateTime.now();
@@ -364,8 +376,47 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
       return false;
     });
 
+    // ═══ FIX D-4: أعد استرجاع طابور النسخ السحابي بعد إعادة تهيئة Hive ═══
+    _restoreCloudDraftQueue('resume');
+
     // 3. Refresh Supabase session if needed
     _refreshSessionOnResume();
+  }
+
+  /// ═══ FIX D-4: إرسال الطابور المعلق إلى Hive قبل إيقاف التطبيق ═══
+  Future<void> _flushCloudDraftQueue(String reason) async {
+    try {
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
+        const Duration(seconds: 5),
+      );
+      final cloudDraft = ref.read(cloudDraftServiceProvider);
+      if (cloudDraft != null) {
+        await cloudDraft.flushQueueToStorage(offline).timeout(
+          const Duration(seconds: 5),
+        );
+        debugPrint('[App] Cloud draft queue flushed ($reason, pending: ${cloudDraft.pendingCount})');
+      }
+    } catch (e) {
+      debugPrint('[App] Cloud draft queue flush failed ($reason): $e');
+    }
+  }
+
+  /// ═══ FIX D-4: استرجاع طابور النسخ السحابي من Hive وإرساله ═══
+  Future<void> _restoreCloudDraftQueue(String reason) async {
+    try {
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
+        const Duration(seconds: 5),
+      );
+      if (!offline.isInitialized) return; // Hive غير جاهز — سنحاول عند الاستئناف
+      final cloudDraft = ref.read(cloudDraftServiceProvider);
+      if (cloudDraft != null) {
+        await cloudDraft.restoreQueueFromStorage(offline).timeout(
+          const Duration(seconds: 10),
+        );
+      }
+    } catch (e) {
+      debugPrint('[App] Cloud draft queue restore failed ($reason): $e');
+    }
   }
 
   Future<void> _refreshSessionOnResume() async {

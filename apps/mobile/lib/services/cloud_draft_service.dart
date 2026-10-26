@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:epi_core/epi_core.dart';
 
 /// ═══════════════════════════════════════════════════════════════════════
 /// CloudDraftService — نسخة احتياطية سحابية للمسودات
@@ -20,9 +21,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class CloudDraftService {
   final SupabaseClient _client;
   
-  // Rate limiting: لا نرسل أكثر من طلب واحد كل 5 ثوانٍ لنفس المسودة
+  // ═══ FIX D-4: الدمج بدل الإسقاط ═══
+  // Previously: أي حفظ خلال 5 ثوانٍ من السابق كان يُهدر نهائياً (لا يُرسل
+  // ولا يُصطف) — آخر تعديل قبل إغلاق التطبيق يضيع.
+  // Now: الحفظ خلال نافذة الـ rate limit يُدمج مع العنصر المعلق الموجود
+  // (يستبدل بياناته بأحدث نسخة) — الطابور يرسل دائماً أحدث حالة.
   final Map<String, DateTime> _lastBackupTime = {};
   static const _minBackupInterval = Duration(seconds: 5);
+  static const _maxRetries = 3; // كانت 1 — D-4: تحمّل انقطاع قصير
   
   // Queue للعمليات المعلقة (non-blocking)
   final List<_PendingBackup> _pendingQueue = [];
@@ -30,7 +36,7 @@ class CloudDraftService {
   
   CloudDraftService(this._client);
 
-  /// ═══ حفظ مسودة في السحابة (non-blocking, rate-limited) ═══
+  /// ═══ حفظ مسودة في السحابة (non-blocking, merge-safe) ═══
   /// يُستدعى من saveDraft() بعد الحفظ المحلي مباشرة
   /// لا يحظر UI — يعمل في الخلفية
   Future<void> backupDraft({
@@ -38,14 +44,29 @@ class CloudDraftService {
     required String formId,
     required Map<String, dynamic> data,
   }) async {
-    // Rate limiting: تخطي إذا آخر backup كان قبل أقل من 5 ثوانٍ
     final lastTime = _lastBackupTime[draftId];
-    if (lastTime != null && DateTime.now().difference(lastTime) < _minBackupInterval) {
-      debugPrint('[CloudDraft] Rate limited — skipping backup for ${draftId.substring(0, 8)}');
-      return;
+    final withinWindow = lastTime != null &&
+        DateTime.now().difference(lastTime) < _minBackupInterval;
+
+    // ═══ FIX D-4: داخل نافذة الـ rate limit ندمج بدل أن نهدر ═══
+    if (withinWindow) {
+      final existingIndex = _pendingQueue.indexWhere((p) => p.draftId == draftId);
+      if (existingIndex != -1) {
+        // أحدث نسخة تحل محل المعلق القديم — لا فقدان لآخر حفظ
+        _pendingQueue[existingIndex] = _PendingBackup(
+          draftId: draftId,
+          formId: formId,
+          data: data,
+          timestamp: DateTime.now(),
+          retryCount: _pendingQueue[existingIndex].retryCount,
+        );
+        debugPrint('[CloudDraft] Merged into pending queue: ${draftId.substring(0, 8)}');
+        return;
+      }
+      // لا يوجد معلق — أضف أحدث نسخة على أي حال (الإرسال سيمر لاحقاً)
+      // نحدّث الطابع الزمني فقط عندما نضيف فعلاً حتى لا نمدد النافذة بلا داعٍ
     }
-    
-    // أضف إلى queue بدلاً من الانتظار
+
     _pendingQueue.add(_PendingBackup(
       draftId: draftId,
       formId: formId,
@@ -53,8 +74,7 @@ class CloudDraftService {
       timestamp: DateTime.now(),
     ));
     _lastBackupTime[draftId] = DateTime.now();
-    
-    // معالجة Queue في الخلفية
+
     _processQueueInBackground();
   }
 
@@ -89,9 +109,16 @@ class CloudDraftService {
         } catch (e) {
           // Non-critical — لا نرمي exception
           debugPrint('[CloudDraft] ❌ Backup failed: $e');
-          // إعادة المحاولة مرة واحدة بعد 5 ثوانٍ
-          if (pending.retryCount < 1) {
-            _pendingQueue.add(pending.copyWith(retryCount: pending.retryCount + 1));
+          // ═══ FIX D-4: 3 محاولات بدل 1 مع تراجع متزايد (5s/15s/45s) ═══
+          if (pending.retryCount < _maxRetries) {
+            final next = pending.copyWith(retryCount: pending.retryCount + 1);
+            // أعد إدراج العنصر في مقدمة الطابور مع تأجيل via retries counter
+            Future.delayed(Duration(seconds: 5 * (1 << next.retryCount)), () {
+              _pendingQueue.insert(0, next);
+              _processQueueInBackground();
+            });
+          } else {
+            debugPrint('[CloudDraft] ⚠️ Giving up on ${pending.draftId.substring(0, 8)} after $_maxRetries retries — local Hive copy remains source of truth');
           }
         }
       }
@@ -182,7 +209,10 @@ class CloudDraftService {
   }
 
   /// ═══ مسح كل المسودات السحابية القديمة ═══
-  /// يُستدعى دورياً لتنظيف المسودات الأقدم من 30 يوم
+  /// ═══ FIX D-2: معطّلة — الحذف التلقائي السحابي أُلغي ═══
+  /// لا يوجد أي مسار في التطبيق يستدعيها، وقد جُعلت @Deprecated لمنع
+  /// إعادة استعمالها مستقبلاً. الحذف الآن يدوي فقط من قبل المستخدم.
+  @Deprecated('D-2: الحذف التلقائي معطّل — استخدم deleteDraft اليدوي فقط')
   Future<void> cleanupOldDrafts() async {
     try {
       final userId = _client.auth.currentUser?.id;
@@ -210,6 +240,54 @@ class CloudDraftService {
       return false;
     }
   }
+
+  /// ═══ FIX D-4: إفراغ الطابور إلى Hive عند إغلاق/إيقاف التطبيق ═══
+  /// تُستدعى من main.dart في AppLifecycleState.paused/detached
+  Future<void> flushQueueToStorage(OfflineManager offlineManager) async {
+    try {
+      if (_pendingQueue.isEmpty) return;
+      await offlineManager.savePendingCloudQueue(
+        _pendingQueue.map((p) => p.toJson()).toList(),
+      );
+      debugPrint('[CloudDraft] 💾 Flushed ${_pendingQueue.length} pending backups to Hive');
+    } catch (e) {
+      debugPrint('[CloudDraft] ❌ Flush queue failed: $e');
+    }
+  }
+
+  /// ═══ FIX D-4: استرجاع الطابور من Hive عند الإقلاع والاستئناف ═══
+  /// تُستدعى من main.dart بعد تهيئة OfflineManager
+  Future<void> restoreQueueFromStorage(OfflineManager offlineManager) async {
+    try {
+      final items = offlineManager.getPendingCloudQueue() as List;
+      if (items.isEmpty) return;
+      await offlineManager.clearPendingCloudQueue();
+      int restored = 0;
+      for (final item in items) {
+        final draftId = item['draft_id'] as String?;
+        if (draftId == null) continue;
+        // لا نسترجع نسخة أقدم من المعلق الحالي
+        final existing = _pendingQueue.indexWhere((p) => p.draftId == draftId);
+        if (existing != -1) continue;
+        _pendingQueue.add(_PendingBackup(
+          draftId: draftId,
+          formId: (item['form_id'] as String?) ?? draftId,
+          data: Map<String, dynamic>.from(item['data'] as Map? ?? {}),
+          timestamp: DateTime.tryParse(item['timestamp'] as String? ?? '') ?? DateTime.now(),
+        ));
+        restored++;
+      }
+      if (restored > 0) {
+        debugPrint('[CloudDraft] ♻️ Restored $restored pending backups from Hive');
+        _processQueueInBackground();
+      }
+    } catch (e) {
+      debugPrint('[CloudDraft] ❌ Restore queue failed: $e');
+    }
+  }
+
+  /// عدد النسخ المعلقة (للتشخيص)
+  int get pendingCount => _pendingQueue.length;
 }
 
 /// عنصر Queue معلق
@@ -237,4 +315,13 @@ class _PendingBackup {
       retryCount: retryCount ?? this.retryCount,
     );
   }
+
+  /// ═══ FIX D-4: تسلسل الطابور للتثبيت في Hive ═══
+  Map<String, dynamic> toJson() => {
+        'draft_id': draftId,
+        'form_id': formId,
+        'data': data,
+        'timestamp': timestamp.toIso8601String(),
+        'retry_count': retryCount,
+      };
 }

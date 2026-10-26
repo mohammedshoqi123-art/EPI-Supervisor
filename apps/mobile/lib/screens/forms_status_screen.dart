@@ -908,6 +908,135 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
   // TAB: DRAFTS
   // ═══════════════════════════════════════════════════════════════
 
+  /// ═══ ميزة جديدة: حذف المسودة بواسطة المستخدم (مع تأكيد) ═══
+  /// يعرض مربع تأكيد، ثم عند الموافقة:
+  ///   1. المسودات العادية: حذف محلي (Hive) + حذف النسخة السحابية (draft_backups)
+  ///   2. المسودات المستردة محلياً: حذف من مخزن الاسترداد _recovered_drafts
+  ///   3. المستردة من السحابة فقط (_source: cloud): حذف السجل السحابي
+  /// بعدها تُحدَّث القائمة فوراً ويظهر SnackBar بتأكيد الحذف.
+  Future<void> _confirmAndDeleteDraft(
+    Map<String, dynamic> draft, {
+    bool recovered = false,
+  }) async {
+    final draftId = draft['draft_id'] as String?;
+    if (draftId == null || draftId.isEmpty) return;
+
+    final title = (draft['form_title'] as String?) ?? 'مسودة';
+    final isCloudOnlyRecovered = recovered && draft['_source'] == 'cloud';
+
+    // ─── 1. تأكيد الحذف ───
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.delete_forever_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'حذف المسودة',
+                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          isCloudOnlyRecovered
+              ? 'سيتم حذف النسخة السحابية للمسودة "$title" نهائياً من الخادم. لا يمكن التراجع عن هذا الإجراء.\n\nهل أنت متأكد من الحذف؟'
+              : 'سيتم حذف مسودة "$title" نهائياً من هذا الجهاز ومن النسخة السحابية الاحتياطية. لا يمكن التراجع عن هذا الإجراء.\n\nهل أنت متأكد من الحذف؟',
+          style: const TextStyle(fontFamily: 'Tajawal', height: 1.6),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text(
+              'إلغاء',
+              style: TextStyle(fontFamily: 'Cairo'),
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+            ),
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text(
+              'حذف نهائي',
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // ─── 2. تنفيذ الحذف ───
+    String? errorMsg;
+    var localDeleted = false;
+
+    try {
+      final offline = await ref.read(offlineManagerProvider.future).timeout(
+            const Duration(seconds: 10),
+          );
+      if (recovered && !isCloudOnlyRecovered) {
+        // مسودة مستردة محلياً — حذف من مخزن الاسترداد
+        await offline.removeRecoveredDraft(draftId);
+        localDeleted = true;
+      } else if (!recovered) {
+        // مسودة عادية — حذف محلي من مخزن المسودات
+        await offline.removeDraft(draftId);
+        localDeleted = true;
+      }
+    } catch (e) {
+      debugPrint('[FormsStatusScreen] Local draft delete failed: $e');
+      errorMsg = 'تعذر الحذف من التخزين المحلي';
+    }
+
+    // ─── 3. حذف النسخة السحابية (للمسودات العادية والسحابية فقط) ───
+    if (!recovered || isCloudOnlyRecovered) {
+      try {
+        final cloudService = CloudDraftService(Supabase.instance.client);
+        await cloudService.deleteDraft(draftId).timeout(
+              const Duration(seconds: 8),
+            );
+      } catch (e) {
+        debugPrint('[FormsStatusScreen] Cloud draft delete failed: $e');
+        if (!localDeleted) {
+          errorMsg = 'تعذر الحذف محلياً أو من السحابة — أعد المحاولة';
+        } else {
+          errorMsg = 'حُذفت من الجهاز — تعذر حذف النسخة السحابية الآن، أعد المحاولة عند توفر الاتصال';
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    // ─── 4. تحديث القائمة فوراً ───
+    setState(() {
+      _draftItems.removeWhere((d) => d['draft_id'] == draftId);
+      _recoveredDraftItems.removeWhere((d) => d['draft_id'] == draftId);
+      if (_draftTotal > 0 && !recovered) _draftTotal--;
+      if (_recoveredDraftTotal > 0 && recovered) _recoveredDraftTotal--;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          errorMsg ?? 'تم حذف المسودة بنجاح',
+          style: const TextStyle(fontFamily: 'Tajawal'),
+        ),
+        backgroundColor: errorMsg != null ? Colors.orange.shade800 : Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+
+    // ─── 5. إعادة تحميل الصفحة الحالية لضمان اتساق الترقيم ───
+    _loadDraftsPage(_draftPage);
+  }
+
   Widget _buildDraftsTab() {
     if (_draftLoading && _draftItems.isEmpty && _recoveredDraftItems.isEmpty) {
       return const EpiLoading.shimmer();
@@ -948,6 +1077,8 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                   context.go('/forms/fill/$formId?draftId=$draftId');
                 }
               },
+              // ═══ ميزة جديدة: حذف المسودة بواسطة المستخدم ═══
+              onDelete: () => _confirmAndDeleteDraft(draft),
             );
           },
           childCount: _draftItems.length,
@@ -976,6 +1107,9 @@ class _FormsStatusScreenState extends ConsumerState<FormsStatusScreen>
                   context.go('/forms/fill/$formId?draftId=$draftId');
                 }
               },
+              // ═══ ميزة جديدة: حذف المسودات المستردة أيضاً ═══
+              // تشمل المستردة محلياً والمستردة من السحابة فقط (_source: cloud)
+              onDelete: () => _confirmAndDeleteDraft(draft, recovered: true),
             );
           },
           childCount: _recoveredDraftItems.length,

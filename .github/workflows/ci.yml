@@ -416,6 +416,13 @@ jobs:
       - name: Push migrations to Production
         id: push_migrations
         run: |
+          # ═══ SAFETY GUARD (stage-2): skip cleanly when supabase/migrations is
+          # intentionally absent — `db push --include-all` on a stale migration
+          # set would re-apply old migrations against production. ═══
+          if [ ! -d "supabase/migrations" ]; then
+            echo "ℹ️ No supabase/migrations directory in repo — skipping DB migrations (schema is managed directly)"
+            exit 0
+          fi
           set +e
           OUTPUT=$(supabase db push --include-all 2>&1)
           EXIT_CODE=$?

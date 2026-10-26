@@ -60,6 +60,15 @@ jobs:
 
       - name: Deploy database migrations
         run: |
+          # ═══ SAFETY GUARD (stage-2) ═══
+          # supabase/migrations is intentionally NOT in the repo: the historical
+          # migration set predates the live prod schema, and `db push --include-all`
+          # would re-apply old migrations against production. Skip cleanly when
+          # the folder is absent instead of failing the whole workflow.
+          if [ ! -d "supabase/migrations" ]; then
+            echo "ℹ️ No supabase/migrations directory in repo — skipping DB migrations (schema is managed directly)"
+            exit 0
+          fi
           # ⚠️ FIX: Repair orphan migration records before pushing.
           # Production has '055_reduce' registered in schema_migrations without a
           # matching local file (artifact of a previous manual apply). This blocks

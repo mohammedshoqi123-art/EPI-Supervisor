@@ -26,7 +26,7 @@ import { detectGreeting } from './utils/greeting.ts'
 import { classifyIntent, classifyCompoundIntents } from './prompts/intents.ts'
 import { buildSystemPrompt } from './prompts/system.ts'
 import { groqChat, huggingfaceChat, openrouterChat, generateSummary } from './llm/providers.ts'
-import { hybridRouteChat, hybridRouteStream, getHybridHealthStats, predictBestProvider } from './llm/hybrid-gateway.ts'
+import { hybridRouteChat, hybridRouteStream, getHybridHealthStats, getRecentAttempts, predictBestProvider } from './llm/hybrid-gateway.ts'
 import { analyzeUserMessage, trackFeedback, trackLatency, getEscalationPrefix } from './llm/smart-escalation.ts'
 import { groundMessage, validateCitations, type GroundingResult } from './llm/grounding.ts'
 import { generateStudioArtifact, ALL_ARTIFACT_TYPES, type StudioArtifactType } from './llm/studio.ts'
@@ -1295,6 +1295,8 @@ serve(async (req) => {
         total_providers: stats.length,
         healthy: stats.filter(s => !s.blocked && s.successRate > 50).length,
         blocked: stats.filter(s => s.blocked).map(s => s.name),
+        // ⚠️ T5-DIAG: recent attempt outcomes with real error messages
+        recent_attempts: getRecentAttempts().slice(0, 20),
         timestamp: new Date().toISOString(),
       }, 200, origin)
     }

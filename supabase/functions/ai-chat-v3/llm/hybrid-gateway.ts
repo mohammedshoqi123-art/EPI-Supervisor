@@ -37,6 +37,22 @@ const health: Record<string, ProviderHealth> = {
 const BLOCK_DURATION = 5 * 60 * 1000 // 5 minutes
 const MAX_FAILURES = 3
 
+// ⚠️ T5-DIAG: in-memory ring buffer of recent attempts (survives between
+// requests on warm instances) — exposed via gateway_health for live debugging.
+export interface AttemptRecord {
+  ts: number
+  provider: string
+  ok: boolean
+  latencyMs: number
+  error?: string
+  tools: boolean
+}
+const _attemptLog: AttemptRecord[] = []
+function logAttempt(provider: string, ok: boolean, latencyMs: number, error?: string, tools = false) {
+  _attemptLog.push({ ts: Date.now(), provider, ok, latencyMs, error: error?.slice(0, 160), tools })
+  if (_attemptLog.length > 40) _attemptLog.shift()
+}
+
 function recordSuccess(name: string, latencyMs: number) {
   const h = health[name]
   if (!h) return
@@ -48,13 +64,15 @@ function recordSuccess(name: string, latencyMs: number) {
   // forever (only cleared after a block expired), so 2 old failures + 1 new one
   // would block a healthy provider for 5 minutes.
   h.failures = 0
+  logAttempt(name, true, latencyMs)
 }
 
-function recordFailure(name: string) {
+function recordFailure(name: string, error?: string) {
   const h = health[name]
   if (!h) return
   h.failures++
   h.lastUsed = Date.now()
+  logAttempt(name, false, 0, error)
   if (h.failures >= MAX_FAILURES) {
     h.blocked = true
     h.blockedUntil = Date.now() + BLOCK_DURATION
@@ -141,7 +159,7 @@ export async function hybridRouteChat(
         }
         recordFailure('groq')
       } catch (e: any) {
-        recordFailure('groq')
+        recordFailure('groq', e?.message)
         console.error(`[GATEWAY] Groq (tools) failed: ${e.message}`)
       }
     }
@@ -167,7 +185,7 @@ export async function hybridRouteChat(
         }
         recordFailure('openrouter')
       } catch (e: any) {
-        recordFailure('openrouter')
+        recordFailure('openrouter', e?.message)
         console.error(`[GATEWAY] OpenRouter (tools) failed: ${e.message}`)
       }
     }
@@ -217,7 +235,7 @@ export async function hybridRouteChat(
           return { content: result, provider: 'pollinations', attempts }
         }
       } catch (e: any) {
-        recordFailure('pollinations')
+        recordFailure('pollinations', e?.message)
         console.error(`[GATEWAY] Pollinations no-tools fallback failed: ${e.message}`)
       }
     }
@@ -256,7 +274,7 @@ export async function hybridRouteChat(
       }
       recordFailure('groq')
     } catch (e: any) {
-      recordFailure('groq')
+      recordFailure('groq', e?.message)
       console.error(`[GATEWAY] Groq failed: ${e.message}`)
     }
   }
@@ -286,7 +304,7 @@ export async function hybridRouteChat(
       }
       recordFailure('openrouter')
     } catch (e: any) {
-      recordFailure('openrouter')
+      recordFailure('openrouter', e?.message)
       console.error(`[GATEWAY] OpenRouter failed: ${e.message}`)
     }
   }
@@ -310,7 +328,7 @@ export async function hybridRouteChat(
       }
       recordFailure('pollinations')
     } catch (e: any) {
-      recordFailure('pollinations')
+      recordFailure('pollinations', e?.message)
       console.error(`[GATEWAY] Pollinations failed: ${e.message}`)
     }
   }
@@ -331,7 +349,7 @@ export async function hybridRouteChat(
       }
       recordFailure('nvidia')
     } catch (e: any) {
-      recordFailure('nvidia')
+      recordFailure('nvidia', e?.message)
       console.error(`[GATEWAY] NVIDIA failed: ${e.message}`)
     }
   }
@@ -352,7 +370,7 @@ export async function hybridRouteChat(
       }
       recordFailure('huggingface')
     } catch (e: any) {
-      recordFailure('huggingface')
+      recordFailure('huggingface', e?.message)
       console.error(`[GATEWAY] HuggingFace failed: ${e.message}`)
     }
   }
@@ -398,7 +416,7 @@ export async function hybridRouteStream(
         return { response: result, provider: 'groq', attempts }
       }
     } catch (e: any) {
-      recordFailure('groq')
+      recordFailure('groq', e?.message)
       console.error(`[STREAM] Groq failed: ${e.message}`)
     }
   }
@@ -418,7 +436,7 @@ export async function hybridRouteStream(
         return { response: result, provider: 'pollinations', attempts }
       }
     } catch (e: any) {
-      recordFailure('pollinations')
+      recordFailure('pollinations', e?.message)
       console.error(`[STREAM] Pollinations failed: ${e.message}`)
     }
   }
@@ -443,6 +461,11 @@ export function getHybridHealthStats() {
     blocked: h.blocked,
     blockedUntil: h.blockedUntil,
   }))
+}
+
+// ⚠️ T5-DIAG: expose recent attempt outcomes for live debugging
+export function getRecentAttempts() {
+  return _attemptLog.slice().reverse()
 }
 
 export function predictBestProvider(

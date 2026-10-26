@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- FIX(W-4): Content Security Policy — GitHub Pages cannot send HTTP headers,
+         so the policy is enforced via meta. script-src pins the exact hash of the
+         inline frame-buster below (clickjacking guard, X-Frame-Options substitute). -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-OVGD1ivcM7kdD/8NSsGlFjxhRbTd2Ybwfe5rjsPV/Vs='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <title>EPI Supervisor's — المشرف | لوحة الإدارة</title>
     <meta name="description" content="المشرف — منصة الإشراف الميداني لحملات التطعيم | وزارة الصحة العامة والسكان" />
     <link rel="icon" type="image/png" href="./logo-epi-64.png" />
@@ -25,5 +29,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- FIX(W-4): clickjacking guard — GitHub Pages cannot set X-Frame-Options /
+         frame-ancestors headers, so break out of any embedding frame.
+         ⚠️ Its SHA-256 hash is pinned in the CSP meta above; editing this script
+         requires updating the 'sha256-' value. -->
+    <script>
+  if (self !== top) { try { top.location = self.location; } catch (e) { document.documentElement.style.display = 'none'; } }
+    </script>
   </body>
 </html>

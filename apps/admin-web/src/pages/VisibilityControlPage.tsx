@@ -12,7 +12,8 @@ import type { UserRole } from '@/types/database'
 // ═══ صفحة التحكم بالظهور — مصفوفة الأنشطة والاستمارات حسب المستوى ═══
 // النشاط (campaign) → عمود visible_roles في campaign_types_base
 // الاستمارة (form) → عمود allowed_roles في forms
-// admin/central مقفولون «يرون الكل» دائماً (يمنع القفل الذاتي)
+// admin فقط مقفول «يرون الكل» دائماً (يمنع القفل الذاتي) — المركز قابل للتحكم
+// القرار 2026-10-28: الإخفاء يشمل التقارير والإحصاءات واللوحات (مرتبط عبر RLS على form_submissions)
 
 interface CampaignRow {
   id: string
@@ -33,8 +34,8 @@ interface FormRow {
   is_active: boolean
 }
 
-const CONTROL_ROLES: UserRole[] = ['data_entry', 'district', 'governorate']
-const LOCKED_ROLES: UserRole[] = ['admin', 'central']
+const CONTROL_ROLES: UserRole[] = ['data_entry', 'district', 'governorate', 'central']
+const LOCKED_ROLES: UserRole[] = ['admin']
 
 const ROLE_LABELS_AR: Record<string, string> = {
   data_entry: 'مدخل بيانات',
@@ -181,9 +182,10 @@ export default function VisibilityControlPage() {
         <CardContent className="flex gap-3 py-4">
           <Info className="h-5 w-5 shrink-0 text-blue-500" />
           <div className="space-y-1 text-sm text-blue-900">
-            <p>• التحكم يخص <b>الظهور والتعبئة فقط</b> — الإحصاءات والتقارير والسجلات القديمة لا تتأثر.</p>
-            <p>• <b>مدير النظام والمركز يرون كل شيء دائماً</b> ولا يمكن إخفاء أي شيء عنهما (حماية من انقطاع الوصول).</p>
-            <p>• التغييرات تصل لهواتف المستخدمين عند أول مزامنة بعد التعديل — الأجهزة غير المتصلة قد تتأخر حتى 24 ساعة.</p>
+            <p>• التحكم يخص <b>الظهور والتعبئة والتقارير والإحصاءات واللوحات</b> — إخفاء نشاط يخفي بياناته وبياناته التحليلية عن هذا المستوى فوراً.</p>
+            <p>• <b>مدير النظام فقط يرى كل شيء دائماً</b> ولا يمكن إخفاء أي شيء عنه (حماية من انقطاع الوصول) — المركز قابل للتحكم كباقي المستويات.</p>
+            <p>• إخفاء النشاط يخفي استماراته تلقائياً، ويمكن إخفاء استمارة بعينها داخل نشاط ظاهر.</p>
+            <p>• البيانات المحفوظة لا تُحذف — إعادة الإظهار تعيد كل شيء، والتغييرات تصل لهواتف المستخدمين عند أول مزامنة (حتى 24 ساعة للأجهزة غير المتصلة).</p>
           </div>
         </CardContent>
       </Card>
@@ -195,7 +197,7 @@ export default function VisibilityControlPage() {
           <span key={r} className="w-20 text-center">{ROLE_LABELS_AR[r]}</span>
         ))}
         <span className="w-28 text-center flex items-center justify-center gap-1">
-          <Lock className="h-3 w-3" /> مدير / المركز
+          <Lock className="h-3 w-3" /> مدير النظام
         </span>
       </div>
 

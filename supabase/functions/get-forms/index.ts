@@ -50,10 +50,12 @@ serve(async (req: Request) => {
       .order('created_at', { ascending: false })
 
     // ═══ Role-based visibility (defense-in-depth; RLS enforces the same rule) ═══
-    // admin/central always see everything; operational roles only see forms
-    // whose allowed_roles include their role.
+    // ONLY admin always sees everything (user decision 2026-10-28: central is a
+    // controlled role like district/governorate); operational roles only see forms
+    // whose allowed_roles include their role AND whose campaign is visible to them
+    // (campaign visibility enforced by RLS via campaign_visible_to_user).
     const userRole = auth.role
-    if (userRole && userRole !== 'admin' && userRole !== 'central') {
+    if (userRole && userRole !== 'admin') {
       query = query.contains('allowed_roles', [userRole])
     }
 

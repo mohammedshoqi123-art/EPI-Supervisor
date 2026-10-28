@@ -195,11 +195,11 @@ async function loadFromSupabase(): Promise<CampaignOption[] | null> {
   }
 }
 
-/** Insert a new campaign type into Supabase */
+/** Insert a new campaign type into Supabase (base table — view is read-only) */
 async function insertToSupabase(campaign: CampaignOption): Promise<boolean> {
   if (!isConfigured) return false
   try {
-    const { error } = await supabase.from('campaign_types').insert({
+    const { error } = await supabase.from('campaign_types_base').insert({
       key: campaign.id,
       label_ar: campaign.labelAr,
       label_en: campaign.labelEn,
@@ -227,7 +227,7 @@ async function updateInSupabase(id: string, updates: Partial<CampaignOption>): P
     if (updates.visible !== undefined) dbUpdates.visible = updates.visible
 
     const { error } = await supabase
-      .from('campaign_types')
+      .from('campaign_types_base')
       .update(dbUpdates)
       .eq('key', id)
       .eq('built_in', false) // Can't update built-in types
@@ -243,7 +243,7 @@ async function deleteFromSupabase(id: string): Promise<boolean> {
   if (!isConfigured) return false
   try {
     const { error } = await supabase
-      .from('campaign_types')
+      .from('campaign_types_base')
       .delete()
       .eq('key', id)
       .eq('built_in', false) // Can't delete built-in types
@@ -254,12 +254,12 @@ async function deleteFromSupabase(id: string): Promise<boolean> {
   }
 }
 
-/** Toggle visibility in Supabase — works for ALL campaigns including built-in */
+/** Toggle visibility in Supabase — works for ALL campaigns including built-in (base table) */
 async function toggleVisibilityInSupabase(id: string, visible: boolean): Promise<boolean> {
   if (!isConfigured) return false
   try {
     const { error } = await supabase
-      .from('campaign_types')
+      .from('campaign_types_base')
       .update({ visible })
       .eq('key', id)
     // Note: built_in campaigns CAN now be hidden — this allows

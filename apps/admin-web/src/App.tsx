@@ -39,6 +39,7 @@ const CampaignRoundsPage = lazy(() => import('@/pages/CampaignRoundsPage'))
 const FieldAnalysisPage = lazy(() => import('@/pages/FieldAnalysisPage'))
 const TrashPage = lazy(() => import('@/pages/TrashPage'))
 const AnalyticsConfigPage = lazy(() => import('@/pages/AnalyticsConfigPage'))
+const VisibilityControlPage = lazy(() => import('@/pages/VisibilityControlPage'))
 
 // ═══ Page Loader ═══
 function PageLoader() {
@@ -178,6 +179,7 @@ export default function App() {
               <Route path="ai-settings" element={<LazyPage name="إعدادات الذكاء الاصطناعي"><AISettingsPage /></LazyPage>} />
               <Route path="pages" element={<LazyPage name="إدارة الصفحات"><PagesManagementPage /></LazyPage>} />
               <Route path="settings" element={<LazyPage name="الإعدادات"><SettingsPage /></LazyPage>} />
+              <Route path="visibility" element={<LazyPage name="التحكم بالظهور"><VisibilityControlPage /></LazyPage>} />
             </Route>
           </Route>
 

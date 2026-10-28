@@ -49,6 +49,14 @@ serve(async (req: Request) => {
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
 
+    // ═══ Role-based visibility (defense-in-depth; RLS enforces the same rule) ═══
+    // admin/central always see everything; operational roles only see forms
+    // whose allowed_roles include their role.
+    const userRole = auth.role
+    if (userRole && userRole !== 'admin' && userRole !== 'central') {
+      query = query.contains('allowed_roles', [userRole])
+    }
+
     // Filter by campaign_type if provided
     if (campaignType) {
       query = query.eq('campaign_type', campaignType)

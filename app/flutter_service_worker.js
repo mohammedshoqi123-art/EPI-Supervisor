@@ -37,7 +37,7 @@ const RESOURCES = {"assets/assets/fonts/Cairo-Regular.ttf": "0e355a997fd3fdc3a2a
 "index.html": "c1e4f982ae563a28d55c26b94f5f36ba",
 "/": "c1e4f982ae563a28d55c26b94f5f36ba",
 "version.json": "69f898c893662d07347d00c9642568d4",
-"flutter_bootstrap.js": "07beac42b95701cf316953caa84c7879"};
+"flutter_bootstrap.js": "6b559e44ce6d81325a05e59ac33c556b"};
 // The application shell files that are downloaded before a service worker can
 // start.
 const CORE = ["main.dart.js",

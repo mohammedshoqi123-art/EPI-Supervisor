@@ -288,7 +288,11 @@ export async function hybridRouteChat(
               tools,
               tool_choice,
             }),
-            new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 16_000)),
+            // ⚠️ T9-FIX: 20s (was 16s) — groqChat's internal chain is
+            // 8b (≤9s) THEN openai/gpt-oss-120b (≤9s) = 18s worst case;
+            // a 16s outer race aborted the healthy 120b attempt and every
+            // count question fell into the generic dump (2026-10-28 E2E).
+            new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 20_000)),
           ])
           if (result?.type === 'tool_calls') {
             return null as null // tool calls handled by caller via needTools

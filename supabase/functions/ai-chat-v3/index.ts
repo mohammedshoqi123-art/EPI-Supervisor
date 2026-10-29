@@ -29,6 +29,7 @@ import { groqChat, huggingfaceChat, openrouterChat, generateSummary } from './ll
 import { hybridRouteChat, hybridRouteStream, getHybridHealthStats, getRecentAttempts, predictBestProvider } from './llm/hybrid-gateway.ts'
 import { analyzeUserMessage, trackFeedback, trackLatency, getEscalationPrefix } from './llm/smart-escalation.ts'
 import { groundMessage, validateCitations, type GroundingResult } from './llm/grounding.ts'
+import { tryDeterministicDataAnswer } from './llm/deterministic-data.ts'
 import { generateStudioArtifact, ALL_ARTIFACT_TYPES, type StudioArtifactType } from './llm/studio.ts'
 import { WRITE_TOOLS, describeWriteAction, requireConfirmation } from './tools/confirmation.ts'
 import { logWriteOperation } from './tools/audit.ts'
@@ -1587,6 +1588,26 @@ serve(async (req) => {
       if (greeting) return jsonResponse({ reply: greeting, source: 'greeting_handler', messageId: crypto.randomUUID() }, 200, origin)
     }
 
+    // ═══ T9: DETERMINISTIC DATA ANSWERS ═══
+    // The most common data questions (counts / pending review / ranking /
+    // weekly+daily reports / status breakdown) are answered with EXACT numbers
+    // straight from the DB via the user's own client (RLS scopes rows).
+    // Zero hallucination, zero provider dependency, <1s. Evidence: 2026-10-28
+    // E2E showed these questions exhausted the chain into a question-agnostic
+    // dump or hallucinated numbers (pollinations "5-10 عادةً").
+    if (message) {
+      const detStart = Date.now()
+      try {
+        const det = await tryDeterministicDataAnswer(supabase, message, {
+          campaignRound: Number(body.campaign_round) || null,
+        })
+        if (det) {
+          await logUsage(supabase, 'deterministic-data', 0, Date.now() - detStart, true, undefined, 'deterministic_data').catch(() => {})
+          return jsonResponse({ reply: det, source: 'deterministic_data', messageId: crypto.randomUUID() }, 200, origin)
+        }
+      } catch { /* fall through to the normal LLM path */ }
+    }
+
     // Intent
     const { intent, confidence } = message ? classifyIntent(message) : { intent: 'general_question' as any, confidence: 0 }
     const compoundIntents = message ? classifyCompoundIntents(message) : ['general_question' as any]
@@ -2169,7 +2190,9 @@ serve(async (req) => {
       // docs that don't answer the actual count.
       if (!fallbackAnswer && message) {
         const dynamicData = await fetchDynamicAnalyticsDirect(supabase, message, campaignRound)
-        if (dynamicData) fallbackAnswer = dynamicData
+        if (dynamicData) {
+          fallbackAnswer = '⚠️ لم يتوفر نموذج ذكاء اصطناعي الآن — إليك أحدث البيانات المتاحة مباشرة:\n\n' + dynamicData
+        }
       }
 
       // 2. grounding report as backup

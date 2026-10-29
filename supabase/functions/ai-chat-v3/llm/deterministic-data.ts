@@ -152,7 +152,17 @@ export async function tryDeterministicDataAnswer(
       const rows = Object.entries(dist)
         .map(([id, c]) => [names[id] || 'غير معروف', c] as [string, number])
         .sort((a, b) => b[1] - a[1])
-      if (rows.length === 0) return null
+      if (rows.length === 0) {
+        // ⚠️ T9-FIX: honest empty answer instead of null (null sent data_entry
+        // users with no submissions down the LLM chain into the generic dump)
+        return [
+          '🏆 **ترتيب المحافظات**',
+          '',
+          'لا توجد إرساليات في نطاق صلاحيتك حالياً — لا يوجد ما يُرتّب بعد.',
+          '',
+          '💡 بمجرد بدء الإدخال ستظهر الترتيبات هنا فوراً.',
+        ].join('\n') + footer()
+      }
       const lines = ['🏆 **ترتيب المحافظات حسب عدد الإرساليات**', '',
         '| # | المحافظة | الإرساليات |', '|---|----------|------------|']
       rows.slice(0, 12).forEach(([name, c], i) => lines.push(`| ${i + 1} | ${name} | ${c} |`))
@@ -164,9 +174,10 @@ export async function tryDeterministicDataAnswer(
     if (/تقرير/.test(n) && /اسبوع/.test(n)) {
       const weekStart = daysAgo(7)
       const prevWeekStart = daysAgo(14)
+      // ⚠️ T9-FIX: compute lastWeek via async IIFE — `promise - number` was NaN
       const [thisWeek, lastWeek, byStatus, byCampaign] = await Promise.all([
         countSince(supa, weekStart),
-        countSince(supa, prevWeekStart) - (await countSince(supa, weekStart)),
+        (async () => (await countSince(supa, prevWeekStart)) - (await countSince(supa, weekStart)))(),
         groupByColSince(supa, 'status', weekStart),
         groupByColSince(supa, 'campaign_type', weekStart),
       ])

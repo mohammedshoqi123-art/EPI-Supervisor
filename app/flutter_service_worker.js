@@ -33,11 +33,11 @@ const RESOURCES = {"assets/assets/fonts/Cairo-Regular.ttf": "0e355a997fd3fdc3a2a
 "canvaskit/skwasm.js.symbols": "96263e00e3c9bd9cd878ead867c04f3c",
 "flutter.js": "4b2350e14c6650ba82871f60906437ea",
 "manifest.json": "15ef2bcd9c1590ae9229a0e16e1559de",
-"main.dart.js": "557c035fccb1068aa900eded370b7024",
+"main.dart.js": "661e09fd7ee7e1d702179149393655c6",
 "index.html": "c1e4f982ae563a28d55c26b94f5f36ba",
 "/": "c1e4f982ae563a28d55c26b94f5f36ba",
 "version.json": "69f898c893662d07347d00c9642568d4",
-"flutter_bootstrap.js": "6b559e44ce6d81325a05e59ac33c556b"};
+"flutter_bootstrap.js": "4bf64f7f7790aa8fbecd8d93d0377a05"};
 // The application shell files that are downloaded before a service worker can
 // start.
 const CORE = ["main.dart.js",

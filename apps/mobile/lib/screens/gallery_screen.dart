@@ -87,9 +87,10 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
       cached = cache.getCachedDataList(_cacheKey);
     } catch (_) {}
 
-    if (cached != null && cached.isNotEmpty && mounted) {
+    final cachedItems = cached;
+    if (cachedItems != null && cachedItems.isNotEmpty && mounted) {
       setState(() {
-        _items = cached;
+        _items = cachedItems;
         _isLoading = false;
         _hasMore = true;
         _fromCache = !ConnectivityUtils.isOnline;

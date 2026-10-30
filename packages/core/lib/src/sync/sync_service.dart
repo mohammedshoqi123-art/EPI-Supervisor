@@ -206,15 +206,15 @@ class SyncService {
       if (nextRetry == null) return true;
       return nextRetry.millisecondsSinceEpoch <= nowMs;
     }).toList();
-    final deferred = uniqueItems.length - dueItems.length;
+    final deferredCount = uniqueItems.length - dueItems.length;
     if (dueItems.isEmpty) {
-      if (kDebugMode && deferred > 0) {
-        debugPrint('[SyncService] All $deferred items waiting for backoff — skipping cycle');
+      if (kDebugMode && deferredCount > 0) {
+        debugPrint('[SyncService] All $deferredCount items waiting for backoff — skipping cycle');
       }
       return SyncCycleResult.empty();
     }
-    if (kDebugMode && deferred > 0) {
-      debugPrint('[SyncService] $deferred/${uniqueItems.length} items deferred (backoff)');
+    if (kDebugMode && deferredCount > 0) {
+      debugPrint('[SyncService] $deferredCount/${uniqueItems.length} items deferred (backoff)');
     }
 
     _isSyncing = true;

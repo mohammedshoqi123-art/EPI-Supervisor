@@ -117,26 +117,38 @@ class RealtimeSyncService {
   }
 
   void _scheduleReconnect() {
+    // ═══ FIX RT-1: لا تُستهلك المحاولات للأبد ═══
+    // Previously: بعد 10 محاولات (أو تخطي مؤقت أثناء offline) يتوقف الـrealtime
+    //   للأبد في الجلسة — حتى بعد عودة الإنترنت، ومراقبة تعطيل الحساب تموت بصمت.
+    // Now: عودة الاتصال تعيد ضبط العداد عبر الاستماع لتغير الحالة، والتخطي
+    //   بسبب offline يعيد الجدولة بنفس التأخير دون استهلاك محاولة.
     if (_reconnectAttempts >= _maxReconnectAttempts) return;
     final delay = _reconnectDelays[_reconnectAttempts];
-    _reconnectAttempts++;
-    debugPrint('[RealtimeSync] 🔄 Reconnect in ${delay}s (#$_reconnectAttempts)');
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(Duration(seconds: delay), () {
-      // ═══ FIX: Skip reconnect when offline — saves battery and CPU ═══
-      // Previously: tried to reconnect even when offline → 10 failed attempts
-      // Now: check connectivity first, skip if offline
       if (!ConnectivityUtils.isOnline) {
-        debugPrint('[RealtimeSync] Offline — skipping reconnect');
-        return;
+        debugPrint('[RealtimeSync] Offline — will retry when back online');
+        _offlineRetrySub ??=
+            ConnectivityUtils.onConnectivityChanged.listen((online) {
+          if (online && !_isListening) {
+            _offlineRetrySub?.cancel();
+            _offlineRetrySub = null;
+            _scheduleReconnect();
+          }
+        });
+        return; // لا نستهلك محاولة — ننتظر عودة الاتصال
       }
       if (!_isListening) {
         _channel?.unsubscribe();
         _channel = null;
+        _reconnectAttempts++; // محاولة تُحتسب فقط عند اتصال فعلي
+        debugPrint('[RealtimeSync] 🔄 Reconnecting (#$_reconnectAttempts/$_maxReconnectAttempts)');
         startListening();
       }
     });
   }
+
+  StreamSubscription<bool>? _offlineRetrySub;
 
   /// Check if current user was deactivated — force logout if so
   void _checkCurrentUserActive(Map<String, dynamic> record) {
@@ -181,6 +193,7 @@ class RealtimeSyncService {
   void dispose() {
     _debounceTimer?.cancel();
     _reconnectTimer?.cancel();
+    _offlineRetrySub?.cancel();
     _channel?.unsubscribe();
     _changeController.close();
     _deactivationController.close();

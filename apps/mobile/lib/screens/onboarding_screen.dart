@@ -207,7 +207,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             HapticFeedback.selectionClick();
                           },
                           itemBuilder: (context, index) => index == 0
-                              ? _buildWelcomePage(size)
+                              ? _buildWelcomePage()
                               : _FeaturePage(
                                   data: _pages[index - 1],
                                   // المفتاح يعيد تشغيل حركة الدخول مع كل تغيير صفحة
@@ -248,7 +248,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   // ── صفحة الترحيب: شعار + اسم التطبيق + رسالة ──
-  Widget _buildWelcomePage(Size size) {
+  Widget _buildWelcomePage() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Column(

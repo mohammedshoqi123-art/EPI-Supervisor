@@ -23,7 +23,7 @@ import type { UserProfile, ModelConfig, UserRole } from './utils/types.ts'
 import { withTimeout, daysAgo, todayStart, CAMPAIGN_LABELS, STATUS_LABELS, CHART_COLORS, getCampaignFormIds, applyCampaignFilter, getRoundLabelAr, getActiveCampaignRound } from './utils/helpers.ts'
 import { sanitizeUserMessage } from './utils/guard.ts'
 import { detectGreeting } from './utils/greeting.ts'
-import { classifyIntent, classifyCompoundIntents } from './prompts/intents.ts'
+import { classifyIntent, classifyCompoundIntents, isKnowledgeQuestion } from './prompts/intents.ts'
 import { buildSystemPrompt } from './prompts/system.ts'
 import { groqChat, huggingfaceChat, openrouterChat, generateSummary } from './llm/providers.ts'
 import { hybridRouteChat, hybridRouteStream, getHybridHealthStats, getRecentAttempts, predictBestProvider } from './llm/hybrid-gateway.ts'
@@ -251,12 +251,16 @@ async function fetchLiveData(supa: any, profile: UserProfile | null): Promise<st
   const today = todayStart()
 
   // Parallel: fetch form IDs
-  const [polioFormsRes, integratedFormsRes] = await Promise.all([
+  // ═══ T11-FIX: حملة الحصبة كانت غائبة كلياً من السياق الحي — وهي الحملة
+  // النشطة فعلياً (844 مشرفاً + آلاف الإرساليات)! جلب ديناميكي لكل الأنشطة ═══
+  const [polioFormsRes, integratedFormsRes, measlesFormsRes] = await Promise.all([
     withTimeout(supa.from('forms').select('id').eq('campaign_type', 'polio_campaign').is('deleted_at', null), 3_000).catch(() => null),
     withTimeout(supa.from('forms').select('id').eq('campaign_type', 'integrated_activity').is('deleted_at', null), 3_000).catch(() => null),
+    withTimeout(supa.from('forms').select('id').eq('campaign_type', 'measles_campaign').is('deleted_at', null), 3_000).catch(() => null),
   ])
   const polioFormIds = (polioFormsRes?.data || []).map((f: any) => f.id)
   const integratedFormIds = (integratedFormsRes?.data || []).map((f: any) => f.id)
+  const measlesFormIds = (measlesFormsRes?.data || []).map((f: any) => f.id)
 
   // Parallel: all count queries at once
   const queries: Promise<any>[] = []
@@ -275,6 +279,13 @@ async function fetchLiveData(supa: any, profile: UserProfile | null): Promise<st
     queries.push(withTimeout(q, 5_000).then(r => ({ label: '📊 إرساليات اليوم (إيصالي)', count: r?.count })).catch(() => null))
   }
 
+  // Today's submissions — measles (T11: كانت مفقودة تماماً)
+  if (measlesFormIds.length > 0) {
+    let q = supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).in('form_id', measlesFormIds).gte('created_at', today)
+    if (!isPrivileged && profile) q = q.eq('submitted_by', profile.id)
+    queries.push(withTimeout(q, 5_000).then(r => ({ label: '📊 إرساليات اليوم (حصبة)', count: r?.count })).catch(() => null))
+  }
+
   // Pending review (privileged only)
   if (isPrivileged) {
     if (polioFormIds.length > 0) {
@@ -287,6 +298,12 @@ async function fetchLiveData(supa: any, profile: UserProfile | null): Promise<st
       queries.push(
         withTimeout(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted').in('form_id', integratedFormIds), 5_000)
           .then(r => ({ label: '⏳ بانتظار المراجعة (إيصالي)', count: r?.count })).catch(() => null)
+      )
+    }
+    if (measlesFormIds.length > 0) {
+      queries.push(
+        withTimeout(supa.from('form_submissions').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'submitted').in('form_id', measlesFormIds), 5_000)
+          .then(r => ({ label: '⏳ بانتظار المراجعة (حصبة)', count: r?.count })).catch(() => null)
       )
     }
     // Active shortages
@@ -1848,7 +1865,44 @@ serve(async (req) => {
         } catch { /* keep first result */ }
       }
 
+      // ═══ T11-KB-ALWAYS: إثراء المعرفة دائماً — سابقاً كان يُفعل فقط عند غياب
+      // بيانات النظام، فسؤال «نسبة تغطية التحصين» الذي يجد بيانات إرساليات
+      // كان يفوّت ملفات التغطية في قاعدة المعرفة تماماً ═══
+      if (message) {
+        try {
+          const { searchKnowledgeBase } = await import('./llm/grounding.ts')
+          const kbSources = await searchKnowledgeBase(message)
+          if (kbSources.length > 0) {
+            const kbContext = kbSources.map((s: any) => s.quote).join('\n\n---\n\n')
+            console.log(`[GROUNDING] KB enrichment: ${kbSources.length} sources (hasData=${grounding?.hasData})`)
+            if (grounding && !grounding.hasData) {
+              grounding = {
+                sources: kbSources,
+                contextText: kbContext,
+                hasData: true,
+                refusalReason: undefined,
+                suggestedFollowups: [],
+                detectedIntent: 'knowledge',
+              }
+            } else if (grounding) {
+              // بيانات نظام + معرفة دليل معاً — بحّص المعرفة حتى لا يتضخم البرومبت
+              grounding.sources = [...grounding.sources, ...kbSources]
+              grounding.contextText = `${grounding.contextText}\n\n---\n[قاعدة معرفة الدليل السريري]\n${kbContext.slice(0, 4500)}`
+            }
+          }
+        } catch (kbErr) {
+          console.log('[GROUNDING] KB enrichment failed (non-fatal)')
+        }
+      }
+
+      // ─── GROUNDING REFUSAL: if nothing found at all, proceed WITHOUT grounding
+      // (don't refuse) — the LLM answers from its general knowledge ───
+      if (grounding && !grounding.hasData) {
+        console.log('[GROUNDING] Proceeding without grounding — LLM will use general knowledge')
+      }
+
       // Add grounding context to messages — this is what the LLM sees
+      // (T11: بعد إثراء المعرفة حتى يدخل سياق الدليل في البرومبت)
       if (grounding?.contextText) {
         messages[0].content += grounding.contextText
       }
@@ -1867,50 +1921,25 @@ serve(async (req) => {
     // ⚠️ T5-ROUTING: removed bare "كم" from the regex — count questions are
     // answered from grounding sources by the fast no-tools path (100% success,
     // 1-4s). Tools stay for explicit analysis verbs only.
+    // ═══ T11-KNOWLEDGE-FIRST: أسئلة الدليل/التغطية/اللقاحات أسئلة معرفة —
+    // كانت تذهب لمسار الأدوات بسبب "نسبة/معدل" فتُستنزف السلسلة ويسقط المستخدم
+    // في الرد الجاهز. أولوية للمعرفة ما لم توجد أفعال تحليل صريحة.
+    const analysisVerb = /حلل|تحليل|تقرير|إحصائية|قارن|مقارنة|ترتيب|رتب|تنبؤ|توقع|أفضل|أسوأ|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل|أداء/.test(message || '')
+    const knowledgeFirst = !analysisVerb && (
+      isKnowledgeQuestion(message || '') ||
+      /تغطية|تحصين|تطعيم|لقاح|جدول|جرعة|دليل|آثار|أعراض|سلسلة التبريد|VVM|فاحص|فقس|مصل/.test(message || '')
+    )
     const { needsDataTools: checkNeedsData } = await import('./prompts/intents.ts')
     const hasToolsProvider = !!groqKey || !!openrouterKey
-    const needsTools = hasToolsProvider && (
-      checkNeedsData(message || '') ||
-      /حلل|تحليل|تقرير|إحصائية|قارن|مقارنة|ترتيب|رتب|تنبؤ|توقع|أفضل|أسوأ|انشر|أرسل|اعتمد|ارفض|حدّث|تعديل|أداء/.test(message || '')
+    const needsTools = hasToolsProvider && !knowledgeFirst && (
+      checkNeedsData(message || '') || analysisVerb
     )
 
     // Predict best provider
     const prediction = predictBestProvider(needsTools, gatewayEnv)
     console.log(`[PREDICT] Best provider: ${prediction}`)
 
-    // ─── GROUNDING REFUSAL: if no data found, try knowledge base fallback first ───
-    if (grounding && !grounding.hasData && message) {
-      console.log('[GROUNDING] No data found — trying knowledge base fallback')
-
-      // Try knowledge base as fallback before refusing
-      try {
-        const { searchKnowledgeBase } = await import('./llm/grounding.ts')
-        const kbSources = await searchKnowledgeBase(message)
-        if (kbSources.length > 0) {
-          console.log(`[GROUNDING] Knowledge base fallback: ${kbSources.length} sources`)
-          grounding = {
-            sources: kbSources,
-            contextText: kbSources.map((s: any) => s.quote).join('\n\n---\n\n'),
-            hasData: true,
-            refusalReason: undefined,
-            suggestedFollowups: [],
-            detectedIntent: 'knowledge',
-          }
-          if (grounding.contextText) {
-            messages[0].content += grounding.contextText
-          }
-        }
-      } catch (kbErr) {
-        console.log('[GROUNDING] Knowledge base fallback also failed')
-      }
-
-      // If still no data, proceed WITHOUT grounding (don't refuse)
-      // — let the LLM answer based on its general knowledge
-      if (!grounding.hasData) {
-        console.log('[GROUNDING] Proceeding without grounding — LLM will use general knowledge')
-        // Don't return refusal — continue to LLM call
-      }
-    }
+    // ─── T11-KB-ALWAYS: (منقول أعلى — يُنفّذ أثناء التحضير قبل حقن السياق) ───
 
     // Streaming mode
     if (stream && modelConfig.streamEnabled) {
@@ -2337,7 +2366,16 @@ async function fetchDynamicAnalyticsDirect(supa: any, message: string, campaignR
           parts.push(`🔢 ${label}: ${field.count ?? 'N/A'}`)
         } else if (field.type === 'bar' && field.distribution) {
           parts.push(`📊 ${label}:`)
-          const entries = Object.entries(field.distribution).slice(0, 5)
+          // ═══ T11-DATA-HYGIENE: قيم الحقول تحمل مسافات زائدة وحالات مكررة
+          // ("محافظة " ≠ "محافظة") — توحيد العرض بعد التطبيع ═══
+          const merged: Record<string, number> = {}
+          for (const [rawKey, val] of Object.entries(field.distribution)) {
+            const key = String(rawKey).trim() || '(فارغ)'
+            merged[key] = (merged[key] || 0) + Number(val || 0)
+          }
+          const entries = Object.entries(merged)
+            .sort((a, b) => Number(b[1]) - Number(a[1]))
+            .slice(0, 5)
           for (const [key, val] of entries) {
             parts.push(`   • ${key}: ${val}`)
           }

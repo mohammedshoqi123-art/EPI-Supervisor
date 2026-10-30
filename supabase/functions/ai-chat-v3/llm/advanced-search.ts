@@ -453,7 +453,11 @@ export function scoredChunksToSources(scored: ScoredChunk[]): GroundingSource[] 
     id: i + 1,
     type: 'knowledge_chunk' as const,
     summary: `${s.chunk.doc_title} — ${s.chunk.section.replace(/_/g, ' ')}`,
-    quote: s.chunk.content,
+    // ═══ T11-SPEED: سقف لكل اقتباس — chunks طويلة كانت تبطئ توليد الإجابة
+    // (16-17 ثانية). الأقسام الحقيقية نادراً ما تتجاوز 1600 حرف مفيد ═══
+    quote: s.chunk.content.length > 1600
+      ? `${s.chunk.content.slice(0, 1600)}…`
+      : s.chunk.content,
     metadata: {
       chunk_id: `${s.chunk.doc_id}-${s.chunk.index}`,
       source_doc: s.chunk.doc_title,

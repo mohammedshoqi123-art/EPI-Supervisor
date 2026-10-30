@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:epi_shared/epi_shared.dart';
+import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import 'form_editor_screen.dart';
 
@@ -19,11 +22,40 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
   List<Map<String, dynamic>> _forms = [];
   Map<String, Map<String, int>> _stats = {};
   String? _error;
+  String? _campaignFilter; // ═══ null = الكل
+  Timer? _searchDebounce;
+  final _searchController = TextEditingController();
+
+  static const _campaignLabels = {
+    'measles_campaign': '🦠 حملة الحصبة',
+    'polio_campaign': '🧬 حملة شلل الأطفال',
+    'integrated_activity': '📋 النشاط التكاملي',
+  };
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _filteredForms {
+    final q = _searchController.text.trim().toLowerCase();
+    return _forms.where((f) {
+      if (_campaignFilter != null && f['campaign_type'] != _campaignFilter) {
+        return false;
+      }
+      if (q.isEmpty) return true;
+      final title = (f['title_ar'] as String? ?? '').toLowerCase();
+      final desc = (f['description_ar'] as String? ?? '').toLowerCase();
+      return title.contains(q) || desc.contains(q);
+    }).toList();
   }
 
   Future<void> _loadData() async {
@@ -35,40 +67,63 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     try {
       final client = Supabase.instance.client;
 
-      // ═══ FIX: Load forms and submissions stats in parallel (2 queries instead of N+1) ═══
-      final results = await Future.wait([
-        client
-            .from('forms')
-            .select('*')
-            .isFilter('deleted_at', null)
-            .order('created_at', ascending: false),
-        client
-            .from('form_submissions')
-            .select('form_id, status'),
-      ]);
-
-      _forms = (results[0] as List<dynamic>).cast<Map<String, dynamic>>();
-      final allSubs = (results[1] as List<dynamic>).cast<Map<String, dynamic>>();
-
-      // ═══ Compute stats from single result set (no per-form queries) ═══
-      final Map<String, Map<String, int>> stats = {};
-      for (final sub in allSubs) {
-        final fid = sub['form_id'] as String?;
-        if (fid == null) continue;
-        final counts = stats.putIfAbsent(fid, () => <String, int>{});
-        counts['total'] = (counts['total'] ?? 0) + 1;
-        final st = sub['status'] ?? 'draft';
-        counts[st] = (counts[st] ?? 0) + 1;
+      // ═══ Server-side stats via RPC (GROUP BY على الخادم) — كانت تجلب
+      // جدول الإرساليات كاملاً إلى الجهاز في كل فتح للشاشة، وتحتسب المحذوفة ═══
+      Map<String, Map<String, int>> stats = {};
+      List<Map<String, dynamic>> forms;
+      try {
+        final results = await Future.wait([
+          client
+              .from('forms')
+              .select('*')
+              .isFilter('deleted_at', null)
+              .order('created_at', ascending: false),
+          client.rpc('form_submission_stats'),
+        ]);
+        forms = (results[0] as List<dynamic>).cast<Map<String, dynamic>>();
+        for (final row in (results[1] as List<dynamic>)) {
+          final r = row as Map<String, dynamic>;
+          final fid = r['form_id'] as String?;
+          if (fid == null) continue;
+          stats[fid] = {
+            'total': (r['total'] as num?)?.toInt() ?? 0,
+            'submitted': (r['submitted'] as num?)?.toInt() ?? 0,
+            'draft': (r['draft'] as num?)?.toInt() ?? 0,
+          };
+        }
+      } catch (_) {
+        // ═══ Fallback: APK قديم من دوال الخادم — حساب محلي مع فلتر المحذوف ═══
+        final results = await Future.wait([
+          client
+              .from('forms')
+              .select('*')
+              .isFilter('deleted_at', null)
+              .order('created_at', ascending: false),
+          client
+              .from('form_submissions')
+              .select('form_id, status')
+              .isFilter('deleted_at', null),
+        ]);
+        forms = (results[0] as List<dynamic>).cast<Map<String, dynamic>>();
+        for (final sub in (results[1] as List<dynamic>).cast<Map<String, dynamic>>()) {
+          final fid = sub['form_id'] as String?;
+          if (fid == null) continue;
+          final counts = stats.putIfAbsent(fid, () => <String, int>{});
+          counts['total'] = (counts['total'] ?? 0) + 1;
+          final st = sub['status'] ?? 'draft';
+          counts[st] = (counts[st] ?? 0) + 1;
+        }
       }
 
       // Ensure all forms have stats (even if 0 submissions)
-      for (final f in _forms) {
+      for (final f in forms) {
         final fid = f['id'] as String;
         stats.putIfAbsent(fid, () => {'total': 0});
       }
 
       if (mounted) {
         setState(() {
+          _forms = forms;
           _stats = stats;
           _isLoading = false;
         });
@@ -105,7 +160,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'max_photos': result['max_photos'] ?? 5,
         'allowed_roles': result['allowed_roles'] ??
             ['data_entry', 'district', 'governorate', 'central', 'admin'],
-        'campaign_type': result['campaign_type'] ?? 'polio_campaign',
+        // ═══ FIX: كانت polio_campaign الثابتة — مخفية عن الجميع عدا المدير ═══
+        'campaign_type': result['campaign_type'] ??
+            ref.read(campaignProvider).value,
         'is_active': true,
         'created_by': user?.id,
       };
@@ -175,7 +232,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
             result['allowed_roles'] ?? form['allowed_roles'] ?? ['data_entry'],
         'campaign_type': result['campaign_type'] ??
             form['campaign_type'] ??
-            'polio_campaign',
+            CampaignType.measlesCampaign.value,
         'version': (form['version'] as int? ?? 1) + 1,
       };
 
@@ -271,8 +328,10 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
 
     try {
       final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
       await client.from('forms').update({
         'deleted_at': DateTime.now().toIso8601String(),
+        'deleted_by': user?.id, // ═══ سجل من حذف (كان عموداً يتيمة بلا قيمة) ═══
         'is_active': false,
       }).eq('id', form['id']).timeout(const Duration(seconds: 15));
 
@@ -399,20 +458,67 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       ),
       body: Column(
         children: [
+          // ═══ بحث + فلتر حملة ═══
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'بحث بعنوان النموذج...',
+                hintStyle: const TextStyle(fontFamily: 'Tajawal'),
+                prefixIcon: const Icon(Icons.search_rounded),
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {});
+                        },
+                      )
+                    : null,
+              ),
+              onChanged: (_) {
+                _searchDebounce?.cancel();
+                _searchDebounce =
+                    Timer(const Duration(milliseconds: 300), () {
+                  if (mounted) setState(() {});
+                });
+              },
+            ),
+          ),
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              children: [
+                _campaignChip(null, 'الكل (${_forms.length})'),
+                ..._campaignLabels.entries
+                    .map((e) => _campaignChip(e.key, e.value)),
+              ],
+            ),
+          ),
           if (_forms.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  _summaryStat('الكل', _forms.length, AppTheme.primaryColor),
+                  _summaryStat('الكل', _filteredForms.length, AppTheme.primaryColor),
                   _summaryStat(
                     'مفعل',
-                    _forms.where((f) => f['is_active'] == true).length,
+                    _filteredForms.where((f) => f['is_active'] == true).length,
                     AppTheme.successColor,
                   ),
                   _summaryStat(
                     'معطل',
-                    _forms.where((f) => f['is_active'] != true).length,
+                    _filteredForms.where((f) => f['is_active'] != true).length,
                     AppTheme.errorColor,
                   ),
                 ],
@@ -478,10 +584,41 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      child: ListView.builder(
+      child: _filteredForms.isEmpty && _forms.isNotEmpty
+          ? ListView(children: const [
+              SizedBox(height: 80),
+              Center(
+                child: Text(
+                  'لا نتائج مطابقة للبحث/الفلتر',
+                  style: TextStyle(fontFamily: 'Tajawal', color: Colors.grey),
+                ),
+              ),
+            ])
+          : ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _forms.length,
-        itemBuilder: (context, i) => _buildFormCard(_forms[i]),
+        itemCount: _filteredForms.length,
+        itemBuilder: (context, i) => _buildFormCard(_filteredForms[i]),
+      ),
+    );
+  }
+
+  Widget _campaignChip(String? value, String label) {
+    final selected = _campaignFilter == value;
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: ChoiceChip(
+        label: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Tajawal',
+            fontSize: 12,
+            color: selected ? Colors.white : AppTheme.textSecondary,
+          ),
+        ),
+        selected: selected,
+        selectedColor: AppTheme.primaryColor,
+        backgroundColor: Colors.grey.shade100,
+        onSelected: (_) => setState(() => _campaignFilter = value),
       ),
     );
   }
@@ -578,6 +715,13 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
               const SizedBox(height: 10),
               Row(
                 children: [
+                  // ═══ شريحة الحملة — المدير يرى الآن أنشطة كل نموذج ═══
+                  _tagChip(
+                    _campaignLabels[form['campaign_type']] ??
+                        (form['campaign_type'] as String? ?? '—'),
+                    AppTheme.infoColor,
+                  ),
+                  const SizedBox(width: 8),
                   _statChip('$totalFields حقل', Colors.indigo),
                   const SizedBox(width: 8),
                   if (sections.isNotEmpty)

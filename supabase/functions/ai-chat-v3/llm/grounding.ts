@@ -964,7 +964,7 @@ export async function searchKnowledgeBase(message: string): Promise<GroundingSou
     const diagnostics = getSearchDiagnostics(message)
     console.log(`[GROUNDING-V2] Search diagnostics:`, diagnostics)
 
-    const scored = advancedKnowledgeSearch(message, allDocs, { topK: 6, minScore: 2 })
+    const scored = advancedKnowledgeSearch(message, allDocs, { topK: 4, minScore: 2 })
     console.log(`[GROUNDING-V2] Found ${scored.length} chunks (top score: ${scored[0]?.score || 0})`)
 
     if (scored.length === 0) {

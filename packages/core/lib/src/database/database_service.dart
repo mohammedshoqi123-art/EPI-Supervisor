@@ -24,7 +24,9 @@ class DatabaseService {
 
     return _api.select(
       'profiles',
-      select: '*, governorates(name_ar, name_en), districts(name_ar, name_en)',
+      // FK hints — deleted_by FKs made these embeds ambiguous (PGRST201)
+      select:
+          '*, governorates!governorate_id(name_ar, name_en), districts!district_id(name_ar, name_en)',
       filters: filters,
       orderBy: 'created_at',
       ascending: false,
@@ -36,7 +38,8 @@ class DatabaseService {
   Future<Map<String, dynamic>> getUserProfile(String userId) async {
     return _api.selectOne(
       'profiles',
-      select: '*, governorates(name_ar, name_en), districts(name_ar, name_en)',
+      select:
+          '*, governorates!governorate_id(name_ar, name_en), districts!district_id(name_ar, name_en)',
       filters: {'id': userId},
     );
   }
@@ -71,7 +74,7 @@ class DatabaseService {
     if (governorateId != null) filters['governorate_id'] = governorateId;
     return _api.select(
       'districts',
-      select: '*, governorates(name_ar, name_en)',
+      select: '*, governorates!governorate_id(name_ar, name_en)',
       filters: filters,
       orderBy: 'name_ar',
       limit: 5000, // ═══ FIX P1: Add safety limit ═══

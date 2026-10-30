@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:epi_shared/epi_shared.dart';
@@ -15,6 +17,7 @@ class UsersScreen extends ConsumerStatefulWidget {
 
 class _UsersScreenState extends ConsumerState<UsersScreen> {
   final _searchController = TextEditingController();
+  Timer? _searchDebounce; // ═══ debounce: was a full 3-query reload per keystroke
   String? _filterRole;
   bool? _filterActive;
   bool _isLoading = true;
@@ -33,6 +36,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -45,9 +49,13 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     try {
       final client = Supabase.instance.client;
       // Load users
+      // ═══ FK disambiguation hint: governorates/districts both carry a
+      // deleted_by → profiles FK, which made the bare embed ambiguous
+      // (PostgREST PGRST201 → the error banner users saw on this screen).
       var query = client
           .from('profiles')
-          .select('*, governorates(name_ar), districts(name_ar)');
+          .select(
+              '*, governorates!governorate_id(name_ar), districts!district_id(name_ar)');
       if (_searchController.text.isNotEmpty) {
         query = query.or(
           'full_name.ilike.%${_searchController.text}%,email.ilike.%${_searchController.text}%',
@@ -391,7 +399,11 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                       )
                     : null,
               ),
-              onChanged: (_) => _loadAll(),
+              onChanged: (_) {
+                _searchDebounce?.cancel();
+                _searchDebounce =
+                    Timer(const Duration(milliseconds: 450), _loadAll);
+              },
               textInputAction: TextInputAction.search,
             ),
           ),

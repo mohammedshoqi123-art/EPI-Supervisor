@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:epi_core/epi_core.dart';
 import 'package:epi_shared/epi_shared.dart';
 
 class FormEditorScreen extends StatefulWidget {
@@ -16,6 +17,9 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
   bool _requiresGps = false;
   bool _requiresPhoto = false;
   int _maxPhotos = 5;
+  // ═══ Campaign type — was missing entirely: every new form silently landed
+  // in polio_campaign (admin-only visible) and field users never saw it.
+  String _campaignType = CampaignType.measlesCampaign.value;
 
   // Schema: flat fields OR sections
   List<Map<String, dynamic>> _fields = [];
@@ -89,6 +93,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
       _requiresGps = f['requires_gps'] ?? false;
       _requiresPhoto = f['requires_photo'] ?? false;
       _maxPhotos = f['max_photos'] ?? 5;
+      _campaignType = f['campaign_type'] as String? ??
+          CampaignType.measlesCampaign.value;
 
       final schema = f['schema'] as Map<String, dynamic>? ?? {};
       final sections = schema['sections'] as List? ?? [];
@@ -144,6 +150,7 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
       'requires_gps': _requiresGps,
       'requires_photo': _requiresPhoto,
       'max_photos': _maxPhotos,
+      'campaign_type': _campaignType,
     });
   }
 
@@ -724,6 +731,28 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                 border: OutlineInputBorder(),
               ),
               style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
+            const SizedBox(height: 12),
+            // ═══ Campaign selector — determines visibility for all roles ═══
+            DropdownButtonFormField<String>(
+              value: _campaignType,
+              decoration: const InputDecoration(
+                labelText: 'النشاط / الحملة *',
+                prefixIcon: Icon(Icons.campaign_rounded),
+                border: OutlineInputBorder(),
+                helperText: 'حدد النشاط الذي ينتمي إليه النموذج — يتحكم في ظهوره لكل المستويات',
+              ),
+              items: CampaignType.values
+                  .map((c) => DropdownMenuItem(
+                        value: c.value,
+                        child: Text(
+                          c.displayLabel,
+                          style: const TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (v) =>
+                  setState(() => _campaignType = v ?? _campaignType),
             ),
             const SizedBox(height: 16),
 

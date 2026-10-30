@@ -525,10 +525,17 @@ class OfflineManager {
     // ═══ FIX DEADLOCK-1: الأرشفة بعد تحرير القفل ═══
     // saveFailedSubmission يأخذ نفس القفل غير القابل لإعادة الدخول —
     // استدعاؤه داخل القفل يعليق تام. نجمع العناصر ونؤرشفها بعد الخروج.
+    // ═══ FIX CFE-1: النتائج تُعلن قبل الإغلاق ═══
+    // Previously: `final results = await _withWriteLock(() async { results.add(...) })`
+    //   — الإغلاق يُشير إلى المتغير داخل تهيئته نفسها؛ المحلل يمرره لكن CFE
+    //   (AOT/dart2js في build apk/web release) يرفضه: "can't be referenced
+    //   before it is declared" — فشل بناء الإصدار كاملاً.
+    // Now: النتائج قائمة خارجية تُملأ داخل القفل ثم تُعاد بعده.
     final toArchiveAfterLock = <Map<String, dynamic>>[];
-    final results = await _withWriteLock(() async {
+    final results = <OfflineSyncResult>[];
+    await _withWriteLock(() async {
     final pending = _getQueue();
-    if (pending.isEmpty) return <OfflineSyncResult>[];
+    if (pending.isEmpty) return;
 
     final remaining = <Map<String, dynamic>>[];
     final successfullySynced = <String>[];
@@ -627,7 +634,6 @@ class OfflineManager {
     _invalidatePendingCount();
 
     _logSyncSummary(results);
-    return results;
     }); // Close _withWriteLock
 
     // ═══ FIX DEADLOCK-1: الأرشفة الآن — خارج القفل ═══

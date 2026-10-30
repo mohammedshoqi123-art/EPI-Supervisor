@@ -30,6 +30,7 @@ import '../screens/users_screen.dart';
 import '../screens/forms_management_screen.dart';
 import '../screens/references_management_screen.dart';
 import '../screens/analytics_screen.dart';
+import '../screens/gallery_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authAsync = ref.watch(authStateProvider);
@@ -143,6 +144,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
           GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
+          GoRoute(
+            path: '/gallery',
+            builder: (context, state) => const GalleryScreen(),
+          ),
           GoRoute(
             path: '/analytics',
             builder: (context, state) {

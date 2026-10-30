@@ -119,10 +119,15 @@ class SyncService {
 
     if (_isSyncing) {
       // ═══ FIX: إذا في sync شغال، ننتظره بدل ما نتجاوزه ═══
+      // ═══ FIX HANG-2: مع مهلة 60s — لو علق الـsync القديم لا نعلق معه للأبد ═══
       if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
         if (kDebugMode)
           debugPrint('[SyncService] Waiting for active sync ($trigger)');
-        await _activeCompleter!.future;
+        try {
+          await _activeCompleter!.future.timeout(const Duration(seconds: 60));
+        } on TimeoutException {
+          debugPrint('[SyncService] Active sync hung >60s — giving up waiting');
+        }
       }
       return;
     }
@@ -158,7 +163,15 @@ class SyncService {
         _activeCompleter = null;
       } else if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
         // نرجع نفس الـ result حق sync الجاري
-        return _activeCompleter!.future;
+        // ═══ FIX HANG-2: مهلة 90s — النتيجة الحالية بدل التعليق للأبد ═══
+        try {
+          return await _activeCompleter!.future.timeout(
+            const Duration(seconds: 90),
+            onTimeout: () => SyncCycleResult.empty(),
+          );
+        } catch (_) {
+          return SyncCycleResult.empty();
+        }
       } else {
         return SyncCycleResult.empty();
       }
@@ -181,6 +194,29 @@ class SyncService {
 
     if (uniqueItems.isEmpty) return SyncCycleResult.empty();
 
+    // ═══ FIX HANG-3: احترام backoff — لا ترسل عنصراً قبل موعد إعادة المحاولة ═══
+    // Previously: next_retry_at كان يُحفظ لكنه لا يُقرأ أبداً → كل دورة مزامنة
+    //   (كل 5 دقائق) كانت تعيد إرسال كل العناصر الفاشلة فوراً → السيرفر يرد 429
+    //   (rate limit) → retry_count يزيد بلا فائدة → العناصر تُؤرشف بعد 5 محاولات
+    //   رغم أن الانقطاع كان قصيراً. والآن: العنصر الذي موعد إعادة محاولته لم يحن
+    //   يُتخطى؛ وتُعاد الدورة التالية تلقائياً بعد 5 دقائق.
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final dueItems = uniqueItems.where((item) {
+      final nextRetry = DateTime.tryParse(item['next_retry_at']?.toString() ?? '');
+      if (nextRetry == null) return true;
+      return nextRetry.millisecondsSinceEpoch <= nowMs;
+    }).toList();
+    final deferred = uniqueItems.length - dueItems.length;
+    if (dueItems.isEmpty) {
+      if (kDebugMode && deferred > 0) {
+        debugPrint('[SyncService] All $deferred items waiting for backoff — skipping cycle');
+      }
+      return SyncCycleResult.empty();
+    }
+    if (kDebugMode && deferred > 0) {
+      debugPrint('[SyncService] $deferred/${uniqueItems.length} items deferred (backoff)');
+    }
+
     _isSyncing = true;
     _syncLockTime = DateTime.now();
     _activeCompleter = Completer<SyncCycleResult>();
@@ -190,11 +226,12 @@ class SyncService {
 
     try {
       // ═══ معالجة العناصر دفعات ═══
+      // ═══ FIX HANG-3: المعالجة على dueItems فقط (تحترم backoff) ═══
       for (int offset = 0;
-          offset < uniqueItems.length;
+          offset < dueItems.length;
           offset += _maxBatchSize) {
-        final batchEnd = (offset + _maxBatchSize).clamp(0, uniqueItems.length);
-        final batch = uniqueItems.sublist(offset, batchEnd);
+        final batchEnd = (offset + _maxBatchSize).clamp(0, dueItems.length);
+        final batch = dueItems.sublist(offset, batchEnd);
 
         if (kDebugMode)
           debugPrint(

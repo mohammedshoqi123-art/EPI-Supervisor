@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:epi_shared/epi_shared.dart';
 import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
+import 'photo_viewer.dart';
 
 class SubmissionDetailScreen extends ConsumerStatefulWidget {
   final String id;
@@ -158,6 +159,13 @@ class _SubmissionDetailScreenState
                       ]),
                       const SizedBox(height: 16),
 
+                      // ═══ FIX: عرض الصور التوثيقية فعلياً ═══
+                      // Previously: كانت تظهر كنص "N صورة" داخل البيانات فقط
+                      //   ولا يمكن للمشرف رؤية صوره أبداً.
+                      // Now: قسم صور مستقل + عارض بملء الشاشة.
+                      ..._buildPhotosSection(),
+                      const SizedBox(height: 16),
+
                       // Location
                       if (_submission!['gps_lat'] != null)
                         _buildSection('الموقع', [
@@ -178,6 +186,91 @@ class _SubmissionDetailScreenState
                   ),
                 ),
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // PHOTOS — استخراج الصور base64 من data وعرضها
+  // ═══════════════════════════════════════════════════════════
+  List<String> _extractPhotos() {
+    final data = _submission?['data'] as Map<String, dynamic>? ?? {};
+    final photos = <String>[];
+    for (final v in data.values) {
+      if (v is List) {
+        for (final e in v) {
+          if (e is String && e.length > 500) photos.add(e);
+        }
+      }
+    }
+    // عمود photos (text[]) إن وُجد — روابط أو base64
+    final col = _submission?['photos'];
+    if (col is List) {
+      for (final e in col) {
+        if (e is String && e.isNotEmpty) photos.add(e);
+      }
+    }
+    return photos;
+  }
+
+  List<Widget> _buildPhotosSection() {
+    final photos = _extractPhotos();
+    if (photos.isEmpty) return const [];
+
+    return [
+      _buildSection('الصور التوثيقية (${photos.length})', [
+        SizedBox(
+          height: 130,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              final bytes = PhotoViewerPage.decodePhoto(photos[i]);
+              return GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(MaterialPageRoute(
+                    fullscreenDialog: true,
+                    builder: (_) => PhotoViewerPage(
+                      photos: photos,
+                      initialIndex: i,
+                      title:
+                          _submission!['forms']?['title_ar'] ?? 'صورة إشراف',
+                      subtitle: _formatDate(_submission!['created_at']),
+                      gpsLat: (_submission!['gps_lat'] as num?)?.toDouble(),
+                      gpsLng: (_submission!['gps_lng'] as num?)?.toDouble(),
+                    ),
+                  ));
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: bytes == null
+                      ? Container(
+                          width: 130,
+                          height: 130,
+                          color: AppTheme.primarySurface,
+                          child: const Icon(Icons.broken_image_rounded,
+                              color: AppTheme.textHint),
+                        )
+                      : Image.memory(
+                          bytes,
+                          width: 130,
+                          height: 130,
+                          fit: BoxFit.cover,
+                          cacheWidth: 400,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 130,
+                            height: 130,
+                            color: AppTheme.primarySurface,
+                            child: const Icon(Icons.broken_image_rounded,
+                                color: AppTheme.textHint),
+                          ),
+                        ),
+                ),
+              );
+            },
+          ),
+        ),
+      ]),
+    ];
   }
 
   Widget _buildHeader() {

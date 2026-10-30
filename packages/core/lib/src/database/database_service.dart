@@ -429,6 +429,34 @@ class DatabaseService {
     return _api.callFunction(SupabaseConfig.fnSubmitForm, data);
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // PHOTO GALLERY — معرض صور الإشراف
+  // الصور مخزنة base64 داخل data JSONB؛ دوال RPC بـ SECURITY INVOKER
+  // ترث صلاحيات RLS نفسها الخاصة بقراءة الإرساليات.
+  // ═══════════════════════════════════════════════════════════════════
+
+  /// صفحة من إرساليات الصور (id, عنوان الاستمارة، المُرسل، التاريخ، GPS، الصور)
+  Future<List<Map<String, dynamic>>> listPhotoSubmissions({
+    int limit = 8,
+    int offset = 0,
+    String? formId,
+  }) async {
+    return _api.rpc(
+      'list_photo_submissions',
+      params: {
+        'p_limit': limit,
+        'p_offset': offset,
+        'p_form_id': formId,
+      },
+    );
+  }
+
+  /// عدد إرساليات الصور المرئية للمستخدم الحالي (حسب RLS)
+  /// RPC عددي — يعيد int مباشرة
+  Future<int> countPhotoSubmissions() async {
+    return _api.rpcCount('count_photo_submissions');
+  }
+
   // ═══ ROUND LOCK — Check if a campaign round is locked ═══
   Future<bool> isRoundLocked(String campaignType, int roundNumber) async {
     try {

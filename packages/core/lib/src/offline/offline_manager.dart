@@ -354,12 +354,27 @@ class OfflineManager {
       final decoded = jsonDecode(_encryption.decrypt(data));
       final items = List<Map<String, dynamic>>.from(decoded);
       // Migrate to sharded format
-      _migrateQueueToSharded(items);
+      // ═══ FIX RACE-1: شغّل الترحيل مرة واحدة فقط ═══
+      // Previously: fire-and-forget بلا حماية — استدعاءان متزامنان
+      //   (_getQueue من داخل write lock + آخر من Recovery) يكتبان
+      //   نفس المفاتيح في نفس الوقت → عناصر مفقودة أو تالفة.
+      // Now: راية _queueMigrationInProgress تضمن تنفيذاً واحداً.
+      _migrateQueueToShardedOnce(items);
       return items;
     } catch (e) {
       if (kDebugMode) print('[OfflineManager] Queue decrypt error: $e');
       return [];
     }
+  }
+
+  /// ═══ FIX RACE-1: حماية ترحيل طابور الإرسال من التنفيذ المتزامن ═══
+  bool _queueMigrationInProgress = false;
+  void _migrateQueueToShardedOnce(List<Map<String, dynamic>> items) {
+    if (_queueMigrationInProgress) return;
+    _queueMigrationInProgress = true;
+    _migrateQueueToSharded(items).whenComplete(() {
+      _queueMigrationInProgress = false;
+    });
   }
 
   /// Migrate legacy blob queue to sharded format
@@ -507,11 +522,14 @@ class OfflineManager {
     // ═══ FIX: Wrap with _withWriteLock to prevent race condition ═══
     // Previously: _getQueue() + _saveQueue() without lock
     // Now: protected by same mutex as addToSyncQueue/removeFromQueue
-    return _withWriteLock(() async {
+    // ═══ FIX DEADLOCK-1: الأرشفة بعد تحرير القفل ═══
+    // saveFailedSubmission يأخذ نفس القفل غير القابل لإعادة الدخول —
+    // استدعاؤه داخل القفل يعليق تام. نجمع العناصر ونؤرشفها بعد الخروج.
+    final toArchiveAfterLock = <Map<String, dynamic>>[];
+    final results = await _withWriteLock(() async {
     final pending = _getQueue();
-    if (pending.isEmpty) return [];
+    if (pending.isEmpty) return <OfflineSyncResult>[];
 
-    final results = <OfflineSyncResult>[];
     final remaining = <Map<String, dynamic>>[];
     final successfullySynced = <String>[];
 
@@ -561,8 +579,14 @@ class OfflineManager {
               ),
             );
           } else {
+            // ═══ FIX CONSISTENCY-1: تجاوز الحد الأقصى → أرشفة بعد تحرير القفل ═══
+            // Previously: بقي في الطابور بلا تقدم ولا أرشفة → عنصر ميت
+            //   لا يُرسل ولا يراه المستخدم.
+            // Now: نفس سلوك SyncService — يُنقل إلى failed_submissions
+            //   بعد الخروج من القفل (راجع FIX DEADLOCK-1 أعلاه).
             item.remove('_syncing');
             remaining.add(item);
+            toArchiveAfterLock.add(item);
             results.add(
               OfflineSyncResult.error(
                 item['offline_id'],
@@ -605,6 +629,17 @@ class OfflineManager {
     _logSyncSummary(results);
     return results;
     }); // Close _withWriteLock
+
+    // ═══ FIX DEADLOCK-1: الأرشفة الآن — خارج القفل ═══
+    for (final item in toArchiveAfterLock) {
+      try {
+        await saveFailedSubmission(
+          item,
+          'Unexpected server response after ${(item['retry_count'] ?? 0)} retries',
+        );
+      } catch (_) {}
+    }
+    return results;
   }
 
   bool _isRetryableError(ApiException e) {

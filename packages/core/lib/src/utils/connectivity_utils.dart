@@ -224,15 +224,42 @@ class ConnectivityUtils {
     }
   }
 
+  // ═══ FIX HANG-1: trailing-edge emit — NEVER drop the final state ═══
+  // Previously: a change arriving within the 2s throttle window was DROPPED.
+  // Example: offline→online at t=0 (emitted), flapping at t=1s (DROPPED) —
+  //   listeners stuck believing offline → SyncService never triggers →
+  //   "المزامنة لا تعمل" while the app shows online.
+  // Now: leading emit fires immediately; a trailing timer guarantees the
+  //   latest state is always delivered once the window closes.
+  static Timer? _trailingEmitTimer;
+
   static void _throttledEmit(bool value) {
     final now = DateTime.now();
-    if (_lastEmit != null && now.difference(_lastEmit!) < _minEmitInterval) {
+    final canEmitNow = _lastEmit == null ||
+        now.difference(_lastEmit!) >= _minEmitInterval;
+
+    if (canEmitNow) {
+      _lastEmit = now;
+      _trailingEmitTimer?.cancel();
+      _trailingEmitTimer = null;
+      if (!_controller.isClosed) {
+        _controller.add(value);
+      }
       return;
     }
-    _lastEmit = now;
-    if (!_controller.isClosed) {
-      _controller.add(value);
-    }
+
+    // Inside the throttle window — schedule a trailing emit with the
+    // LATEST value so listeners always end up with the true current state.
+    _trailingEmitTimer?.cancel();
+    final remaining =
+        _minEmitInterval - now.difference(_lastEmit!);
+    _trailingEmitTimer = Timer(remaining < Duration.zero ? Duration.zero : remaining, () {
+      _trailingEmitTimer = null;
+      _lastEmit = DateTime.now();
+      if (!_controller.isClosed) {
+        _controller.add(_isOnline);
+      }
+    });
   }
 
   static bool _isConnected(List<ConnectivityResult> results) {
@@ -277,6 +304,7 @@ class ConnectivityUtils {
   static void dispose() {
     _subscription?.cancel();
     _recheckTimer?.cancel();
+    _trailingEmitTimer?.cancel();
     _controller.close();
   }
 }

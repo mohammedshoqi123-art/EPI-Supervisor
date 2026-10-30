@@ -282,11 +282,17 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
           final subStart = DateTime.now();
 
           while (hasMore) {
+            // ═══ FIX HANG-4: lean: true — لا تجلب عمود data JSONB ═══
+            // Previously: fetch_submissions يعيد كل الأعمدة بما فيها data —
+            //   274 إرسالية تحمل صوراً base64 (~80MB إجمالاً) → تحميل بطيء جداً
+            //   على شبكات اليمن → تعليق المزامنة الكاملة + انتفاخ Hive + OOM.
+            // Now: REST lean — metadata فقط (~0.3KB/صف) = تحميل أسرع 100×.
             final batch = await db.getSubmissions(
               campaignType: campaign.value,
               limit: pageSize,
               offset: offset,
-            ).timeout(const Duration(seconds: 15));
+              lean: true,
+            ).timeout(const Duration(seconds: 20));
             if (batch.isEmpty || batch.length < pageSize) hasMore = false;
             allSubs.addAll(batch);
             offset += pageSize;

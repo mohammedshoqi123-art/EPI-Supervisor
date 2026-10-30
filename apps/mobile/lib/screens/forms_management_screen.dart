@@ -72,7 +72,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       Map<String, Map<String, int>> stats = {};
       List<Map<String, dynamic>> forms;
       try {
-        final results = await Future.wait([
+        // ═══ Future.wait<dynamic> صريحة: PostgrestBuilder يُطبّق Future لكن
+        // الاستنتاج التلقائي يفشل عند خلط from() مع rpc() ═══
+        final results = await Future.wait<dynamic>([
           client
               .from('forms')
               .select('*')

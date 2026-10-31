@@ -154,7 +154,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               // ═══ Support ?tab=reports deep-link from Dashboard quick action ═══
               final tab = state.uri.queryParameters['tab'];
               int initialTab = 0;
-              if (tab == 'reports') initialTab = 4;
+              // ═══ FIX: reports tab is index 1 now (2-tab layout) ═══
+              if (tab == 'reports') initialTab = 1;
               return AnalyticsScreen(initialTab: initialTab);
             },
           ),

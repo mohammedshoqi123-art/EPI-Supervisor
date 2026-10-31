@@ -343,10 +343,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   @override
   void initState() {
     super.initState();
-    // ═══ Clamp initialTab to valid range [0, 5] ═══
-    final initial = widget.initialTab.clamp(0, 5);
+    // ═══ Clamp initialTab to valid range [0, 1] (2 tabs) ═══
+    final initial = widget.initialTab.clamp(0, 1);
     _tab = TabController(
-      length: 6,
+      length: 2, // ═══ FIX: was 6 while TabBar/TabBarView have 2 children ═══
       vsync: this,
       initialIndex: initial,
     );
@@ -395,19 +395,28 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     return campaign == 'integrated_activity' ? round : null;
   }
 
+  /// ═══ Role-based data scope for reports (حسب الصلاحيات) ═══
+  /// admin/central → everything; governorate → own governorate;
+  /// district/data_entry → own governorate (fetch_submissions scopes further
+  /// server-side for submission lists).
+  ({String? governorateId, String? districtId}) get _dataScope {
+    final auth = ref.read(authStateProvider).valueOrNull;
+    final level = auth?.role?.hierarchyLevel ?? 0;
+    if (level >= 4) return (governorateId: null, districtId: null);
+    return (governorateId: auth?.governorateId, districtId: auth?.districtId);
+  }
+
   // ═══ Debounce refresh — prevents rapid invalidations ═══
   Timer? _refreshDebounce;
   void _debouncedRefresh() {
     _refreshDebounce?.cancel();
     _refreshDebounce = Timer(const Duration(seconds: 2), () {
       if (mounted) {
-        // ⚠️ FIX: Only invalidate dynamic analytics (the only active tab now).
-        // Previously: invalidated _readinessSubsProvider + _supervisionSubsProvider
-        // which fetched 2000+ rows with full data column → freezing.
-        final params = _getAnalyticsParams(ref);
-        ref.invalidate(_dynamicAnalyticsProvider(
-          (formId: '', round: params.campaignRound, governorateId: null),
-        ));
+        // ═══ FIX: invalidate the whole dynamic-analytics family ═══
+        // Previously invalidated a formId:'' instance that never matched the
+        // selected form → the analytics tab never refreshed after a sync.
+        // Invalidating the family refreshes every open form's analytics.
+        ref.invalidate(_dynamicAnalyticsProvider);
       }
     });
   }
@@ -424,8 +433,12 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تحليلات النشاط الإيصال التكاملي',
-            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+        // ═══ FIX: dynamic title — was hardcoded to the integrated activity;
+        // now reflects the current activity (e.g. تحليلات حملة الحصبة) ═══
+        title: Text(
+          'تحليلات ${ref.watch(campaignProvider).labelAr}',
+          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+        ),
         centerTitle: true,
         bottom: TabBar(
           controller: _tab,
@@ -549,6 +562,19 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       await _generateRoundComparison();
       return;
     }
+    // ═══ NEW: Measles campaign reports (حملة الحصبة) ═══
+    if (type == 'measles_full') {
+      await _generateMeaslesComprehensiveReport(format: format);
+      return;
+    }
+    if (type == 'measles_gov') {
+      await _generateMeaslesGovernorateReport(format: format);
+      return;
+    }
+    if (type == 'measles_day') {
+      await _generateMeaslesDayReport(format: format);
+      return;
+    }
     if (type == 'readiness_report') {
       await _generateFormReport('readiness', 'استمارة الجاهزية', format: format);
       return;
@@ -605,6 +631,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         try {
           return await ref.read(analyticsServiceProvider).getGovernorateRanking(
             campaignRound: _effectiveRound,
+            governorateId: _dataScope.governorateId,
           );
         } catch (_) {
           return null;
@@ -761,6 +788,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           try {
             return await ref.read(analyticsServiceProvider).getGovernorateRanking(
               campaignRound: round,
+              governorateId: _dataScope.governorateId,
             );
           } catch (_) {
             return null;
@@ -879,6 +907,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           try {
             return await ref.read(analyticsServiceProvider).getGovernorateRanking(
                   campaignRound: round,
+                  governorateId: _dataScope.governorateId,
                 );
           } catch (_) {
             return null;
@@ -1011,6 +1040,221 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('فشل: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // ═════════════════════════════════════════════════════════════════
+  // NEW: Measles campaign reports (تقارير حملة الحصبة)
+  // All data flows through get_form_analytics / fetch_submissions —
+  // both role-scoped server-side, so every user sees data per their
+  // permission level (محافظة → محافظته، مركزي/مدير → الكل).
+  // ═════════════════════════════════════════════════════════════════
+
+  /// Fetch dynamic analytics for one form via the get_form_analytics RPC.
+  Future<Map<String, dynamic>> _fetchFormAnalytics(String formId) async {
+    final db = ref.read(databaseServiceProvider);
+    final result = await db.rpcSingle('get_form_analytics', params: {
+      'p_form_id': formId,
+      'p_campaign_round': null,
+      'p_governorate_id': null,
+    }).timeout(const Duration(seconds: 20));
+    return result ?? <String, dynamic>{};
+  }
+
+  /// تقرير حملة الحصبة الشامل — يجمع الاستمارات الثلاث في تقرير واحد
+  /// (الإشراف + العينات العشوائية + الجاهزية)
+  Future<void> _generateMeaslesComprehensiveReport({String format = 'pdf'}) async {
+    if (!mounted) return;
+    try {
+      final forms = <Map<String, String>>[
+        {'id': FormIds.measlesSupervision, 'name': 'الإشراف'},
+        {'id': FormIds.measlesSurvey, 'name': 'العينات العشوائية'},
+        {'id': FormIds.measlesReadiness, 'name': 'الجاهزية'},
+      ];
+
+      final mergedFields = <Map<String, dynamic>>[];
+      var totalSubmissions = 0;
+      for (final form in forms) {
+        final data = await _fetchFormAnalytics(form['id']!);
+        totalSubmissions += (data['total_submissions'] as num?)?.toInt() ?? 0;
+        final analytics = (data['analytics'] as List?) ?? [];
+        for (final item in analytics) {
+          final m = Map<String, dynamic>.from(item as Map);
+          final label =
+              m['field_label'] as String? ?? m['field_key'] as String? ?? '';
+          m['field_label'] = '${form['name']} — $label';
+          mergedFields.add(m);
+        }
+      }
+
+      final analyticsData = <String, dynamic>{
+        'submissions': {
+          'total': totalSubmissions,
+          'today': 0,
+          'byStatus': {'submitted': totalSubmissions},
+        },
+        'shortages': {'total': 0, 'resolved': 0},
+        'dynamic_analytics': {
+          'form_id': 'measles_campaign_all',
+          'form_title':
+              'التقرير الشامل لحملة الحصبة (الإشراف + العينات العشوائية + الجاهزية)',
+          'total_submissions': totalSubmissions,
+          'fields': mergedFields,
+        },
+      };
+
+      if (!mounted) return;
+      await DashboardReportExporter.generateAndShare(
+        context: context,
+        type: 'form_report',
+        format: format,
+        analyticsData: analyticsData,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل توليد التقرير الشامل: $e',
+                style: const TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// تقرير أداء المحافظات لحملة الحصبة — عدد الإرساليات لكل محافظة
+  /// (محدد تلقائياً حسب صلاحية المستخدم عبر fetch_submissions)
+  Future<void> _generateMeaslesGovernorateReport({String format = 'pdf'}) async {
+    if (!mounted) return;
+    try {
+      final db = ref.read(databaseServiceProvider);
+      final subs = await db
+          .getSubmissions(
+            campaignType: 'measles_campaign',
+            limit: 5000,
+            lean: true,
+          )
+          .timeout(const Duration(seconds: 45));
+
+      if (subs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('لا توجد بيانات لحملة الحصبة بعد',
+                  style: TextStyle(fontFamily: 'Tajawal')),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      final counts = <String, int>{};
+      for (final s in subs) {
+        final gov = (s['governorate_name'] as String?) ?? 'غير محدد';
+        counts[gov] = (counts[gov] ?? 0) + 1;
+      }
+
+      final ranking = counts.entries
+          .map((e) => {'governorate_id': '', 'name_ar': e.key, 'count': e.value})
+          .toList()
+        ..sort((a, b) =>
+            (b['count'] as int).compareTo(a['count'] as int));
+
+      final analyticsData = <String, dynamic>{
+        'submissions': {
+          'total': subs.length,
+          'today': 0,
+          'byStatus': {'submitted': subs.length},
+        },
+      };
+
+      if (!mounted) return;
+      await DashboardReportExporter.generateAndShare(
+        context: context,
+        type: 'governorates',
+        format: format,
+        analyticsData: analyticsData,
+        fetchGovRanking: () async => ranking,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل توليد تقرير المحافظات: $e',
+                style: const TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// تقرير أيام الزيارة الإشرافية — توزيع الزيارات على أيام الحملة
+  /// (اليوم الأول … اليوم السابع) من حقل اليوم في استمارة الإشراف
+  Future<void> _generateMeaslesDayReport({String format = 'pdf'}) async {
+    if (!mounted) return;
+    try {
+      final data = await _fetchFormAnalytics(FormIds.measlesSupervision);
+      final analytics = (data['analytics'] as List?) ?? [];
+
+      Map<String, dynamic>? dayItem;
+      for (final item in analytics) {
+        final m = Map<String, dynamic>.from(item as Map);
+        if (m['field_key'] == 'supervision_date') {
+          dayItem = m;
+          break;
+        }
+      }
+
+      if (dayItem == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('لا توجد بيانات أيام زيارة بعد',
+                  style: TextStyle(fontFamily: 'Tajawal')),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      final analyticsData = <String, dynamic>{
+        'submissions': {
+          'total': (dayItem['total'] as num?)?.toInt() ?? 0,
+          'today': 0,
+          'byStatus': const {},
+        },
+        'dynamic_analytics': {
+          'form_id': FormIds.measlesSupervision,
+          'form_title': 'تقرير أيام الزيارة الإشرافية — حملة الحصبة',
+          'total_submissions': (dayItem['total'] as num?)?.toInt() ?? 0,
+          'fields': [dayItem],
+        },
+      };
+
+      if (!mounted) return;
+      await DashboardReportExporter.generateAndShare(
+        context: context,
+        type: 'form_report',
+        format: format,
+        analyticsData: analyticsData,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل توليد تقرير الأيام: $e',
+                style: const TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }

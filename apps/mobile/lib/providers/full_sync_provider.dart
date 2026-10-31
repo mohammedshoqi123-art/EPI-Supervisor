@@ -158,7 +158,11 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
 
       // Check which data is stale and needs refresh
       final needsRefresh = <String, bool>{};
-      final cacheKeys = ['governorates', 'districts_all', 'forms_${campaign.value}', 'references', 'facilities_all'];
+      // ═══ FIX: forms_${campaign.value} removed from stale-check — forms are
+      // ALWAYS refreshed below so admin changes (hidden/deactivated forms)
+      // reach the device; previously isStale treated any persisted copy as
+      // fresh forever and stale forms/visibility caused offline confusion.
+      final cacheKeys = ['governorates', 'districts_all', 'references', 'facilities_all'];
 
       for (final key in cacheKeys) {
         needsRefresh[key] = cache.isStale(key, staleThreshold);
@@ -191,17 +195,15 @@ class FullSyncNotifier extends StateNotifier<FullSyncState> {
         futures.add(Future.value({'name': 'المديريات', 'data': <Map<String, dynamic>>[], 'skipped': true}));
       }
 
-      // 3. Forms
-      if (needsRefresh['forms_${campaign.value}'] == true) {
-        futures.add(
-          db.getForms(campaignType: campaign.value).then((data) async {
-            await cache.putList('forms_${campaign.value}', data);
-            return {'name': 'النماذج', 'data': data};
-          }).catchError((e) => {'name': 'النماذج', 'error': e}),
-        );
-      } else {
-        futures.add(Future.value({'name': 'النماذج', 'data': <Map<String, dynamic>>[], 'skipped': true}));
-      }
+      // 3. Forms — ═══ FIX: ALWAYS refresh during full sync ═══
+      // (previously guarded by isStale → any persisted copy skipped refresh
+      // forever, so hidden/deactivated forms kept appearing offline)
+      futures.add(
+        db.getForms(campaignType: campaign.value).then((data) async {
+          await cache.putList('forms_${campaign.value}', data);
+          return {'name': 'النماذج', 'data': data};
+        }).catchError((e) => {'name': 'النماذج', 'error': e}),
+      );
 
       // 4. References
       if (needsRefresh['references'] == true) {

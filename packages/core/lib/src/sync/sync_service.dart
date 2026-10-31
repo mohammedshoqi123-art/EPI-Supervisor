@@ -504,41 +504,24 @@ class SyncService {
     return result;
   }
 
-  /// ═══ Warm up forms cache for all campaign types ═══
-  /// ═══ PERFORMANCE: Only warm up if cache is empty (first sync after install) ═══
-  /// Previously: 3 network calls after EVERY sync
-  /// Now: only when cache has no forms data
+  /// ═══ Warm up + refresh forms cache for all campaign types ═══
+  /// ═══ FIX: Always refresh while online — previously skipped when keys
+  /// existed, so admin changes (deactivated forms, hidden activities,
+  /// visibility changes) never reached devices that had synced before the
+  /// change. Forms rows are tiny; a per-sync refresh is cheap and keeps the
+  /// offline view consistent with the dashboard (online and offline).
   Future<void> _warmUpFormsCache() async {
     final cache = _dataCache;
     if (cache == null) return;
 
     try {
-      // ═══ FIX N-8: Check if ALL form cache keys exist, not just any one ═══
-      // Previously: skipped if ANY key existed (e.g. forms_polio_campaign cached
-      //   but forms_all not → forms_all never warmed up)
-      // Now: only skips if ALL required keys are cached
-      // ⚠️ FIX: Include measles_campaign in cache warm-up.
-      // Previously: only polio_campaign and integrated_activity were warmed up,
-      // so when user selected measles campaign, formsProvider had to fetch live
-      // (slow on first load, and failed offline).
-      final hasAllForms = cache.hasCachedData('forms_all') &&
-          cache.hasCachedData('forms_polio_campaign') &&
-          cache.hasCachedData('forms_integrated_activity') &&
-          cache.hasCachedData('forms_measles_campaign');
-
-      if (hasAllForms) {
-        if (kDebugMode)
-          debugPrint('[SyncService] Forms cache already warm — skipping');
-        return;
-      }
-
-      // First time — warm up cache
       await cache.getList(
         'forms_all',
         () => _api.callFunction(SupabaseConfig.fnGetForms, {}).then(
           (resp) => List<Map<String, dynamic>>.from(resp['forms'] ?? []),
         ),
         maxAge: const Duration(hours: 12),
+        forceRefresh: true,
       );
 
       const types = ['polio_campaign', 'integrated_activity', 'measles_campaign'];
@@ -550,10 +533,27 @@ class SyncService {
             (resp) => List<Map<String, dynamic>>.from(resp['forms'] ?? []),
           ),
           maxAge: const Duration(hours: 12),
+          forceRefresh: true,
         );
       }
+
+      // ═══ FIX: refresh the persisted campaign visibility map so hidden
+      // activities (campaign_types.visible) stay hidden offline too ═══
+      try {
+        final visRows =
+            await _api.select('campaign_types', select: 'key, visible');
+        final visMap = <String, dynamic>{};
+        for (final row in visRows) {
+          final key = row['key'] as String?;
+          if (key != null) visMap[key] = row['visible'] ?? true;
+        }
+        await cache.putMap('campaign_visibility', visMap);
+      } catch (e) {
+        if (kDebugMode) print('[SyncService] Visibility refresh failed: $e');
+      }
+
       if (kDebugMode)
-        debugPrint('[SyncService] Forms cache warmed up for all campaign types');
+        debugPrint('[SyncService] Forms cache refreshed for all campaign types');
     } catch (e) {
       if (kDebugMode) print('[SyncService] Warm-up failed: $e');
     }

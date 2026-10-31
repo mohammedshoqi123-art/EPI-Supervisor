@@ -134,8 +134,14 @@ class NotificationService {
     }
 
     try {
+      // ═══ FIX: Scope notifications to the signed-in user (حسب الصلاحيات) ═══
+      // Previously: fetched ALL notifications for everyone — any user could see
+      // other users' notifications. Now: filter by recipient_id client-side
+      // (defense-in-depth alongside the notifications_select RLS policy).
+      final currentUserId = _api!.currentUserId;
       final results = await _api!.select(
         'notifications',
+        filters: currentUserId != null ? {'recipient_id': currentUserId} : null,
         orderBy: 'created_at',
         ascending: false,
         limit: _pageSize,

@@ -714,6 +714,7 @@ class DatabaseService {
   // ===== NOTIFICATIONS =====
 
   /// Get user notifications (paginated)
+  /// ═══ FIX: Scoped to the signed-in user — was returning all users' rows ═══
   Future<List<Map<String, dynamic>>> getNotifications({
     int limit = 50,
     int offset = 0,
@@ -721,6 +722,8 @@ class DatabaseService {
   }) async {
     final filters = <String, dynamic>{};
     if (unreadOnly) filters['is_read'] = false;
+    final uid = _api.currentUserId;
+    if (uid != null) filters['recipient_id'] = uid;
 
     return _api.select(
       'notifications',
@@ -733,12 +736,17 @@ class DatabaseService {
   }
 
   /// Get unread notification count using efficient count query
+  /// ═══ FIX: Scoped to the signed-in user — was counting all users' rows ═══
   Future<int> getUnreadNotificationCount() async {
     try {
+      final uid = _api.currentUserId;
       final result = await _api.selectOne(
         'notifications',
         select: 'count',
-        filters: {'is_read': false},
+        filters: {
+          'is_read': false,
+          if (uid != null) 'recipient_id': uid,
+        },
       );
       // Supabase returns count in the response when using count select
       final count = result['count'];
@@ -748,7 +756,10 @@ class DatabaseService {
       final results = await _api.select(
         'notifications',
         select: 'id',
-        filters: {'is_read': false},
+        filters: {
+          'is_read': false,
+          if (uid != null) 'recipient_id': uid,
+        },
         limit: 100,
       );
       return results.length;

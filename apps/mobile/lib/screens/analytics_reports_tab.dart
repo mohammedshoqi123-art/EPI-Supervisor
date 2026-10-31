@@ -213,6 +213,31 @@ class _DynamicReportsTabState extends ConsumerState<DynamicReportsTab> {
                     onTap: () =>
                         widget.onGenerate?.call('full', 'pdf', '30'),
                   ),
+                  // ═══ NEW: Measles campaign reports (تقارير حملة الحصبة) ═══
+                  _GeneralReportCard(
+                    icon: Icons.medical_services_rounded,
+                    label: 'تقرير الحصبة الشامل',
+                    subtitle: 'الاستمارات الثلاث معاً',
+                    color: const Color(0xFFD81B60),
+                    onTap: () => widget.onGenerate?.call(
+                        'measles_full', 'pdf', '30'),
+                  ),
+                  _GeneralReportCard(
+                    icon: Icons.map_rounded,
+                    label: 'أداء المحافظات',
+                    subtitle: 'الحصبة حسب المحافظة',
+                    color: const Color(0xFF6D4C41),
+                    onTap: () => widget.onGenerate?.call(
+                        'measles_gov', 'pdf', '30'),
+                  ),
+                  _GeneralReportCard(
+                    icon: Icons.calendar_month_rounded,
+                    label: 'أيام الزيارة',
+                    subtitle: 'توزيع أيام الإشراف',
+                    color: const Color(0xFF3949AB),
+                    onTap: () => widget.onGenerate?.call(
+                        'measles_day', 'pdf', '30'),
+                  ),
                 ]),
               ),
             ),

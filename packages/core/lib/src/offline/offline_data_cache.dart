@@ -352,6 +352,14 @@ class OfflineDataCache {
     await _saveToCache(key, data);
   }
 
+  /// Public: Save a map to both memory and persistent cache.
+  /// Used to persist campaign visibility so hidden activities stay hidden
+  /// offline too (previously the visibility map was in-memory only and
+  /// defaulted to "all visible" offline → hidden activities reappeared).
+  Future<void> putMap(String key, Map<String, dynamic> data) async {
+    await _saveToCache(key, data);
+  }
+
   /// Get from memory cache if not expired
   dynamic _getFromMemory<T>(String key, Duration maxAge) {
     final entry = _memoryCache[key];

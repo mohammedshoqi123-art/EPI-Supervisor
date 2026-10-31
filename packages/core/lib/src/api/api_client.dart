@@ -41,6 +41,17 @@ class ApiClient {
     return _client!;
   }
 
+  /// Current authenticated user id (null if signed out or Supabase not ready).
+  /// Used for client-side row scoping (e.g. notifications) as defense-in-depth
+  /// alongside server-side RLS.
+  String? get currentUserId {
+    try {
+      return _safeClient.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ===== Generic CRUD operations with RLS =====
 
   /// Default safety limit — Supabase REST API returns max 1000 rows by default

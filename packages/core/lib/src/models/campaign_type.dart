@@ -14,7 +14,8 @@ enum CampaignType {
   static CampaignType fromString(String value) {
     return CampaignType.values.firstWhere(
       (c) => c.value == value,
-      orElse: () => CampaignType.polioCampaign,
+      // ═══ FIX: default to measles campaign — the system's current focus ═══
+      orElse: () => CampaignType.measlesCampaign,
     );
   }
 

@@ -328,7 +328,9 @@ final healthFacilitiesProvider =
 class CampaignNotifier extends StateNotifier<CampaignType> {
   final Ref _ref;
 
-  CampaignNotifier(this._ref) : super(CampaignType.polioCampaign) {
+  // ═══ FIX: Default campaign = measles (حملة الحصبة) — the system's current
+  // focus online AND offline. Previously defaulted to polio_campaign. ═══
+  CampaignNotifier(this._ref) : super(CampaignType.measlesCampaign) {
     _load();
   }
 
@@ -341,29 +343,43 @@ class CampaignNotifier extends StateNotifier<CampaignType> {
         return {'campaign': result};
       }, maxAge: const Duration(days: 30));
       state = CampaignType.fromString(
-        cached['campaign'] as String? ?? 'polio_campaign',
+        cached['campaign'] as String? ?? 'measles_campaign',
       );
     } catch (_) {
-      // Default to polio campaign if loading fails
+      // Default to measles campaign if loading fails
     }
 
     // ═══ Load visibility in background (non-blocking) ═══
     _loadVisibilityInBackground();
   }
 
+  /// ═══ FIX: Persist campaign visibility so hidden activities stay hidden ═══
+  /// offline too. Previously the visibility map lived only in memory with a
+  /// `?? true` default → every hidden activity reappeared offline and caused
+  /// confusion. Now the last-known visibility map is cached in Hive and
+  /// re-applied on every app start (online or offline).
   Future<void> _loadVisibilityInBackground() async {
     try {
-      final api = _ref.read(apiClientProvider);
-      final result = await api.select('campaign_types', select: 'key, visible');
-      final visibilityMap = <String, bool>{};
-      for (final row in result) {
-        final key = row['key'] as String?;
-        final visible = row['visible'] as bool?;
-        if (key != null) visibilityMap[key] = visible ?? true;
-      }
+      final cache = await _ref.read(offlineDataCacheProvider.future);
+      // Cache-first: returns the cached map when present (even offline),
+      // otherwise fetches from Supabase and stores it.
+      final visibility = await cache.getMap('campaign_visibility', () async {
+        final api = _ref.read(apiClientProvider);
+        final result = await api.select('campaign_types', select: 'key, visible');
+        final map = <String, dynamic>{};
+        for (final row in result) {
+          final key = row['key'] as String?;
+          final visible = row['visible'] as bool?;
+          if (key != null) map[key] = visible ?? true;
+        }
+        return map;
+      }, maxAge: const Duration(hours: 1));
+      final visibilityMap = visibility.map((k, v) => MapEntry(k, v == true));
       await CampaignType.loadVisibility(visibilityMap);
     } catch (_) {
-      // Silently fail — default to all visible
+      // Offline with no cached map: keep the last-known map (or all visible
+      // on a truly fresh install — impossible post-login since login needs
+      // network).
     }
   }
 
@@ -500,11 +516,27 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
     throw Exception('No forms cached — check connection');
   }
 
-  // Filter inactive only when online
-  if (ConnectivityUtils.isOnline) {
+  // ═══ FIX: Always filter inactive forms — online AND offline ═══
+  // Previously the is_active filter ran only when online, so forms that the
+  // admin deactivated kept reappearing offline from stale cache and caused
+  // confusion. Cached rows carry is_active/allowed_roles, so we can enforce
+  // the same visibility rules offline.
+  // Also enforce allowed_roles per signed-in role (admin sees everything).
+  final role = ref.watch(authStateProvider).valueOrNull?.role;
+  final roleValue = role?.dbValue;
+  final filtered = allForms.where((f) {
+    if (f['is_active'] != true) return false;
+    if (roleValue == null || roleValue == 'admin') return true;
+    final allowed = f['allowed_roles'];
+    if (allowed is! List || allowed.isEmpty) return true;
+    return allowed.contains(roleValue);
+  }).toList();
+  if (filtered.isEmpty && allForms.isNotEmpty) {
+    // Do not leave the user with an empty form list offline — fall back to
+    // active-only (without role filter) to avoid a dead forms screen.
     return allForms.where((f) => f['is_active'] == true).toList();
   }
-  return allForms;
+  return filtered;
 });
 
 /// ═══ PERFORMANCE: AutoDispose family — cleans up unused filter instances ═══
@@ -647,17 +679,40 @@ class AnalyticsFilter {
   }
 }
 
+/// ═══ Role-based data scope (حسب الصلاحيات) ═══
+/// Returns the (governorateId, districtId) the signed-in user is allowed to
+/// see: admin/central → everything (null scope); governorate → own
+/// governorate; district → own district; data_entry → own governorate (the
+/// best available server-side scope — own-submission views are handled by
+/// fetch_submissions RLS/RPC).
+({String? governorateId, String? districtId}) roleDataScope(Ref ref) {
+  final auth = ref.watch(authStateProvider).valueOrNull;
+  final level = auth?.role?.hierarchyLevel ?? 0;
+  if (level >= 4) return (governorateId: null, districtId: null);
+  return (governorateId: auth?.governorateId, districtId: auth?.districtId);
+}
+
 final dashboardAnalyticsProvider =
     FutureProvider.family.autoDispose<Map<String, dynamic>, AnalyticsFilter>((
   ref,
   filter,
 ) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
+  // ═══ FIX: scope by signed-in role (حسب الصلاحيات) ═══
+  // admin/central → everything; governorate → own governorate;
+  // district → own district; data_entry → own governorate. Previously every
+  // user saw global stats.
+  final scope = roleDataScope(ref);
+  final effectiveGov = filter.governorateId ?? scope.governorateId;
+  final effectiveDist = filter.districtId ?? scope.districtId;
+  final cacheKey = scope.governorateId == null && scope.districtId == null
+      ? filter.cacheKey
+      : '${filter.cacheKey}_scope_${scope.governorateId ?? '-'}_${scope.districtId ?? '-'}';
   return cache.getMap(
-    filter.cacheKey,
+    cacheKey,
     () => ref.read(analyticsServiceProvider).getAnalytics(
-          governorateId: filter.governorateId,
-          districtId: filter.districtId,
+          governorateId: effectiveGov,
+          districtId: effectiveDist,
           formId: filter.formId,
           campaignType: filter.campaignType,
           campaignRound: filter.campaignRound,
@@ -684,14 +739,20 @@ final submissionTrendProvider = FutureProvider.family
     .autoDispose<List<Map<String, dynamic>>, ({int days, int? campaignRound})>(
   (ref, params) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
+  // ═══ FIX: role scope (حسب الصلاحيات) — trend follows user's data only ═══
+  final scope = roleDataScope(ref);
   final key = params.campaignRound != null
       ? 'submission_trend_${params.days}_round_${params.campaignRound}'
       : 'submission_trend_${params.days}';
+  final scopedKey = scope.governorateId == null && scope.districtId == null
+      ? key
+      : '${key}_scope_${scope.governorateId ?? '-'}_${scope.districtId ?? '-'}';
   return cache.getList(
-    key,
+    scopedKey,
     () => ref.read(analyticsServiceProvider).getSubmissionTrend(
           days: params.days,
           campaignRound: params.campaignRound,
+          governorateId: scope.governorateId,
         ),
     maxAge: const Duration(hours: 24), // ═══ Cache 7 days ═══
   );
@@ -700,12 +761,20 @@ final submissionTrendProvider = FutureProvider.family
 final governorateRankingProvider = FutureProvider.family
     .autoDispose<List<Map<String, dynamic>>, int?>((ref, campaignRound) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
+  // ═══ FIX: role scope (حسب الصلاحيات) — ranking follows user's data only ═══
+  final scope = roleDataScope(ref);
   final key = campaignRound != null
       ? 'governorate_ranking_round_$campaignRound'
       : 'governorate_ranking';
+  final scopedKey = scope.governorateId == null && scope.districtId == null
+      ? key
+      : '${key}_scope_${scope.governorateId ?? '-'}_${scope.districtId ?? '-'}';
   return cache.getList(
-    key,
-    () => ref.read(analyticsServiceProvider).getGovernorateRanking(campaignRound: campaignRound),
+    scopedKey,
+    () => ref.read(analyticsServiceProvider).getGovernorateRanking(
+          campaignRound: campaignRound,
+          governorateId: scope.governorateId,
+        ),
     maxAge: const Duration(hours: 24), // ═══ Cache 7 days ═══
   );
 });

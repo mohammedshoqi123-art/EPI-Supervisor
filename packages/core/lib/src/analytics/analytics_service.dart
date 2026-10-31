@@ -232,11 +232,15 @@ class AnalyticsService {
   /// Now: uses topGovernorates from get-analytics Edge Function (server-side aggregation)
   Future<List<Map<String, dynamic>>> getGovernorateRanking({
     int? campaignRound,
+    String? governorateId,
   }) async {
     try {
       // Use get-analytics Edge Function which already computes topGovernorates
+      // ═══ FIX: forward governorateId — role-scoped users (حسب الصلاحيات)
+      // must only see their own governorate's ranking ═══
       final result = await _api.callFunction(SupabaseConfig.fnGetAnalytics, {
         'campaign_round': campaignRound,
+        'governorate_id': governorateId,
       });
 
       // Extract topGovernorates from the response
@@ -265,6 +269,7 @@ class AnalyticsService {
     // ═══ FALLBACK: Old method (fetch raw data) — only if Edge Function fails ═══
     final filters = <String, dynamic>{};
     if (campaignRound != null) filters['campaign_round'] = campaignRound;
+    if (governorateId != null) filters['governorate_id'] = governorateId;
 
     final submissions = await _api.select(
       'form_submissions',

@@ -6,27 +6,38 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Age Calculation', () {
-    int calculateAgeMonths(DateTime birthDate) {
-      final now = DateTime.now();
+    // ═══ FIX: اختبارات حتمية بتواريخ ثابتة — السابق كان يستخدم DateTime.now()
+    // فينهار في نهاية الشهر (مثال: 31 أكتوبر − 6 أشهر = 1 مايو → 5 بدل 6) ═══
+    int calculateAgeMonths(DateTime birthDate, DateTime now) {
       return (now.year - birthDate.year) * 12 + (now.month - birthDate.month);
     }
 
     test('newborn is 0 months', () {
-      final age = calculateAgeMonths(DateTime.now());
-      expect(age, equals(0));
+      final now = DateTime(2026, 10, 31);
+      expect(calculateAgeMonths(now, now), equals(0));
     });
 
     test('1 year old is 12 months', () {
-      final birth = DateTime(DateTime.now().year - 1, DateTime.now().month, DateTime.now().day);
-      final age = calculateAgeMonths(birth);
-      expect(age, equals(12));
+      expect(
+        calculateAgeMonths(DateTime(2025, 10, 31), DateTime(2026, 10, 31)),
+        equals(12),
+      );
     });
 
     test('6 months old', () {
-      final now = DateTime.now();
-      final birth = DateTime(now.year, now.month - 6, now.day);
-      final age = calculateAgeMonths(birth);
-      expect(age, equals(6));
+      expect(
+        calculateAgeMonths(DateTime(2026, 4, 30), DateTime(2026, 10, 31)),
+        equals(6),
+      );
+    });
+
+    test('month-end overflow documented: Apr 31 normalizes to May 1', () {
+      // يوثق فخ التطبيع الذي جعل النسخة القديمة (DateTime.now-based) هشة
+      expect(DateTime(2026, 4, 31), DateTime(2026, 5, 1));
+      expect(
+        calculateAgeMonths(DateTime(2026, 4, 31), DateTime(2026, 10, 31)),
+        equals(5),
+      );
     });
   });
 

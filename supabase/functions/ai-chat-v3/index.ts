@@ -555,10 +555,27 @@ async function executeFunction(supa: any, name: string, args: Record<string, any
         }
         const { data: users } = await withTimeout(uq.limit(5000), 10_000) ?? {}
         if (!users?.length) return { error: 'لا يوجد مستلمين' }
-        const notifications = users.map((u: any) => ({ user_id: u.id, title, body, priority: priority || 'normal', is_read: false, created_at: new Date().toISOString() }))
-        const { error: err } = await withTimeout(supa.from('notifications').insert(notifications), 15_000)
-        if (err) return { error: `فشل: ${err.message}` }
-        return { success: true, sent_to: users.length, message: `✅ تم إرسال "${title}" إلى ${users.length} مستخدم` }
+        // ═══ FIX: notifications table has recipient_id (not user_id), no
+        // priority column, and type is NOT NULL — previous insert always
+        // failed with PGRST204. Priority now lives in data JSONB. ═══
+        const notifications = users.map((u: any) => ({
+          recipient_id: u.id,
+          title,
+          body,
+          type: 'info',
+          category: 'general',
+          data: priority && priority !== 'normal' ? { priority } : {},
+          is_read: false,
+        }))
+        // Insert in batches of 100 (5000 recipients × one row = oversized single insert)
+        let inserted = 0
+        for (let i = 0; i < notifications.length; i += 100) {
+          const batch = notifications.slice(i, i + 100)
+          const { error: batchErr } = await withTimeout(supa.from('notifications').insert(batch), 15_000)
+          if (batchErr) return { error: `فشل: ${batchErr.message}` }
+          inserted += batch.length
+        }
+        return { success: true, sent_to: inserted, message: `✅ تم إرسال "${title}" إلى ${inserted} مستخدم` }
       }
 
       case 'execute_sql': {

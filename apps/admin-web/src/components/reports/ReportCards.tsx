@@ -162,9 +162,9 @@ export function FormExportCard({
           {form.campaign_type && (
             <Badge variant="outline" className={cn(
               'text-[10px] shrink-0',
-              form.campaign_type === 'polio_campaign' ? 'text-blue-600 border-blue-200' : 'text-emerald-600 border-emerald-200'
+              form.campaign_type === 'polio_campaign' ? 'text-blue-600 border-blue-200' : form.campaign_type === 'measles_campaign' ? 'text-rose-600 border-rose-200' : 'text-emerald-600 border-emerald-200'
             )}>
-              {form.campaign_type === 'polio_campaign' ? '💉' : '🏥'}
+              {form.campaign_type === 'polio_campaign' ? '💉' : form.campaign_type === 'measles_campaign' ? '🔴' : '🏥'}
             </Badge>
           )}
         </div>

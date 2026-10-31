@@ -211,6 +211,8 @@ List<Widget> buildFormSections({
                   key: f['key'] as String,
                   label: f['label_ar'] as String? ?? '',
                   required: f['required'] as bool? ?? false,
+                  // ═══ الحقول المحسوبة تلقائياً (auto_calc) تُعرض للقراءة فقط ═══
+                  readOnly: f['auto_calc'] != null,
                 ))
             .toList(),
         formData: formData,

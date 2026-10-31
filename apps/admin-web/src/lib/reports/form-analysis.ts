@@ -105,7 +105,7 @@ export async function generateFormAnalysisReport(
     count: subs.filter(s => new Date(s.created_at).getHours() === i).length,
   }))
 
-  const campaignLabel = form.campaign_type === 'polio_campaign' ? '💉 حملة شلل الأطفال' : '🏥 النشاط الإيصالي التكاملي'
+  const campaignLabel = form.campaign_type === 'polio_campaign' ? '💉 حملة شلل الأطفال' : form.campaign_type === 'measles_campaign' ? '🔴 حملة الحصبة' : '🏥 النشاط الإيصالي التكاملي'
 
   const html = `
     <!DOCTYPE html>

@@ -634,11 +634,11 @@ export default function PublicDashboardPage() {
                       </td>
                       <td className="py-3 px-2 sm:px-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold ${
-                          f.campaign_type === 'polio_campaign' ? 'text-blue-600' : 'text-emerald-600'
+                          f.campaign_type === 'polio_campaign' ? 'text-blue-600' : f.campaign_type === 'measles_campaign' ? 'text-rose-600' : 'text-emerald-600'
                         }`} style={{
-                          background: f.campaign_type === 'polio_campaign' ? T.bluePale : T.emeraldPale,
+                          background: f.campaign_type === 'polio_campaign' ? T.bluePale : f.campaign_type === 'measles_campaign' ? T.rosePale : T.emeraldPale,
                         }}>
-                          {f.campaign_type === 'polio_campaign' ? '💉 شلل أطفال' : '🔄 إيصالي'}
+                          {f.campaign_type === 'polio_campaign' ? '💉 شلل أطفال' : f.campaign_type === 'measles_campaign' ? '🔴 حصبة' : '🔄 إيصالي'}
                         </span>
                       </td>
                       <td className="py-3 px-2 sm:px-3 text-center font-bold tabular-nums text-xs sm:text-sm" style={{ color: T.slate700 }}>

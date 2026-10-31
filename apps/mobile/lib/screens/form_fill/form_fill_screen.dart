@@ -447,6 +447,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
         }
       }
     }
+
+    // ═══ إعادة حساب الحقول المحسوبة بعد الاستعادة (اتساق البيانات) ═══
+    _recomputeAutoCalcFields();
   }
 
   /// Auto-fill form fields from the authenticated user's profile.
@@ -907,6 +910,45 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
     }
   }
 
+  /// ═══ قيمة رقمية من أي نوع مخزّن (num أو نص) — 0 عند الغياب ═══
+  num _numOf(dynamic v) {
+    if (v is num) return v;
+    return num.tryParse('${v ?? ''}') ?? 0;
+  }
+
+  /// ═══ الحقول المحسوبة تلقائياً (auto_calc في السكيما) ═══
+  /// مثال: اجمالي الأطفال غير المطعمين = الإجمالي − (6-11 شهر) − (12-59 شهر)
+  /// تُعاد الحسابية عند كل تغيير، وعند استعادة المسودة، وقبل الحفظ والإرسال.
+  void _recomputeAutoCalcFields() {
+    for (final field in _allFields) {
+      final calc = field['auto_calc'];
+      if (calc is! Map) continue;
+      final key = field['key'] as String?;
+      final from = calc['from'] as String?;
+      if (key == null || from == null) continue;
+
+      num value = _numOf(_formData[from]);
+      final subtract = calc['subtract'];
+      if (subtract is List) {
+        for (final sk in subtract) {
+          value -= _numOf(_formData['$sk']);
+        }
+      }
+      final computed = value.toInt();
+
+      final current = _formData[key];
+      final currentNum = current is num ? current : num.tryParse('${current ?? ''}');
+      if (currentNum == null || currentNum.toInt() != computed) {
+        _formData[key] = computed;
+      }
+      // حدّث مربع العرض إن وُجد (الشبكة تبني المتحكم مرة واحدة فقط)
+      final controller = _textControllers[key];
+      if (controller != null && controller.text != '$computed') {
+        controller.text = '$computed';
+      }
+    }
+  }
+
   /// ═══ Rate limiting: prevent double-submit ═══
   DateTime? _lastSubmitTime;
   static const _submitDebounce = Duration(seconds: 2);
@@ -921,6 +963,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
     _lastSubmitTime = now;
 
     _syncControllersToFormData();
+    // ═══ إعادة حساب الحقول المحسوبة قبل التحقق والإرسال ═══
+    _recomputeAutoCalcFields();
 
     final formState = _formKey.currentState;
     if (formState == null) {
@@ -982,6 +1026,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
               (_formData[key] as String?)?.isEmpty == true)
             missingFields.add(label);
           break;
+        case 'number':
+          // ═══ FIX: حقول الأعداد المطلوبة في الشبكة المدمجة لم تكن تُفحص إطلاقاً ═══
+          if (_formData[key] == null) missingFields.add(label);
+          break;
         case 'gps':
           if (_gpsLat == null) missingFields.add(label);
           break;
@@ -999,6 +1047,27 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
     if (missingFields.isNotEmpty) {
       context.showWarning('الحقول التالية مطلوبة: ${missingFields.join("، ")}');
       return;
+    }
+
+    // ═══ قاعدة تحقق: مجموع حقول لا يتجاوز قيمة الحقل الإجمالي ═══
+    // مثال: المطعمين (6-11 + 12-59 شهر) ≤ إجمالي الأطفال في المنزل
+    for (final field in _allFields) {
+      final maxSum = field['max_sum_of'];
+      if (maxSum is! List || maxSum.isEmpty) continue;
+      if (!isFieldConditionMet(field, _formData)) continue;
+      if (!isFieldVisibleForRole(field, _userRoleName)) continue;
+      final total = _numOf(_formData[field['key']]);
+      num sum = 0;
+      for (final k in maxSum) {
+        sum += _numOf(_formData['$k']);
+      }
+      if (sum > total) {
+        context.showWarning(
+          (field['max_sum_message_ar'] as String?) ??
+              'المجموع المدخل يتجاوز القيمة الإجمالية المسموحة',
+        );
+        return;
+      }
     }
 
     final requiresGps = _formSchema?['requires_gps'] == true;
@@ -1430,6 +1499,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
 
     // ═══ PERF: _syncControllersToFormData ═══
     _syncControllersToFormData();
+    // ═══ إعادة حساب الحقول المحسوبة قبل الحفظ ═══
+    _recomputeAutoCalcFields();
 
     // ═══ FIX 2.2: Retry logic — 3 attempts with exponential backoff ═══
     for (int attempt = 0; attempt < 3; attempt++) {
@@ -1481,6 +1552,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   }
 
   void _markChanged() {
+    // ═══ إعادة حساب الحقول المحسوبة فوراً عند أي تغيير (تحديث حي للعرض) ═══
+    _recomputeAutoCalcFields();
     setState(() {
       _hasUnsavedChanges = true;
       _saveVersion++;

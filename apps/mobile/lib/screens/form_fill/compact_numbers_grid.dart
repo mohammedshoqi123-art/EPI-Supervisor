@@ -87,14 +87,17 @@ class CompactNumbersGrid extends StatelessWidget {
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           textAlign: TextAlign.center,
+          // ═══ حقل محسوب تلقائياً (auto_calc) — للعرض فقط ═══
+          readOnly: item.readOnly,
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
           decoration: InputDecoration(
             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            filled: true, fillColor: Colors.white,
+            filled: true,
+            fillColor: item.readOnly ? cs.surfaceContainerHighest.withValues(alpha: 0.5) : Colors.white,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: cs.outline.withValues(alpha: 0.2))),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.primaryColor, width: 2)),
           ),
-          onChanged: (v) { onChanged(item.key, num.tryParse(v) ?? 0); markChanged(); },
+          onChanged: item.readOnly ? null : (v) { onChanged(item.key, num.tryParse(v) ?? 0); markChanged(); },
         )),
       ]),
     );
@@ -137,5 +140,7 @@ class NumberItem {
   final String key;
   final String label;
   final bool required;
-  const NumberItem({required this.key, required this.label, this.required = false});
+  /// ═══ حقل محسوب تلقائياً من حقول أخرى (auto_calc في السكيما) — للقراءة فقط ═══
+  final bool readOnly;
+  const NumberItem({required this.key, required this.label, this.required = false, this.readOnly = false});
 }

@@ -157,7 +157,7 @@ export async function generateCentralReport(options?: {
           return [
             `${i+1}`,
             escapeHtml(f.title_ar),
-            f.campaign_type === 'polio_campaign' ? '💉 شلل أطفال' : '🏥 إيصالي تكاملي',
+            f.campaign_type === 'polio_campaign' ? '💉 شلل أطفال' : f.campaign_type === 'measles_campaign' ? '🔴 حصبة' : '🏥 إيصالي تكاملي',
             `<span class="num">${formSubs.length}</span>`,
             `<span class="num">${formSubs.length > 0 ? Math.round((formSubmitted/formSubs.length)*100) : 0}%</span>`,
           ]

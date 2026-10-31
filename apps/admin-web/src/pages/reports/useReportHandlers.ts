@@ -206,7 +206,7 @@ export function useReportHandlers() {
       status: s.status === 'submitted' ? 'مرسلة' : 'مسودة',
       submitted_by: s.profiles?.full_name || '',
       governorate: s.governorates?.name_ar || '', district: s.districts?.name_ar || '',
-      campaign: s.forms?.campaign_type === 'polio_campaign' ? 'شلل أطفال' : 'إيصالي',
+      campaign: s.forms?.campaign_type === 'polio_campaign' ? 'شلل أطفال' : s.forms?.campaign_type === 'measles_campaign' ? 'حصبة' : 'إيصالي',
       date: new Date(s.created_at).toLocaleDateString('ar-SA'),
     }))
     const ok = exportSubmissionsProExcel(rows)

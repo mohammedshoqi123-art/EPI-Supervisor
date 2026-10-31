@@ -913,7 +913,7 @@ export default function ScheduledReportsPage() {
                           </Badge>
                           {report.campaign_type && report.campaign_type !== 'all' && (
                             <Badge variant="outline" className="text-[9px] px-1.5 py-0">
-                              {report.campaign_type === 'polio_campaign' ? '💉 شلل' : '🏥 إيصالي'}
+                              {report.campaign_type === 'polio_campaign' ? '💉 شلل' : report.campaign_type === 'measles_campaign' ? '🔴 حصبة' : '🏥 إيصالي'}
                             </Badge>
                           )}
                           {report.campaign_round && report.campaign_round > 0 && (

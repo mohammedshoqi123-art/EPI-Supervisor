@@ -492,6 +492,26 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
             final now = TimeOfDay.now();
             _formData[key] = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
             continue;
+          case 'current_datetime':
+            // ═══ التاريخ + الوقت معاً — استمارة الإشراف (وقت الزيارة) ═══
+            final nowDt = DateTime.now();
+            _formData[key] =
+                '${nowDt.year.toString().padLeft(4, '0')}-${nowDt.month.toString().padLeft(2, '0')}-${nowDt.day.toString().padLeft(2, '0')}'
+                ' ${nowDt.hour.toString().padLeft(2, '0')}:${nowDt.minute.toString().padLeft(2, '0')}';
+            continue;
+          case 'profile.role_label':
+            // ═══ صفة المشرف — تعبئة تلقائية حسب صلاحية المستخدم ═══
+            final role = authState.role;
+            if (role == UserRole.central || role == UserRole.admin) {
+              _formData[key] = 'مشرف مركزي';
+            } else if (role == UserRole.governorate) {
+              _formData[key] = 'مشرف محافظة';
+            } else if (role == UserRole.district) {
+              _formData[key] = 'مشرف مديرية';
+            } else if (role == UserRole.data_entry) {
+              _formData[key] = 'مشرف فرق';
+            }
+            continue;
           case 'campaign_round_name':
             // Will be filled by campaign round context
             _formData[key] = _getCampaignRoundName();
@@ -726,7 +746,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   /// ⚠️ PERF: Build cache once — avoids O(n) allocation per build
   void _buildFieldsCache() {
     if (_sections.isNotEmpty) {
-      _allFieldsCache = _sections
+      // ═══ FIX: حقول الأقسام المخفية حسب الصلاحية لا تدخل ذاكرة الحقول إطلاقاً ═══
+      _allFieldsCache = _visibleSections
           .expand((s) => (s['fields'] as List? ?? []))
           .cast<Map<String, dynamic>>()
           .toList();
@@ -743,6 +764,22 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   }
 
   List<Map<String, dynamic>> get _allFields => _allFieldsCache;
+
+  /// ═══ اسم صلاحية المستخدم الحالي (admin/central/governorate/district/data_entry) ═══
+  String? get _userRoleName =>
+      ref.read(authStateProvider).valueOrNull?.role?.name;
+
+  /// ═══ الأقسام المرئية لهذا المستخدم — القسم المخفي بحسب الصلاحية
+  /// لا يُعرض ولا يُحتسب في التقدم ولا يُطلب في التحقق ═══
+  List<Map<String, dynamic>> get _visibleSections {
+    final role = _userRoleName;
+    return _sections
+        .where((s) =>
+            s is Map<String, dynamic> &&
+            isSectionVisibleForRole(s, role))
+        .cast<Map<String, dynamic>>()
+        .toList();
+  }
 
   Future<void> _getLocation() async {
     setState(() => _isGettingLocation = true);
@@ -919,6 +956,12 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
       final isRequired = field['required'] == true;
       if (!isRequired) continue;
 
+      // ═══ FIX: تجاهل الحقول المخفية بشرط الإظهار (show_if/showIf) —
+      // سابقاً: حقل مطلوب مخفي شرطياً كان يحظر الإرسال ═══
+      if (!isFieldConditionMet(field, _formData)) continue;
+      // ═══ حقول/أقسام مخفية حسب الصلاحية لا تدخل في التحقق ═══
+      if (!isFieldVisibleForRole(field, _userRoleName)) continue;
+
       switch (type) {
         case 'select':
         case 'health_facility':
@@ -934,6 +977,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
           break;
         case 'date':
         case 'time':
+        case 'datetime':
           if (_formData[key] == null ||
               (_formData[key] as String?)?.isEmpty == true)
             missingFields.add(label);
@@ -1492,10 +1536,11 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   /// Build review sections for the review bottom sheet
   List<SectionReview> _buildReviewSections() {
     final reviews = <SectionReview>[];
-    if (_sections.isEmpty) return reviews;
+    final visibleSections = _visibleSections;
+    if (visibleSections.isEmpty) return reviews;
 
-    for (int i = 0; i < _sections.length; i++) {
-      final sec = _sections[i] as Map<String, dynamic>;
+    for (int i = 0; i < visibleSections.length; i++) {
+      final sec = visibleSections[i];
       final title = sec['title_ar'] as String? ?? '';
       final fields = (sec['fields'] as List?) ?? [];
 
@@ -1508,19 +1553,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
         final type = field['type'] as String? ?? 'text';
         final required = field['required'] as bool? ?? false;
 
-        final showIf = field['showIf'];
-        if (showIf != null) {
-          final condField = showIf['field'] as String?;
-          final condValue = showIf['value'];
-          if (condField != null) {
-            final current = _formData[condField];
-            bool matches = current == condValue;
-            if (!matches && current is bool && condValue is String) {
-              matches = (current && condValue == 'yes') || (!current && condValue == 'no');
-            }
-            if (!matches) continue;
-          }
-        }
+        // ═══ FIX: دعم show_if + showIf + شرط 'in' — عبر المحرك المشترك ═══
+        if (!isFieldConditionMet(field, _formData)) continue;
+        if (!isFieldVisibleForRole(field, _userRoleName)) continue;
 
         fieldCount++;
         final val = key != null ? _formData[key] : null;
@@ -1548,11 +1583,14 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
 
   ({int total, int yes}) get _yesNoStats {
     int total = 0, yes = 0;
-    for (final sec in _sections) {
+    for (final sec in _visibleSections) {
       final fields = (sec['fields'] as List?) ?? [];
       for (final f in fields) {
         final field = f as Map<String, dynamic>;
         if (field['type'] == 'yesno') {
+          // ═══ حقول مخفية شرطياً أو حسب الصلاحية لا تُحتسب ═══
+          if (!isFieldConditionMet(field, _formData)) continue;
+          if (!isFieldVisibleForRole(field, _userRoleName)) continue;
           total++;
           if (_formData[field['key']] == true) yes++;
         }
@@ -1566,7 +1604,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   /// تجميع الأقسام في صفحات — كل صفحة تحتوي عدة أقسام صغيرة
   void _buildSectionPages() {
     _sectionPages = [];
-    if (_sections.isEmpty) return;
+    // ═══ FIX: الأقسام المخفية حسب الصلاحية لا تدخل في صفحات التنقل ═══
+    final visibleSections = _visibleSections;
+    if (visibleSections.isEmpty) return;
 
     List<int> currentPage = [];
     int currentFieldCount = 0;
@@ -1574,8 +1614,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
     // الهدف: 12 قسم → 6 صفحات
     const maxFieldsPerPage = 15;
 
-    for (int i = 0; i < _sections.length; i++) {
-      final section = _sections[i] as Map<String, dynamic>;
+    for (int i = 0; i < visibleSections.length; i++) {
+      final section = visibleSections[i];
       final fields = (section['fields'] as List?) ?? [];
       final fieldCount = fields.length;
 
@@ -1630,7 +1670,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
 
   /// بناء بيانات التنقل للصفحات
   List<SectionNavItem> _buildSectionNavItems() {
-    if (_sections.isEmpty || _sectionPages.isEmpty) return [];
+    final visibleSections = _visibleSections;
+    if (visibleSections.isEmpty || _sectionPages.isEmpty) return [];
 
     return _sectionPages.asMap().entries.map((entry) {
       final pageIndex = entry.key;
@@ -1642,7 +1683,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
       String title = '';
 
       for (final sectionIdx in sectionIndices) {
-        final section = _sections[sectionIdx] as Map<String, dynamic>;
+        final section = visibleSections[sectionIdx];
         final sectionTitle = section['title_ar'] as String? ?? '';
         final fields = (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
@@ -1658,21 +1699,9 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
           final type = field['type'] as String? ?? 'text';
           final isRequired = field['required'] == true;
 
-          // تحقق من شرط الإظهار
-          final showIf = field['showIf'];
-          if (showIf != null) {
-            final condField = showIf['field'] as String?;
-            final condValue = showIf['value'];
-            if (condField != null) {
-              final current = _formData[condField];
-              bool matches = current == condValue;
-              if (!matches && current is bool && condValue is String) {
-                matches = (current && condValue == 'yes') || (!current && condValue == 'no');
-              }
-              if (!matches) continue;
-            }
-          }
-
+          // ═══ FIX: دعم show_if + showIf + شرط 'in' — عبر المحرك المشترك ═══
+          if (!isFieldConditionMet(field, _formData)) continue;
+          if (!isFieldVisibleForRole(field, _userRoleName)) continue;
           totalFields++;
           if (isRequired) requiredFields++;
 
@@ -1725,6 +1754,10 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
       final key = field['key'] as String? ?? '';
       final type = field['type'] as String? ?? 'text';
       final isRequired = field['required'] == true;
+
+      // ═══ حقول مخفية شرطياً أو حسب الصلاحية لا تُحتسب في التقدم الكلي ═══
+      if (!isFieldConditionMet(field, _formData)) continue;
+      if (!isFieldVisibleForRole(field, _userRoleName)) continue;
 
       totalFields++;
       if (isRequired) requiredFields++;
@@ -1910,7 +1943,8 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
   /// بناء صفحة تحتوي عدة أقسام
   Widget _buildPageView(int pageIndex) {
     final sectionIndices = _sectionPages[pageIndex];
-    final sectionsToShow = sectionIndices.map((i) => _sections[i]).toList();
+    // ═══ FIX: الفهرسة الآن على الأقسام المرئية حسب الصلاحية ═══
+    final sectionsToShow = sectionIndices.map((i) => _visibleSections[i]).toList();
 
     // بناء widgets لجميع الأقسام في الصفحة
     final allWidgets = buildFormSections(
@@ -1926,6 +1960,7 @@ class _FormFillScreenState extends ConsumerState<FormFillScreen> with WidgetsBin
       runSetState: (fn) => setState(fn),
       formSchema: _formSchema,
       photosByField: _photosByField,
+      userRole: _userRoleName,
     );
 
     return ListView(

@@ -8,6 +8,81 @@ import 'photo_picker_field.dart';
 import 'compact_yesno_table.dart';
 import 'compact_numbers_grid.dart';
 
+// ═══════════════════════════════════════════════════════════════════
+// ═══ محرك الشروط المشترك — يدعم showIf و show_if (snake_case) ═══
+// ═══════════════════════════════════════════════════════════════════
+
+/// Reads the conditional-display rule from a field, accepting both
+/// camelCase ('showIf') and snake_case ('show_if') keys.
+Map<String, dynamic>? fieldCondition(Map<String, dynamic> field) {
+  final v = field['showIf'] ?? field['show_if'];
+  return v is Map<String, dynamic> ? v : null;
+}
+
+/// Whether a conditional field should currently be visible.
+/// Supports: equals (default), 'in' (value is a list), and yes/no
+/// normalization between bool and 'yes'/'no' strings.
+bool isFieldConditionMet(Map<String, dynamic> field, Map<String, dynamic> formData) {
+  final showIf = fieldCondition(field);
+  if (showIf == null) return true;
+  final condField = showIf['field'] as String?;
+  if (condField == null) return true;
+  final condValue = showIf['value'];
+  final current = formData[condField];
+
+  bool eq(dynamic a, dynamic b) {
+    if (a == b) return true;
+    if (a is bool && b is String) {
+      return (a && b == 'yes') || (!a && b == 'no');
+    }
+    if (a is String && b is bool) {
+      return (a == 'yes' && b) || (a == 'no' && !b);
+    }
+    return false;
+  }
+
+  // 'in' operator or a list value → membership check
+  if (condValue is List) {
+    for (final v in condValue) {
+      if (eq(current, v)) return true;
+    }
+    return false;
+  }
+  return eq(current, condValue);
+}
+
+/// Role-based section visibility.
+/// - visible_roles: show ONLY for these roles (empty/absent = everyone)
+/// - hidden_roles: hide for these roles
+/// If the role is not loaded yet (null) we fail-open so no section
+/// disappears due to a transient auth-state delay.
+bool isSectionVisibleForRole(Map<String, dynamic> section, String? userRole) {
+  final visibleRoles = (section['visible_roles'] as List?)?.cast<String>();
+  final hiddenRoles = (section['hidden_roles'] as List?)?.cast<String>();
+  if (hiddenRoles != null && hiddenRoles.isNotEmpty &&
+      userRole != null && hiddenRoles.contains(userRole)) {
+    return false;
+  }
+  if (visibleRoles != null && visibleRoles.isNotEmpty && userRole != null) {
+    if (!visibleRoles.contains(userRole)) return false;
+  }
+  return true;
+}
+
+/// Role-based field visibility (optional per-field restriction).
+bool isFieldVisibleForRole(Map<String, dynamic> field, String? userRole) {
+  final visibleRoles = (field['visible_roles'] as List?)?.cast<String>();
+  final hiddenRoles = (field['hidden_roles'] as List?)?.cast<String>();
+  if (visibleRoles != null && visibleRoles.isNotEmpty) {
+    if (userRole == null || !visibleRoles.contains(userRole)) return false;
+  }
+  if (hiddenRoles != null && hiddenRoles.isNotEmpty &&
+      userRole != null && hiddenRoles.contains(userRole)) {
+    return false;
+  }
+  return true;
+}
+
 /// Builds section headers for grouped form fields.
 List<Widget> buildFormSections({
   required List<dynamic> sections,
@@ -22,6 +97,7 @@ List<Widget> buildFormSections({
   required void Function(VoidCallback) runSetState,
   required Map<String, dynamic>? formSchema,
   required Map<String, List<XFile>> photosByField,
+  String? userRole,
 }) {
   final widgets = <Widget>[];
 
@@ -33,15 +109,19 @@ List<Widget> buildFormSections({
   for (int secIdx = 0; secIdx < sortedSections.length; secIdx++) {
     final section = sortedSections[secIdx];
     final title = section['title_ar'] as String? ?? '';
+
+    // ═══ إخفاء القسم حسب صلاحية المستخدم (visible_roles / hidden_roles) ═══
+    if (!isSectionVisibleForRole(section, userRole)) continue;
+
     final fields =
         (section['fields'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-    // ═══ تجميع الحقول المتشابهة في مجموعات مع دعم showIf ═══
+    // ═══ تجميع الحقول المتشابهة في مجموعات مع دعم showIf/show_if ═══
     // المجموعة 1: yesno fields → CompactYesNoTable
     // المجموعة 2: number fields → CompactNumbersGrid
     // المجموعة 3: باقي الحقول → عرض فردي
 
-    // فصل الحقول إلى مجموعات مع تطبيق showIf
+    // فصل الحقول إلى مجموعات مع تطبيق الشروط
     final yesNoFields = <Map<String, dynamic>>[];
     final numberFields = <Map<String, dynamic>>[];
     final otherFields = <Map<String, dynamic>>[];
@@ -49,27 +129,9 @@ List<Widget> buildFormSections({
     for (final field in fields) {
       final type = field['type'] as String? ?? 'text';
 
-      // ═══ دعم الإظهار الشرطي (showIf) ═══
-      final showIf = field['showIf'] as Map<String, dynamic>?;
-      if (showIf != null) {
-        final condField = showIf['field'] as String?;
-        final condValue = showIf['value'];
-        if (condField != null) {
-          final currentValue = formData[condField];
-          // ═══ FIX: yesno fields store bool (true/false) but showIf uses "yes"/"no" ═══
-          // Normalize both sides for comparison
-          bool matches = currentValue == condValue;
-          if (!matches && currentValue is bool && condValue is String) {
-            matches = (currentValue && condValue == 'yes') ||
-                      (!currentValue && condValue == 'no');
-          }
-          if (!matches && currentValue is String && condValue is bool) {
-            matches = (currentValue == 'yes' && condValue) ||
-                      (currentValue == 'no' && !condValue);
-          }
-          if (!matches) continue;
-        }
-      }
+      // ═══ الإظهار الشرطي (showIf/show_if) + صلاحيات الحقل ═══
+      if (!isFieldConditionMet(field, formData)) continue;
+      if (!isFieldVisibleForRole(field, userRole)) continue;
 
       if (type == 'yesno') {
         yesNoFields.add(field);
@@ -160,21 +222,11 @@ List<Widget> buildFormSections({
       ));
     }
 
-    // عرض باقي الحقول فردياً مع دعم showIf
+    // عرض باقي الحقول فردياً مع دعم showIf/show_if
     for (final field in otherFields) {
-      // ═══ دعم الإظهار الشرطي (showIf) ═══
-      final showIf = field['showIf'] as Map<String, dynamic>?;
-      if (showIf != null) {
-        final condField = showIf['field'] as String?;
-        final condValue = showIf['value'];
-        if (condField != null) {
-          final currentValue = formData[condField];
-          // إذا القيمة لا تطابق الشرط، لا تعرض الحقل
-          if (currentValue != condValue) {
-            continue; // تخطي هذا الحقل
-          }
-        }
-      }
+      // ═══ الإظهار الشرطي + صلاحيات الحقل ═══
+      if (!isFieldConditionMet(field, formData)) continue;
+      if (!isFieldVisibleForRole(field, userRole)) continue;
 
       widgets.add(
         buildFormField(
@@ -683,6 +735,8 @@ Widget _buildFieldInput({
         value: formData[key],
         onChanged: (v) => runSetState(() {
           formData[key] = v;
+          // ═══ FIX: تغيير المديرية يلغي المرفق الصحي القديم (من مديرية أخرى) ═══
+          formData.remove('health_facility');
           markChanged();
         }),
         isRequired: isRequired,
@@ -691,12 +745,61 @@ Widget _buildFieldInput({
     case 'health_facility':
       return HealthFacilityDropdown(
         districtId: formData['district_id'] as String?,
-        value: formData[key],
+        value: formData[key] as String?,
         onChanged: (v) => runSetState(() {
           formData[key] = v;
           markChanged();
         }),
         isRequired: isRequired,
+        allowCustom: field['allow_custom'] == true,
+      );
+
+    case 'datetime':
+      // ═══ تاريخ + وقت معاً — يُعبأ تلقائياً بـ current_datetime ═══
+      final dtValue = formData[key] as String?;
+      return Builder(
+        builder: (context) => InkWell(
+          onTap: () async {
+            final date = await showDatePicker(
+              context: context,
+              initialDate: DateTime.now(),
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2030),
+              locale: const Locale('ar'),
+            );
+            if (date == null || !context.mounted) return;
+            final time = await showTimePicker(
+              context: context,
+              initialTime: TimeOfDay.now(),
+            );
+            if (time == null) return;
+            runSetState(() {
+              formData[key] =
+                  '${date.toIso8601String().split('T')[0]} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+              markChanged();
+            });
+          },
+          child: InputDecorator(
+            decoration: InputDecoration(
+              hintText: hint ?? 'التاريخ والوقت',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+              suffixIcon: const Icon(Icons.event_available, size: 20),
+            ),
+            child: Text(
+              dtValue ?? hint ?? 'التاريخ والوقت',
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                color: dtValue != null ? Colors.black : Colors.grey,
+              ),
+            ),
+          ),
+        ),
       );
 
     case 'photo':

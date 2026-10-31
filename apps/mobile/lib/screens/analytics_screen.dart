@@ -1155,7 +1155,13 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
 
       final counts = <String, int>{};
       for (final s in subs) {
-        final gov = (s['governorate_name'] as String?) ?? 'غير محدد';
+        // lean:true returns the name nested as governorates{name_ar}; the RPC
+        // fallback may flatten it — handle both (same pattern as map screen).
+        final govName = (s['governorates']?['name_ar'] ??
+                s['governorate_name'] ??
+                '')
+            .toString();
+        final gov = govName.isEmpty ? 'غير محدد' : govName;
         counts[gov] = (counts[gov] ?? 0) + 1;
       }
 

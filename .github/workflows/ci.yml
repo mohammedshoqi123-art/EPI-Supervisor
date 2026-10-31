@@ -66,8 +66,9 @@ jobs:
       - name: Run tests with coverage
         working-directory: apps/mobile
         run: |
-          # Run unit + integration tests (widget tests require native plugins unavailable in CI)
-          flutter test --coverage test/unit/ test/integration/ 2>&1 || true
+          # Run unit tests (widget tests require native plugins unavailable in CI)
+          # FIX: test/integration/ لم يكن موجوداً أبداً — كان يفسد التغطية (2%) ويفشل العتبة
+          flutter test --coverage test/unit/ 2>&1 || true
           if [ -f coverage/lcov.info ]; then
             TOTAL=$(grep -c "^DA:" coverage/lcov.info 2>/dev/null || echo 0)
             HIT=$(grep "^DA:" coverage/lcov.info | grep -v ",0$" | wc -l 2>/dev/null || echo 0)

@@ -80983,35 +80983,38 @@ m=n.ga0().a9(0,$.hx(),t.o)
 s=7
 return A.h(m.avi("measles_campaign",!0,5000).cI(0,B.hs),$async$GC)
 case 7:l=a5
-if(J.cp(l)){e=n.c
-if(e!=null)e.N(t.q).f.aV(B.bF_)
+if(J.cp(l)){d=n.c
+if(d!=null)d.N(t.q).f.aV(B.bF_)
 s=1
-break}e=t.N
-d=t.S
-k=A.x(e,d)
-for(c=J.ap(l);c.t();){j=c.gF(c)
-b=A.a_(J.f(j,"governorate_name"))
-i=b==null?"\u063a\u064a\u0631 \u0645\u062d\u062f\u062f":b
-a=J.f(k,i)
+break}d=t.N
+c=t.S
+k=A.x(d,c)
+for(b=J.ap(l);b.t();){j=b.gF(b)
+a=J.f(j,"governorates")
+a=a==null?null:J.f(a,"name_ar")
+if(a==null)a=J.f(j,"governorate_name")
+i=J.aC(a==null?"":a)
+h=J.aj(i)===0?"\u063a\u064a\u0631 \u0645\u062d\u062f\u062f":i
+a=J.f(k,h)
 if(a==null)a=0
-J.aD(k,i,a+1)}a0=J.jF(k).cp(0,new A.bnv(),t.nf).aY(0)
+J.aD(k,h,a+1)}a0=J.jF(k).cp(0,new A.bnv(),t.nf).aY(0)
 B.h.ee(a0,new A.bnw())
-h=a0
-g=A.K(["submissions",A.K(["total",J.aj(l),"today",0,"byStatus",A.K(["submitted",J.aj(l)],e,d)],e,t.K)],e,t.z)
-e=n.c
-if(e==null){s=1
+g=a0
+f=A.K(["submissions",A.K(["total",J.aj(l),"today",0,"byStatus",A.K(["submitted",J.aj(l)],d,c)],d,t.K)],d,t.z)
+d=n.c
+if(d==null){s=1
 break}s=8
-return A.h(A.nV(g,null,null,e,new A.bnx(h),null,a3,null,null,"governorates"),$async$GC)
+return A.h(A.nV(f,null,null,d,new A.bnx(g),null,a3,null,null,"governorates"),$async$GC)
 case 8:p=2
 s=6
 break
 case 4:p=3
 a2=o
-f=A.O(a2)
-e=n.c
-if(e!=null){d=t.q
-e.N(d).f.qw()
-n.c.N(d).f.aV(A.cr(null,null,null,B.c8,null,B.J,null,A.w("\u0641\u0634\u0644 \u062a\u0648\u0644\u064a\u062f \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u062d\u0627\u0641\u0638\u0627\u062a: "+A.i(f),null,null,null,null,B.R,null,null,null),null,B.ac,null,null,null,null,null,null,null,null,null))}s=6
+e=A.O(a2)
+d=n.c
+if(d!=null){c=t.q
+d.N(c).f.qw()
+n.c.N(c).f.aV(A.cr(null,null,null,B.c8,null,B.J,null,A.w("\u0641\u0634\u0644 \u062a\u0648\u0644\u064a\u062f \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u062d\u0627\u0641\u0638\u0627\u062a: "+A.i(e),null,null,null,null,B.R,null,null,null),null,B.ac,null,null,null,null,null,null,null,null,null))}s=6
 break
 case 3:s=2
 break

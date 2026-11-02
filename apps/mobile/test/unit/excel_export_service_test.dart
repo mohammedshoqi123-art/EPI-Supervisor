@@ -129,7 +129,7 @@ Map<String, dynamic> _restSubmission() => {
       'status': 'submitted',
       'data': {
         'team_name': 'فريق البيضاء',
-        'visit_done': false,
+        'q2': false,
       },
       'governorates': {'name_ar': 'البيضاء'},
       'districts': {'name_ar': 'الضليعة'},

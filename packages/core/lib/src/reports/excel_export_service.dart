@@ -277,7 +277,8 @@ class ExcelExportService {
         '${two(d.hour)}:${two(d.minute)}';
   }
 
-  static String? _cleanText(dynamic value) {
+  /// نص أو رقم جاهز للخلية — null للفراغ.
+  static dynamic _cleanText(dynamic value) {
     if (value == null) return null;
     if (value is num) return value;
     final s = value.toString().trim();
@@ -454,10 +455,12 @@ class ExcelExportService {
         if (defaultSheet != null) excel.delete(defaultSheet);
       } catch (_) {}
 
-      final bytes = excel.encode();
-      if (bytes == null) {
+      final encoded = excel.encode();
+      if (encoded == null) {
         return const ExcelExportResult(error: 'تعذّر ترميز ملف Excel');
       }
+      // نسخة excel 4.x قد تُعيد List<int> أو Uint8List — وحّد النوع
+      final bytes = Uint8List.fromList(encoded);
       return ExcelExportResult(
         bytes: bytes,
         rowCount: submissions.length,

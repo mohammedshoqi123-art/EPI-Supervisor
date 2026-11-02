@@ -59,6 +59,12 @@ jobs:
         working-directory: apps/mobile
         run: dart format . || true
 
+      - name: Analyze core package
+        # FIX: flutter analyze في apps/mobile لا يغطي سياق packages/core —
+        # أخطاء الأنواع في core كانت تصل إلى مرحلة البناء فقط. الآن تُكتشف مبكراً.
+        working-directory: packages/core
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
       - name: Analyze code
         working-directory: apps/mobile
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -68,7 +74,9 @@ jobs:
         run: |
           # Run unit tests (widget tests require native plugins unavailable in CI)
           # FIX: test/integration/ لم يكن موجوداً أبداً — كان يفسد التغطية (2%) ويفشل العتبة
-          flutter test --coverage test/unit/ 2>&1 || true
+          # FIX: || true كان يبتلع فشل الاختبارات نفسها — الآن يُسجَّل ويُفشل الـjob بعد التغطية
+          TEST_FAILED=0
+          flutter test --coverage test/unit/ 2>&1 || TEST_FAILED=1
           if [ -f coverage/lcov.info ]; then
             TOTAL=$(grep -c "^DA:" coverage/lcov.info 2>/dev/null || echo 0)
             HIT=$(grep "^DA:" coverage/lcov.info | grep -v ",0$" | wc -l 2>/dev/null || echo 0)
@@ -82,6 +90,10 @@ jobs:
                 echo "::warning::Coverage ${PCT}% — coverage instrumentation reports partial data (known pipeline issue), tests themselves: 594+ passing"
               fi
             fi
+          fi
+          if [ "$TEST_FAILED" = "1" ]; then
+            echo "❌ Unit tests FAILED — failing the job (was silently swallowed by || true before)"
+            exit 1
           fi
 
   # ─── Admin Web Build & Test ──────────────────────────────

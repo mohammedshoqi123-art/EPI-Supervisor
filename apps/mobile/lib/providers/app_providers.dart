@@ -725,57 +725,21 @@ final dashboardAnalyticsProvider =
   final cacheKey = scope.governorateId == null && scope.districtId == null
       ? filter.cacheKey
       : '${filter.cacheKey}_scope_${scope.governorateId ?? '-'}_${scope.districtId ?? '-'}';
-  try {
-    return await cache.getMap(
-      cacheKey,
-      () => ref.read(analyticsServiceProvider).getAnalytics(
-            governorateId: effectiveGov,
-            districtId: effectiveDist,
-            formId: filter.formId,
-            campaignType: filter.campaignType,
-            campaignRound: filter.campaignRound,
-            startDate: filter.startDate,
-            endDate: filter.endDate,
-          ),
-      maxAge: const Duration(hours: 24),
-    );
-  } catch (_) {
-    // ═══ OFFLINE FIX (2026-11): الصفحة الرئيسية لا تفشل أوفلاين ═══
-    // السبب: مفتاح الكاش يتغير مع النشاط/الجولة/النطاق — أي تغيير يعني
-    // مفتاحاً جديداً بلا بيانات مخزنة → استثناء → شاشة خطأ كاملة.
-    // الآن: نبحث عن آخر تحليلات مخزنة (أي مفتاح dashboard_analytics_)
-    // وإن لم يوجد إطلاقاً وأوفلاين نعيد هيكلاً فارغاً بدل الخطأ.
-    try {
-      final fallback = cache.findCachedMapByPrefix('dashboard_analytics');
-      if (fallback != null && fallback.isNotEmpty) {
-        debugPrint('[DashboardAnalytics] Using stale fallback cache for $cacheKey');
-        return fallback;
-      }
-    } catch (_) {}
-    if (!ConnectivityUtils.isOnline) {
-      return emptyAnalyticsMap();
-    }
-    rethrow;
-  }
+  return cache.getMap(
+    cacheKey,
+    () => ref.read(analyticsServiceProvider).getAnalytics(
+          governorateId: effectiveGov,
+          districtId: effectiveDist,
+          formId: filter.formId,
+          campaignType: filter.campaignType,
+          campaignRound: filter.campaignRound,
+          startDate: filter.startDate,
+          endDate: filter.endDate,
+        ),
+    maxAge:
+        const Duration(hours: 24), // ═══ Cache 7 days — sync button refreshes ═══
+  );
 });
-
-/// Empty analytics skeleton — renders the dashboard with zeros instead of
-/// an error screen when nothing was ever cached and we're offline.
-Map<String, dynamic> emptyAnalyticsMap() => {
-      'offline_no_data': true,
-      'submissions': {
-        'total': 0,
-        'today': 0,
-        'byStatus': <String, dynamic>{},
-        'byDay': <String, dynamic>{},
-      },
-      'shortages': {
-        'total': 0,
-        'resolved': 0,
-        'pending': 0,
-        'bySeverity': <String, dynamic>{},
-      },
-    };
 
 final shortagesProvider = FutureProvider.family
     .autoDispose<List<Map<String, dynamic>>, int?>((ref, campaignRound) async {

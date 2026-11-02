@@ -1254,32 +1254,10 @@ class _AnalyticsParams {
 final _formAnalyticsProvider = FutureProvider.family<
     Map<String, dynamic>, _AnalyticsParams>((ref, params) async {
   final db = ref.read(databaseServiceProvider);
-  // ═══ OFFLINE FIX (2026-11): cache-first — كان يستدعي RPC مباشرة فيفشل
-  // أوفلاين ("فشل تحميل التحليلات"). الآن: كاش أولاً ثم شبكة ثم كاش قديم. ═══
-  final cache = await ref.watch(offlineDataCacheProvider.future);
-  final cacheKey =
-      'form_analytics_${params.formId}_${params.campaignRound ?? 'all'}_all';
-  try {
-    final result = await cache.getMap(cacheKey, () async {
-      final r = await db.rpcSingle('get_form_analytics', params: {
-        'p_form_id': params.formId,
-        'p_campaign_round': params.campaignRound,
-        'p_governorate_id': null,
-      });
-      return Map<String, dynamic>.from(r ?? {});
-    }).timeout(const Duration(seconds: 35));
-    return result;
-  } catch (_) {
-    final stale = cache.getCachedMap(cacheKey);
-    if (stale != null && stale.isNotEmpty) return stale;
-    if (!ConnectivityUtils.isOnline) {
-      return <String, dynamic>{
-        'form_id': params.formId,
-        'analytics': <dynamic>[],
-        'total_submissions': 0,
-        'offline_empty': true,
-      };
-    }
-    rethrow;
-  }
+  final result = await db.rpcSingle('get_form_analytics', params: {
+    'p_form_id': params.formId,
+    'p_campaign_round': params.campaignRound,
+    'p_governorate_id': null,
+  });
+  return Map<String, dynamic>.from(result ?? {});
 });

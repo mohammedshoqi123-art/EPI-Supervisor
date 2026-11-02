@@ -710,32 +710,6 @@ class OfflineDataCache {
     return null;
   }
 
-  /// ═══ OFFLINE FIX (2026-11): Find cached MAP by key prefix ═══
-  /// Mirror of [findCachedListByPrefix] but for map-shaped data
-  /// (dashboard analytics, form analytics). Returns the most recently
-  /// cached non-empty map whose key starts with [prefix].
-  /// Used as last-resort fallback so screens never error offline just
-  /// because the exact campaign/round cache key is missing.
-  Map<String, dynamic>? findCachedMapByPrefix(String prefix) {
-    try {
-      Map<String, dynamic>? best;
-      DateTime? bestTime;
-      final allKeys = _offline.getCacheKeys();
-      for (final key in allKeys) {
-        if (!key.startsWith(prefix)) continue;
-        final cached = getCachedMap(key);
-        if (cached == null || cached.isEmpty) continue;
-        final ts = _offline.getCachedAt(key) ?? DateTime.fromMillisecondsSinceEpoch(0);
-        if (best == null || (bestTime == null || ts.isAfter(bestTime))) {
-          best = cached;
-          bestTime = ts;
-        }
-      }
-      return best;
-    } catch (_) {}
-    return null;
-  }
-
   /// Expose all cache keys — used by form_fill_screen to search
   /// for a specific form across every cached "forms_*" key.
   /// Delegates to the underlying OfflineManager.

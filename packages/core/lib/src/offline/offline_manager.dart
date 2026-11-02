@@ -1623,20 +1623,6 @@ class OfflineManager {
     return entry['data'];
   }
 
-  /// ═══ OFFLINE FIX (2026-11): Timestamp of when [key] was last cached ═══
-  /// Returns null when the key is absent. Used by OfflineDataCache to pick
-  /// the freshest fallback entry among prefix-matched cache keys.
-  DateTime? getCachedAt(String key) {
-    try {
-      final cache = _getCache();
-      final entry = cache[key];
-      if (entry == null) return null;
-      return DateTime.tryParse(entry['cached_at']?.toString() ?? '');
-    } catch (_) {
-      return null;
-    }
-  }
-
   Future<void> clearCache() async {
     // ⚠️ FIX: Selective clear — preserve reference data (forms, governorates,
     // districts, facilities) so the app still works offline after cache clear.

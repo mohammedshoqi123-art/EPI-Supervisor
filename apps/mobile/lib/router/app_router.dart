@@ -180,12 +180,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/analytics',
             builder: (context, state) {
-              // ═══ Support ?tab=reports|data deep-link from Dashboard quick action ═══
+              // ═══ Support ?tab=reports deep-link from Dashboard quick action ═══
               final tab = state.uri.queryParameters['tab'];
               int initialTab = 0;
-              // reports tab is index 1, data tab is index 2 (3-tab layout)
+              // ═══ FIX: reports tab is index 1 now (2-tab layout) ═══
               if (tab == 'reports') initialTab = 1;
-              if (tab == 'data') initialTab = 2;
               return AnalyticsScreen(initialTab: initialTab);
             },
           ),

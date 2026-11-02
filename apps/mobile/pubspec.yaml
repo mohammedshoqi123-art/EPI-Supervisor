@@ -1,6 +1,6 @@
 name: epi_supervisor
 description: EPI Supervisor Platform - Mobile App
-version: 3.17.4+67
+version: 3.17.3+66
 publish_to: none
 
 environment:
@@ -43,9 +43,6 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   connectivity_plus: ^6.0.3
-
-  # Excel import/export (تبويب البيانات — استيراد إكسل)
-  excel: ^4.0.6
 
   # Image compression
   flutter_image_compress: ^2.3.0

@@ -157,9 +157,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
     // ═══ PERFORMANCE: Use .select() for campaign to minimize rebuild scope ═══
     final campaign = ref.watch(campaignProvider.select((c) => c.value));
     final round = ref.watch(campaignRoundProvider);
+    // ═══ FIX (2026-11): الفلترة بالجولة للنشاط التكاملي فقط —
+    // إرساليات الحصبة/الشلل لا تحمل رقماً حقيقياً للجولة، والفلترة
+    // بـ round=N كانت تُفرغ الخريطة تماماً (نفس إصلاح forms_status) ═══
+    final effectiveRound = campaign == 'integrated_activity' ? round : null;
     final allSubsAsync = ref.watch(submissionsProvider(SubmissionsFilter(
       campaignType: campaign,
-      campaignRound: round,
+      campaignRound: effectiveRound,
       limit: 2000,
       lean: true,  // ═══ P0: Skip 'data' column — 5.5MB→0.86MB (84% reduction)
     )));

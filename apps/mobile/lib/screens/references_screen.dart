@@ -27,10 +27,31 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
   }
 
   Future<void> _loadReferences() async {
+    // ═══ NEW (2026-11): أوفلاين أولاً — اقرأ الكاش المحلي فوراً ═══
+    // المزامنة الكاملة تخزن المراجع تحت المفتاح 'references' — الشاشة
+    // السابقة كانت تستعلم من الشبكة مباشرة وتظهر فارغة بدون إنترنت.
+    try {
+      final cache = await ref.read(offlineDataCacheProvider.future);
+      final cached = cache.getCachedDataList('references');
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _references = cached;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
+
+    // ثم حدّث من الشبكة إذا متاح (وحدّث الكاش)
     try {
       final db = ref.read(databaseServiceProvider);
       // ═══ FIX: getReferences() already filters is_active=true via RLS ═══
       final data = await db.getReferences();
+      if (data.isNotEmpty) {
+        try {
+          final cache = await ref.read(offlineDataCacheProvider.future);
+          await cache.putList('references', data);
+        } catch (_) {}
+      }
       if (mounted) {
         setState(() {
           _references = data;
@@ -38,6 +59,7 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
         });
       }
     } catch (e) {
+      debugPrint('[References] Online load failed (offline cache kept): $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }

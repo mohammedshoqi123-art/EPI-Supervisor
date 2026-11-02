@@ -38,6 +38,26 @@ class _SubmissionDetailScreenState
         _isLoading = false;
       });
     } catch (e) {
+      // ═══ NEW (2026-11): أوفلاين — ابحث عن الإرسالية في الكاش المحلي ═══
+      // قوائم الإرساليات المخزنة (submissions_*) من المزامنة الكاملة تحتوي
+      // عادةً السجل نفسه — نفتح التفاصيل منه بدل رسالة الفشل.
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final cached = cache.findCachedListByPrefix('submissions_');
+        final hit = cached == null
+            ? null
+            : cached.firstWhere(
+                (s) => (s['id']?.toString() ?? '') == widget.id,
+                orElse: () => const {},
+              );
+        if (hit != null && hit.isNotEmpty && mounted) {
+          setState(() {
+            _submission = hit;
+            _isLoading = false;
+          });
+          return;
+        }
+      } catch (_) {}
       setState(() => _isLoading = false);
       if (mounted) context.showError('فشل تحميل الإرسالية');
     }

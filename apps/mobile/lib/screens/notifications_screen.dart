@@ -32,6 +32,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       // Ensure service is initialized
       final api = ref.read(apiClientProvider);
       NotificationService.init(api);
+      // ═══ NEW: اربط الكاش الأوفلاين — الإشعارات تبقى ظاهرة بدون إنترنت ═══
+      try {
+        NotificationService.attachCache(
+            await ref.read(offlineDataCacheProvider.future));
+      } catch (_) {}
       await NotificationService.loadFromDB(refresh: true);
     } catch (e) {
       debugPrint('Load notifications error: $e');

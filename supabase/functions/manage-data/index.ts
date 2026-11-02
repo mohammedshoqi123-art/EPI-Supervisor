@@ -341,7 +341,9 @@ serve(async (req) => {
         }
 
         if (action === 'create') {
-          const { title_ar, title_en, description_ar, description_en, schema, requires_gps, requires_photo, max_photos, allowed_roles } = body
+          // ═══ FIX: قبول campaign_type — كان يُسقط دائماً إلى polio_campaign
+          // الافتراضي فتظهر النماذج الجديدة مخفية عن حملة المستخدم ═══
+          const { title_ar, title_en, description_ar, description_en, schema, requires_gps, requires_photo, max_photos, allowed_roles, campaign_type } = body
           const { data, error } = await adminClient
             .from('forms')
             .insert({
@@ -351,6 +353,7 @@ serve(async (req) => {
               requires_photo: requires_photo ?? false,
               max_photos: max_photos ?? 5,
               allowed_roles: allowed_roles ?? ['data_entry', 'district', 'governorate', 'central', 'admin'],
+              campaign_type: campaign_type ?? 'polio_campaign',
               created_by: auth.userId,
             })
             .select()
@@ -362,15 +365,23 @@ serve(async (req) => {
 
         if (action === 'update') {
           // ═══ FIX R-2: Allowlist to prevent mass assignment ═══
-          const { id, title, title_ar, description, schema, campaign_type, is_active, version } = body
+          // ═══ FIX: + requires_gps/requires_photo/max_photos/allowed_roles —
+          // محرر الموبايل يرسلها وكانت تُسقط صامتة ═══
+          const { id, title, title_ar, description, description_ar, description_en, schema, campaign_type, is_active, version, requires_gps, requires_photo, max_photos, allowed_roles } = body
           const safeUpdates: Record<string, unknown> = {}
           if (title !== undefined) safeUpdates.title = title
           if (title_ar !== undefined) safeUpdates.title_ar = title_ar
           if (description !== undefined) safeUpdates.description = description
+          if (description_ar !== undefined) safeUpdates.description_ar = description_ar
+          if (description_en !== undefined) safeUpdates.description_en = description_en
           if (schema !== undefined) safeUpdates.schema = schema
           if (campaign_type !== undefined) safeUpdates.campaign_type = campaign_type
           if (is_active !== undefined) safeUpdates.is_active = is_active
           if (version !== undefined) safeUpdates.version = version
+          if (requires_gps !== undefined) safeUpdates.requires_gps = requires_gps
+          if (requires_photo !== undefined) safeUpdates.requires_photo = requires_photo
+          if (max_photos !== undefined) safeUpdates.max_photos = max_photos
+          if (allowed_roles !== undefined) safeUpdates.allowed_roles = allowed_roles
           const { data, error } = await adminClient
             .from('forms')
             .update({ ...safeUpdates, updated_at: new Date().toISOString() })
@@ -387,6 +398,24 @@ serve(async (req) => {
           const { error } = await adminClient
             .from('forms')
             .update({ is_active, updated_at: new Date().toISOString() })
+            .eq('id', id)
+
+          if (error) return jsonResponse({ error: error.message }, 400, origin)
+          return jsonResponse({ success: true }, 200, origin)
+        }
+
+        // ═══ NEW: حذف ناعم (soft delete) — كان التطبيق يعتمد كتابة مباشرة
+        // تُفشل لغير المدير بسبب RLS (forms_modify_admin_only) ═══
+        if (action === 'delete') {
+          const { id, deleted_by } = body
+          const { error } = await adminClient
+            .from('forms')
+            .update({
+              deleted_at: new Date().toISOString(),
+              deleted_by: deleted_by ?? auth.userId,
+              is_active: false,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', id)
 
           if (error) return jsonResponse({ error: error.message }, 400, origin)

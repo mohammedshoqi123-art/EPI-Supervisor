@@ -19,6 +19,7 @@ class FormsManagementScreen extends ConsumerStatefulWidget {
 
 class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
   bool _isLoading = true;
+  bool _offlineView = false; // ═══ NEW: عرض من الكاش بدون إنترنت ═══
   List<Map<String, dynamic>> _forms = [];
   Map<String, Map<String, int>> _stats = {};
   String? _error;
@@ -63,6 +64,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _offlineView = false;
     });
     try {
       final client = Supabase.instance.client;
@@ -123,6 +125,16 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         stats.putIfAbsent(fid, () => {'total': 0});
       }
 
+      // ═══ NEW: خزّن آخر تحميل ناجح للعرض أوفلاين ═══
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        await cache.putList('forms_management_all', forms);
+        await cache.putMap('forms_management_stats', {
+          for (final e in stats.entries)
+            e.key: Map<String, dynamic>.from(e.value),
+        });
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _forms = forms;
@@ -132,6 +144,30 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       }
     } catch (e) {
       debugPrint('[FormsManagement] Load error: $e');
+      // ═══ NEW (2026-11): أوفلاين — اعرض آخر نسخة محفوظة بدل شاشة الخطأ ═══
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final cachedForms = cache.getCachedDataList('forms_management_all');
+        if (cachedForms != null && cachedForms.isNotEmpty) {
+          final rawStats = cache.getCachedMap('forms_management_stats') ?? {};
+          final cachedStats = <String, Map<String, int>>{};
+          rawStats.forEach((k, v) {
+            if (v is Map) {
+              cachedStats[k] = v.map((kk, vv) =>
+                  MapEntry(kk.toString(), (vv as num?)?.toInt() ?? 0));
+            }
+          });
+          if (mounted) {
+            setState(() {
+              _forms = cachedForms;
+              _stats = cachedStats;
+              _offlineView = true;
+              _isLoading = false;
+            });
+          }
+          return;
+        }
+      } catch (_) {}
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -139,6 +175,25 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         });
       }
     }
+  }
+
+  // ═════════════════════════════════════════════════════════════════════
+  // NEW (2026-11): الكتابات عبر manage-data Edge Function (service-role،
+  // بوابة admin+central) — كانت كتابات مباشرة على الجداول بـ JWT المستخدم
+  // وسياسة RLS تسمح للمدير فقط، فتُفشل كل عمليات المستخدم المركزي
+  // (وهذا سبب «إدارة النماذج ما تشتغل فعلياً»). عند فشل الدالة نرجع
+  // للكتابة المباشرة (تعمل للمدير) — وميزة مزدوجة بلا مسدوديات.
+  // ═════════════════════════════════════════════════════════════════════
+  Future<Map<String, dynamic>> _manageDataAction(
+    String action,
+    Map<String, dynamic> payload,
+  ) async {
+    final api = ref.read(apiClientProvider);
+    return api.callFunction('manage-data', {
+      'resource': 'forms',
+      'action': action,
+      ...payload,
+    });
   }
 
   Future<void> _addForm() async {
@@ -169,7 +224,12 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'created_by': user?.id,
       };
 
-      await client.from('forms').insert(insertData).timeout(const Duration(seconds: 15));
+      // ═══ FIX: مسار manage-data أولاً (يعمل للمركزي والمدير) ثم مباشرة ═══
+      try {
+        await _manageDataAction('create', insertData);
+      } catch (_) {
+        await client.from('forms').insert(insertData).timeout(const Duration(seconds: 15));
+      }
 
       // Invalidate caches
       try {
@@ -221,12 +281,24 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     try {
       final client = Supabase.instance.client;
 
+      // ═══ FIX: احفظ مفاتيح schema العليا (version!) ثم زِد رقم النسخة —
+      // المحرر كان يفقد schema.version فيُفقد تتبع نسخ النموذج ═══
+      final oldSchema = (form['schema'] as Map<String, dynamic>? ?? {});
+      final newSchema = Map<String, dynamic>.from(result['schema'] ?? {});
+      final preserved = Map<String, dynamic>.from(oldSchema)
+        ..remove('sections')
+        ..remove('fields');
+      preserved.addAll(newSchema);
+      preserved['version'] =
+          ((oldSchema['version'] as num?)?.toInt() ?? 0) + 1;
+
       // ═══ FIX: Build update map with safe defaults ═══
       final updateData = <String, dynamic>{
+        'id': form['id'],
         'title_ar': result['title_ar'],
         'title_en': result['title_en'] ?? form['title_en'] ?? '',
         'description_ar': result['description_ar'],
-        'schema': result['schema'],
+        'schema': preserved,
         'requires_gps': result['requires_gps'] ?? false,
         'requires_photo': result['requires_photo'] ?? false,
         'max_photos': result['max_photos'] ?? 5,
@@ -238,7 +310,13 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'version': (form['version'] as int? ?? 1) + 1,
       };
 
-      await client.from('forms').update(updateData).eq('id', form['id']).timeout(const Duration(seconds: 15));
+      // ═══ FIX: مسار manage-data أولاً (يعمل للمركزي والمدير) ثم مباشرة ═══
+      try {
+        await _manageDataAction('update', updateData);
+      } catch (_) {
+        final direct = Map<String, dynamic>.from(updateData)..remove('id');
+        await client.from('forms').update(direct).eq('id', form['id']).timeout(const Duration(seconds: 15));
+      }
 
       // ═══ FIX: Invalidate BOTH local cache and Riverpod providers ═══
       try {
@@ -329,13 +407,23 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     if (confirmed != true) return;
 
     try {
-      final client = Supabase.instance.client;
-      final user = client.auth.currentUser;
-      await client.from('forms').update({
-        'deleted_at': DateTime.now().toIso8601String(),
-        'deleted_by': user?.id, // ═══ سجل من حذف (كان عموداً يتيمة بلا قيمة) ═══
-        'is_active': false,
-      }).eq('id', form['id']).timeout(const Duration(seconds: 15));
+      // ═══ FIX: مسار manage-data أولاً (حذف ناعم بوابة admin+central) ═══
+      try {
+        final client = Supabase.instance.client;
+        await _manageDataAction('delete', {
+          'id': form['id'],
+          'deleted_by': client.auth.currentUser?.id,
+        });
+      } catch (_) {
+        // Fallback: كتابة مباشرة — تعمل للمدير (RLS: admin فقط)
+        final client = Supabase.instance.client;
+        final user = client.auth.currentUser;
+        await client.from('forms').update({
+          'deleted_at': DateTime.now().toIso8601String(),
+          'deleted_by': user?.id, // ═══ سجل من حذف (كان عموداً يتيمة بلا قيمة) ═══
+          'is_active': false,
+        }).eq('id', form['id']).timeout(const Duration(seconds: 15));
+      }
 
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
@@ -377,11 +465,19 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
 
   Future<void> _toggleFormActive(Map<String, dynamic> form) async {
     try {
-      final client = Supabase.instance.client;
       final newStatus = !(form['is_active'] as bool? ?? true);
-      await client
-          .from('forms')
-          .update({'is_active': newStatus}).eq('id', form['id']);
+      // ═══ FIX: مسار manage-data أولاً (يعمل للمركزي والمدير) ثم مباشرة ═══
+      try {
+        await _manageDataAction('toggle_active', {
+          'id': form['id'],
+          'is_active': newStatus,
+        });
+      } catch (_) {
+        final client = Supabase.instance.client;
+        await client
+            .from('forms')
+            .update({'is_active': newStatus}).eq('id', form['id']);
+      }
 
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
@@ -460,6 +556,30 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       ),
       body: Column(
         children: [
+          // ═══ NEW: شريط وضع العرض أوفلاين ═══
+          if (_offlineView)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: AppTheme.warningColor.withValues(alpha: 0.12),
+              child: Row(
+                children: [
+                  Icon(Icons.wifi_off_rounded,
+                      size: 16, color: AppTheme.warningColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'وضع عرض أوفلاين — آخر نسخة محفوظة. التعديل يتطلب اتصالاً.',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 12,
+                        color: AppTheme.warningColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // ═══ بحث + فلتر حملة ═══
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -630,7 +750,6 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     final fid = form['id'] as String;
     final stats = _stats[fid] ?? {};
     final total = stats['total'] ?? 0;
-    final approved = stats['approved'] ?? 0;
     final submitted = stats['submitted'] ?? 0;
     final schema = form['schema'] as Map<String, dynamic>? ?? {};
     final fields = schema['fields'] as List? ?? [];
@@ -709,9 +828,11 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
                 children: [
                   _statChip('$total إرسالية', AppTheme.primaryColor),
                   const SizedBox(width: 8),
-                  _statChip('$submitted معلق', AppTheme.warningColor),
+                  // ═══ FIX: الأعمدة الفعلية للـ RPC هي total/submitted/draft —
+                  // «معلق» كانت تعرض submitted و«معتمد» كان دائماً 0 ═══
+                  _statChip('$submitted مُرسلة', AppTheme.successColor),
                   const SizedBox(width: 8),
-                  _statChip('$approved معتمد', AppTheme.successColor),
+                  _statChip('${stats['draft'] ?? 0} مسودة', AppTheme.warningColor),
                 ],
               ),
               const SizedBox(height: 10),

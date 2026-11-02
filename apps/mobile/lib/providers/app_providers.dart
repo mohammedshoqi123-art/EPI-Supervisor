@@ -610,12 +610,29 @@ final formStatsProvider = FutureProvider.autoDispose<FormStats>((ref) async {
         status: 'submitted',
       );
       submitted = count;
+      // ═══ NEW: احفظ آخر عدد ناجح — يُعرض أوفلاين بدل الصفر ═══
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        await cache.putMap('form_stats_${campaign.value}',
+            {'submitted': count, 'saved_at': DateTime.now().toIso8601String()});
+      } catch (_) {}
     } catch (e) {
       // ═══ FIX: Don't silently swallow — track error so UI can show it ═══
       // Previously: catch (_) {} → Dashboard showed 0 submissions on any error
       // Now: submittedLoadError = true → UI shows "خطأ في التحميل" instead of "0"
+      // ═══ NEW (2026-11): أوفلاين — اقرأ آخر عدد محفوظ من الكاش أولاً ═══
       debugPrint('[FormStats] getSubmissionsCount failed: $e');
-      submitted = -1; // Sentinel: -1 means "error", not "0 submissions"
+      int? cachedCount;
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final m = cache.getCachedMap('form_stats_${campaign.value}');
+        cachedCount = (m?['submitted'] as num?)?.toInt();
+      } catch (_) {}
+      if (cachedCount != null) {
+        submitted = cachedCount; // بيانات كاش صالحة — لا خطأ
+      } else {
+        submitted = -1; // Sentinel: -1 means "error", not "0 submissions"
+      }
     }
   } catch (_) {}
 
@@ -814,11 +831,16 @@ final notificationCountProvider = StreamProvider<int>((ref) async* {
   yield 0;
   final api = ref.read(apiClientProvider);
   NotificationService.init(api);
+  // ═══ NEW: اربط الكاش الأوفلاين — الإشعارات تُقرأ من المخزن عند انقطاع الشبكة ═══
+  try {
+    NotificationService.attachCache(await ref.read(offlineDataCacheProvider.future));
+  } catch (_) {}
   try {
     await NotificationService.loadFromDB(refresh: true);
     yield NotificationService.unreadCount;
   } catch (_) {
-    yield 0;
+    // أوفلاين: loadFromDB يملأ من الكاش داخلياً — اعتمد العدد الفعلي
+    yield NotificationService.unreadCount;
   }
   // ═══ FIX: Poll every 60s (was 300s) — urgent notifications need faster delivery ═══
   yield* Stream.periodic(const Duration(seconds: 60), (_) async {

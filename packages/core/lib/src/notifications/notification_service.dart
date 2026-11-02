@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../api/api_client.dart';
+import '../offline/offline_data_cache.dart';
 
 /// Types of in-app notifications
 enum AppNotificationType { info, success, warning, error, sync }
@@ -52,6 +53,18 @@ class AppNotification {
     );
   }
 
+  /// ═══ NEW: Serialize for offline cache — mirrors fromJson keys ═══
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'body': body,
+        'type': type.name,
+        'category': category,
+        'created_at': createdAt.toIso8601String(),
+        'is_read': read,
+        'data': data,
+      };
+
   static AppNotificationType _parseType(String type) {
     switch (type) {
       case 'success':
@@ -74,6 +87,10 @@ class NotificationService {
   static final _notifications = <AppNotification>[];
   static final _uuid = const Uuid();
   static ApiClient? _api;
+  static OfflineDataCache? _cache;
+
+  /// ═══ NEW: Offline persistence key — الإشعارات تبقى ظاهرة أوفلاين ═══
+  static const String _offlineKey = 'notifications_cache';
 
   static int _pageSize = 50;
   static int _currentPage = 0;
@@ -95,6 +112,11 @@ class NotificationService {
   /// Initialize with API client for DB persistence
   static void init(ApiClient api) {
     _api = api;
+  }
+
+  /// ═══ NEW: Attach offline cache — الإشعارات تُخزَّن وتُقرأ أوفلاين ═══
+  static void attachCache(OfflineDataCache cache) {
+    _cache = cache;
   }
 
   /// Push a new notification (in-memory + optional DB write)
@@ -180,8 +202,38 @@ class NotificationService {
 
       _notifications.addAll(deduped);
       _currentPage++;
+
+      // ═══ NEW: persist loaded page to offline cache — الإشعارات أوفلاين ═══
+      if (_cache != null) {
+        try {
+          await _cache!.putList(
+            _offlineKey,
+            _notifications.map((n) => n.toJson()).toList(),
+          );
+        } catch (e) {
+          if (kDebugMode) print('Failed to cache notifications: $e');
+        }
+      }
     } catch (e) {
       if (kDebugMode) print('Failed to load notifications from DB: $e');
+
+      // ═══ NEW: OFFLINE FALLBACK — اقرأ من الكاش المحلي بدل الشاشة الفارغة ═══
+      if (_cache != null) {
+        try {
+          final cached = await _cache!.getCachedDataList(_offlineKey);
+          if (cached.isNotEmpty && _notifications.isEmpty) {
+            _notifications.addAll(
+              cached.map((j) => AppNotification.fromJson(j)),
+            );
+            _hasMore = false; // الكاش صفحة واحدة — لا يوجد مزيد
+            if (kDebugMode) {
+              print('Loaded ${_notifications.length} notifications from offline cache');
+            }
+          }
+        } catch (cacheErr) {
+          if (kDebugMode) print('Offline notifications cache read failed: $cacheErr');
+        }
+      }
     }
   }
 

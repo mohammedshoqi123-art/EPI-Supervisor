@@ -335,6 +335,29 @@ class OfflineDataCache {
 
   /// Save data to both memory and persistent cache
   Future<void> _saveToCache(String key, dynamic data) async {
+    // ═══════════════════════════════════════════════════════════════════
+    // ⚠️ NEVER-LOSE-FORMS GUARD (2026-11): نتيجة شبكة فارغة لا تمسح النماذج
+    //
+    // إذا أعاد الخادم قائمة فارغة لنموذج مخزَّن غير فارغ (خطأ مؤقت، تغيّر
+    // RLS/الصلاحيات، انقطاع أثناء الطلب) — نحتفظ بالبيانات المخزنة ونرفض
+    // الكتابة الفارغة. النماذج لا تختفي أبداً أونلاين أو أوفلاين.
+    // الإزالة الحقيقية تتم فقط عبر invalidate الصريح أو تحديث بقائمة فعلية.
+    // ═══════════════════════════════════════════════════════════════════
+    if (data is List &&
+        data.isEmpty &&
+        (key == 'forms_all' || key.startsWith('forms_'))) {
+      final existing = _getFromPersistentRaw<List>(key) ??
+          _getFromMemory<List>(key, const Duration(days: 365));
+      if (existing != null && existing.isNotEmpty) {
+        if (kDebugMode) {
+          debugPrint(
+              '[OfflineDataCache] Refused to overwrite non-empty $key with '
+              'empty server result — keeping ${existing.length} cached forms');
+        }
+        return;
+      }
+    }
+
     // Memory cache
     _putToMemory(key, data);
 
@@ -656,6 +679,19 @@ class OfflineDataCache {
           .toList();
     }
 
+    return null;
+  }
+
+  /// Get cached data as a map (handles plain map values).
+  /// Used for small persisted state like last-good stats (form_stats_*).
+  Map<String, dynamic>? getCachedMap(String key) {
+    // Try fresh first, then fallback to stale (offline override)
+    dynamic cached = _offline.getCachedData(key);
+    cached ??= _offline.getCachedData(key, offlineOverride: true);
+
+    if (cached is Map && cached['_type'] != 'list') {
+      return Map<String, dynamic>.from(cached);
+    }
     return null;
   }
 

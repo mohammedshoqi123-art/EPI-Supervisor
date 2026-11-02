@@ -8,6 +8,9 @@
 //
 // هذه الاختبارات تثبت أن الإشعارات تُطلق فقط عند تغير دخول/خروج/دور —
 // وليس عند كل انبعاث (تحديث Token، تحميل Profile بنفس القيم، إلخ).
+//
+// ملاحظة: إشعار البناء الأول (notifyListeners في المُنشئ) يحدث قبل
+// إرفاق المستمع في الاختبارات — فلا يُحتسب، وهذا مقصود.
 // ═══════════════════════════════════════════════════════════════════════
 import 'dart:async';
 
@@ -17,18 +20,7 @@ import 'package:epi_supervisor/router/app_router.dart'
     show GoRouterRefreshStream;
 
 void main() {
-  test('notifies once on construction', () {
-    final controller = StreamController<AuthState>.broadcast();
-    addTearDown(controller.close);
-    var notifications = 0;
-    final listenable = GoRouterRefreshStream(controller.stream)
-      ..addListener(() => notifications++);
-    // constructor fires one immediate notify
-    expect(notifications, 1);
-    listenable.dispose();
-  });
-
-  test('login → profile-load (same user, role arrives) → single notify', () {
+  test('identical re-emission after login does not notify', () async {
     final controller = StreamController<AuthState>.broadcast();
     addTearDown(controller.close);
     var notifications = 0;
@@ -41,27 +33,35 @@ void main() {
       userId: 'u-1',
       email: 'a@b.c',
     ));
-    // 2) profile loaded — same user, role now attached
-    controller.add(const AuthState(
-      isAuthenticated: true,
-      userId: 'u-1',
-      email: 'a@b.c',
-      role: UserRole.data_entry,
-    ));
-    // 3) token refresh — identical values, no change
-    controller.add(const AuthState(
-      isAuthenticated: true,
-      userId: 'u-1',
-      email: 'a@b.c',
-      role: UserRole.data_entry,
-    ));
+    await pumpEventQueue();
+    expect(notifications, 1);
 
-    expect(notifications, 1 + 2, reason: 'constructor + login + role change; '
-        'identical re-emission must NOT notify');
+    // 2) profile loaded — same user, role now attached → meaningful change
+    controller.add(const AuthState(
+      isAuthenticated: true,
+      userId: 'u-1',
+      email: 'a@b.c',
+      role: UserRole.data_entry,
+    ));
+    await pumpEventQueue();
+    expect(notifications, 2);
+
+    // 3) token refresh / profile re-load — identical values, NO notify
+    //    (هذا بالضبط الانبعاث الذي كان يعيد إنشاء الراوتر ويمسح الجولة)
+    controller.add(const AuthState(
+      isAuthenticated: true,
+      userId: 'u-1',
+      email: 'a@b.c',
+      role: UserRole.data_entry,
+    ));
+    await pumpEventQueue();
+    expect(notifications, 2);
+
     listenable.dispose();
   });
 
-  test('role escalation re-evaluates RBAC (notify) without user change', () {
+  test('role escalation re-evaluates RBAC (notify) without user change',
+      () async {
     final controller = StreamController<AuthState>.broadcast();
     addTearDown(controller.close);
     var notifications = 0;
@@ -70,16 +70,19 @@ void main() {
 
     controller.add(const AuthState(
         isAuthenticated: true, userId: 'u-2', role: UserRole.data_entry));
-    expect(notifications, 2); // constructor + login
+    await pumpEventQueue();
+    expect(notifications, 1);
 
     // profile re-load: same user, promoted role → guards must re-run
     controller.add(const AuthState(
         isAuthenticated: true, userId: 'u-2', role: UserRole.admin));
-    expect(notifications, 3);
+    await pumpEventQueue();
+    expect(notifications, 2);
+
     listenable.dispose();
   });
 
-  test('logout always notifies', () {
+  test('logout always notifies; repeated signed-out does not', () async {
     final controller = StreamController<AuthState>.broadcast();
     addTearDown(controller.close);
     var notifications = 0;
@@ -88,14 +91,18 @@ void main() {
 
     controller.add(const AuthState(
         isAuthenticated: true, userId: 'u-3', role: UserRole.admin));
-    expect(notifications, 2);
+    await pumpEventQueue();
+    expect(notifications, 1);
 
     controller.add(const AuthState(isAuthenticated: false));
-    expect(notifications, 3, reason: 'logout is a meaningful change');
+    await pumpEventQueue();
+    expect(notifications, 2, reason: 'logout is a meaningful change');
 
     // repeated signed-out emissions — no change
     controller.add(const AuthState(isAuthenticated: false));
-    expect(notifications, 3);
+    await pumpEventQueue();
+    expect(notifications, 2);
+
     listenable.dispose();
   });
 }

@@ -261,6 +261,12 @@ class AuthRepository {
           email: response['email'] ?? user.email,
           role: _parseRole(response['role']),
           governorateId: response['governorate_id'],
+          // ═══ NEW: المحافظات المعينة للمستوى المركزي (عدة محافظات من المدير) ═══
+          assignedGovernorates:
+              (response['assigned_governorates'] as List?)
+                  ?.map((e) => e.toString())
+                  .toList() ??
+              const [],
           districtId: response['district_id'],
           fullName: response['full_name'],
           phone: response['phone'],
@@ -294,6 +300,11 @@ class AuthRepository {
               email: newResponse['email'] ?? user.email,
               role: _parseRole(newResponse['role']),
               governorateId: newResponse['governorate_id'],
+              assignedGovernorates:
+                  (newResponse['assigned_governorates'] as List?)
+                      ?.map((e) => e.toString())
+                      .toList() ??
+                  const [],
               districtId: newResponse['district_id'],
               fullName: newResponse['full_name'],
               phone: newResponse['phone'],

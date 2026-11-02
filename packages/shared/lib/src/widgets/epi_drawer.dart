@@ -334,10 +334,9 @@ class EpiDrawer extends StatelessWidget {
                     '/studio',
                   ),
 
-                  // ═══ FIX (2026-11): إدارة النماذج للمركزي أيضاً (المستوى 4) —
-                  // الكتابات تمر عبر manage-data (بوابة admin+central) والمسار
-                  // يسمح بـ 4 أصلاً — كانت مخفية بالدرج فبدا «لا تعمل» ═══
-                  if (userRoleLevel >= 4) ...[
+                  // ═══ FIX (2026-11): إدارة النماذج للمدير فقط — طلب المستخدم:
+                  // «اخفيها عن المستوى المركزي نهائياً» (كتابات RLS للمدير فقط) ═══
+                  if (userRoleLevel >= 5) ...[
                     const Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: 16,
@@ -348,19 +347,15 @@ class EpiDrawer extends StatelessWidget {
                     _SectionLabel(label: 'الإدارة'),
                     _buildItem(
                       context,
-                      Icons.settings_applications_rounded,
-                      'إدارة النماذج',
-                      '/forms-management',
-                    ),
-                  ],
-
-                  // Admin-only sections
-                  if (userRoleLevel >= 5) ...[
-                    _buildItem(
-                      context,
                       Icons.people_rounded,
                       'إدارة المستخدمين',
                       '/users',
+                    ),
+                    _buildItem(
+                      context,
+                      Icons.settings_applications_rounded,
+                      'إدارة النماذج',
+                      '/forms-management',
                     ),
                     _buildItem(
                       context,

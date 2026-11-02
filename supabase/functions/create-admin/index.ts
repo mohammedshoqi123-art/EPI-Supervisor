@@ -54,7 +54,7 @@ serve(async (req) => {
 
     // ─── Parse Request ─────────────────────────────────────
     const body = await req.json()
-    const { email, password, full_name, role = 'admin', governorate_id, district_id, phone, national_id } = body
+    const { email, password, full_name, role = 'admin', governorate_id, district_id, phone, national_id, assigned_governorates } = body
 
     if (!email || !password || !full_name) {
       return jsonResponse({ error: 'email, password, and full_name are required' }, 400, origin)
@@ -111,6 +111,16 @@ serve(async (req) => {
             .update({ role, full_name, updated_at: new Date().toISOString() })
             .eq('id', existingUser.id)
         }
+        // ═══ NEW: طبّق المحافظات المعينة إن أُرسلت (للمستوى المركزي) ═══
+        if (Array.isArray(assigned_governorates)) {
+          await supabaseAdmin
+            .from('profiles')
+            .update({
+              assigned_governorates,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingUser.id)
+        }
         return jsonResponse({
           success: true,
           message: 'User already exists. Profile updated.',
@@ -122,6 +132,9 @@ serve(async (req) => {
           email,
           full_name,
           role,
+          ...(Array.isArray(assigned_governorates)
+            ? { assigned_governorates }
+            : {}),
         })
         return jsonResponse({
           success: true,
@@ -149,6 +162,10 @@ serve(async (req) => {
     if (district_id) profileUpdates.district_id = district_id
     if (phone) profileUpdates.phone = phone
     if (national_id) profileUpdates.national_id = national_id
+    // ═══ NEW: محافظات المستوى المركزي المعينة (عدة) — دائماً حتى الفارغة ═══
+    if (Array.isArray(assigned_governorates)) {
+      profileUpdates.assigned_governorates = assigned_governorates
+    }
 
     if (Object.keys(profileUpdates).length > 0) {
       await supabaseAdmin

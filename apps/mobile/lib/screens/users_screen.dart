@@ -126,6 +126,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
           'governorate_id': result['governorate_id'],
           'district_id': result['district_id'],
           'national_id': result['national_id'],
+          // ═══ NEW: محافظات المستوى المركزي المعينة ═══
+          'assigned_governorates': result['assigned_governorates'] ?? <String>[],
           'secret': '',
         },
       ).timeout(const Duration(seconds: 20));
@@ -185,6 +187,10 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         'governorate_id': result['governorate_id'],
         'district_id': result['district_id'],
         'national_id': result['national_id'],
+        // ═══ NEW: تعيين محافظات المستوى المركزي (عدة) — يفرضها الخادم فوراً ═══
+        'assigned_governorates':
+            (result['assigned_governorates'] as List?)?.cast<String>() ??
+                <String>[],
       };
       await client.from('profiles').update(updateData).eq('id', user['id']).timeout(const Duration(seconds: 15));
       _loadAll();
@@ -589,6 +595,36 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                           color: AppTheme.textHint,
                         ),
                       ),
+                    // ═══ NEW: المحافظات المعينة للمستوى المركزي ═══
+                    if (role == 'central')
+                      Builder(builder: (_) {
+                        final assigned = (user['assigned_governorates'] as List?)
+                                ?.map((e) => e.toString()) ??
+                            const <String>[];
+                        if (assigned.isEmpty) {
+                          return Text(
+                            '⚠️ لا توجد محافظات معينة — لا رؤية بيانات',
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 11,
+                              color: AppTheme.errorColor,
+                            ),
+                          );
+                        }
+                        final names = _governorates
+                            .where((g) => assigned.contains(g['id']))
+                            .map((g) => g['name_ar']?.toString() ?? '')
+                            .where((n) => n.isNotEmpty)
+                            .join('، ');
+                        return Text(
+                          'المحافظات: ${names.isEmpty ? '${assigned.length} محافظات' : names}',
+                          style: const TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 11,
+                            color: AppTheme.infoColor,
+                          ),
+                        );
+                      }),
                   ],
                 ),
               ),

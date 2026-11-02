@@ -55,7 +55,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     '/ai': 1, // everyone
     '/references': 1, // everyone can view references
     '/users': 4, // admin + central only
-    '/forms-management': 4, // admin + central only
+    '/forms-management': 5, // admin only (طلب المستخدم: مخفية عن المركزي نهائياً)
     '/references-management': 4, // admin + central only
     '/analytics': 3, // governorate+ can view analytics
     '/map': 1, // everyone

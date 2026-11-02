@@ -44,6 +44,7 @@ interface UserProfile {
   role: string
   governorate_id: string | null
   district_id: string | null
+  assigned_governorates?: string[] | null
 }
 
 async function validateSubmissionPermissions(
@@ -54,7 +55,7 @@ async function validateSubmissionPermissions(
 ): Promise<{ valid: boolean; error?: string }> {
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('role, governorate_id, district_id')
+    .select('role, governorate_id, district_id, assigned_governorates')
     .eq('id', userId)
     .single()
 
@@ -64,8 +65,21 @@ async function validateSubmissionPermissions(
 
   switch (p.role) {
     case 'admin':
-    case 'central':
       return { valid: true }
+
+    case 'central':
+      // ═══ FIX (2026-11): المركزي يرسل فقط ضمن المحافظات المعينة له من المدير
+      // — فشل مغلق: بلا تعيين = لا إرسال ═══
+      {
+        const assigned = (p.assigned_governorates ?? []).filter(Boolean)
+        if (assigned.length === 0) {
+          return { valid: false, error: 'لا توجد محافظات معينة لحسابك — راجع مدير النظام' }
+        }
+        if (targetGovId && !assigned.includes(targetGovId)) {
+          return { valid: false, error: 'لا يمكنك الإرسال لمحافظة غير معينة لحسابك' }
+        }
+        return { valid: true }
+      }
 
     case 'governorate':
       if (targetGovId && targetGovId !== p.governorate_id) {

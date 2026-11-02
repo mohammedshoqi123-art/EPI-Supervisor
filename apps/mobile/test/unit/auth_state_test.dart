@@ -109,4 +109,39 @@ void main() {
       expect(restored.role, isNull);
     });
   });
+
+  // ═══ NEW (2026-11): المحافظات المعينة للمستوى المركزي من المدير ═══
+  group('AuthState assignedGovernorates (central multi-gov)', () {
+    test('defaults to empty list (fail-closed)', () {
+      const state = AuthState();
+      expect(state.assignedGovernorates, isEmpty);
+      expect(AuthState.fromJson({}).assignedGovernorates, isEmpty);
+    });
+
+    test('parses assigned_governorates from profile row', () {
+      final state = AuthState.fromJson({
+        'role': 'central',
+        'assigned_governorates': ['gov-1', 'gov-2'],
+      });
+      expect(state.assignedGovernorates, ['gov-1', 'gov-2']);
+    });
+
+    test('toJson/fromJson roundtrip preserves assignments', () {
+      const original = AuthState(
+        isAuthenticated: true,
+        role: UserRole.central,
+        userId: 'u-9',
+        assignedGovernorates: ['a1', 'b2'],
+      );
+      final restored = AuthState.fromJson(original.toJson());
+      expect(restored.assignedGovernorates, ['a1', 'b2']);
+    });
+
+    test('copyWith preserves unset assignments, updates when given', () {
+      const base = AuthState(role: UserRole.central, assignedGovernorates: ['g1']);
+      expect(base.copyWith(email: 'x@y.z').assignedGovernorates, ['g1']);
+      expect(base.copyWith(assignedGovernorates: ['g2', 'g3']).assignedGovernorates,
+          ['g2', 'g3']);
+    });
+  });
 }

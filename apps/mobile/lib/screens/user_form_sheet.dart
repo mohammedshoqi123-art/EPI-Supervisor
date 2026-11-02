@@ -28,9 +28,12 @@ class UserFormSheetState extends State<UserFormSheet> {
   String _selectedRole = 'data_entry';
   String? _selectedGovernorateId;
   String? _selectedDistrictId;
+  // ═══ NEW (2026-11): محافظات المستوى المركزي المعينة من المدير (عدة) ═══
+  final Set<String> _assignedGovernorateIds = {};
   bool _obscurePassword = true;
 
   bool get _isEditing => widget.existingUser != null;
+  bool get _isCentral => _selectedRole == 'central';
 
   @override
   void initState() {
@@ -44,6 +47,11 @@ class UserFormSheetState extends State<UserFormSheet> {
       _selectedRole = u['role'] ?? 'data_entry';
       _selectedGovernorateId = u['governorate_id'];
       _selectedDistrictId = u['district_id'];
+      // ═══ NEW: حمّل المحافظات المعينة السابقة للمركزي ═══
+      final assigned = u['assigned_governorates'];
+      if (assigned is List) {
+        _assignedGovernorateIds.addAll(assigned.map((e) => e.toString()));
+      }
     }
   }
 
@@ -66,6 +74,19 @@ class UserFormSheetState extends State<UserFormSheet> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    // ═══ NEW: المركزي يحتاج محافظة معينة واحدة على الأقل — فشل مغلق ═══
+    if (_isCentral && _assignedGovernorateIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'حدّد محافظة واحدة على الأقل للمستوى المركزي',
+            style: TextStyle(fontFamily: 'Tajawal'),
+          ),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
     Navigator.pop(context, {
       'full_name': _nameController.text.trim(),
       'email': _emailController.text.trim(),
@@ -75,6 +96,9 @@ class UserFormSheetState extends State<UserFormSheet> {
       'role': _selectedRole,
       'governorate_id': _selectedGovernorateId,
       'district_id': _selectedDistrictId,
+      // ═══ NEW: قائمة المحافظات المعينة (للمركزي فقط) ═══
+      'assigned_governorates':
+          _isCentral ? _assignedGovernorateIds.toList() : <String>[],
     });
   }
 
@@ -254,8 +278,11 @@ class UserFormSheetState extends State<UserFormSheet> {
                       ),
                     ),
                   ],
-                  onChanged: (v) =>
-                      setState(() => _selectedRole = v ?? 'data_entry'),
+                  onChanged: (v) => setState(() {
+                    _selectedRole = v ?? 'data_entry';
+                    // تبديل الدور يصفّر تعيينات المركزي — بيانات دور آخر لا تنطبق
+                    if (!_isCentral) _assignedGovernorateIds.clear();
+                  }),
                   style: const TextStyle(
                     fontFamily: 'Tajawal',
                     color: Colors.black87,
@@ -263,40 +290,92 @@ class UserFormSheetState extends State<UserFormSheet> {
                 ),
                 const SizedBox(height: 14),
 
-                // Governorate
-                DropdownButtonFormField<String>(
-                  value: _selectedGovernorateId,
-                  decoration: _inputDecoration(
-                    'المحافظة (اختياري)',
-                    Icons.location_city_rounded,
-                  ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text(
-                        '— بدون —',
-                        style: TextStyle(fontFamily: 'Tajawal'),
-                      ),
+                // ═══ NEW: تعيين عدة محافظات للمستوى المركزي (من المدير) ═══
+                if (_isCentral) ...[
+                  Text(
+                    'المحافظات المعينة (اختيار متعدد)',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
                     ),
-                    ...widget.governorates.map(
-                      (g) => DropdownMenuItem(
-                        value: g['id'] as String,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'سيرى المستخدم بيانات هذه المحافظات فقط',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: widget.governorates.map((g) {
+                      final gid = g['id'] as String;
+                      final selected = _assignedGovernorateIds.contains(gid);
+                      return FilterChip(
+                        label: Text(
+                          g['name_ar']?.toString() ?? gid,
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 13,
+                            color: selected ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        selected: selected,
+                        onSelected: (v) => setState(() {
+                          v
+                              ? _assignedGovernorateIds.add(gid)
+                              : _assignedGovernorateIds.remove(gid);
+                        }),
+                        selectedColor: AppTheme.primaryColor,
+                        checkmarkColor: Colors.white,
+                        backgroundColor: Colors.grey.shade100,
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // Governorate
+                if (!_isCentral)
+                  DropdownButtonFormField<String>(
+                    value: _selectedGovernorateId,
+                    decoration: _inputDecoration(
+                      'المحافظة (اختياري)',
+                      Icons.location_city_rounded,
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
                         child: Text(
-                          g['name_ar'],
-                          style: const TextStyle(fontFamily: 'Tajawal'),
+                          '— بدون —',
+                          style: TextStyle(fontFamily: 'Tajawal'),
                         ),
                       ),
+                      ...widget.governorates.map(
+                        (g) => DropdownMenuItem(
+                          value: g['id'] as String,
+                          child: Text(
+                            g['name_ar'],
+                            style: const TextStyle(fontFamily: 'Tajawal'),
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() {
+                      _selectedGovernorateId = v;
+                      _selectedDistrictId = null;
+                    }),
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      color: Colors.black87,
                     ),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _selectedGovernorateId = v;
-                    _selectedDistrictId = null;
-                  }),
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: Colors.black87,
                   ),
-                ),
                 const SizedBox(height: 14),
 
                 // District

@@ -67,6 +67,9 @@ class AuthState {
   final UserRole? role;
   final String? governorateId;
   final String? districtId;
+  /// ═══ NEW (2026-11): المحافظات المعينة للمستوى المركزي من المدير ═══
+  /// فارغة = لا رؤية بيانات (فشل مغلق — الخادم يفرضها عبر RLS والدوال)
+  final List<String> assignedGovernorates;
   final String? fullName;
   final String? phone;
   final String? avatarUrl;
@@ -82,6 +85,7 @@ class AuthState {
     this.role,
     this.governorateId,
     this.districtId,
+    this.assignedGovernorates = const [],
     this.fullName,
     this.phone,
     this.avatarUrl,
@@ -98,6 +102,7 @@ class AuthState {
     UserRole? role,
     String? governorateId,
     String? districtId,
+    List<String>? assignedGovernorates,
     String? fullName,
     String? phone,
     String? avatarUrl,
@@ -113,6 +118,7 @@ class AuthState {
       role: role ?? this.role,
       governorateId: governorateId ?? this.governorateId,
       districtId: districtId ?? this.districtId,
+      assignedGovernorates: assignedGovernorates ?? this.assignedGovernorates,
       fullName: fullName ?? this.fullName,
       phone: phone ?? this.phone,
       avatarUrl: avatarUrl ?? this.avatarUrl,
@@ -129,6 +135,7 @@ class AuthState {
         'role': role?.name,
         'governorate_id': governorateId,
         'district_id': districtId,
+        'assigned_governorates': assignedGovernorates,
         'full_name': fullName,
         'phone': phone,
         'avatar_url': avatarUrl,
@@ -143,6 +150,10 @@ class AuthState {
         role: _parseRole(json['role'] as String?),
         governorateId: json['governorate_id'] as String?,
         districtId: json['district_id'] as String?,
+        assignedGovernorates: (json['assigned_governorates'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const [],
         fullName: json['full_name'] as String?,
         phone: json['phone'] as String?,
         avatarUrl: json['avatar_url'] as String?,

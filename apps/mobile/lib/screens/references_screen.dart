@@ -33,7 +33,7 @@ class _ReferencesScreenState extends ConsumerState<ReferencesScreen> {
     try {
       final cache = await ref.read(offlineDataCacheProvider.future);
       final cached = cache.getCachedDataList('references');
-      if (cached.isNotEmpty && mounted) {
+      if (cached != null && cached.isNotEmpty && mounted) {
         setState(() {
           _references = cached;
           _isLoading = false;

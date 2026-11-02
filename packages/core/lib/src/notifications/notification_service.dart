@@ -221,7 +221,7 @@ class NotificationService {
       if (_cache != null) {
         try {
           final cached = await _cache!.getCachedDataList(_offlineKey);
-          if (cached.isNotEmpty && _notifications.isEmpty) {
+          if (cached != null && cached.isNotEmpty && _notifications.isEmpty) {
             _notifications.addAll(
               cached.map((j) => AppNotification.fromJson(j)),
             );

@@ -573,6 +573,130 @@ class _FirstLoginTourScreenState extends ConsumerState<FirstLoginTourScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// صفحة قسم من الجولة — حركة دخول متدرجة (تُعاد عند فتح الصفحة بسبب الـ key)
+// ═══════════════════════════════════════════════════════════════════════
+
+class _TopicPage extends StatelessWidget {
+  final _TourPageData data;
+
+  const _TopicPage({super.key, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 550),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) {
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset(0, 24 * (1 - t)),
+            child: child,
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 30),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Spacer(flex: 1),
+
+            // أيقونة القسم داخل هالة
+            Container(
+              width: 118,
+              height: 118,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+                border: Border.all(
+                  color: data.accentColor.withValues(alpha: 0.25),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: data.accentColor.withValues(alpha: 0.16),
+                    blurRadius: 44,
+                    spreadRadius: 6,
+                  ),
+                ],
+              ),
+              child: Icon(data.icon, size: 48, color: Colors.white),
+            ),
+            const SizedBox(height: 40),
+
+            Text(
+              data.title,
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                height: 1.35,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+
+            Text(
+              data.subtitle,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 14.5,
+                color: Colors.white.withValues(alpha: 0.78),
+                height: 1.75,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 26),
+
+            // شرائح الميزات
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: data.features
+                  .map((f) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: data.accentColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: data.accentColor.withValues(alpha: 0.28),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_rounded,
+                                size: 14, color: data.accentColor),
+                            const SizedBox(width: 6),
+                            Text(
+                              f,
+                              style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: data.accentColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ))
+                  .toList(),
+            ),
+
+            const Spacer(flex: 2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // بيانات صفحات الجولة — تعليم كل قسم من النظام
 // ═══════════════════════════════════════════════════════════════════════
 

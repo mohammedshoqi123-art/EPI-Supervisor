@@ -133,6 +133,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         await Future.delayed(const Duration(seconds: 1));
       }
       if (!mounted || userId == null || userId.isEmpty) return;
+      // ═══ FIX: نسخة نهائية — ترقية النوع لا تدخل إلى إغلاق pageBuilder ═══
+      final tourUserId = userId;
       // ═══ Gate: الجولة للتركيب الجديد فقط (أول دخول حقيقي) ═══
       // المستخدمون الحاليون لديهم كاش نماذج من تحديثات سابقة — لا نزعجهم.
       // التركيب الجديد كاشه فارغ وهذا سبب «الثقل» الذي تحل الجولة مشكلته.
@@ -149,14 +151,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       } catch (_) {
         // فشل فحص الكاش — نعرض الجولة (الأملح للمستخدم الجديد فعلاً)
       }
-      if (await FirstLoginTourScreen.isCompleted(userId)) return;
+      if (await FirstLoginTourScreen.isCompleted(tourUserId)) return;
       if (!mounted) return;
       await Navigator.of(context).push(
         PageRouteBuilder(
           fullscreenDialog: true,
           transitionDuration: const Duration(milliseconds: 380),
           reverseTransitionDuration: const Duration(milliseconds: 300),
-          pageBuilder: (_, __, ___) => FirstLoginTourScreen(userId: userId),
+          pageBuilder: (_, __, ___) => FirstLoginTourScreen(userId: tourUserId),
           transitionsBuilder: (_, animation, __, child) => FadeTransition(
             opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
             child: child,

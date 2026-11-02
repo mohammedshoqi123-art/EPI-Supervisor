@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// OnboardingScreen — الواجهة التعريفية (تُعرض مرة واحدة قبل تسجيل الدخول)
 ///
 /// تصميم v2 — 2026-10-30:
-/// - صفحة ترحيب بشعار التطبيق واسم المنصة
+/// - صفحة ترحيب بشعار التطبيق واسم النظام
 /// - 3 صفحات ميزات: النماذج والأوفلاين، معرض صور الإشراف (جديد)، التحليلات والمساعد
 /// - حركات دخول متدرجة لكل صفحة + مؤشرات متحركة + خلفية متدرجة ناعمة
 /// - محسّنة للـ RTL بالكامل
@@ -302,7 +302,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           ),
           const SizedBox(height: 12),
           const Text(
-            'منصة الإشراف الميداني\nلبرنامج التحصين الموسّع',
+            'نظام الإشراف الميداني\nلبرنامج التحصين الموسّع',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Cairo',

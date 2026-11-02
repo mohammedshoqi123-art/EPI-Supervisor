@@ -11,6 +11,7 @@ import '../services/memos_feedback_service.dart';
 import 'dashboard_header.dart';
 import 'dashboard_charts.dart';
 import 'dashboard_widgets.dart';
+import 'first_login_tour_screen.dart';
 
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -49,6 +50,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       const Duration(milliseconds: 200),
       () => _cardsAnim.forward(),
     );
+    // ═══ NEW: دليل الاستخدام عند أول دخول — يظهر مرة واحدة لكل مستخدم ═══
+    // أثناء تصفح الجولة تُحمَّل صفحات النظام كاملة في الخلفية (مزامنة كاملة)
+    // فلا يشعر المستخدم بتعليق النظام بعد تسجيل الدخول
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowFirstLoginTour();
+    });
     // ═══ PERFORMANCE FIX: Pulse once then stop — was infinite 60fps rebuilds ═══
     _pulseAnim.forward();
     Future.delayed(const Duration(seconds: 2), () {
@@ -108,6 +115,57 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         }
       });
     });
+  }
+
+  /// ═══ NEW: فتح الدليل التعليمي مرة واحدة عند أول تسجيل دخول ═══
+  /// العلم مخزّن لكل مستخدم (first_login_tour_<uid>) — لو استخدم جهاز واحد
+  /// أكثر من مستخدم يرى كل منهم الدليل مرة واحدة.
+  /// الجولة نفسها تشغّل المزامنة الكاملة في الخلفية — لا حاجة لفعل شيء هنا.
+  Future<void> _maybeShowFirstLoginTour() async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 600));
+      // Belt-and-suspenders: قد يتأخر انبعاث حالة المصادقة على الشبكات البطيئة
+      String? userId;
+      for (int i = 0; i < 3; i++) {
+        if (!mounted) return;
+        userId = ref.read(authStateProvider).valueOrNull?.userId;
+        if (userId != null && userId.isNotEmpty) break;
+        await Future.delayed(const Duration(seconds: 1));
+      }
+      if (!mounted || userId == null || userId.isEmpty) return;
+      // ═══ Gate: الجولة للتركيب الجديد فقط (أول دخول حقيقي) ═══
+      // المستخدمون الحاليون لديهم كاش نماذج من تحديثات سابقة — لا نزعجهم.
+      // التركيب الجديد كاشه فارغ وهذا سبب «الثقل» الذي تحل الجولة مشكلته.
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => throw Exception('cache timeout'),
+        );
+        final hasForms = cache.hasCachedData('forms_all') ||
+            cache.hasCachedData('forms_measles_campaign') ||
+            cache.hasCachedData('forms_polio_campaign') ||
+            cache.hasCachedData('forms_integrated_activity');
+        if (hasForms) return; // مستخدم حالي لديه بيانات — ليس أول دخول
+      } catch (_) {
+        // فشل فحص الكاش — نعرض الجولة (الأملح للمستخدم الجديد فعلاً)
+      }
+      if (await FirstLoginTourScreen.isCompleted(userId)) return;
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        PageRouteBuilder(
+          fullscreenDialog: true,
+          transitionDuration: const Duration(milliseconds: 380),
+          reverseTransitionDuration: const Duration(milliseconds: 300),
+          pageBuilder: (_, __, ___) => FirstLoginTourScreen(userId: userId),
+          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            child: child,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[Dashboard] First-login tour check failed: $e');
+    }
   }
 
   @override

@@ -121,6 +121,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   /// العلم مخزّن لكل مستخدم (first_login_tour_<uid>) — لو استخدم جهاز واحد
   /// أكثر من مستخدم يرى كل منهم الدليل مرة واحدة.
   /// الجولة نفسها تشغّل المزامنة الكاملة في الخلفية — لا حاجة لفعل شيء هنا.
+  ///
+  /// ═══ FIX (2026-11): «الجولة ظهرت ثم اختفت مباشرة» ═══
+  /// 1) تُفتح الآن عبر context.push كـ route حقيقي في الراوتر
+  ///    (/first-login-tour) — لا تُمسح مهما أُعيد بناء الراوتر.
+  /// 2) عِلم «started» يُحفظ قبل الفتح — لو أُغلقت الجولة قسراً (قتل
+  ///    التطبيق) تظهر مجدداً عند الإقلاع التالي حتى تكتمل فعلاً.
   Future<void> _maybeShowFirstLoginTour() async {
     try {
       await Future.delayed(const Duration(milliseconds: 600));
@@ -135,36 +141,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       if (!mounted || userId == null || userId.isEmpty) return;
       // ═══ FIX: نسخة نهائية — ترقية النوع لا تدخل إلى إغلاق pageBuilder ═══
       final tourUserId = userId;
-      // ═══ Gate: الجولة للتركيب الجديد فقط (أول دخول حقيقي) ═══
-      // المستخدمون الحاليون لديهم كاش نماذج من تحديثات سابقة — لا نزعجهم.
-      // التركيب الجديد كاشه فارغ وهذا سبب «الثقل» الذي تحل الجولة مشكلته.
-      try {
-        final cache = await ref.read(offlineDataCacheProvider.future).timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => throw Exception('cache timeout'),
-        );
-        final hasForms = cache.hasCachedData('forms_all') ||
-            cache.hasCachedData('forms_measles_campaign') ||
-            cache.hasCachedData('forms_polio_campaign') ||
-            cache.hasCachedData('forms_integrated_activity');
-        if (hasForms) return; // مستخدم حالي لديه بيانات — ليس أول دخول
-      } catch (_) {
-        // فشل فحص الكاش — نعرض الجولة (الأملح للمستخدم الجديد فعلاً)
-      }
+
+      // 1) اكتملت سابقاً؟ لا تعرض أبداً
       if (await FirstLoginTourScreen.isCompleted(tourUserId)) return;
+
+      // 2) بدأت سابقاً ولم تكتمل؟ (قتل للتطبيق أثناء الجولة) — أعد فتحها
+      //    فوراً بغضّ النظر عن الكاش حتى تكتمل الجولة
+      final started = await FirstLoginTourScreen.isStarted(tourUserId);
+
+      // 3) Gate: الجولة للتركيب الجديد فقط (أول دخول حقيقي) — لا تنطبق
+      //    على من بدأ الجولة فعلاً. المستخدمون الحاليون لديهم كاش نماذج
+      //    من تحديثات سابقة — لا نزعجهم. التركيب الجديد كاشه فارغ وهذا
+      //    سبب «الثقل» الذي تحل الجولة مشكلته.
+      if (!started) {
+        try {
+          final cache = await ref.read(offlineDataCacheProvider.future).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => throw Exception('cache timeout'),
+          );
+          final hasForms = cache.hasCachedData('forms_all') ||
+              cache.hasCachedData('forms_measles_campaign') ||
+              cache.hasCachedData('forms_polio_campaign') ||
+              cache.hasCachedData('forms_integrated_activity');
+          if (hasForms) return; // مستخدم حالي لديه بيانات — ليس أول دخول
+        } catch (_) {
+          // فشل فحص الكاش — نعرض الجولة (الأملح للمستخدم الجديد فعلاً)
+        }
+      }
+
       if (!mounted) return;
-      await Navigator.of(context).push(
-        PageRouteBuilder(
-          fullscreenDialog: true,
-          transitionDuration: const Duration(milliseconds: 380),
-          reverseTransitionDuration: const Duration(milliseconds: 300),
-          pageBuilder: (_, __, ___) => FirstLoginTourScreen(userId: tourUserId),
-          transitionsBuilder: (_, animation, __, child) => FadeTransition(
-            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-            child: child,
-          ),
-        ),
-      );
+      // سجّل «بدأت» قبل الفتح — الضمانة الوحيدة لإعادة العرض إن قُتل التطبيق
+      await FirstLoginTourScreen.markStarted(tourUserId);
+      if (!mounted) return;
+      // ═══ FIX: context.push — route حقيقي في الراوتر (ملء الشاشة،
+      // خارج الـ ShellRoute) بدلاً من Navigator.push داخل الشل ═══
+      await context.push('/first-login-tour?uid=$tourUserId');
     } catch (e) {
       debugPrint('[Dashboard] First-login tour check failed: $e');
     }

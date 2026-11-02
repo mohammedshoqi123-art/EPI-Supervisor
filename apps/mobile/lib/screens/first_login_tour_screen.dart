@@ -15,7 +15,16 @@ import '../providers/full_sync_provider.dart';
 ///    الإرساليات المعلقة، المحافظات، المديريات، النماذج، المراجع، المرفقات)
 ///    فلا يشعر المستخدم بتعليق أو بطء بعد الدخول
 ///
-/// - تظهر مرة واحدة لكل مستخدم (SharedPreferences: first_login_tour_<uid>)
+/// ═══ ضمانات عدم الاختفاء (FIX 2026-11: «ظهرت ثم اختفت مباشرة») ═══
+/// السبب الجذري كان إعادة إنشاء GoRouter عند كل انبعاث مصادقة (مُصلح في
+/// app_router.dart) — ومعه هذه الضمانات داخل الشاشة:
+/// - Route حقيقي في الراوتر (/first-login-tour) يُفتح بـ context.push —
+///   لا يُمسح عند إعادة بناء الـ delegate، وملء الشاشة خارج الـ ShellRoute
+/// - PopScope(canPop:false): زر الرجوع = خطوة للخلف داخل الجولة، لا خروج
+/// - قفل _closing: الإغلاق مرة واحدة فقط عبر _complete()
+/// - عِلم started يُحفظ قبل الفتح وcompleted عند الإكمال فقط — لو قُتل
+///   التطبيق أثناء الجولة تعود الجولة عند الإقلاع التالي حتى تكتمل
+/// - تظهر مرة واحدة لكل مستخدم (SharedPreferences)
 /// - شريط حالة صغير يعرض تقدم التجهيز في كل الصفحات
 /// - زر المتابعة يعمل دائماً — لا مسدوديات: إذا فشلت الشبكة يكمل النظام
 ///   التجهيز تلقائياً في الخلفية كالمعتاد
@@ -27,6 +36,21 @@ class FirstLoginTourScreen extends ConsumerStatefulWidget {
   const FirstLoginTourScreen({super.key, required this.userId});
 
   static String _prefsKey(String userId) => 'first_login_tour_completed_$userId';
+
+  // ═══ NEW: عِلم «بدأت» — يُحفظ لحظة فتح الجولة. الضمانة أن الجولة
+  // لا تختفي نهائياً إلا بإكمالها: لو قُتل التطبيق أثناء الجولة
+  // تعود الجولة عند الإقلاع التالي حتى لو اكتمل التحميل في الخلفية ═══
+  static String _startedKey(String userId) => 'first_login_tour_started_$userId';
+
+  static Future<bool> isStarted(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_startedKey(userId)) ?? false;
+  }
+
+  static Future<void> markStarted(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_startedKey(userId), true);
+  }
 
   static Future<bool> isCompleted(String userId) async {
     final prefs = await SharedPreferences.getInstance();
@@ -47,6 +71,11 @@ class _FirstLoginTourScreenState extends ConsumerState<FirstLoginTourScreen>
     with SingleTickerProviderStateMixin {
   final _pageController = PageController();
   int _currentPage = 0;
+
+  // ═══ NEW: قفل الإغلاق — الجولة لا تُغلق إلا من _complete() (زر
+  // «ابدأ الآن» في الصفحة الأخيرة أو «تخطي الجولة» الصريح). أي محاولة
+  // أخرى (زر الرجوع، إيماءة، إغلاق برمجي) تُرفض أو تُوجّه للخلف ═══
+  bool _closing = false;
 
   // ── حالة تجهيز النظام في الخلفية ──
   bool _warmupStarted = false;
@@ -138,12 +167,30 @@ class _FirstLoginTourScreenState extends ConsumerState<FirstLoginTourScreen>
     }
   }
 
+  // ═══ NEW: زر الرجوع (النظام/الإيماءة) = خطوة للخلف داخل الجولة،
+  // لا يخرج منها أبداً. في صفحة الترحيب الأولى لا يفعل شيئاً —
+  // الجولة لا تُغلق إلا بإكمالها (طلب المستخدم 2026-11: «خليها
+  // ما تختفي الا بعد التاكد من اكتمالها») ═══
+  void _onBackRequested() {
+    if (_closing) return; // إغلاق مُصرّح به جارٍ — لا تتدخل
+    if (_currentPage > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 460),
+        curve: Curves.easeInOutCubic,
+      );
+    }
+    // في الصفحة الأولى: الزر لا يغلق الجولة — تنتهي بالإكمال أو التخطي فقط
+  }
+
   void _skip() {
     HapticFeedback.selectionClick();
     _complete();
   }
 
   Future<void> _complete() async {
+    // ═══ FIX: قفل من النقر المزدوج — الإغلاق مرة واحدة فقط ═══
+    if (_closing) return;
+    _closing = true;
     try {
       await FirstLoginTourScreen.markCompleted(widget.userId);
       // بيانات المزامنة وصلت أثناء الجولة — حدّث كل مزودات الشاشة الرئيسية
@@ -173,82 +220,93 @@ class _FirstLoginTourScreenState extends ConsumerState<FirstLoginTourScreen>
     final Color accent = page?.accentColor ??
         (isReadyPage ? const Color(0xFFB9F6CA) : const Color(0xFF64FFDA));
 
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: gradient,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    return PopScope(
+      // ═══ FIX: canPop=false دائماً — زر الرجوع لا يُغلق الجولة أبداً.
+      // onPopInvokedWithResult يوجّه الرجوع لخطوة سابقة داخل الجولة.
+      // الإغلاق الوحيد: Navigator.pop داخل _complete() — وهو pop مباشر
+      // لا يمرّ عبر PopScope، فيعمل دائماً عند الإكمال ═══
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _onBackRequested();
+      },
+      child: Scaffold(
+          body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: gradient,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // تخطي الجولة
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                  child: TextButton(
-                    onPressed: _currentPage == 0 ? null : _skip,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white.withValues(alpha: 0.65),
-                    ),
-                    child: Text(
-                      _currentPage == 0 ? '' : 'تخطي الجولة',
-                      style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14),
+          child: SafeArea(
+            child: Column(
+              children: [
+                // تخطي الجولة
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                    child: TextButton(
+                      onPressed: _currentPage == 0 ? null : _skip,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white.withValues(alpha: 0.65),
+                      ),
+                      child: Text(
+                        _currentPage == 0 ? '' : 'تخطي الجولة',
+                        style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14),
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-              Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: _pages.length + 2, // ترحيب + 6 أقسام + صفحة الجاهزية
-                  onPageChanged: (index) {
-                    setState(() => _currentPage = index);
-                    HapticFeedback.selectionClick();
-                  },
-                  itemBuilder: (context, index) {
-                    if (index == 0) return _buildWelcomePage();
-                    if (index == _pages.length + 1) return _buildReadyPage();
-                    return _TopicPage(
-                      data: _pages[index - 1],
-                      key: ValueKey('tour-$index'),
-                    );
-                  },
+                Expanded(
+                  child: PageView.builder(
+                    controller: _pageController,
+                    itemCount: _pages.length + 2, // ترحيب + 6 أقسام + صفحة الجاهزية
+                    onPageChanged: (index) {
+                      setState(() => _currentPage = index);
+                      HapticFeedback.selectionClick();
+                    },
+                    itemBuilder: (context, index) {
+                      if (index == 0) return _buildWelcomePage();
+                      if (index == _pages.length + 1) return _buildReadyPage();
+                      return _TopicPage(
+                        data: _pages[index - 1],
+                        key: ValueKey('tour-$index'),
+                      );
+                    },
+                  ),
                 ),
-              ),
 
-              // شريط حالة تجهيز النظام — يظهر في كل الصفحات
-              _buildWarmupChip(accent),
+                // شريط حالة تجهيز النظام — يظهر في كل الصفحات
+                _buildWarmupChip(accent),
 
-              // المؤشرات + زر الإجراء
-              Padding(
-                padding: const EdgeInsets.fromLTRB(32, 10, 32, 26),
-                child: Column(
-                  children: [
-                    _buildPageIndicator(),
-                    const SizedBox(height: 20),
-                    _buildCTAButton(isLast, accent, gradient.first),
-                    const SizedBox(height: 10),
-                    Text(
-                      '${_currentPage + 1} من ${_pages.length + 2}',
-                      style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.35),
+                // المؤشرات + زر الإجراء
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 10, 32, 26),
+                  child: Column(
+                    children: [
+                      _buildPageIndicator(),
+                      const SizedBox(height: 20),
+                      _buildCTAButton(isLast, accent, gradient.first),
+                      const SizedBox(height: 10),
+                      Text(
+                        '${_currentPage + 1} من ${_pages.length + 2}',
+                        style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.35),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
+        ),
     );
   }
 

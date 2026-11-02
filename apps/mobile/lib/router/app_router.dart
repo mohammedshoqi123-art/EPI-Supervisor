@@ -31,9 +31,24 @@ import '../screens/forms_management_screen.dart';
 import '../screens/references_management_screen.dart';
 import '../screens/analytics_screen.dart';
 import '../screens/gallery_screen.dart';
+import '../screens/first_login_tour_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authAsync = ref.watch(authStateProvider);
+  // ═════════════════════════════════════════════════════════════════════
+  // ⚠️ CRITICAL FIX (2026-11): لا تستخدم ref.watch(authStateProvider) هنا!
+  //
+  // السابق: ref.watch(authStateProvider) في جسم الـ Provider كان يعيد بناء
+  // الـ GoRouter بالكامل عند كل انبعاث من مجرى المصادقة — و _loadProfile
+  // يُصدر مرتين عند كل استدعاء (فوراً + بعد جلب الـ Profile)، والمؤقت
+  // الاستباقي يجدد كل 3 دقائق. النتيجة: إعادة إنشاء الراوتر ← تصفير
+  // مكدس التنقل إلى /splash ← اختفاء الجولة التعليمية فور ظهورها
+  // واختفاء أي شاشة مكدسة أثناء الاستخدام.
+  //
+  // الآن: الراوتر يُنشأ مرة واحدة فقط. الـ redirect يقرأ أحدث قيمة
+  // مصادقة عبر ref.read عند كل تشغيل، و refreshListenable يوقظ الـ
+  // redirect عند كل تغيير ذي معنى (دخول/خروج/تغير الدور).
+  // ═════════════════════════════════════════════════════════════════════
+  final authRepository = ref.watch(authRepositoryProvider); // نسخة ثابتة لا تتبدل
 
   // Minimum role level required per route — RBAC guards
   const routeMinRole = {
@@ -55,9 +70,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     debugLogDiagnostics: kDebugMode,
     refreshListenable: GoRouterRefreshStream(
-      ref.watch(authRepositoryProvider).authStateChanges,
+      authRepository.authStateChanges,
     ),
     redirect: (context, state) {
+      // ═══ FIX: ref.read — يقرأ أحدث قيمة لحظياً بدون إعادة بناء الراوتر ═══
+      // الـ redirect يُعاد تشغيله تلقائياً عند كل إشعار من refreshListenable
+      final authAsync = ref.read(authStateProvider);
       final isLoginRoute = state.matchedLocation == '/login';
       final isSplash = state.matchedLocation == '/splash';
 
@@ -112,6 +130,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      // ═══ NEW: الجولة التعليمية عند أول تسجيل دخول — route حقيقي في الراوتر ═══
+      // خارج الـ ShellRoute → ملء الشاشة تماماً (بدون شريط تنقل سفلي)،
+      // ومشاركة في مكدس الراوتر → لا تُمسح عند إعادة بناء الـ delegate
+      // (نفس الـ location = نفس مفتاح الصفحة = لا فرق في الـ diff).
+      // تُفتح عبر context.push وتُغلق فقط عند إكمال الجولة داخل الشاشة.
+      GoRoute(
+        path: '/first-login-tour',
+        builder: (context, state) => FirstLoginTourScreen(
+          userId: state.uri.queryParameters['uid'] ?? '',
+        ),
+      ),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
@@ -508,33 +537,43 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   }
 }
 
-/// Makes GoRouter rebuild ONLY when auth status actually changes
-/// (login/logout), not on every profile metadata update.
+/// Makes GoRouter rebuild ONLY when auth meaningfully changes
+/// (login/logout/role change), not on every profile metadata update.
 class GoRouterRefreshStream extends ChangeNotifier {
   StreamSubscription? _subscription;
   bool? _lastIsAuth;
   String? _lastUserId;
+  int? _lastRoleLevel;
 
   GoRouterRefreshStream(Stream<dynamic> stream) {
     _subscription = stream.asBroadcastStream().listen((event) {
       bool isAuth = false;
       String? userId;
+      int? roleLevel;
       if (event is AuthState) {
         isAuth = event.isAuthenticated;
         userId = event.userId;
+        roleLevel = event.role?.hierarchyLevel;
       } else {
         try {
           isAuth = (event as dynamic).isAuthenticated as bool? ?? false;
           userId = (event as dynamic).userId as String?;
+          roleLevel =
+              (event as dynamic).role?.hierarchyLevel as int? ?? roleLevel;
         } catch (_) {
           notifyListeners();
           return;
         }
       }
-      final changed = isAuth != _lastIsAuth || userId != _lastUserId;
+      // ═══ FIX: نوعّي أيضاً عند تغير مستوى الدور — حتى تُعاد تقييم حواجز
+      // RBAC بعد اكتمال جلب الـ Profile (بدوّن إعادة إنشاء الراوتر) ═══
+      final changed = isAuth != _lastIsAuth ||
+          userId != _lastUserId ||
+          roleLevel != _lastRoleLevel;
       if (changed) {
         _lastIsAuth = isAuth;
         _lastUserId = userId;
+        _lastRoleLevel = roleLevel;
         notifyListeners();
       }
     });

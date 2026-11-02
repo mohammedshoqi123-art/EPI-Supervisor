@@ -7,6 +7,7 @@ import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import 'analytics_widgets.dart';
 import 'analytics_reports_tab.dart';
+import 'analytics_data_tab.dart';
 import 'dashboard_report.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -343,10 +344,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   @override
   void initState() {
     super.initState();
-    // ═══ Clamp initialTab to valid range [0, 1] (2 tabs) ═══
-    final initial = widget.initialTab.clamp(0, 1);
+    // ═══ Clamp initialTab to valid range [0, 2] (3 tabs) ═══
+    final initial = widget.initialTab.clamp(0, 2);
     _tab = TabController(
-      length: 2, // ═══ FIX: was 6 while TabBar/TabBarView have 2 children ═══
+      length: 3, // التحليلات + التقارير + البيانات
       vsync: this,
       initialIndex: initial,
     );
@@ -461,6 +462,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           tabs: const [
             Tab(icon: Icon(Icons.insights_rounded), text: 'التحليلات'),
             Tab(icon: Icon(Icons.assessment_rounded), text: 'التقارير'),
+            Tab(icon: Icon(Icons.ios_share_rounded), text: 'البيانات'),
           ],
         ),
       ),
@@ -483,6 +485,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                         formTitle: formTitle,
                       ),
                 ),
+                const DataExportTab(),
               ],
             ),
           ),

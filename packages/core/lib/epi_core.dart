@@ -24,6 +24,7 @@ export 'src/reports/word_report_generator.dart';
 export 'src/reports/report_generator.dart';
 export 'src/reports/report_templates.dart';
 export 'src/reports/excel_report_generator.dart';
+export 'src/reports/excel_export_service.dart';
 // ═══ REMOVED: export 'src/cache/advanced_cache_manager.dart'; ═══
 // Dead code — AdvancedCacheManager was defined but never used anywhere
 export 'src/errors/app_exceptions.dart';

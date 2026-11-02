@@ -11,6 +11,7 @@ import '../providers/app_providers.dart';
 import '../router/app_router.dart';
 import 'map/map_helpers.dart';
 import 'map/map_controls.dart';
+import 'map/cached_tile_provider.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -45,6 +46,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   // ═══ P0-2: Debounce search input — was triggering setState on every keystroke
   Timer? _searchDebounce;
+
+  // ═══ OFFLINE FIX (2026-11): تُعطّل عندما تُعرض بيانات الكاش دون اتصال ═══
+  bool _offlineDataUsed = false;
 
   late AnimationController _fabAnimController;
   late Animation<double> _fabAnimation;
@@ -167,7 +171,23 @@ class _MapScreenState extends ConsumerState<MapScreen>
       limit: 2000,
       lean: true,  // ═══ P0: Skip 'data' column — 5.5MB→0.86MB (84% reduction)
     )));
-    final allSubs = allSubsAsync.valueOrNull ?? [];
+    // ═══ OFFLINE FIX (2026-11): كانت الخريطة تظهر فارغة تماماً أوفلاين
+    // عندما لا يوجد كاش للمفتاح الدقيق (تغير النشاط/الجولة). الآن:
+    // عند الخطأ أو عدم الاتصال نبحث عن آخر قائمة إرساليات مخزنة. ═══
+    List<Map<String, dynamic>> allSubs = allSubsAsync.valueOrNull ?? [];
+    if (allSubs.isEmpty && (allSubsAsync.hasError || !ConnectivityUtils.isOnline)) {
+      // قراءة متزامنة للكاش (محمل منذ بدء التشغيل) — بدون await
+      final cache = ref.read(offlineDataCacheProvider).valueOrNull;
+      if (cache != null) {
+        final fallback = cache.findCachedListByPrefix(
+            campaign != null ? 'submissions_lean_camp_$campaign' : 'submissions_lean');
+        if (fallback != null && fallback.isNotEmpty) {
+          allSubs = fallback;
+        }
+      }
+    }
+    _offlineDataUsed =
+        allSubs.isEmpty && (allSubsAsync.hasError || !ConnectivityUtils.isOnline);
 
     // Build signature: if filters + data length haven't changed, return cache
     final sig = '${_filterFormId ?? ''}|${_filterSupervisorId ?? ''}|'
@@ -294,6 +314,36 @@ class _MapScreenState extends ConsumerState<MapScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ═══ OFFLINE FIX (2026-11): مؤشر الوضع الأوفلاين ═══
+              if (_offlineDataUsed || !ConnectivityUtils.isOnline)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cloud_off_rounded,
+                          size: 13, color: Colors.white),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          _offlineDataUsed
+                              ? 'وضع عدم الاتصال — تُعرض آخر بيانات مخزنة'
+                              : 'وضع عدم الاتصال',
+                          style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 11,
+                              color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Row(
                 children: [
                   Container(
@@ -807,6 +857,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.epi.supervisor',
+          // ═══ OFFLINE FIX (2026-11): بلاطات مع ذاكرة قرص — الخريطة تعمل أوفلاين
+          // للمناطق التي سبق عرضها أونلاين، والبلاطات غير المخزنة شفافة ═══
+          tileProvider: OfflineCachedTileProvider(),
+          errorTileCallback: (tile, url, err) {}, // لا تتكسر الخريطة على خطأ بلاطة
         ),
         _buildIndividualLayer(),
       ],

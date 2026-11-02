@@ -7,6 +7,7 @@ import 'package:epi_core/epi_core.dart';
 import '../providers/app_providers.dart';
 import 'analytics_widgets.dart';
 import 'analytics_reports_tab.dart';
+import 'analytics_data_tab.dart';
 import 'dashboard_report.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -212,6 +213,13 @@ final _readinessSubsProvider = FutureProvider.family
           ).timeout(const Duration(seconds: 30));
     } catch (e2) {
       debugPrint('[Analytics] Direct getSubmissions also failed: $e2');
+      // ═══ OFFLINE FIX (2026-11): fallback أخير — آخر قائمة مخزنة بنفس البادئة،
+      // وإلا قائمة فارغة أوفلاين بدل شاشة خطأ ═══
+      try {
+        final fb = cache.findCachedListByPrefix('readiness_subs_');
+        if (fb != null && fb.isNotEmpty) return fb;
+      } catch (_) {}
+      if (!ConnectivityUtils.isOnline) return <Map<String, dynamic>>[];
       rethrow;
     }
   }
@@ -255,6 +263,13 @@ final _supervisionSubsProvider = FutureProvider.family
           ).timeout(const Duration(seconds: 30));
     } catch (e2) {
       debugPrint('[Analytics] Direct getSubmissions also failed: $e2');
+      // ═══ OFFLINE FIX (2026-11): fallback أخير — آخر قائمة مخزنة بنفس البادئة،
+      // وإلا قائمة فارغة أوفلاين بدل شاشة خطأ ═══
+      try {
+        final fb = cache.findCachedListByPrefix('supervision_subs_');
+        if (fb != null && fb.isNotEmpty) return fb;
+      } catch (_) {}
+      if (!ConnectivityUtils.isOnline) return <Map<String, dynamic>>[];
       // أعد رمي الخطأ الأصلي ليتم عرضه في الـ UI بشكل صحيح
       rethrow;
     }
@@ -343,10 +358,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   @override
   void initState() {
     super.initState();
-    // ═══ Clamp initialTab to valid range [0, 1] (2 tabs) ═══
-    final initial = widget.initialTab.clamp(0, 1);
+    // ═══ Clamp initialTab to valid range [0, 2] (3 tabs) ═══
+    final initial = widget.initialTab.clamp(0, 2);
     _tab = TabController(
-      length: 2, // ═══ FIX: was 6 while TabBar/TabBarView have 2 children ═══
+      length: 3, // التحليلات / التقارير / البيانات
       vsync: this,
       initialIndex: initial,
     );
@@ -421,6 +436,19 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     });
   }
 
+  /// ═══ NEW: يُستدعى بعد اكتمال استيراد Excel من تبويب البيانات ═══
+  /// يُحدّث كل مزودي البيانات حتى تعكس الشاشات الإرساليات الجديدة.
+  void _onDataImported(int count) {
+    try {
+      ref.invalidate(submissionsProvider);
+      ref.invalidate(dashboardAnalyticsProvider);
+      ref.invalidate(_dynamicAnalyticsProvider);
+      ref.invalidate(_readinessSubsProvider);
+      ref.invalidate(_supervisionSubsProvider);
+      debugPrint('[Analytics] Data imported ($count rows) — providers invalidated');
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _refreshDebounce?.cancel();  // ⚠️ PERF FIX: was leaking
@@ -461,6 +489,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           tabs: const [
             Tab(icon: Icon(Icons.insights_rounded), text: 'التحليلات'),
             Tab(icon: Icon(Icons.assessment_rounded), text: 'التقارير'),
+            Tab(icon: Icon(Icons.import_export_rounded), text: 'البيانات'),
           ],
         ),
       ),
@@ -482,6 +511,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                         formId: formId,
                         formTitle: formTitle,
                       ),
+                ),
+                // ═══ NEW: تبويب البيانات — استيراد Excel لجميع النماذج ═══
+                DataImportTab(
+                  onImported: _onDataImported,
                 ),
               ],
             ),
@@ -3183,15 +3216,47 @@ final _dynamicAnalyticsProvider = FutureProvider.autoDispose
     .family<Map<String, dynamic>, ({String formId, int? round, String? governorateId})>(
   (ref, params) async {
     final db = ref.watch(databaseServiceProvider);
-    final result = await db.rpcSingle('get_form_analytics', params: {
-      'p_form_id': params.formId,
-      'p_campaign_round': params.round,
-      'p_governorate_id': params.governorateId,
-    }).timeout(const Duration(seconds: 30));
-    if (result == null) {
-      return {'form_id': params.formId, 'analytics': <dynamic>[], 'total_submissions': 0};
+    final cache = await ref.watch(offlineDataCacheProvider.future);
+    // ═══ OFFLINE FIX (2026-11): كان هذا الـ Provider يستدعي RPC مباشرة
+    // بدون أي تخزين محلي — أوفلاين كان يرمي خطأ دائماً وتظهر شاشة
+    // "تعذّر تحميل التحليلات". الآن: cache-first مع بحث بالبادئة. ═══
+    final cacheKey =
+        'form_analytics_${params.formId}_${params.round ?? 'all'}_${params.governorateId ?? 'all'}';
+    try {
+      return await cache.getMap(cacheKey, () async {
+        final result = await db.rpcSingle('get_form_analytics', params: {
+          'p_form_id': params.formId,
+          'p_campaign_round': params.round,
+          'p_governorate_id': params.governorateId,
+        }).timeout(const Duration(seconds: 30));
+        if (result == null) {
+          return {
+            'form_id': params.formId,
+            'analytics': <dynamic>[],
+            'total_submissions': 0,
+          };
+        }
+        return result;
+      }).timeout(const Duration(seconds: 35));
+    } catch (_) {
+      // ═══ Fallback 1: آخر تحليلات مخزنة لنفس النموذج ═══
+      try {
+        final stale = cache.getCachedMap(cacheKey);
+        if (stale != null && stale.isNotEmpty) return stale;
+        final any = cache.findCachedMapByPrefix('form_analytics_${params.formId}_');
+        if (any != null && any.isNotEmpty) return any;
+      } catch (_) {}
+      // ═══ Fallback 2: أوفلاين بلا كاش إطلاقاً → حالة فارغة أنيقة بدل خطأ ═══
+      if (!ConnectivityUtils.isOnline) {
+        return {
+          'form_id': params.formId,
+          'analytics': <dynamic>[],
+          'total_submissions': 0,
+          'offline_empty': true,
+        };
+      }
+      rethrow;
     }
-    return result;
   },
 );
 
@@ -3311,19 +3376,27 @@ class _DynamicAnalyticsView extends ConsumerWidget {
         final totalSubs = (result['total_submissions'] as num?)?.toInt() ?? 0;
 
         if (analytics.isEmpty) {
+          final offlineEmpty = result['offline_empty'] == true;
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.inbox_outlined,
-                      size: 64, color: Theme.of(context).colorScheme.outline),
+                  Icon(
+                    offlineEmpty ? Icons.cloud_off_rounded : Icons.inbox_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
                   const SizedBox(height: 12),
                   Text(
-                    'لا توجد تحليلات مكوّنة لهذا النموذج بعد.\n'
-                    'يمكن للمسؤول تفعيلها من صفحة إعدادات التحليلات.\n'
-                    'إجمالي الإرساليات: $totalSubs',
+                    offlineEmpty
+                        ? 'لا توجد تحليلات مخزنة لهذا النموذج.\n'
+                            'افتح هذا النموذج مرة واحدة أونلاين ثم ستعمل\n'
+                            'التحليلات أوفلاين من الذاكرة المحلية.'
+                        : 'لا توجد تحليلات مكوّنة لهذا النموذج بعد.\n'
+                            'يمكن للمسؤول تفعيلها من صفحة إعدادات التحليلات.\n'
+                            'إجمالي الإرساليات: $totalSubs',
                     style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
                     textAlign: TextAlign.center,
                   ),

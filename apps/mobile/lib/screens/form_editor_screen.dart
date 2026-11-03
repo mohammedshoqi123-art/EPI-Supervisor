@@ -25,6 +25,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
   List<Map<String, dynamic>> _fields = [];
   List<Map<String, dynamic>> _sections = [];
   bool _useSections = false;
+  // ═══ FIX: تتبّع التعديلات غير المحفوظة — لحرس الخروج (PopScope) ═══
+  bool _dirty = false;
 
   // Field type definitions
   static const _fieldTypes = {
@@ -78,6 +80,32 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
       'icon': Icons.camera_alt_rounded,
       'color': Colors.amber,
     },
+    // ═══ FIX: أنواع يدعمها محرك التعبئة وكانت مفقودة من قائمة المحرر ═══
+    'email': {
+      'label': 'بريد إلكتروني',
+      'icon': Icons.email_rounded,
+      'color': Colors.blueGrey,
+    },
+    'time': {
+      'label': 'وقت',
+      'icon': Icons.access_time_rounded,
+      'color': Colors.brown,
+    },
+    'governorate': {
+      'label': 'المحافظة',
+      'icon': Icons.public_rounded,
+      'color': Colors.green,
+    },
+    'district': {
+      'label': 'القضاء',
+      'icon': Icons.location_city_rounded,
+      'color': Colors.lightGreen,
+    },
+    'health_facility': {
+      'label': 'منشأة صحية',
+      'icon': Icons.local_hospital_rounded,
+      'color': Colors.redAccent,
+    },
   };
 
   bool get _isEditing => widget.existingForm != null;
@@ -102,14 +130,28 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
 
       if (sections.isNotEmpty) {
         _useSections = true;
-        _sections =
-            sections.map((s) => Map<String, dynamic>.from(s as Map)).toList();
+        _sections = sections.map((s) {
+          final m = Map<String, dynamic>.from(s as Map);
+          // ✅ FIX: المحرك يقرأ title_ar — اعتمده احتياطياً من title القديم
+          if ((m['title_ar'] as String? ?? '').trim().isEmpty) {
+            m['title_ar'] = m['title'] ?? '';
+          }
+          return m;
+        }).toList();
       } else {
         _useSections = false;
         _fields =
             flatFields.map((f) => Map<String, dynamic>.from(f as Map)).toList();
       }
     }
+    // ═══ FIX: أي تعديل نصي يفعّل حرس التغييرات غير المحفوظة ═══
+    _titleArController.addListener(_markDirty);
+    _titleEnController.addListener(_markDirty);
+    _descArController.addListener(_markDirty);
+  }
+
+  void _markDirty() {
+    if (!_dirty) setState(() => _dirty = true);
   }
 
   @override
@@ -134,13 +176,70 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
       return;
     }
 
-    final schema = _useSections
+    // ═══ FIX: ممنوع حفظ قائمة نشطة فارغة بينما الهيكل الآخر يحتوي محتوى —
+    // كان التحويل بعد الإدخال يُفرغ الاستمارة كلياً عند الحفظ (فقدان بيانات) ═══
+    final activeEmpty = _useSections ? _sections.isEmpty : _fields.isEmpty;
+    final otherHasContent = _useSections
+        ? _fields.isNotEmpty
+        : _sections.any(
+            (s) => ((s['fields'] as List?)?.isNotEmpty ?? false),
+          );
+    if (activeEmpty && otherHasContent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'يوجد محتوى في الهيكل الآخر — استخدم زر التحويل لنقله قبل الحفظ',
+            style: TextStyle(fontFamily: 'Tajawal'),
+          ),
+          backgroundColor: AppTheme.errorColor,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    // ═══ FIX: تحقق شامل قبل الحفظ — مفاتيح مكررة / استمارة فارغة /
+    // تسميات ناقصة / قوائم اختيار بلا خيارات ═══
+    final problem = _validateForm();
+    if (problem != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            problem,
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          backgroundColor: AppTheme.errorColor,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    // صريح النوع: ندمج لاحقاً مفاتيح قديمة + version (int) فلا يجوز
+    // أن يُستنتج نوعه كـ Map<String, List<Map<...>>>
+    final Map<String, dynamic> schema = _useSections
         ? {
-            'sections': _sections
-                .map((s) => Map<String, dynamic>.from(s)..remove('expanded'))
-                .toList(),
+            'sections': [
+              for (int i = 0; i < _sections.length; i++)
+                _sectionForSave(_sections[i], i),
+            ],
           }
         : {'fields': _fields};
+
+    // ═══ FIX: احتفظ بمفاتيح schema العليا الموجودة مسبقاً (إعدادات gps...) ═══
+    Map<String, dynamic> oldSchema = {};
+    if (_isEditing) {
+      final raw = widget.existingForm!['schema'];
+      if (raw is Map) oldSchema = Map<String, dynamic>.from(raw);
+      oldSchema.forEach((k, v) {
+        if (k != 'sections' && k != 'fields') {
+          schema.putIfAbsent(k.toString(), () => v);
+        }
+      });
+    }
+    // ═══ FIX: version لم يكن يُكتب عند الإنشاء إطلاقاً — 1 عند الإنشاء
+    // وزيادة عند التعديل (>= 1 دائماً) ═══
+    schema['version'] = ((oldSchema['version'] as num?)?.toInt() ?? 0) + 1;
 
     Navigator.pop(context, {
       'title_ar': _titleArController.text.trim(),
@@ -152,6 +251,136 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
       'max_photos': _maxPhotos,
       'campaign_type': _campaignType,
     });
+  }
+
+  // ═══ يجهّز القسم للحفظ: يحفظ كل المفاتيح غير المعروضة (id,
+  // visible_roles...) ويكتب title_ar + title معاً (المحرك يقرأ title_ar)
+  // ويعيد ترقيم order حسب موقع القسم ═══
+  Map<String, dynamic> _sectionForSave(Map<String, dynamic> section, int i) {
+    final out = Map<String, dynamic>.from(section)..remove('expanded');
+    final title = (out['title_ar'] ?? out['title'] ?? '').toString();
+    out['title_ar'] = title;
+    out['title'] = title;
+    out['order'] = i + 1;
+    return out;
+  }
+
+  // ═══ FIX: تحقق من صلاحية الاستمارة — يعيد رسالة المشكلة أو null ═══
+  String? _validateForm() {
+    final allFields = <Map<String, dynamic>>[..._fields];
+    for (final s in _sections) {
+      final list = s['fields'] as List?;
+      if (list == null) continue;
+      allFields.addAll(
+        list.map((f) => Map<String, dynamic>.from(f as Map)),
+      );
+    }
+
+    if (allFields.isEmpty) {
+      return 'لا يمكن حفظ استمارة فارغة — أضف حقلاً واحداً على الأقل';
+    }
+
+    // مفاتيح مكررة (غير حساسة لحالة الأحرف) عبر كل الاستمارة
+    final seen = <String>{};
+    final duplicates = <String>{};
+    for (final f in allFields) {
+      final key = (f['key'] as String? ?? '').trim();
+      if (key.isEmpty) continue;
+      final lower = key.toLowerCase();
+      if (seen.contains(lower)) {
+        duplicates.add(key);
+      } else {
+        seen.add(lower);
+      }
+    }
+    if (duplicates.isNotEmpty) {
+      return 'مفاتيح حقول مكررة: ${duplicates.join('، ')} — يجب أن يكون المفتاح فريداً لكل حقل';
+    }
+
+    for (int i = 0; i < allFields.length; i++) {
+      final f = allFields[i];
+      final key = (f['key'] as String? ?? '').trim();
+      final label = (f['label_ar'] as String? ?? '').trim();
+      if (label.isEmpty) {
+        return 'الحقل رقم ${i + 1}${key.isNotEmpty ? ' ($key)' : ''} بدون تسمية عربية';
+      }
+      final type = f['type'] as String? ?? 'text';
+      if (type == 'select' || type == 'multiselect') {
+        final validOptions = ((f['options'] as List?) ?? [])
+            .where((o) => o.toString().trim().isNotEmpty)
+            .length;
+        if (validOptions < 2) {
+          return 'الحقل «$label» (قائمة اختيار) يحتاج خيارين صحيحين على الأقل';
+        }
+      }
+    }
+    return null;
+  }
+
+  // ═══ FIX: حرس التغييرات غير المحفوظة — خروج مع تأكيد ═══
+  Future<void> _confirmExitWithUnsavedChanges() async {
+    // تحقق عند الخروج أيضاً — أظهر المشكلة بدقة قبل سؤال التأكيد
+    final problem = _validateForm();
+    if (problem != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            problem,
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          backgroundColor: AppTheme.warningColor,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppTheme.warningColor),
+              SizedBox(width: 8),
+              Text(
+                'تغييرات غير محفوظة',
+                style: TextStyle(fontFamily: 'Cairo', fontSize: 18),
+              ),
+            ],
+          ),
+          content: const Text(
+            'لديك تغييرات غير محفوظة — الخروج سيؤدي إلى فقدانها؟',
+            style: TextStyle(fontFamily: 'Tajawal'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text(
+                'مواصلة التعديل',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.errorColor,
+              ),
+              child: const Text(
+                'خروج',
+                style: TextStyle(fontFamily: 'Tajawal', color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (leave == true && mounted) {
+      setState(() => _dirty = false);
+      Navigator.of(context).pop();
+    }
   }
 
   // ═══════════════════════════════════════
@@ -166,7 +395,61 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     _showFieldEditor(fieldIndex, sectionIndex: sectionIndex);
   }
 
-  void _deleteField(int fieldIndex, {int? sectionIndex}) {
+  Future<void> _deleteField(int fieldIndex, {int? sectionIndex}) async {
+    Map<String, dynamic> field;
+    if (sectionIndex != null) {
+      field = ((_sections[sectionIndex]['fields'] as List?) ?? [])
+          .cast<Map<String, dynamic>>()[fieldIndex];
+    } else {
+      field = _fields[fieldIndex];
+    }
+    final label = (field['label_ar'] ?? field['key'] ?? '—').toString();
+    // ═══ FIX: تأكيد قبل الحذف — كان يُحذف فوراً بلا سؤال ═══
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppTheme.errorColor),
+              SizedBox(width: 8),
+              Text(
+                'حذف الحقل',
+                style: TextStyle(fontFamily: 'Cairo', fontSize: 18),
+              ),
+            ],
+          ),
+          content: Text(
+            'سيتم حذف الحقل «$label» نهائياً من الاستمارة. هل أنت متأكد؟',
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.errorColor,
+              ),
+              child: const Text(
+                'حذف',
+                style: TextStyle(fontFamily: 'Tajawal', color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
     setState(() {
       if (sectionIndex != null) {
         final fields = (_sections[sectionIndex]['fields'] as List)
@@ -175,6 +458,7 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
       } else {
         _fields.removeAt(fieldIndex);
       }
+      _dirty = true;
     });
   }
 
@@ -191,6 +475,7 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
         final item = _fields.removeAt(oldIndex);
         _fields.insert(newIndex, item);
       }
+      _dirty = true;
     });
   }
 
@@ -469,14 +754,22 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                           return;
                         }
 
-                        final field = <String, dynamic>{
-                          'key': keyController.text.trim(),
-                          'type': selectedType,
-                          'label_ar': labelController.text.trim(),
-                          'required': isRequired,
-                        };
-                        if (hintController.text.trim().isNotEmpty)
-                          field['hint'] = hintController.text.trim();
+                        // ✅ FIX: احتفظ بكل المفاتيح الموجودة مسبقاً (show_if,
+                        // auto_fill, label_en, visible_roles, config...) — كان
+                        // يُعاد بناء الخريطة من الصفر فتُفقد بلا رجعة
+                        final field = existingField != null
+                            ? Map<String, dynamic>.from(existingField)
+                            : <String, dynamic>{};
+                        field['key'] = keyController.text.trim();
+                        field['type'] = selectedType;
+                        field['label_ar'] = labelController.text.trim();
+                        field['required'] = isRequired;
+                        final hint = hintController.text.trim();
+                        if (hint.isNotEmpty) {
+                          field['hint'] = hint;
+                        } else {
+                          field.remove('hint');
+                        }
                         if (selectedType == 'select' ||
                             selectedType == 'multiselect') {
                           // ✅ FIX: Read from controllers to get actual typed values
@@ -488,6 +781,7 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                         }
 
                         setState(() {
+                          _dirty = true;
                           if (sectionIndex != null) {
                             final fields =
                                 (_sections[sectionIndex]['fields'] as List)
@@ -578,11 +872,15 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
               onPressed: () {
                 if (controller.text.trim().isNotEmpty) {
                   setState(() {
+                    // ✅ FIX: المحرك يقرأ title_ar — اكتب المفتاحين معاً
                     _sections.add({
+                      'title_ar': controller.text.trim(),
                       'title': controller.text.trim(),
+                      'order': _sections.length + 1,
                       'fields': <Map<String, dynamic>>[],
                       'expanded': true,
                     });
+                    _dirty = true;
                   });
                 }
                 Navigator.pop(ctx);
@@ -603,7 +901,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
 
   void _editSectionTitle(int index) {
     final controller = TextEditingController(
-      text: _sections[index]['title'] ?? '',
+      // ✅ FIX: اقرأ title_ar أولاً (المحرك يقرؤه) مع احتياطي title القديم
+      text: _sections[index]['title_ar'] ?? _sections[index]['title'] ?? '',
     );
     showDialog(
       context: context,
@@ -638,7 +937,10 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
               onPressed: () {
                 if (controller.text.trim().isNotEmpty) {
                   setState(() {
+                    // ✅ FIX: اكتب المفتاحين معاً حتى تُعرض في كل المحركات
+                    _sections[index]['title_ar'] = controller.text.trim();
                     _sections[index]['title'] = controller.text.trim();
+                    _dirty = true;
                   });
                 }
                 Navigator.pop(ctx);
@@ -657,9 +959,175 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
     );
   }
 
-  void _deleteSection(int index) {
+  Future<void> _deleteSection(int index) async {
+    final title =
+        (_sections[index]['title_ar'] ?? _sections[index]['title'] ?? '—')
+            .toString();
+    final fieldCount = ((_sections[index]['fields'] as List?)?.length ?? 0);
+    // ═══ FIX: تأكيد قبل الحذف — كان يُحذف القسم فوراً بلا سؤال ═══
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppTheme.errorColor),
+              SizedBox(width: 8),
+              Text(
+                'حذف القسم',
+                style: TextStyle(fontFamily: 'Cairo', fontSize: 18),
+              ),
+            ],
+          ),
+          content: Text(
+            'سيتم حذف القسم «$title» و$fieldCount حقل داخله. هل أنت متأكد؟',
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.errorColor,
+              ),
+              child: const Text(
+                'حذف',
+                style: TextStyle(fontFamily: 'Tajawal', color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
     setState(() {
       _sections.removeAt(index);
+      _dirty = true;
+    });
+  }
+
+  // ═══ FIX: إعادة ترتيب الأقسام — المحرك يفرز بـ order فنعيد الترقيم ═══
+  void _moveSection(int index, int direction) {
+    final newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= _sections.length) return;
+    setState(() {
+      final section = _sections.removeAt(index);
+      _sections.insert(newIndex, section);
+      for (int i = 0; i < _sections.length; i++) {
+        _sections[i]['order'] = i + 1;
+      }
+      _dirty = true;
+    });
+  }
+
+  // ═══ FIX: التحويل بين «حقول مباشرة» و«مقسم بأقسام» — كان يترك القائمة
+  // الأخرى كما هي والحفظ يكتب النشطة فقط فيُتلف المحتوى. الآن نرحّل
+  // المحتوى (مع تأكيد) فلا يُفقد شيء ═══
+  Future<void> _switchStructureMode(bool toSections) async {
+    if (_useSections == toSections) return;
+
+    final converting =
+        toSections ? _fields.isNotEmpty : _sections.isNotEmpty;
+    if (converting) {
+      final fieldCount = toSections
+          ? _fields.length
+          : _sections.fold<int>(
+              0,
+              (n, s) => n + ((s['fields'] as List?)?.length ?? 0),
+            );
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.swap_horiz_rounded, color: AppTheme.warningColor),
+                SizedBox(width: 8),
+                Text(
+                  'تحويل هيكل الاستمارة',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 18),
+                ),
+              ],
+            ),
+            content: Text(
+              toSections
+                  ? 'سيتم نقل الحقول الـ $fieldCount الحالية إلى قسم واحد بعنوان «محتوى الاستمارة». هل تريد المتابعة؟'
+                  : 'سيتم دمج حقول الأقسام ($fieldCount حقل) في قائمة واحدة مع الحفاظ على ترتيبها. هل تريد المتابعة؟',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text(
+                  'إلغاء',
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                ),
+                child: const Text(
+                  'متابعة',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    setState(() {
+      if (toSections) {
+        if (_fields.isNotEmpty) {
+          _sections.add({
+            'title_ar': 'محتوى الاستمارة',
+            'title': 'محتوى الاستمارة',
+            'order': _sections.length + 1,
+            'fields': List<Map<String, dynamic>>.from(_fields),
+            'expanded': true,
+          });
+          _fields = [];
+        }
+      } else {
+        if (_sections.isNotEmpty) {
+          final sorted = [..._sections]..sort(
+              (a, b) => ((a['order'] as num?)?.toInt() ?? 0)
+                  .compareTo((b['order'] as num?)?.toInt() ?? 0),
+            );
+          // نسخ كل حقل كخريطة String→dynamic — عناصر jsonb قد تكون
+          // Map<dynamic, dynamic> فالمعالجة الخام ستكسر وقت التشغيل
+          _fields = [
+            for (final s in sorted)
+              ...(((s['fields'] as List?) ?? []).map(
+                (f) => Map<String, dynamic>.from(f as Map),
+              )),
+          ];
+          _sections = [];
+        }
+      }
+      _useSections = toSections;
+      _dirty = true;
     });
   }
 
@@ -669,7 +1137,14 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // ═══ FIX: PopScope — منع الخروج العرضي مع تغييرات غير محفوظة ═══
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _confirmExitWithUnsavedChanges();
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Text(
           _isEditing ? 'تعديل النموذج' : 'نموذج جديد',
@@ -751,8 +1226,10 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                         ),
                       ))
                   .toList(),
-              onChanged: (v) =>
-                  setState(() => _campaignType = v ?? _campaignType),
+              onChanged: (v) => setState(() {
+                _campaignType = v ?? _campaignType;
+                _dirty = true;
+              }),
             ),
             const SizedBox(height: 16),
 
@@ -765,7 +1242,10 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                 style: TextStyle(fontFamily: 'Tajawal'),
               ),
               value: _requiresGps,
-              onChanged: (v) => setState(() => _requiresGps = v),
+              onChanged: (v) => setState(() {
+                _requiresGps = v;
+                _dirty = true;
+              }),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(color: Colors.grey.shade300),
@@ -787,7 +1267,10 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                     )
                   : null,
               value: _requiresPhoto,
-              onChanged: (v) => setState(() => _requiresPhoto = v),
+              onChanged: (v) => setState(() {
+                _requiresPhoto = v;
+                _dirty = true;
+              }),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(color: Colors.grey.shade300),
@@ -809,7 +1292,10 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                           (n) => DropdownMenuItem(value: n, child: Text('$n')),
                         )
                         .toList(),
-                    onChanged: (v) => setState(() => _maxPhotos = v ?? 5),
+                    onChanged: (v) => setState(() {
+                      _maxPhotos = v ?? 5;
+                      _dirty = true;
+                    }),
                   ),
                 ],
               ),
@@ -828,7 +1314,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                 children: [
                   Expanded(
                     child: InkWell(
-                      onTap: () => setState(() => _useSections = false),
+                      // ═══ FIX: تحويل مع ترحيل المحتوى + تأكيد ═══
+                      onTap: () => _switchStructureMode(false),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -852,7 +1339,8 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                   ),
                   Expanded(
                     child: InkWell(
-                      onTap: () => setState(() => _useSections = true),
+                      // ═══ FIX: تحويل مع ترحيل المحتوى + تأكيد ═══
+                      onTap: () => _switchStructureMode(true),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -928,6 +1416,7 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
             const SizedBox(height: 40),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1119,7 +1608,7 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          section['title'] ?? '—',
+                          section['title_ar'] ?? section['title'] ?? '—',
                           style: const TextStyle(
                             fontFamily: 'Cairo',
                             fontSize: 15,
@@ -1136,6 +1625,31 @@ class _FormEditorScreenState extends State<FormEditorScreen> {
                         ),
                       ],
                     ),
+                  ),
+                  // ═══ FIX: أزرار ترتيب الأقسام — المحرك يفرز بـ order ═══
+                  IconButton(
+                    icon: const Icon(
+                      Icons.arrow_upward_rounded,
+                      size: 18,
+                      color: AppTheme.textSecondary,
+                    ),
+                    tooltip: 'نقل القسم لأعلى',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: sectionIndex > 0
+                        ? () => _moveSection(sectionIndex, -1)
+                        : null,
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.arrow_downward_rounded,
+                      size: 18,
+                      color: AppTheme.textSecondary,
+                    ),
+                    tooltip: 'نقل القسم لأسفل',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: sectionIndex < _sections.length - 1
+                        ? () => _moveSection(sectionIndex, 1)
+                        : null,
                   ),
                   IconButton(
                     icon: const Icon(

@@ -95,27 +95,38 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
             'draft': (r['draft'] as num?)?.toInt() ?? 0,
           };
         }
-      } catch (_) {
-        // ═══ Fallback: APK قديم من دوال الخادم — حساب محلي مع فلتر المحذوف ═══
-        final results = await Future.wait([
-          client
-              .from('forms')
-              .select('*')
-              .isFilter('deleted_at', null)
-              .order('created_at', ascending: false),
-          client
+      } catch (rpcErr) {
+        // ═══ Fallback: RPC غير موجود على هذا الخادم — تجميع محلي مقيّد:
+        // استعلام واحد بحد 5000 صف مفلتر بمعرّفات النماذج الظاهرة فقط
+        // بدل المسح الكامل غير المحدود لجدول form_submissions ═══
+        debugPrint(
+          '[FormsManagement] form_submission_stats RPC failed: $rpcErr',
+        );
+        final formsRows = await client
+            .from('forms')
+            .select('*')
+            .isFilter('deleted_at', null)
+            .order('created_at', ascending: false);
+        forms = (formsRows as List<dynamic>).cast<Map<String, dynamic>>();
+        final visibleFormIds = forms.map((f) => f['id'] as String).toList();
+        if (visibleFormIds.isNotEmpty) {
+          final subs = await client
               .from('form_submissions')
               .select('form_id, status')
-              .isFilter('deleted_at', null),
-        ]);
-        forms = (results[0] as List<dynamic>).cast<Map<String, dynamic>>();
-        for (final sub in (results[1] as List<dynamic>).cast<Map<String, dynamic>>()) {
-          final fid = sub['form_id'] as String?;
-          if (fid == null) continue;
-          final counts = stats.putIfAbsent(fid, () => <String, int>{});
-          counts['total'] = (counts['total'] ?? 0) + 1;
-          final st = sub['status'] ?? 'draft';
-          counts[st] = (counts[st] ?? 0) + 1;
+              .inFilter('form_id', visibleFormIds)
+              .isFilter('deleted_at', null)
+              .limit(5000);
+          for (final sub
+              in (subs as List<dynamic>).cast<Map<String, dynamic>>()) {
+            final fid = sub['form_id'] as String?;
+            if (fid == null) continue;
+            final counts = stats.putIfAbsent(fid, () => <String, int>{});
+            counts['total'] = (counts['total'] ?? 0) + 1;
+            final stRaw = sub['status'];
+            final st =
+                (stRaw is String && stRaw.isNotEmpty) ? stRaw : 'draft';
+            counts[st] = (counts[st] ?? 0) + 1;
+          }
         }
       }
 
@@ -196,6 +207,62 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     });
   }
 
+  // ═══ FIX: يسجّل خطأ الخدمة بدل إخفائه، ويعرض تنبيهاً غير معيق فقط
+  // إذا فشل المسارَان (الخدمة + المباشر) معاً — عند نجاح المباشر يظهر
+ // النجاح الطبيعي بلا ضجيج ═══
+  Future<void> _writeWithFallback(
+    String action,
+    Map<String, dynamic> payload,
+    Future<void> Function() directWrite,
+  ) async {
+    try {
+      await _manageDataAction(action, payload);
+    } catch (edgeErr) {
+      debugPrint('[FormsManagement] manage-data "$action" failed: $edgeErr');
+      try {
+        await directWrite();
+      } catch (directErr) {
+        debugPrint(
+          '[FormsManagement] direct "$action" failed: $directErr',
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'تعذر الحفظ عبر الخدمة — جرّب الحفظ المباشر',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
+              backgroundColor: AppTheme.warningColor,
+            ),
+          );
+        }
+        rethrow;
+      }
+    }
+  }
+
+  // ═══ FIX: طبّع schema قبل الكتابة: version ≥ 1، وترقيم order للأقسام
+  // (1-based حسب الترتيب)، وtitle_ar احتياطاً من title، مع الحفاظ على
+  // كل المفاتيح الموجودة (id الأقسام، إعدادات gps العليا...) ═══
+  Map<String, dynamic> _normalizeSchema(Map<String, dynamic> schema) {
+    final out = Map<String, dynamic>.from(schema);
+    out['version'] = (out['version'] as num?)?.toInt() ?? 0;
+    if ((out['version'] as int) < 1) out['version'] = 1;
+    final sections = out['sections'];
+    if (sections is List) {
+      for (int i = 0; i < sections.length; i++) {
+        if (sections[i] is! Map) continue;
+        final sec = Map<String, dynamic>.from(sections[i] as Map);
+        sec['order'] = i + 1;
+        if ((sec['title_ar'] as String? ?? '').trim().isEmpty) {
+          sec['title_ar'] = sec['title'] ?? '';
+        }
+        sections[i] = sec;
+      }
+    }
+    return out;
+  }
+
   Future<void> _addForm() async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -211,7 +278,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'title_ar': result['title_ar'],
         'title_en': result['title_en'] ?? result['title_ar'],
         'description_ar': result['description_ar'],
-        'schema': result['schema'] ?? {'fields': []},
+        // ═══ FIX: طبّع schema — version ≥ 1 (كان الإنشاء لا يكتبه أبداً)
+        // وترقيم order للأقسام مع الاحتفاظ بكل المفاتيح الموجودة ═══
+        'schema': _normalizeSchema(result['schema'] ?? {'fields': []}),
         'requires_gps': result['requires_gps'] ?? false,
         'requires_photo': result['requires_photo'] ?? false,
         'max_photos': result['max_photos'] ?? 5,
@@ -225,11 +294,12 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       };
 
       // ═══ FIX: مسار manage-data أولاً (يعمل للمركزي والمدير) ثم مباشرة ═══
-      try {
-        await _manageDataAction('create', insertData);
-      } catch (_) {
-        await client.from('forms').insert(insertData).timeout(const Duration(seconds: 15));
-      }
+      await _writeWithFallback('create', insertData, () async {
+        await client
+            .from('forms')
+            .insert(insertData)
+            .timeout(const Duration(seconds: 15));
+      });
 
       // Invalidate caches
       try {
@@ -240,7 +310,8 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       } catch (_) {}
       ref.invalidate(formsProvider);
 
-      await Future.delayed(const Duration(milliseconds: 300));
+      // ═══ FIX: ننتظر إعادة التحميل الفعلية مباشرة — كانت مهلة 300ms
+      // تخميناً لتأخر اتساق Supabase و_loadData ترجع Future حقيقية ═══
       await _loadData();
 
       if (mounted) {
@@ -289,7 +360,9 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         ..remove('sections')
         ..remove('fields');
       preserved.addAll(newSchema);
-      preserved['version'] =
+      // ═══ FIX: طبّع الأقسام (order + title_ar) مع الحفاظ على المفاتيح ═══
+      final finalSchema = _normalizeSchema(preserved);
+      finalSchema['version'] =
           ((oldSchema['version'] as num?)?.toInt() ?? 0) + 1;
 
       // ═══ FIX: Build update map with safe defaults ═══
@@ -298,7 +371,7 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
         'title_ar': result['title_ar'],
         'title_en': result['title_en'] ?? form['title_en'] ?? '',
         'description_ar': result['description_ar'],
-        'schema': preserved,
+        'schema': finalSchema,
         'requires_gps': result['requires_gps'] ?? false,
         'requires_photo': result['requires_photo'] ?? false,
         'max_photos': result['max_photos'] ?? 5,
@@ -311,12 +384,14 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       };
 
       // ═══ FIX: مسار manage-data أولاً (يعمل للمركزي والمدير) ثم مباشرة ═══
-      try {
-        await _manageDataAction('update', updateData);
-      } catch (_) {
+      await _writeWithFallback('update', updateData, () async {
         final direct = Map<String, dynamic>.from(updateData)..remove('id');
-        await client.from('forms').update(direct).eq('id', form['id']).timeout(const Duration(seconds: 15));
-      }
+        await client
+            .from('forms')
+            .update(direct)
+            .eq('id', form['id'])
+            .timeout(const Duration(seconds: 15));
+      });
 
       // ═══ FIX: Invalidate BOTH local cache and Riverpod providers ═══
       try {
@@ -327,8 +402,8 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       } catch (_) {}
       ref.invalidate(formsProvider);
 
-      // ═══ FIX: Reload with small delay to ensure Supabase consistency ═══
-      await Future.delayed(const Duration(milliseconds: 300));
+      // ═══ FIX: ننتظر إعادة التحميل الفعلية مباشرة — كانت مهلة 300ms
+      // تخميناً لتأخر اتساق Supabase و_loadData ترجع Future حقيقية ═══
       await _loadData();
 
       if (mounted) {
@@ -407,23 +482,20 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     if (confirmed != true) return;
 
     try {
+      final client = Supabase.instance.client;
       // ═══ FIX: مسار manage-data أولاً (حذف ناعم بوابة admin+central) ═══
-      try {
-        final client = Supabase.instance.client;
-        await _manageDataAction('delete', {
-          'id': form['id'],
-          'deleted_by': client.auth.currentUser?.id,
-        });
-      } catch (_) {
+      await _writeWithFallback('delete', {
+        'id': form['id'],
+        'deleted_by': client.auth.currentUser?.id,
+      }, () async {
         // Fallback: كتابة مباشرة — تعمل للمدير (RLS: admin فقط)
-        final client = Supabase.instance.client;
         final user = client.auth.currentUser;
         await client.from('forms').update({
           'deleted_at': DateTime.now().toIso8601String(),
           'deleted_by': user?.id, // ═══ سجل من حذف (كان عموداً يتيمة بلا قيمة) ═══
           'is_active': false,
         }).eq('id', form['id']).timeout(const Duration(seconds: 15));
-      }
+      });
 
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
@@ -433,7 +505,6 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       } catch (_) {}
       ref.invalidate(formsProvider);
 
-      await Future.delayed(const Duration(milliseconds: 300));
       await _loadData();
 
       if (mounted) {
@@ -467,17 +538,15 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
     try {
       final newStatus = !(form['is_active'] as bool? ?? true);
       // ═══ FIX: مسار manage-data أولاً (يعمل للمركزي والمدير) ثم مباشرة ═══
-      try {
-        await _manageDataAction('toggle_active', {
-          'id': form['id'],
-          'is_active': newStatus,
-        });
-      } catch (_) {
+      await _writeWithFallback('toggle_active', {
+        'id': form['id'],
+        'is_active': newStatus,
+      }, () async {
         final client = Supabase.instance.client;
         await client
             .from('forms')
             .update({'is_active': newStatus}).eq('id', form['id']);
-      }
+      });
 
       try {
         final cache = await ref.read(offlineDataCacheProvider.future);
@@ -487,7 +556,8 @@ class _FormsManagementScreenState extends ConsumerState<FormsManagementScreen> {
       } catch (_) {}
       ref.invalidate(formsProvider);
 
-      await Future.delayed(const Duration(milliseconds: 200));
+      // ═══ FIX: ننتظر إعادة التحميل الفعلية مباشرة — كانت مهلة 200ms
+      // تخميناً لتأخر اتساق Supabase و_loadData ترجع Future حقيقية ═══
       await _loadData();
 
       if (mounted) {

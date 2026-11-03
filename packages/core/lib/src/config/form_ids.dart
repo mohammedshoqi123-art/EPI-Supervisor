@@ -31,6 +31,9 @@ class FormIds {
   /// استمارة جاهزية حملة الحصبة
   static const String measlesReadiness = 'a1b2c3d4-3333-4333-8333-333333333333';
 
+  /// استمارة الاشراف على مخيمات النازحين (حملة الحصبة)
+  static const String measlesCampsSupervision = 'a1b2c3d4-4444-4444-8444-444444444444';
+
   /// كل المعرفات
   static const List<String> all = [
     supervision,
@@ -39,6 +42,7 @@ class FormIds {
     measlesSupervision,
     measlesSurvey,
     measlesReadiness,
+    measlesCampsSupervision,
   ];
 
   /// التحقق إذا كان المعرف ينتمي لنموذج معروف
@@ -52,6 +56,7 @@ class FormIds {
     if (id == measlesSupervision) return 'استمارة الإشراف لحملة الحصبة';
     if (id == measlesSurvey) return 'استمارة المسح العشوائي لحملة الحصبة';
     if (id == measlesReadiness) return 'استمارة جاهزية حملة الحصبة';
+    if (id == measlesCampsSupervision) return 'استمارة الاشراف على مخيمات النازحين';
     return null;
   }
 }

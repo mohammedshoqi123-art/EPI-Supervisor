@@ -640,7 +640,7 @@ serve(async (req: Request) => {
     collect(probe)
     try {
       let endFound = false
-      for (let waveStart = pageSize; waveStart < MAX_ROWS && !endFound; waveStart += FETCH_CONCURRENCY * pageSize) {
+      for (let waveStart = 0; waveStart < MAX_ROWS && !endFound; waveStart += FETCH_CONCURRENCY * pageSize) {
         const offsets: number[] = []
         for (let i = 0; i < FETCH_CONCURRENCY; i++) {
           const o = waveStart + i * pageSize

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/memos_feedback_service.dart';
 import '../providers/app_providers.dart';
 
@@ -13,6 +14,36 @@ import '../providers/app_providers.dart';
 ///   - مهام اليوم (زيارات مجدولة)
 /// ═══════════════════════════════════════════════════════════
 
+/// ═══════════════════════════════════════════════════════════
+/// myYesterdaySubmissionsProvider — عدد إرساليات المستخدم أمس
+/// ═══ FIX: previously «إرسالياتي أمس» was hardcoded to '—'. This counts the
+/// current user's form_submissions created yesterday (not deleted). ═══
+/// ═══════════════════════════════════════════════════════════
+
+final myYesterdaySubmissionsProvider =
+    FutureProvider.autoDispose<int>((ref) async {
+  try {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return 0;
+    final now = DateTime.now();
+    final yesterdayStart = DateTime(now.year, now.month, now.day - 1);
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final response = await client
+        .from('form_submissions')
+        .select('id')
+        .eq('submitted_by', userId)
+        .gte('created_at', yesterdayStart.toIso8601String())
+        .lt('created_at', todayStart.toIso8601String())
+        .isFilter('deleted_at', null)
+        .timeout(const Duration(seconds: 15));
+    return (response as List).length;
+  } catch (e) {
+    debugPrint('[myYesterdaySubmissionsProvider] error: $e');
+    rethrow; // surfaced as '—' in the brief stat card
+  }
+});
+
 class DailyBriefWidget extends ConsumerWidget {
   final String userName;
 
@@ -22,6 +53,8 @@ class DailyBriefWidget extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final memosAsync = ref.watch(memosProvider);
     final ticketsAsync = ref.watch(feedbackTicketsProvider('received'));
+    // ═══ FIX: real count for «إرسالياتي أمس» ═══
+    final mySubsAsync = ref.watch(myYesterdaySubmissionsProvider);
 
     // Today's date label
     final now = DateTime.now();
@@ -145,8 +178,8 @@ class DailyBriefWidget extends ConsumerWidget {
                   child: _briefStat(
                     icon: Icons.send_rounded,
                     label: 'إرسالياتي أمس',
-                    valueAsync: memosAsync,
-                    valueBuilder: (_) => '—',
+                    valueAsync: mySubsAsync,
+                    valueBuilder: (count) => '$count',
                     color: const Color(0xFFC8E6C9),
                   ),
                 ),
@@ -306,10 +339,10 @@ class AchievementBoard extends ConsumerWidget {
       ),
     );
 
-    final govRankingAsync = ref.watch(
-      governorateRankingProvider(ref.read(campaignRoundProvider)),
-    );
-
+    // Capture the provider instance so the retry button can invalidate it
+    final rankingProvider =
+        governorateRankingProvider(ref.read(campaignRoundProvider));
+    final govRankingAsync = ref.watch(rankingProvider);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       padding: const EdgeInsets.all(14),
@@ -350,12 +383,44 @@ class AchievementBoard extends ConsumerWidget {
           // Real data from governorate ranking
           govRankingAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, __) => _achievementItem(
-              icon: '📊',
-              title: 'أعلى محافظة في الإرساليات',
-              value: 'جاري التحميل...',
-              metric: '-',
-              color: const Color(0xFFFFD700),
+            // ═══ FIX: real error message + retry — previously showed the
+            // misleading 'جاري التحميل...' on errors ═══
+            error: (e, _) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.error_outline_rounded,
+                        size: 16, color: Color(0xFFEF4444)),
+                    SizedBox(width: 6),
+                    Text(
+                      'تعذّر تحميل الإنجازات',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        color: Color(0xFFEF4444),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    onPressed: () => ref.invalidate(rankingProvider),
+                    icon: const Icon(Icons.refresh_rounded, size: 14),
+                    label: const Text('إعادة المحاولة',
+                        style: TextStyle(fontFamily: 'Tajawal', fontSize: 11)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+              ],
             ),
             data: (ranking) {
               if (ranking.isEmpty) {
@@ -606,8 +671,4 @@ class _EmergencyBannerState extends State<EmergencyBanner>
     );
   }
 }
-
-/// ═══════════════════════════════════════════════════════════
-/// SmartRepliesBar — شريط الردود الجاهزة الذكية
-/// ═══════════════════════════════════════════════════════════
 

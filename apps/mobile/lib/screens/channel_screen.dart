@@ -16,7 +16,8 @@ class ChannelScreen extends StatefulWidget {
   final ChatChannel channel;
   final String currentUserId;
   final String currentUserName;
-  final String currentUserRole;
+  // ═══ FIX: nullable — chat hub passes null until the user's role loads ═══
+  final String? currentUserRole;
 
   const ChannelScreen({
     super.key,
@@ -83,7 +84,64 @@ class _ChannelScreenState extends State<ChannelScreen> {
         },
       );
 
-      _realtimeChannel!.subscribe();
+      // ═══ FIX: handle UPDATE — replace the message in _messages in place ═══
+      _realtimeChannel!.onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'chat_messages',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'room',
+          value: channelCode,
+        ),
+        callback: (payload) {
+          if (!mounted) return;
+          final updated = payload.newRecord;
+          final id = updated['id']?.toString();
+          if (id == null || updated.isEmpty) {
+            _loadMessages(silent: true);
+            return;
+          }
+          final index =
+              _messages.indexWhere((m) => m['id']?.toString() == id);
+          if (index != -1) {
+            setState(() => _messages[index] = updated);
+          } else {
+            // Message not in the loaded window — full silent reload
+            _loadMessages(silent: true);
+          }
+        },
+      );
+
+      // ═══ FIX: handle DELETE — remove the message by id ═══
+      _realtimeChannel!.onPostgresChanges(
+        event: PostgresChangeEvent.delete,
+        schema: 'public',
+        table: 'chat_messages',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'room',
+          value: channelCode,
+        ),
+        callback: (payload) {
+          if (!mounted) return;
+          final deletedId = payload.oldRecord['id']?.toString();
+          if (deletedId == null) return;
+          setState(() =>
+              _messages.removeWhere((m) => m['id']?.toString() == deletedId));
+        },
+      );
+
+      // ═══ FIX: start fallback polling from the subscribe status callback —
+      // previously only synchronous exceptions were caught, so if subscribe
+      // itself failed/timed out the fallback polling never started ═══
+      _realtimeChannel!.subscribe((status, [error]) {
+        if (status != RealtimeSubscribeStatus.subscribed || error != null) {
+          debugPrint('[ChannelScreen] Realtime status=$status error=$error — '
+              'starting fallback polling');
+          _startFallbackPolling();
+        }
+      });
     } catch (e) {
       debugPrint('[ChannelScreen] Realtime subscribe failed: $e');
       _startFallbackPolling();
@@ -101,16 +159,19 @@ class _ChannelScreenState extends State<ChannelScreen> {
     if (_messages.isEmpty) return _loadMessages(silent: true);
     try {
       final client = Supabase.instance.client;
-      final lastId = _messages.last['id'];
+      // ═══ FIX: filter by created_at — 'id' is a UUID and NOT chronological,
+      // so .gt('id', lastId) could miss (or duplicate) messages ═══
+      final lastCreatedAt = _messages.last['created_at']?.toString() ?? '';
+      if (lastCreatedAt.isEmpty) return _loadMessages(silent: true);
       final channelCode = widget.channel.code ?? 'general';
       final response = widget.channel.id.isNotEmpty
           ? await client.from('chat_messages').select('*')
               .eq('channel_id', widget.channel.id)
-              .gt('id', lastId).order('created_at', ascending: true)
+              .gt('created_at', lastCreatedAt).order('created_at', ascending: true)
               .limit(50).timeout(const Duration(seconds: 10))
           : await client.from('chat_messages').select('*')
               .eq('room', channelCode)
-              .gt('id', lastId).order('created_at', ascending: true)
+              .gt('created_at', lastCreatedAt).order('created_at', ascending: true)
               .limit(50).timeout(const Duration(seconds: 10));
       final newMsgs = (response as List).cast<Map<String, dynamic>>();
       if (newMsgs.isNotEmpty && mounted) {
@@ -295,8 +356,15 @@ class _ChannelScreenState extends State<ChannelScreen> {
   }
 
   bool get _canWrite {
-    return widget.channel.targetRoles.contains(widget.currentUserRole);
+    // ═══ FIX: null role (still loading) → treat as non-privileged ═══
+    final role = widget.currentUserRole;
+    return role != null &&
+        role.isNotEmpty &&
+        widget.channel.targetRoles.contains(role);
   }
+
+  /// ═══ FIX: admin can moderate (delete) any message, not just their own ═══
+  bool get _canModerate => widget.currentUserRole == 'admin';
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -477,10 +545,17 @@ class _ChannelScreenState extends State<ChannelScreen> {
       ));
     }
 
-    return ListView(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      children: items,
+    // ═══ FIX: pull-to-refresh — full reload of the message list ═══
+    return RefreshIndicator(
+      onRefresh: () => _loadMessages(),
+      child: ListView(
+        controller: _scrollController,
+        // Always scrollable so pull-to-refresh works even when the
+        // conversation is shorter than the viewport
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        children: items,
+      ),
     );
   }
 
@@ -803,7 +878,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
                 ),
               );
             }),
-            if (isMe)
+            if (isMe || _canModerate)
               _optionTile(Icons.delete_outline_rounded, 'حذف', () {
                 Navigator.pop(context);
                 _deleteMessage(msg['id']);
@@ -829,11 +904,53 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
   Future<void> _deleteMessage(dynamic id) async {
     if (id == null) return;
+
+    // ═══ FIX: confirm before deleting — the delete was previously instant ═══
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الرسالة',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+        content: const Text(
+          'هل أنت متأكد من حذف هذه الرسالة؟ لا يمكن التراجع عن هذا الإجراء.',
+          style: TextStyle(fontFamily: 'Tajawal'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء',
+                style: TextStyle(fontFamily: 'Tajawal')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف',
+                style: TextStyle(fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     try {
       final client = Supabase.instance.client;
       await client.from('chat_messages').delete().eq('id', id).timeout(const Duration(seconds: 10));
       await _loadMessages(silent: true);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[ChannelScreen] Delete message failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تعذّر حذف الرسالة — حاول مرة أخرى',
+                style: TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildInputBar(Color channelColor) {

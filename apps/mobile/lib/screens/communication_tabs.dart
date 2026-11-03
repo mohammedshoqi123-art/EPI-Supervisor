@@ -26,7 +26,7 @@ import 'channel_screen.dart';
 class MemosTab extends ConsumerStatefulWidget {
   final String currentUserId;
   final String currentUserName;
-  final String currentUserRole;
+  final String? currentUserRole;
 
   const MemosTab({
     super.key,
@@ -57,7 +57,7 @@ class _MemosTabState extends ConsumerState<MemosTab>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    Widget content = Column(
       children: [
         // Sub-tab bar (الواردة / إلزامي / المُقَرّ بها)
         Container(
@@ -95,26 +95,59 @@ class _MemosTabState extends ConsumerState<MemosTab>
             children: [
               _MemosListTab(
                 filter: (m) => true,
-                currentUserId: widget.currentUserId,
-                currentUserName: widget.currentUserName,
                 currentUserRole: widget.currentUserRole,
               ),
               _MemosListTab(
                 filter: (m) => m.needsUrgentAcknowledgment && !m.isExpired,
-                currentUserId: widget.currentUserId,
-                currentUserName: widget.currentUserName,
                 currentUserRole: widget.currentUserRole,
                 showBatchAck: true, // Show "acknowledge all" button
               ),
               _MemosListTab(
                 filter: (m) => m.isAcknowledged,
-                currentUserId: widget.currentUserId,
-                currentUserName: widget.currentUserName,
                 currentUserRole: widget.currentUserRole,
               ),
             ],
           ),
         ),
+      ],
+    );
+
+    // ═══ FIX: زر «إصدار تعميم» — admin/central/governorate فقط ═══
+    final role = widget.currentUserRole;
+    final canIssueMemo =
+        role == 'admin' || role == 'central' || role == 'governorate';
+
+    return Stack(
+      children: [
+        content,
+        if (canIssueMemo)
+          PositionedDirectional(
+            bottom: 16,
+            end: 16,
+            child: FloatingActionButton.extended(
+              heroTag: 'issueMemoFab',
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const MemoComposerScreen(),
+                  ),
+                ).then((_) => ref.invalidate(memosProvider));
+              },
+              icon: const Icon(Icons.campaign_rounded, size: 20),
+              label: const Text(
+                'إصدار تعميم',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -127,7 +160,7 @@ class _MemosTabState extends ConsumerState<MemosTab>
 class ChannelsTab extends ConsumerStatefulWidget {
   final String currentUserId;
   final String currentUserName;
-  final String currentUserRole;
+  final String? currentUserRole;
 
   const ChannelsTab({
     super.key,
@@ -350,7 +383,7 @@ class _ChannelsTabState extends ConsumerState<ChannelsTab> {
 
 class _EmbeddedChannelCard extends StatelessWidget {
   final ChatChannel channel;
-  final String currentUserRole;
+  final String? currentUserRole;
   final VoidCallback onTap;
 
   const _EmbeddedChannelCard({
@@ -537,7 +570,7 @@ class _EmbeddedChannelCard extends StatelessWidget {
                               ),
                             ),
                           const Spacer(),
-                          if (!channel.canWrite(currentUserRole))
+                          if (!channel.canWrite(currentUserRole ?? ''))
                             Icon(Icons.lock_outline_rounded,
                                 size: 12, color: Colors.grey.shade400),
                         ],
@@ -585,7 +618,7 @@ class _EmbeddedChannelCard extends StatelessWidget {
 class FeedbackTab extends ConsumerStatefulWidget {
   final String currentUserId;
   final String currentUserName;
-  final String currentUserRole;
+  final String? currentUserRole;
 
   const FeedbackTab({
     super.key,
@@ -601,32 +634,11 @@ class FeedbackTab extends ConsumerStatefulWidget {
 class _FeedbackTabState extends ConsumerState<FeedbackTab>
     with SingleTickerProviderStateMixin {
   late TabController _subTabController;
-  String _currentFilter = 'all';
 
   @override
   void initState() {
     super.initState();
     _subTabController = TabController(length: 4, vsync: this);
-    _subTabController.addListener(() {
-      if (!_subTabController.indexIsChanging) {
-        setState(() {
-          switch (_subTabController.index) {
-            case 0:
-              _currentFilter = 'all';
-              break;
-            case 1:
-              _currentFilter = 'received';
-              break;
-            case 2:
-              _currentFilter = 'overdue';
-              break;
-            case 3:
-              _currentFilter = 'resolved';
-              break;
-          }
-        });
-      }
-    });
   }
 
   @override
@@ -707,10 +719,13 @@ class _FeedbackTabState extends ConsumerState<FeedbackTab>
           child: TabBarView(
             controller: _subTabController,
             children: [
-              _TicketsListTab(filter: 'all'),
-              _TicketsListTab(filter: 'received'),
-              _TicketsListTab(filter: 'overdue'),
-              _TicketsListTab(filter: 'resolved'),
+              _TicketsListTab(filter: 'all', currentUserRole: widget.currentUserRole),
+              _TicketsListTab(
+                  filter: 'received', currentUserRole: widget.currentUserRole),
+              _TicketsListTab(
+                  filter: 'overdue', currentUserRole: widget.currentUserRole),
+              _TicketsListTab(
+                  filter: 'resolved', currentUserRole: widget.currentUserRole),
             ],
           ),
         ),
@@ -727,7 +742,7 @@ class BriefTab extends ConsumerWidget {
   final String userName;
   final String currentUserId;
   final String currentUserName;
-  final String currentUserRole;
+  final String? currentUserRole;
 
   const BriefTab({
     super.key,
@@ -910,16 +925,12 @@ class BriefTab extends ConsumerWidget {
 
 class _MemosListTab extends ConsumerStatefulWidget {
   final bool Function(OfficialMemo) filter;
-  final String currentUserId;
-  final String currentUserName;
-  final String currentUserRole;
+  final String? currentUserRole;
   final bool showBatchAck; // Show "acknowledge all" button (for mandatory tab)
 
   const _MemosListTab({
     required this.filter,
-    required this.currentUserId,
-    required this.currentUserName,
-    required this.currentUserRole,
+    this.currentUserRole,
     this.showBatchAck = false,
   });
 
@@ -1179,8 +1190,10 @@ class _MemosListTabState extends ConsumerState<_MemosListTab> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                MemoDetailScreen(memo: memos[index]),
+                            builder: (_) => MemoDetailScreen(
+                              memo: memos[index],
+                              currentUserRole: widget.currentUserRole,
+                            ),
                           ),
                         ).then((_) => ref.invalidate(memosProvider));
                       },
@@ -1202,8 +1215,9 @@ class _MemosListTabState extends ConsumerState<_MemosListTab> {
 
 class _TicketsListTab extends ConsumerWidget {
   final String filter;
+  final String? currentUserRole;
 
-  const _TicketsListTab({required this.filter});
+  const _TicketsListTab({required this.filter, this.currentUserRole});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1277,8 +1291,10 @@ class _TicketsListTab extends ConsumerWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          FeedbackDetailScreen(ticket: tickets[index]),
+                      builder: (_) => FeedbackDetailScreen(
+                        ticket: tickets[index],
+                        currentUserRole: currentUserRole,
+                      ),
                     ),
                   ).then((_) =>
                       ref.invalidate(allFeedbackTicketsProvider));

@@ -117,6 +117,7 @@ class FeedbackTicket {
   final String? fromUserId;
   final String fromName;
   final String fromRole;
+  final String? toUserId;
   final String toRole;
   final String? toGovernorateId;
   final String? toDistrictId;
@@ -139,6 +140,7 @@ class FeedbackTicket {
     this.fromUserId,
     required this.fromName,
     required this.fromRole,
+    this.toUserId,
     required this.toRole,
     this.toGovernorateId,
     this.toDistrictId,
@@ -163,6 +165,7 @@ class FeedbackTicket {
       fromUserId: m['from_user_id'] as String?,
       fromName: m['from_name'] as String? ?? '',
       fromRole: m['from_role'] as String? ?? '',
+      toUserId: m['to_user_id'] as String?,
       toRole: m['to_role'] as String? ?? '',
       toGovernorateId: m['to_governorate_id'] as String?,
       toDistrictId: m['to_district_id'] as String?,
@@ -287,7 +290,8 @@ class OfficialMemosService {
             .toList();
       } catch (e2) {
         debugPrint('[OfficialMemosService] Fallback error: $e2');
-        return [];
+        // ═══ FIX: Do not swallow errors — let the provider emit an error state ═══
+        rethrow;
       }
     }
   }
@@ -442,7 +446,8 @@ class FeedbackTicketsService {
             .toList();
       } catch (e2) {
         debugPrint('[FeedbackTicketsService] Fallback error: $e2');
-        return [];
+        // ═══ FIX: Do not swallow errors — let the provider emit an error state ═══
+        rethrow;
       }
     }
   }
@@ -606,10 +611,33 @@ final feedbackTicketsServiceProvider = Provider<FeedbackTicketsService>((ref) {
 final memosProvider = StreamProvider<List<OfficialMemo>>((ref) async* {
   final service = ref.read(officialMemosServiceProvider);
   final controller = StreamController<List<OfficialMemo>>();
+  // ═══ FIX: set when the generator exits (e.g. after an error) so in-flight
+  // refreshes never push into a closed/cancelled stream. ═══
+  bool streamDone = false;
+  // ═══ FIX: once at least one refresh succeeded, later failures keep the last
+  // good data instead of flipping the UI into an error state. ═══
+  bool everSucceeded = false;
 
   Future<void> refresh() async {
+    List<OfficialMemo>? memos;
     try {
-      final memos = await service.getUserMemos();
+      memos = await service.getUserMemos();
+      everSucceeded = true;
+    } catch (e) {
+      debugPrint('[memosProvider] fetch error: $e');
+      // ═══ FIX: Offline fallback — serve cached snapshot if one exists ═══
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final cached = await cache.getList('memos_offline', () async => [], maxAge: const Duration(days: 365));
+        if (cached.isNotEmpty) {
+          memos = cached.map((m) => OfficialMemo.fromMap(m)).toList();
+          debugPrint('[memosProvider] offline — serving ${memos.length} cached memos');
+        }
+      } catch (_) {}
+    }
+
+    if (streamDone || controller.isClosed) return;
+    if (memos != null) {
       if (!controller.isClosed) controller.add(memos);
       // ═══ FIX: Cache memos for offline viewing ═══
       try {
@@ -634,17 +662,14 @@ final memosProvider = StreamProvider<List<OfficialMemo>>((ref) async* {
         await cache.forceInvalidate('memos_offline');
         await cache.getList('memos_offline', () async => rawList, maxAge: const Duration(days: 7));
       } catch (_) {}
-    } catch (e) {
-      // ═══ FIX: On failure, try offline cache ═══
-      try {
-        final cache = await ref.read(offlineDataCacheProvider.future);
-        final cached = await cache.getList('memos_offline', () async => [], maxAge: const Duration(days: 365));
-        if (cached.isNotEmpty) {
-          final memos = cached.map((m) => OfficialMemo.fromMap(m)).toList();
-          if (!controller.isClosed) controller.add(memos);
-        }
-      } catch (_) {}
+    } else if (!everSucceeded) {
+      // ═══ FIX: No data and no cache → emit error so the UI error branch renders
+      // (previously errors were swallowed and the UI stayed loading forever) ═══
+      if (!controller.isClosed) {
+        controller.addError(StateError('تعذّر تحميل التعاميم'));
+      }
     }
+    // If we already emitted data once, a later failure keeps the last good data.
   }
 
   await refresh();
@@ -655,8 +680,13 @@ final memosProvider = StreamProvider<List<OfficialMemo>>((ref) async* {
     controller.close();
   });
 
-  await for (final memos in controller.stream) {
-    yield memos;
+  try {
+    await for (final memos in controller.stream) {
+      yield memos;
+    }
+  } finally {
+    timer.cancel();
+    streamDone = true;
   }
 });
 
@@ -666,10 +696,33 @@ final allFeedbackTicketsProvider =
     StreamProvider<List<FeedbackTicket>>((ref) async* {
   final service = ref.read(feedbackTicketsServiceProvider);
   final controller = StreamController<List<FeedbackTicket>>();
+  // ═══ FIX: set when the generator exits (e.g. after an error) so in-flight
+  // refreshes never push into a closed/cancelled stream. ═══
+  bool streamDone = false;
+  // ═══ FIX: once at least one refresh succeeded, later failures keep the last
+  // good data instead of flipping the UI into an error state. ═══
+  bool everSucceeded = false;
 
   Future<void> refresh() async {
+    List<FeedbackTicket>? tickets;
     try {
-      final tickets = await service.getUserTickets(filter: 'all');
+      tickets = await service.getUserTickets(filter: 'all');
+      everSucceeded = true;
+    } catch (e) {
+      debugPrint('[allFeedbackTicketsProvider] fetch error: $e');
+      // ═══ FIX: Offline fallback — serve cached snapshot if one exists ═══
+      try {
+        final cache = await ref.read(offlineDataCacheProvider.future);
+        final cached = await cache.getList('tickets_offline', () async => [], maxAge: const Duration(days: 365));
+        if (cached.isNotEmpty) {
+          tickets = cached.map((t) => FeedbackTicket.fromMap(t)).toList();
+          debugPrint('[allFeedbackTicketsProvider] offline — serving ${tickets.length} cached tickets');
+        }
+      } catch (_) {}
+    }
+
+    if (streamDone || controller.isClosed) return;
+    if (tickets != null) {
       if (!controller.isClosed) controller.add(tickets);
       // ═══ FIX: Cache tickets for offline viewing ═══
       try {
@@ -680,6 +733,7 @@ final allFeedbackTicketsProvider =
           'from_user_id': t.fromUserId,
           'from_name': t.fromName,
           'from_role': t.fromRole,
+          'to_user_id': t.toUserId,
           'to_role': t.toRole,
           'to_governorate_id': t.toGovernorateId,
           'to_district_id': t.toDistrictId,
@@ -699,17 +753,14 @@ final allFeedbackTicketsProvider =
         await cache.forceInvalidate('tickets_offline');
         await cache.getList('tickets_offline', () async => rawList, maxAge: const Duration(days: 7));
       } catch (_) {}
-    } catch (e) {
-      // ═══ FIX: On failure, try offline cache ═══
-      try {
-        final cache = await ref.read(offlineDataCacheProvider.future);
-        final cached = await cache.getList('tickets_offline', () async => [], maxAge: const Duration(days: 365));
-        if (cached.isNotEmpty) {
-          final tickets = cached.map((t) => FeedbackTicket.fromMap(t)).toList();
-          if (!controller.isClosed) controller.add(tickets);
-        }
-      } catch (_) {}
+    } else if (!everSucceeded) {
+      // ═══ FIX: No data and no cache → emit error so the UI error branch renders
+      // (previously errors were swallowed and the UI stayed loading forever) ═══
+      if (!controller.isClosed) {
+        controller.addError(StateError('تعذّر تحميل التذاكر'));
+      }
     }
+    // If we already emitted data once, a later failure keeps the last good data.
   }
 
   await refresh();
@@ -720,32 +771,86 @@ final allFeedbackTicketsProvider =
     controller.close();
   });
 
-  await for (final tickets in controller.stream) {
-    yield tickets;
+  try {
+    await for (final tickets in controller.stream) {
+      yield tickets;
+    }
+  } finally {
+    timer.cancel();
+    streamDone = true;
   }
 });
 
 /// Filtered feedback tickets provider — derives from allFeedbackTicketsProvider
 /// with client-side filtering (NO extra RPC call — reduces 4 RPC → 1)
+/// ═══ FIX: 'sent' / 'received' / 'pending' are now filtered client-side
+/// against the current user id + role (previously they fell through the
+/// default branch and returned ALL tickets). ═══
 final feedbackTicketsProvider =
     FutureProvider.family<List<FeedbackTicket>, String>((ref, filter) async {
+  // Current user id + role for client-side sent/received filtering.
+  // userId: from Supabase auth (always available when signed in).
+  // role: from the global auth state (falls back to a profiles lookup).
+  String? currentUserId;
+  String? currentUserRole;
+  try {
+    final auth = ref.watch(authStateProvider).valueOrNull;
+    currentUserId = auth?.userId;
+    currentUserRole = auth?.role?.dbValue;
+  } catch (_) {}
+  try {
+    currentUserId ??= Supabase.instance.client.auth.currentUser?.id;
+  } catch (_) {}
+  if (currentUserRole == null && currentUserId != null) {
+    try {
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('role')
+          .eq('id', currentUserId)
+          .maybeSingle();
+      currentUserRole = profile?['role'] as String?;
+    } catch (_) {}
+  }
+
+  // "Addressed to me" — same rule for received & pending:
+  // to_user_id == me, OR (no explicit user target AND to_role == my role)
+  bool addressedToMe(FeedbackTicket t) {
+    if (t.toUserId != null && t.toUserId!.isNotEmpty) {
+      return t.toUserId == currentUserId;
+    }
+    return currentUserRole != null &&
+        currentUserRole.isNotEmpty &&
+        t.toRole == currentUserRole;
+  }
+
   final allTickets = await ref.watch(allFeedbackTicketsProvider.future);
 
   switch (filter) {
-    case 'overdue':
-      return allTickets.where((t) => t.isOverdue).toList();
+    case 'sent':
+      if (currentUserId == null) return const [];
+      return allTickets
+          .where((t) => t.fromUserId == currentUserId)
+          .toList();
+    case 'received':
+      if (currentUserId == null) return const [];
+      return allTickets.where(addressedToMe).toList();
     case 'pending':
+      // Pending = addressed to me AND still open (sent/in_progress)
+      if (currentUserId == null) return const [];
       return allTickets
           .where((t) =>
-              t.status == 'sent' ||
-              t.status == 'received' ||
-              t.status == 'in_progress')
+              addressedToMe(t) &&
+              (t.status == 'sent' || t.status == 'in_progress') &&
+              t.status != 'resolved' &&
+              t.status != 'closed')
           .toList();
+    case 'overdue':
+      return allTickets.where((t) => t.isOverdue).toList();
     case 'resolved':
       return allTickets
           .where((t) => t.status == 'resolved' || t.status == 'closed')
           .toList();
-    default: // 'all', 'sent', 'received' — server already filters
+    default: // 'all'
       return allTickets;
   }
 });

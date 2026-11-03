@@ -11,112 +11,9 @@ import 'attachment_widgets.dart';
 /// ═══════════════════════════════════════════════════════════
 /// NOTE: MemosScreen (standalone) was removed — use MemosTab in
 /// communication_tabs.dart instead. The classes below (MemoCard,
-/// MemoDetailScreen, MemoComposerScreen, _MemosListTab) are still
-/// used by communication_tabs.dart.
+/// MemoDetailScreen, MemoComposerScreen) are still used by
+/// communication_tabs.dart.
 /// ═══════════════════════════════════════════════════════════
-
-/// ═══════════════════════════════════════════════════════════
-/// _MemosListTab — قائمة التعاميم مع فلتر
-/// ═══════════════════════════════════════════════════════════
-
-class _MemosListTab extends ConsumerWidget {
-  final bool Function(OfficialMemo) filter;
-
-  const _MemosListTab({required this.filter});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final memosAsync = ref.watch(memosProvider);
-
-    return memosAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 48, color: Color(0xFFEF4444)),
-            const SizedBox(height: 12),
-            Text('تعذّر تحميل التعاميم',
-                style: TextStyle(fontFamily: 'Tajawal', color: Colors.grey.shade700)),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () => ref.invalidate(memosProvider),
-              icon: const Icon(Icons.refresh),
-              label: const Text('إعادة'),
-            ),
-          ],
-        ),
-      ),
-      data: (allMemos) {
-        final memos = allMemos.where(filter).toList();
-
-        if (memos.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.description_outlined,
-                        size: 44,
-                        color: AppTheme.primaryColor.withValues(alpha: 0.5)),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'لا توجد تعاميم',
-                    style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'ستظهر التعاميم الرسمية هنا',
-                    style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 13,
-                        color: Colors.grey.shade500),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(memosProvider),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: memos.length,
-            itemBuilder: (context, index) {
-              return MemoCard(
-                memo: memos[index],
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          MemoDetailScreen(memo: memos[index]),
-                    ),
-                  ).then((_) => ref.invalidate(memosProvider));
-                },
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-}
 
 /// ═══════════════════════════════════════════════════════════
 /// _MemoCard — بطاقة تعميم
@@ -297,8 +194,14 @@ class MemoCard extends StatelessWidget {
 
 class MemoDetailScreen extends ConsumerStatefulWidget {
   final OfficialMemo memo;
+  // ═══ FIX: role of the current user — gates admin-only panels/actions ═══
+  final String? currentUserRole;
 
-  const MemoDetailScreen({super.key, required this.memo});
+  const MemoDetailScreen({
+    super.key,
+    required this.memo,
+    this.currentUserRole,
+  });
 
   @override
   ConsumerState<MemoDetailScreen> createState() => _MemoDetailScreenState();
@@ -306,14 +209,21 @@ class MemoDetailScreen extends ConsumerStatefulWidget {
 
 class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
   bool _acknowledging = false;
+  bool _deactivating = false;
   Map<String, dynamic>? _ackStats;
   List<Attachment> _attachments = [];
   bool _loadingAttachments = true;
 
+  /// ═══ FIX: ack-stats panel + deactivate action are admin/central only ═══
+  bool get _canManage =>
+      widget.currentUserRole == 'admin' || widget.currentUserRole == 'central';
+
   @override
   void initState() {
     super.initState();
-    _loadAckStats();
+    // ═══ FIX: only admins/central need ack stats — previously every user
+    // fetched them and got a zeroed panel (service returns zeros on error) ═══
+    if (_canManage) _loadAckStats();
     _loadAttachments();
   }
 
@@ -334,11 +244,94 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
 
   Future<void> _loadAckStats() async {
     // Only for admin/central
+    if (!_canManage) return;
     final service = ref.read(officialMemosServiceProvider);
     try {
       final stats = await service.getAcknowledgmentStats(widget.memo.id);
       if (mounted) setState(() => _ackStats = stats);
     } catch (_) {}
+  }
+
+  /// ═══ FIX: hide the stats panel when the data is all zeros (service
+  /// returns a zeroed map on error — showing "متابعة الاستلام 0/0" is noise) ═══
+  bool get _ackStatsHasData {
+    final s = _ackStats;
+    if (s == null) return false;
+    final total = (s['total_recipients'] as num?)?.toInt() ?? 0;
+    final ack = (s['acknowledged_count'] as num?)?.toInt() ?? 0;
+    final pending = (s['pending_count'] as num?)?.toInt() ?? 0;
+    return total > 0 || ack > 0 || pending > 0;
+  }
+
+  /// ═══ FIX: «إلغاء التعميم» — deactivate (admin/central only) ═══
+  Future<void> _deactivateMemo() async {
+    HapticFeedback.mediumImpact();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إلغاء التعميم',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+        content: const Text(
+          'سيتم إخفاء هذا التعميم نهائياً عن جميع المستلمين. هل أنت متأكد؟',
+          style: TextStyle(fontFamily: 'Tajawal'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء',
+                style: TextStyle(fontFamily: 'Tajawal')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('إلغاء التعميم',
+                style: TextStyle(fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deactivating = true);
+    try {
+      final service = ref.read(officialMemosServiceProvider);
+      await service.deactivateMemo(widget.memo.id);
+      if (mounted) {
+        ref.invalidate(memosProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text('تم إلغاء التعميم بنجاح',
+                    style: TextStyle(fontFamily: 'Tajawal')),
+              ],
+            ),
+            backgroundColor: const Color(0xFF22C55E),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل إلغاء التعميم: $e',
+                style: const TextStyle(fontFamily: 'Tajawal')),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deactivating = false);
+    }
   }
 
   Future<void> _acknowledge() async {
@@ -396,6 +389,21 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
         ),
         backgroundColor: color,
         foregroundColor: Colors.white,
+        // ═══ FIX: «إلغاء التعميم» — admin/central only ═══
+        actions: [
+          if (_canManage)
+            IconButton(
+              tooltip: 'إلغاء التعميم',
+              icon: _deactivating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.cancel_schedule_send_rounded),
+              onPressed: _deactivating ? null : _deactivateMemo,
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -573,8 +581,8 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
                   const SizedBox(height: 16),
                   AttachmentList(attachments: _attachments),
                 ],
-                // ═══ Ack Stats (admin only) ═══
-                if (_ackStats != null) ...[
+                // ═══ Ack Stats (admin/central only — hidden when all zeros) ═══
+                if (_ackStats != null && _ackStatsHasData) ...[
                   const SizedBox(height: 20),
                   _buildAckStats(),
                 ],

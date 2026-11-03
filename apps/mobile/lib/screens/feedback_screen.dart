@@ -12,115 +12,9 @@ import 'attachment_widgets.dart';
 /// ═══════════════════════════════════════════════════════════
 /// NOTE: FeedbackScreen (standalone) was removed — use FeedbackTab in
 /// communication_tabs.dart instead. The classes below (TicketCard,
-/// FeedbackDetailScreen, FeedbackComposerScreen, _TicketsListTab,
-/// _ResponseBubble) are still used by communication_tabs.dart.
+/// FeedbackDetailScreen, FeedbackComposerScreen, _ResponseBubble) are
+/// still used by communication_tabs.dart.
 /// ═══════════════════════════════════════════════════════════
-
-/// ═══════════════════════════════════════════════════════════
-/// _TicketsListTab — قائمة التذاكر
-/// ═══════════════════════════════════════════════════════════
-
-class _TicketsListTab extends ConsumerWidget {
-  final String filter;
-
-  const _TicketsListTab({required this.filter});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ticketsAsync = ref.watch(feedbackTicketsProvider(filter));
-
-    return ticketsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 48, color: Color(0xFFEF4444)),
-            const SizedBox(height: 12),
-            Text('تعذّر تحميل التذاكر',
-                style: TextStyle(fontFamily: 'Tajawal', color: Colors.grey.shade700)),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () =>
-                  ref.invalidate(allFeedbackTicketsProvider),
-              icon: const Icon(Icons.refresh),
-              label: const Text('إعادة'),
-            ),
-          ],
-        ),
-      ),
-      data: (tickets) {
-        if (tickets.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.feedback_outlined,
-                        size: 44,
-                        color: AppTheme.primaryColor.withValues(alpha: 0.5)),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'لا توجد تغذية راجعة',
-                    style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    filter == 'overdue'
-                        ? 'لا توجد تذاكر متأخرة — ممتاز!'
-                        : 'ستظهر التذاكر هنا',
-                    style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 13,
-                        color: Colors.grey.shade500),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return RefreshIndicator(
-          onRefresh: () async =>
-              ref.invalidate(allFeedbackTicketsProvider),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: tickets.length,
-            itemBuilder: (context, index) {
-              return TicketCard(
-                ticket: tickets[index],
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          FeedbackDetailScreen(ticket: tickets[index]),
-                    ),
-                  ).then((_) =>
-                      ref.invalidate(allFeedbackTicketsProvider));
-                },
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-}
 
 /// ═══════════════════════════════════════════════════════════
 /// _TicketCard — بطاقة تذكرة تغذية راجعة
@@ -368,8 +262,14 @@ class TicketCard extends StatelessWidget {
 
 class FeedbackDetailScreen extends ConsumerStatefulWidget {
   final FeedbackTicket ticket;
+  // ═══ FIX: role of the current user — gates the status-change menu ═══
+  final String? currentUserRole;
 
-  const FeedbackDetailScreen({super.key, required this.ticket});
+  const FeedbackDetailScreen({
+    super.key,
+    required this.ticket,
+    this.currentUserRole,
+  });
 
   @override
   ConsumerState<FeedbackDetailScreen> createState() =>
@@ -383,6 +283,34 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
   bool _sendingReply = false;
   List<Attachment> _attachments = [];
   bool _loadingAttachments = true;
+
+  /// ═══ FIX: status changes are allowed only for admin/central or the user
+  /// the ticket is addressed to (toRole) — previously everyone saw the menu ═══
+  bool get _canChangeStatus {
+    final role = widget.currentUserRole;
+    return role == 'admin' ||
+        role == 'central' ||
+        (role != null && role == widget.ticket.toRole);
+  }
+
+  /// ═══ FIX: Arabic status labels (previously the raw English enum was
+  /// posted into the status-change comment) ═══
+  String _statusLabelAr(String status) {
+    switch (status) {
+      case 'sent':
+        return 'مُرسلة';
+      case 'in_progress':
+        return 'قيد المعالجة';
+      case 'resolved':
+        return 'تم الحل';
+      case 'closed':
+        return 'مغلقة';
+      case 'escalated':
+        return 'مُصعّدة';
+      default:
+        return status;
+    }
+  }
 
   @override
   void initState() {
@@ -473,6 +401,33 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
 
   Future<void> _updateStatus(String newStatus) async {
     HapticFeedback.mediumImpact();
+
+    // ═══ FIX: confirm before applying the status change ═══
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تغيير حالة التذكرة',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+        content: Text(
+          'سيتم تغيير حالة التذكرة إلى: ${_statusLabelAr(newStatus)}. هل تريد المتابعة؟',
+          style: const TextStyle(fontFamily: 'Tajawal'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء',
+                style: TextStyle(fontFamily: 'Tajawal')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('تأكيد',
+                style: TextStyle(fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     try {
       final client = Supabase.instance.client;
       final userId = client.auth.currentUser?.id;
@@ -492,7 +447,8 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
         responderId: userId,
         responderName: profile['full_name'] ?? 'غير معروف',
         responderRole: profile['role'] ?? 'data_entry',
-        comment: 'تم تحديث الحالة إلى: $newStatus',
+        // ═══ FIX: Arabic label instead of the raw English enum ═══
+        comment: 'تم تحديث الحالة إلى: ${_statusLabelAr(newStatus)}',
       );
 
       await _loadResponses();
@@ -534,16 +490,19 @@ class _FeedbackDetailScreenState extends ConsumerState<FeedbackDetailScreen> {
         backgroundColor: statusColor,
         foregroundColor: Colors.white,
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded),
-            onSelected: _updateStatus,
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'received', child: Text('تم الاستلام')),
-              const PopupMenuItem(value: 'in_progress', child: Text('قيد المعالجة')),
-              const PopupMenuItem(value: 'resolved', child: Text('تم الحل')),
-              const PopupMenuItem(value: 'closed', child: Text('إغلاق')),
-            ],
-          ),
+          // ═══ FIX: status-change menu only for admin/central or the ticket's
+          // target role — hidden for everyone else ═══
+          if (_canChangeStatus)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded),
+              onSelected: _updateStatus,
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'received', child: Text('تم الاستلام')),
+                const PopupMenuItem(value: 'in_progress', child: Text('قيد المعالجة')),
+                const PopupMenuItem(value: 'resolved', child: Text('تم الحل')),
+                const PopupMenuItem(value: 'closed', child: Text('إغلاق')),
+              ],
+            ),
         ],
       ),
       body: Column(

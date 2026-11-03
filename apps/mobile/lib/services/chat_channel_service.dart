@@ -129,7 +129,8 @@ class ChatChannelService {
             .toList();
       } catch (e2) {
         debugPrint('[ChatChannelService] Fallback query error: $e2');
-        return [];
+        // ═══ FIX: Do not swallow errors — let the provider emit an error state ═══
+        rethrow;
       }
     }
   }
@@ -149,10 +150,30 @@ final channelsProvider = StreamProvider<List<ChatChannel>>((ref) async* {
 
   // Use a controller for periodic refresh
   final controller = StreamController<List<ChatChannel>>();
+  // ═══ FIX: set when the generator exits (e.g. after an error) so in-flight
+  // refreshes never push into a closed/cancelled stream. ═══
+  bool streamDone = false;
+  // ═══ FIX: once at least one refresh succeeded, later failures keep the last
+  // good data instead of flipping the UI into an error state. ═══
+  bool everSucceeded = false;
 
   Future<void> refresh() async {
-    final channels = await service.getUserChannels();
-    if (!controller.isClosed) controller.add(channels);
+    List<ChatChannel>? channels;
+    try {
+      channels = await service.getUserChannels();
+      everSucceeded = true;
+    } catch (e) {
+      // ═══ FIX: previously the service returned [] on failure and the error was
+      // swallowed — the error UI never rendered. Propagate the error instead. ═══
+      debugPrint('[channelsProvider] fetch error: $e');
+    }
+
+    if (streamDone || controller.isClosed) return;
+    if (channels != null) {
+      if (!controller.isClosed) controller.add(channels);
+    } else if (!everSucceeded && !controller.isClosed) {
+      controller.addError(StateError('تعذّر تحميل القنوات'));
+    }
   }
 
   // Initial data
@@ -169,7 +190,12 @@ final channelsProvider = StreamProvider<List<ChatChannel>>((ref) async* {
     controller.close();
   });
 
-  await for (final channels in controller.stream) {
-    yield channels;
+  try {
+    await for (final channels in controller.stream) {
+      yield channels;
+    }
+  } finally {
+    refreshTimer.cancel();
+    streamDone = true;
   }
 });

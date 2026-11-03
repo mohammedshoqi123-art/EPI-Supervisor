@@ -247,16 +247,14 @@
       setTimeout(function() { progressEl.textContent = 'جاري إكمال التحميل...'; }, 20000);
     }
 
-    // Unregister any stale service workers
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        registrations.forEach(function(reg) { reg.unregister(); });
-      }).catch(function() {});
-    }
-    // Clear all caches
-    if ('caches' in window) {
-      caches.keys().then(function(names) { names.forEach(function(n) { caches.delete(n); }); });
-    }
+    // ═══ FIX 2026-11 — سبب «الصفحة المعلقة» الحقيقي ═══
+    // سابقاً كان هذا السكربت يلغي كل Service Workers ويمسح كل الكاشات عند
+    // كل زيارة → Flutter يعيد تسجيل SW ويعيد تنزيل ~6.5MB (main.dart.js
+    // والأصول) إلى الكاش في الخلفية **كل مرة** → على الشبكات البطيئة يتنافس
+    // هذا مع تحميل التطبيق نفسه ويبدو معلقاً بلا نهاية.
+    // الآن: نثق بـ Service Worker الرسمي من Flutter — يثبّت مرة واحدة،
+    // ويحدّث نفسه تدريجياً بعد كل نشر (يجلب الملفات المتغيرة فقط)، فيصبح
+    // إقلاع الزيارات التالية سريعاً من الكاش. لا نلغي ولا نمسح شيئاً.
 
     // ═══ Detect if Flutter has started rendering ═══
     function hasFlutterRendered() {

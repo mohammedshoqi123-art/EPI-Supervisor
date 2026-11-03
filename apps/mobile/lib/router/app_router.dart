@@ -57,7 +57,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     '/users': 4, // admin + central only
     '/forms-management': 5, // admin only (طلب المستخدم: مخفية عن المركزي نهائياً)
     '/references-management': 4, // admin + central only
-    '/analytics': 3, // governorate+ can view analytics
+    '/analytics': 2, // district+ (طلب المستخدم: مشرفو المديريات يرون التحليلات — الخادم يقصر بياناتهم على مديريتهم)
     '/map': 1, // everyone
     '/submissions': 1, // everyone (RLS filters by role)
     '/forms-status': 1, // everyone

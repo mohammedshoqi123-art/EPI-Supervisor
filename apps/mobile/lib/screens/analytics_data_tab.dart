@@ -2,18 +2,21 @@
 //  DATA EXPORT TAB — تبويب «البيانات» في صفحة التحليلات
 // ═══════════════════════════════════════════════════════════════════════════
 //
-//  تصدير جميع بيانات النماذج بجميع حقولها إلى ملف Excel (.xlsx)
-//  وفق صلاحيات المستخدم:
+//  تصدير مباشر (بدون معاينة) لجميع بيانات النماذج بجميع حقولها إلى ملف
+//  Excel (.xlsx) وفق صلاحيات المستخدم:
 //    • النماذج: فقط الاستمارات المسموح بدوره (allowed_roles + is_active)
-//      — عبر formsProvider الذي يطبق نفس الفلترة أونلاين وأوفلاين.
 //    • الحقول: فقط الحقول الظاهرة لدوره (visible_roles / hidden_roles)
-//      — نفس منطق form_fill.
-//    • النطاق: الصفوف تأتي من الخادم مقيّدةً بالدور أصلاً؛ المدير (5)
-//      يختار أي محافظة أو الكل، والمركزي (4) ضمن المحافظات المعيّنة له فقط،
-//      وما دون ذلك نطاقه الثابت من حسابه.
+//    • النطاق: الصفوف تأتي من الخادم مقيّدةً بالدور أصلاً (fetch_submissions)؛
+//      المدير يختار أي محافظة، والمركزي ضمن المعيّن له، وما دون ذلك نطاقه.
 //
-//  يعمل أوفلاين: الإرساليات عبر submissionsProvider (كاش أولاً + مزامنة)،
-//  والمراجع (محافظات/مديريات/مرافق) من الكاش المحلي.
+//  التدفق المطلوب من المستخدم: اختر الاستمارة ← اضغط «تصدير Excel» ←
+//  يُجلب ويُولَّد ويُشارك مباشرة. لا معاينة تُحمّل البيانات عند فتح التبويب.
+//
+//  الموثوقية:
+//    • الجلب أونلاين عبر getSubmissions (RPC) — مهلة 90 ثانية.
+//    • عند فشل الشبكة: fallback تلقائي إلى الكاش المحلي (نفس مفتاح
+//      submissionsProvider) أو أي كاش submissions_* مطابق للنموذج.
+//    • كل خطأ يظهر كرسالة واضحة مع بقاء زر التصدير جاهزاً لإعادة المحاولة.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:io';
@@ -38,6 +41,7 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
   String? _selectedFormId;
   String? _selectedGovId; // للمدير/المركزي فقط
   bool _exporting = false;
+  String? _lastError;
 
   // ─────────────────────────────────────────────────────────────────
   //  الصلاحيات
@@ -60,12 +64,7 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
   List<String> get _assignedGovernorateIds =>
       ref.read(authStateProvider).valueOrNull?.assignedGovernorates ?? const [];
 
-  // ─────────────────────────────────────────────────────────────────
-  //  نطاق البيانات المُرسل للخادم
-  // ─────────────────────────────────────────────────────────────────
-
-  /// الجولة تُمرر فقط للنشاط التكاملي (نفس منطق _effectiveRound —
-  /// الشلل والحصبة ليست لها جولات حقيقية).
+  /// الجولة تُمرر فقط للنشاط التكاملي (نفس منطق _effectiveRound).
   int? get _effectiveRound {
     final campaign = ref.read(campaignProvider).value;
     final round = ref.read(campaignRoundProvider);
@@ -136,7 +135,7 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
     }
   }
 
-  /// إثراء حقول المراجع بخريطة ID → اسم.
+  /// حقول التصدير (مفلترة بالدور) مُثراة بخريطة ID → اسم للمراجع.
   Future<List<ExcelExportField>> _enrichedFields(
       Map<String, dynamic> form) async {
     final schemaRaw = form['schema'];
@@ -153,15 +152,9 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
     final facMap = await _facilityIdToName();
 
     return base.map((f) {
-      if (f.type == 'governorate') {
-        return _copyField(f, govMap);
-      }
-      if (f.type == 'district') {
-        return _copyField(f, distMap);
-      }
-      if (f.type == 'health_facility') {
-        return _copyField(f, facMap);
-      }
+      if (f.type == 'governorate') return _copyField(f, govMap);
+      if (f.type == 'district') return _copyField(f, distMap);
+      if (f.type == 'health_facility') return _copyField(f, facMap);
       return f;
     }).toList();
   }
@@ -181,19 +174,84 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  //  التصدير الفعلي
+  //  جلب الإرساليات — أونلاين أولاً ثم الكاش المحلي
   // ─────────────────────────────────────────────────────────────────
 
-  Future<void> _exportExcel(
-    Map<String, dynamic> form,
-    List<Map<String, dynamic>> submissions,
-  ) async {
+  Future<List<Map<String, dynamic>>> _fetchSubmissions(
+      Map<String, dynamic> form) async {
+    final formId = form['id']?.toString();
+    List<Map<String, dynamic>> subs = [];
+    bool networkFailed = false;
+
+    // 1) أونلاين — نفس مسار التقارير (RPC fetch_submissions، الصلاحيات من الخادم)
+    try {
+      subs = await ref
+          .read(databaseServiceProvider)
+          .getSubmissions(
+            formId: formId,
+            governorateId: _scopeGovernorateId,
+            campaignRound: _effectiveRound,
+            limit: 10000,
+            lean: false,
+          )
+          .timeout(const Duration(seconds: 90));
+    } catch (_) {
+      networkFailed = true;
+    }
+
+    if (subs.isNotEmpty) return subs;
+
+    // 2) أوفلاين — الكاش المحلي بنفس مفتاح submissionsProvider
+    try {
+      final cache = await ref.read(offlineDataCacheProvider.future);
+      final filter = SubmissionsFilter(
+        formId: formId,
+        governorateId: _scopeGovernorateId,
+        campaignRound: _effectiveRound,
+        lean: false,
+        limit: 10000,
+      );
+      final cached = cache.getCachedDataList(filter.cacheKey);
+      if (cached != null && cached.isNotEmpty) return cached;
+
+      // 3) آخر fallback: أي كاش submissions_* يحتوي صفوف هذا النموذج
+      final any = cache.findCachedListByPrefix('submissions_');
+      if (any != null && any.isNotEmpty) {
+        final rows = any
+            .where((s) =>
+                formId == null || s['form_id']?.toString() == formId)
+            .toList();
+        if (rows.isNotEmpty) return rows;
+      }
+    } catch (_) {}
+
+    if (networkFailed) {
+      throw Exception('تعذّر جلب البيانات من الشبكة ولا يوجد نسخة محلية مخزنة');
+    }
+    return const [];
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  //  التصدير المباشر — بضغطة واحدة
+  // ─────────────────────────────────────────────────────────────────
+
+  Future<void> _exportExcel(Map<String, dynamic> form) async {
     if (_exporting) return;
-    setState(() => _exporting = true);
+    setState(() {
+      _exporting = true;
+      _lastError = null;
+    });
     try {
       final fields = await _enrichedFields(form);
       if (fields.isEmpty) {
         _snack('لا توجد حقول قابلة للتصدير في هذا النموذج', Colors.orange);
+        return;
+      }
+
+      final submissions = await _fetchSubmissions(form);
+      if (submissions.isEmpty) {
+        _snack('لا توجد إرساليات لهذه الاستمارة في نطاق صلاحياتك',
+            Colors.orange);
         return;
       }
 
@@ -202,6 +260,7 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
         submissions: submissions,
       );
       if (!result.isSuccess || result.bytes == null) {
+        setState(() => _lastError = result.error ?? 'تعذّر توليد الملف');
         _snack(result.error ?? 'تعذّر توليد الملف', Colors.red);
         return;
       }
@@ -220,7 +279,9 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
             '(${result.rowCount} إرسالية)',
       ));
     } catch (e) {
-      _snack('فشل التصدير: $e', Colors.red);
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      setState(() => _lastError = msg);
+      _snack('فشل التصدير: $msg', Colors.red);
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -230,14 +291,14 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message,
-          style: const TextStyle(fontFamily: 'Tajawal')),
+      content:
+          Text(message, style: const TextStyle(fontFamily: 'Tajawal')),
       backgroundColor: color,
     ));
   }
 
   // ─────────────────────────────────────────────────────────────────
-  //  الواجهة
+  //  الواجهة — بلا معاينة: اختيار + زر مباشر
   // ─────────────────────────────────────────────────────────────────
 
   @override
@@ -275,11 +336,10 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
           );
         }
 
-        // النموذج المختار (أول نموذج افتراضياً)
         final selectedForm = _formById(forms, _selectedFormId) ?? forms.first;
-        if (_selectedFormId != selectedForm['id']?.toString()) {
-          _selectedFormId = selectedForm['id']?.toString();
-        }
+        _selectedFormId = selectedForm['id']?.toString();
+        final color = _campaignColors[selectedForm['campaign_type']] ??
+            const Color(0xFF607D8B);
 
         return ListView(
           padding: const EdgeInsets.all(16),
@@ -289,6 +349,7 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
               selectedId: _selectedFormId,
               onChanged: (id) => setState(() {
                 _selectedFormId = id;
+                _lastError = null;
               }),
             ),
             const SizedBox(height: 12),
@@ -297,19 +358,110 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
               isAdmin: _isAdmin,
               assignedIds: _assignedGovernorateIds,
               selectedGovId: _selectedGovId,
-              userGovId: _userGovernorateId,
-              onGovernorateChanged: (id) => setState(() => _selectedGovId = id),
+              onGovernorateChanged: (id) =>
+                  setState(() => _selectedGovId = id),
             ),
             const SizedBox(height: 12),
-            _SubmissionsPreview(
-              form: selectedForm,
-              governorateId: _scopeGovernorateId,
-              campaignRound: _effectiveRound,
-              onExport: _exportExcel,
-              exporting: _exporting,
-              onRetry: () {
-                ref.invalidate(submissionsProvider);
-              },
+
+            // ── بطاقة التصدير المباشر ──
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.ios_share_rounded,
+                          color: color, size: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('تصدير Excel مباشر',
+                          style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.grey.shade800)),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text(
+                    'اضغط الزر ليتم جلب جميع إرساليات «${selectedForm['title_ar'] ?? ''}» '
+                    'المسموحة بصلاحياتك، وتوليد ملف Excel بجميع حقولها ومشاركته فوراً.',
+                    style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11.5,
+                        height: 1.5,
+                        color: Colors.grey.shade600),
+                  ),
+                  if (_lastError != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.error_outline_rounded,
+                            size: 18, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(_lastError!,
+                              style: const TextStyle(
+                                  fontFamily: 'Tajawal',
+                                  fontSize: 11.5,
+                                  color: Colors.red)),
+                        ),
+                      ]),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: _exporting
+                        ? null
+                        : () => _exportExcel(selectedForm),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: color,
+                      disabledBackgroundColor: color.withValues(alpha: 0.5),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: _exporting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.download_rounded, size: 20),
+                    label: Text(
+                      _exporting ? 'جاري التصدير...' : 'تصدير Excel',
+                      style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             _PermissionsInfoCard(
@@ -423,7 +575,6 @@ class _ScopeSelector extends ConsumerWidget {
   final bool isAdmin;
   final List<String> assignedIds;
   final String? selectedGovId;
-  final String? userGovId;
   final void Function(String?) onGovernorateChanged;
 
   const _ScopeSelector({
@@ -431,14 +582,12 @@ class _ScopeSelector extends ConsumerWidget {
     required this.isAdmin,
     required this.assignedIds,
     required this.selectedGovId,
-    required this.userGovId,
     required this.onGovernorateChanged,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!canChoose) {
-      // مستوى محافظة/مديرية/مُدخل — النطاق ثابت من الحساب (الخادم يفرضه)
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -454,7 +603,8 @@ class _ScopeSelector extends ConsumerWidget {
             child: Text(
               'نطاق البيانات: نطاقك الخاص حسب صلاحياتك (يفرضه الخادم)',
               style: TextStyle(
-                  fontFamily: 'Tajawal', fontSize: 12,
+                  fontFamily: 'Tajawal',
+                  fontSize: 12,
                   color: Colors.grey.shade700),
             ),
           ),
@@ -462,7 +612,6 @@ class _ScopeSelector extends ConsumerWidget {
       );
     }
 
-    // المدير/المركزي — قائمة محافظات
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: ref.read(governoratesProvider.future).timeout(
             const Duration(seconds: 10),
@@ -470,14 +619,15 @@ class _ScopeSelector extends ConsumerWidget {
           ),
       builder: (context, snap) {
         var govs = snap.data ?? const <Map<String, dynamic>>[];
-        // المركزي: فقط المحافظات المعيّنة له
         if (!isAdmin && assignedIds.isNotEmpty) {
           govs = govs
               .where((g) => assignedIds.contains(g['id']?.toString()))
               .toList();
         }
-        // تحقق: الاختيار الحالي يجب أن يكون ضمن القائمة المسموحة
-        final allowedValues = <String>{'', for (final g in govs) g['id'].toString()};
+        final allowedValues = <String>{
+          '',
+          for (final g in govs) g['id'].toString()
+        };
         final currentValue =
             (selectedGovId != null && allowedValues.contains(selectedGovId))
                 ? selectedGovId
@@ -506,8 +656,7 @@ class _ScopeSelector extends ConsumerWidget {
             items: [
               const DropdownMenuItem(
                 value: '',
-                child: Text('الكل',
-                    overflow: TextOverflow.ellipsis),
+                child: Text('الكل', overflow: TextOverflow.ellipsis),
               ),
               for (final g in govs)
                 DropdownMenuItem(
@@ -520,247 +669,6 @@ class _ScopeSelector extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-}
-
-/// بطاقة معاينة البيانات + زر التصدير.
-class _SubmissionsPreview extends ConsumerWidget {
-  final Map<String, dynamic> form;
-  final String? governorateId;
-  final int? campaignRound;
-  final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
-      onExport;
-  final bool exporting;
-  final VoidCallback onRetry;
-
-  const _SubmissionsPreview({
-    required this.form,
-    required this.governorateId,
-    required this.campaignRound,
-    required this.onExport,
-    required this.exporting,
-    required this.onRetry,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final filter = SubmissionsFilter(
-      formId: form['id']?.toString(),
-      governorateId: governorateId,
-      campaignRound: campaignRound,
-      lean: false,
-      limit: 10000,
-    );
-    final subsAsync = ref.watch(submissionsProvider(filter));
-
-    final color = _campaignColors[form['campaign_type']] ??
-        const Color(0xFF607D8B);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // رأس البطاقة
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.table_view_rounded, color: color, size: 22),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('معاينة البيانات',
-                        style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.grey.shade800)),
-                    const SizedBox(height: 2),
-                    Text(
-                      'الصفوف المصدَّرة حسب صلاحياتك على الخادم',
-                      style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 11,
-                          color: Colors.grey.shade500),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: onRetry,
-                tooltip: 'تحديث',
-                icon: Icon(Icons.refresh_rounded,
-                    size: 20, color: Colors.grey.shade600),
-              ),
-            ]),
-          ),
-          Divider(height: 1, color: Colors.grey.shade200),
-
-          // المحتوى
-          subsAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Icon(Icons.cloud_off_rounded,
-                      size: 40, color: Colors.grey[400]),
-                  const SizedBox(height: 10),
-                  Text(
-                    'تعذّر تحميل البيانات — أعد المحاولة',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 13,
-                        color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: onRetry,
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('إعادة المحاولة',
-                        style: TextStyle(fontFamily: 'Tajawal')),
-                  ),
-                ],
-              ),
-            ),
-            data: (subs) {
-              if (subs.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Icon(Icons.inbox_rounded,
-                          size: 44, color: Colors.grey[400]),
-                      const SizedBox(height: 10),
-                      Text(
-                        'لا توجد إرساليات لهذه الاستمارة في نطاقك',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 13,
-                            color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // عدادات
-                    Row(children: [
-                      _CountChip(
-                        icon: Icons.receipt_long_rounded,
-                        label: '${subs.length} إرسالية',
-                        color: color,
-                      ),
-                      const SizedBox(width: 8),
-                      _CountChip(
-                        icon: Icons.table_rows_rounded,
-                        label: 'Excel (.xlsx)',
-                        color: const Color(0xFF217346),
-                      ),
-                    ]),
-                    const SizedBox(height: 8),
-                    Text(
-                      'تُصدَّر جميع الحقول الظاهرة لدورك («${form['title_ar'] ?? ''}») '
-                      'مع بيانات المحافظة والمديرية والمُرسِل والتاريخ والإحداثيات.',
-                      style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 11.5,
-                          height: 1.5,
-                          color: Colors.grey.shade600),
-                    ),
-                    const SizedBox(height: 14),
-                    // زر التصدير
-                    FilledButton.icon(
-                      onPressed:
-                          exporting ? null : () => onExport(form, subs),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: color,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      icon: exporting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.ios_share_rounded, size: 20),
-                      label: Text(
-                        exporting ? 'جاري التوليد...' : 'تصدير Excel',
-                        style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CountChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _CountChip(
-      {required this.icon, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 5),
-        Text(label,
-            style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: color)),
-      ]),
     );
   }
 }
@@ -793,35 +701,33 @@ class _PermissionsInfoCard extends StatelessWidget {
             size: 20, color: Color(0xFF00897B)),
         const SizedBox(width: 10),
         Expanded(
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('صلاحيات التصدير — $roleLabel',
-                    style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF00695C))),
-                const SizedBox(height: 3),
-                Text(
-                  scopeText,
-                  style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 11.5,
-                      height: 1.5,
-                      color: Color(0xFF00695C)),
-                ),
-                const SizedBox(height: 3),
-                const Text(
-                  'أعمدة الملف: المحافظة، المديرية، المُرسِل، الحالة، التاريخ، '
-                  'الإحداثيات، عدد الصور، الملاحظات، ثم حقول الاستمارة كاملة.',
-                  style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 11,
-                      height: 1.5,
-                      color: Color(0xFF4B6B65)),
-                ),
-              ]),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('صلاحيات التصدير — $roleLabel',
+                style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF00695C))),
+            const SizedBox(height: 3),
+            Text(
+              scopeText,
+              style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 11.5,
+                  height: 1.5,
+                  color: Color(0xFF00695C)),
+            ),
+            const SizedBox(height: 3),
+            const Text(
+              'أعمدة الملف: المحافظة، المديرية، المُرسِل، الحالة، التاريخ، '
+              'الإحداثيات، عدد الصور، الملاحظات، ثم حقول الاستمارة كاملة.',
+              style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 11,
+                  height: 1.5,
+                  color: Color(0xFF4B6B65)),
+            ),
+          ]),
         ),
       ]),
     );

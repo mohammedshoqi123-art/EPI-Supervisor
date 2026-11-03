@@ -267,7 +267,11 @@ export function FormDataDialog({ open, onOpenChange, form }: {
           })
         }
         if (records.length === 0) throw new Error('لا توجد سجلات في الملف')
-        const toInsert = records.map(r => ({ form_id: form.id, data: r.data || r, status: r.status || 'submitted', submitted_at: r.submitted_at || new Date().toISOString() }))
+        // ═══ FIX: submitted_by مطلوب (NOT NULL) — كان الاستيراد يفشل دائماً بدونها ═══
+        const { data: { session } } = await supabase.auth.getSession()
+        const uid = session?.user.id
+        if (!uid) throw new Error('انتهت الجلسة — أعد تسجيل الدخول')
+        const toInsert = records.map(r => ({ form_id: form.id, data: r.data || r, status: r.status || 'submitted', submitted_at: r.submitted_at || new Date().toISOString(), submitted_by: uid }))
         const { error } = await supabase.from('form_submissions').insert(toInsert)
         if (error) throw error
         toast({ title: 'تم الاستيراد', description: `تم استيراد ${records.length} سجل بنجاح` })
@@ -281,8 +285,12 @@ export function FormDataDialog({ open, onOpenChange, form }: {
   const confirmDeleteSubmission = async () => {
     if (!deleteSubTarget) return
     try {
-      const { error } = await supabase.from('form_submissions').update({ deleted_at: new Date().toISOString() }).eq('id', deleteSubTarget)
+      // ═══ FIX: عبر RPC soft_delete_submission (SECURITY DEFINER) —
+      // التحديث المباشر لـ deleted_at يُرفض بـ RLS لأن سياسة SELECT
+      // (deleted_at IS NULL) تُطبّق على الصف الجديد عند UPDATE ═══
+      const { data, error } = await supabase.rpc('soft_delete_submission', { p_id: deleteSubTarget })
       if (error) throw error
+      if (!data) throw new Error('لم تُحذف الإرسالية — تحقق من الصلاحية')
       toast({ title: 'تم الحذف', description: 'تم حذف الإرسالية' })
       refetch()
     } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }) }
@@ -291,9 +299,19 @@ export function FormDataDialog({ open, onOpenChange, form }: {
 
   const confirmDeleteAll = async () => {
     try {
-      const { error } = await supabase.from('form_submissions').update({ deleted_at: new Date().toISOString() }).eq('form_id', form.id).is('deleted_at', null)
+      // جلب المعرفات ثم الحذف عبر RPC الجماعي (نفس آلية الحماية)
+      const { data: rows, error: fetchErr } = await supabase
+        .from('form_submissions')
+        .select('id')
+        .eq('form_id', form.id)
+        .is('deleted_at', null)
+        .limit(10000)
+      if (fetchErr) throw fetchErr
+      const ids = (rows || []).map(r => r.id)
+      if (ids.length === 0) { toast({ title: 'لا توجد بيانات للحذف' }); setDeleteAllConfirm(false); return }
+      const { data, error } = await supabase.rpc('soft_delete_submissions', { p_ids: ids })
       if (error) throw error
-      toast({ title: 'تم الحذف', description: 'تم حذف جميع البيانات' })
+      toast({ title: 'تم الحذف', description: `تم حذف ${data ?? 0} إرسالية` })
       refetch()
     } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }) }
     finally { setDeleteAllConfirm(false) }

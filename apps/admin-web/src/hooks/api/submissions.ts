@@ -129,6 +129,90 @@ export function useUpdateSubmissionStatus() {
   })
 }
 
+// ═══ Soft delete via SECURITY DEFINER RPC ═══
+// السبب: سياسة SELECT (deleted_at IS NULL) تُطبَّق على الصف الجديد عند UPDATE،
+// فأي حذف ناعم مباشر من العميل يُرفض بـ 42501 مهما كانت سياسة UPDATE.
+// soft_delete_submission(s) تتحقق من الصلاحية داخلياً (admin/central) وتقيّد
+// deleted_at + deleted_by وتُطلق مشغّل التدقيق تلقائياً.
+function invalidateAfterDelete(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['submissions'] })
+  queryClient.invalidateQueries({ queryKey: ['form-submission-counts'] })
+  queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+  queryClient.invalidateQueries({ queryKey: ['trash-stats'] })
+}
+
+export function useDeleteSubmission() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc('soft_delete_submission', { p_id: id })
+      if (error) throw error
+      const deleted = typeof data === 'number' ? data : Number(data ?? 0)
+      if (deleted === 0) throw new Error('لم تُحذف الإرسالية — قد تكون محذوفة مسبقاً أو لا تملك صلاحية')
+      return deleted
+    },
+    onSuccess: () => invalidateAfterDelete(queryClient),
+  })
+}
+
+export function useBulkDeleteSubmissions() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ ids }: { ids: string[] }) => {
+      if (ids.length === 0) throw new Error('لم يتم اختيار أي إرسالية')
+      const { data, error } = await supabase.rpc('soft_delete_submissions', { p_ids: ids })
+      if (error) throw error
+      const deleted = typeof data === 'number' ? data : Number(data ?? 0)
+      return { deleted, total: ids.length }
+    },
+    onSuccess: () => invalidateAfterDelete(queryClient),
+  })
+}
+
+// ═══ Full submission row incl. `data` column ═══
+// القائمة تستثني عمود data (صور base64 ثقيلة) — نجلبه هنا عند فتح التفاصيل
+// فقط، لعرض الحقول وتعديلها بأمان بدل JSON الخام.
+export function useSubmissionDetail(id: string | null) {
+  return useQuery({
+    queryKey: ['submission-detail', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('form_submissions')
+        .select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, campaign_round, notes, review_notes, data')
+        .eq('id', id!)
+        .maybeSingle()
+      if (error) throw error
+      return data as {
+        id: string; status: SubmissionStatus; form_id: string
+        governorate_id: string | null; district_id: string | null
+        submitted_by: string | null; created_at: string; submitted_at: string | null
+        campaign_round: number | null; notes: string | null; review_notes: string | null
+        data: Record<string, unknown> | null
+      } | null
+    },
+    enabled: isConfigured && !!id,
+    staleTime: 0,
+  })
+}
+
+// Form schema for schema-aware editing (sections → fields)
+export function useFormSchema(formId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['form-schema', formId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('forms')
+        .select('id, title_ar, schema')
+        .eq('id', formId!)
+        .maybeSingle()
+      if (error) throw error
+      return data as { id: string; title_ar: string; schema: any } | null
+    },
+    enabled: isConfigured && !!formId,
+    staleTime: 60000,
+  })
+}
+
 export function useBulkUpdateSubmissionStatus() {
   const queryClient = useQueryClient()
   return useMutation({

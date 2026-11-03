@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Search, Filter, CheckCircle2, XCircle, Clock, Eye, MessageSquare,
   ChevronLeft, ChevronRight, MapPin, Calendar, User, FileText, Download,
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Header } from '@/components/layout/header'
-import { useSubmissions, useUpdateSubmissionStatus, useBulkUpdateSubmissionStatus, useForms, useGovernorates, useAuth, getCampaignFormIds } from '@/hooks/useApi'
+import { useSubmissions, useUpdateSubmissionStatus, useBulkUpdateSubmissionStatus, useForms, useGovernorates, useAuth, getCampaignFormIds, useDeleteSubmission, useBulkDeleteSubmissions, useSubmissionDetail, useFormSchema } from '@/hooks/useApi'
 import { supabase } from '@/lib/supabase'
 import { STATUS_LABELS, STATUS_COLORS, type SubmissionStatus, type FormSubmission } from '@/types/database'
 import { formatDateTime, formatRelativeTime, cn } from '@/lib/utils'
@@ -63,6 +63,7 @@ export default function SubmissionsPage() {
   const [formFilter, setFormFilter] = useState<string>('all')
   const [govFilter, setGovFilter] = useState<string>('all')
   const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null)
@@ -76,6 +77,14 @@ export default function SubmissionsPage() {
   const canBulkAction = ['admin', 'central'].includes(userRole || '')
 
   const bulkUpdate = useBulkUpdateSubmissionStatus()
+  const deleteMut = useDeleteSubmission()
+  const bulkDeleteMut = useBulkDeleteSubmissions()
+
+  // ═══ بحث مُهذّب (400ms) — يمنع ضربة استعلام لكل حرف ═══
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 400)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   const { data, isLoading, isError, error, refetch } = useSubmissions({
     status: statusFilter !== 'all' ? (statusFilter as SubmissionStatus) : undefined,
@@ -179,18 +188,26 @@ export default function SubmissionsPage() {
 
   const deleteSubmission = async (sub: FormSubmission) => {
     try {
-      const { data, error } = await supabase.functions.invoke('manage-data', {
-        body: { resource: 'submissions', action: 'delete', id: sub.id },
-      })
-      if (error || (data && data.error)) {
-        toast({ title: 'فشل حذف الإرسالية', description: data?.error || error?.message, variant: 'destructive' })
-      } else {
-        toast({ title: 'تم حذف الإرسالية', variant: 'success' })
-        setDeleteTarget(null)
-        refetch()
-      }
+      // ═══ عبر RPC soft_delete_submission (SECURITY DEFINER) — يضبط deleted_by ويكتب التدقيق ═══
+      await deleteMut.mutateAsync(sub.id)
+      toast({ title: 'تم حذف الإرسالية', variant: 'success' })
+      setDeleteTarget(null)
+      refetch()
     } catch (e: any) {
-      toast({ title: 'فشل حذف الإرسالية', description: e.message, variant: 'destructive' })
+      toast({ title: 'فشل حذف الإرسالية', description: e?.message || 'خطأ غير معروف', variant: 'destructive' })
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`⚠️ حذف ${selectedIds.size} إرسالية؟\nستنتقل إلى سلة المهملات ويمكن استرجاعها من هناك.`)) return
+    try {
+      const res = await bulkDeleteMut.mutateAsync({ ids: Array.from(selectedIds) })
+      toast({ title: `تم حذف ${res.deleted} إرسالية`, variant: 'success' })
+      setSelectedIds(new Set())
+      refetch()
+    } catch (err: any) {
+      toast({ title: 'فشل الحذف الجماعي', description: err?.message, variant: 'destructive' })
     }
   }
 
@@ -292,13 +309,13 @@ export default function SubmissionsPage() {
                 <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <Input
                   placeholder="بحث بالاسم..."
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   className="h-8 text-xs pr-8"
                 />
-                {search && (
+                {searchInput && (
                   <Button variant="ghost" size="icon-sm" className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6"
-                    onClick={() => { setSearch(''); setPage(1) }}>
+                    onClick={() => { setSearchInput('') }}>
                     <X className="w-3 h-3" />
                   </Button>
                 )}
@@ -403,6 +420,18 @@ export default function SubmissionsPage() {
               >
                 <Clock className="w-3 h-3" /> إعادة لمسودة
               </Button>
+              {canDelete && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleteMut.isPending}
+                >
+                  {bulkDeleteMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  حذف المُختار
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -580,8 +609,8 @@ export default function SubmissionsPage() {
             </div>
             <DialogFooter className="gap-2">
               <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>إلغاء</Button>
-              <Button variant="destructive" size="sm" onClick={() => deleteSubmission(deleteTarget)} className="gap-1.5">
-                <Trash2 className="w-3.5 h-3.5" /> حذف
+              <Button variant="destructive" size="sm" onClick={() => deleteSubmission(deleteTarget)} disabled={deleteMut.isPending} className="gap-1.5">
+                {deleteMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} حذف
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -590,47 +619,139 @@ export default function SubmissionsPage() {
     </div>
   )
 }
+// ═══════════════════════════════════════════════════════════════
+// SubmissionDetailDialog — عرض/تعديل الإرسالية بحسب مخطط النموذج
+// التحرير يُبنى من form.schema (أقسام → حقول بأنواعها) بدل JSON الخام،
+// ويحفظ بدمج القيم المعدّلة فوق البيانات الأصلية (يحافظ على مفاتيح
+// غير المخطط كالصور)، مع دعم show_if لإظهار/إخفاء الحقول الشرطية.
+// ═══════════════════════════════════════════════════════════════
+
+interface SchemaField { key: string; type: string; label_ar?: string; required?: boolean; options?: string[]; show_if?: { field: string; value?: unknown; operator?: string } }
+interface SchemaSection { title_ar?: string; title?: string; fields?: SchemaField[] }
+
+function parseSchemaSections(schema: unknown): SchemaSection[] {
+  if (!schema || typeof schema !== 'object') return []
+  const s = schema as Record<string, any>
+  if (Array.isArray(s.sections) && s.sections.length > 0) {
+    return s.sections.filter((sec: any) => sec && typeof sec === 'object')
+  }
+  if (Array.isArray(s.fields) && s.fields.length > 0) {
+    return [{ title_ar: 'محتوى الاستمارة', fields: s.fields }]
+  }
+  return []
+}
+
+function isConditionMet(showIf: SchemaField['show_if'], values: Record<string, unknown>): boolean {
+  if (!showIf || !showIf.field) return true
+  const current = values[showIf.field]
+  const target = showIf.value
+  const looseEq = (a: unknown, b: unknown) => {
+    if (a === b) return true
+    if (typeof b === 'boolean') return a === b || a === (b ? 'نعم' : 'لا') || a === (b ? 'yes' : 'no')
+    if (typeof a === 'boolean') return a === b
+    return String(a) === String(b)
+  }
+  if (Array.isArray(target)) return target.some(v => looseEq(current, v))
+  return looseEq(current, target)
+}
+
+const EDITABLE_TYPES = ['text', 'number', 'phone', 'email', 'time', 'textarea', 'select', 'multiselect', 'yesno', 'date']
+const YESNO_LABEL = (v: unknown) => (v === true || v === 'true' || v === 'yes' || v === 'نعم' ? 'نعم' : v === false || v === 'false' || v === 'no' || v === 'لا' ? 'لا' : '—')
+
+function fieldDisplayValue(field: SchemaField, val: unknown): string {
+  if (field.type === 'yesno') return YESNO_LABEL(val)
+  if (val === null || val === undefined || val === '') return '—'
+  if (Array.isArray(val)) return val.length ? val.join('، ') : '—'
+  if (typeof val === 'object') return JSON.stringify(val)
+  return String(val)
+}
 
 function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
   submission: FormSubmission; open: boolean; onOpenChange: (v: boolean) => void; onDeleted: () => void
 }) {
   const [reviewNotes, setReviewNotes] = useState('')
   const [editMode, setEditMode] = useState(false)
-  const [editData, setEditData] = useState(JSON.stringify(submission.data, null, 2))
-  const [editNotes, setEditNotes] = useState(submission.notes || '')
+  const [editValues, setEditValues] = useState<Record<string, unknown>>({})
+  const [editNotes, setEditNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const updateStatus = useUpdateSubmissionStatus()
+  const deleteMut = useDeleteSubmission()
   const { toast } = useToast()
   const { data: authData } = useAuth()
   const userRole = authData?.profile?.role
   const canDelete = userRole === 'admin'
   const canEdit = userRole === 'admin' || userRole === 'central'
 
+  // الصف الكامل (يشمل عمود data) + مخطط النموذج للتحرير الواعي بالحقول
+  const detailQuery = useSubmissionDetail(open ? submission.id : null)
+  const detail = detailQuery.data
+  const formRow = useFormSchema(detail?.form_id || submission.form_id || null)
+  const sections = useMemo(() => parseSchemaSections(formRow.data?.schema), [formRow.data?.schema])
+
+  const dataObj = (detail?.data || {}) as Record<string, unknown>
+  const allSchemaFields = useMemo(() => sections.flatMap(s => s.fields || []), [sections])
+  const extraKeys = useMemo(() => {
+    const known = new Set(allSchemaFields.map(f => f.key))
+    return Object.keys(dataObj).filter(k => !known.has(k) && dataObj[k] !== null && dataObj[k] !== undefined)
+  }, [allSchemaFields, dataObj])
+
+  const startEdit = () => {
+    const vals: Record<string, unknown> = {}
+    for (const f of allSchemaFields) {
+      if (!EDITABLE_TYPES.includes(f.type)) continue
+      const v = dataObj[f.key]
+      if (f.type === 'multiselect') vals[f.key] = Array.isArray(v) ? [...v] : []
+      else vals[f.key] = v ?? (f.type === 'number' ? '' : f.type === 'yesno' ? null : '')
+    }
+    setEditValues(vals)
+    setEditNotes(detail?.notes || submission.notes || '')
+    setEditMode(true)
+  }
+
+  const setVal = (key: string, v: unknown) => setEditValues(prev => ({ ...prev, [key]: v }))
+
   const handleSaveEdit = async () => {
-    setSaving(true)
-    try {
-      let parsedData: Record<string, unknown>
-      try {
-        parsedData = JSON.parse(editData)
-      } catch {
-        toast({ title: 'خطأ في البيانات', description: 'JSON غير صالح — تحقق من التنسيق', variant: 'destructive' })
-        setSaving(false)
+    // تحقق من الحقول المطلوبة الظاهرة فقط
+    for (const f of allSchemaFields) {
+      if (!f.required || !EDITABLE_TYPES.includes(f.type)) continue
+      if (!isConditionMet(f.show_if, editValues)) continue
+      const v = editValues[f.key]
+      const empty = v === '' || v === null || v === undefined || (Array.isArray(v) && v.length === 0)
+      if (empty) {
+        toast({ title: 'حقل مطلوب ناقص', description: f.label_ar || f.key, variant: 'destructive' })
         return
       }
-
+    }
+    setSaving(true)
+    try {
+      // دمج آمن: القيم المعدّلة فوق البيانات الأصلية — المفاتيح خارج المخطط (صور…) لا تُمس
+      const merged: Record<string, unknown> = { ...dataObj }
+      for (const f of allSchemaFields) {
+        if (!EDITABLE_TYPES.includes(f.type)) continue
+        const v = editValues[f.key]
+        if (f.type === 'number') {
+          merged[f.key] = v === '' || v === null || v === undefined ? null : Number(v)
+        } else if (f.type === 'yesno') {
+          merged[f.key] = v === null || v === undefined || v === '' ? null : !!v
+        } else if (f.type === 'multiselect') {
+          merged[f.key] = Array.isArray(v) ? v : []
+        } else {
+          merged[f.key] = v === '' ? null : v
+        }
+      }
       const { error } = await supabase
         .from('form_submissions')
         .update({
-          data: parsedData,
+          data: merged,
           notes: editNotes || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', submission.id)
-
       if (error) throw error
       toast({ title: 'تم الحفظ', description: 'تم تحديث بيانات الإرسالية', variant: 'success' })
       setEditMode(false)
-      onOpenChange(false)
+      await detailQuery.refetch()
     } catch (e: any) {
       toast({ title: 'فشل الحفظ', description: e.message, variant: 'destructive' })
     } finally {
@@ -651,19 +772,13 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
     )
   }
 
-  const [deleting, setDeleting] = useState(false)
   const handleDelete = async () => {
+    if (!confirm('هل أنت متأكد من حذف هذه الإرسالية؟ يمكن استرجاعها من سلة المهملات.')) return
     setDeleting(true)
     try {
-      const { data, error } = await supabase.functions.invoke('manage-data', {
-        body: { resource: 'submissions', action: 'delete', id: submission.id },
-      })
-      if (error || (data && data.error)) {
-        toast({ title: 'فشل الحذف', description: data?.error || error?.message, variant: 'destructive' })
-      } else {
-        toast({ title: 'تم حذف الإرسالية', variant: 'success' })
-        onDeleted()
-      }
+      await deleteMut.mutateAsync(submission.id)
+      toast({ title: 'تم حذف الإرسالية', variant: 'success' })
+      onDeleted()
     } catch (e: any) {
       toast({ title: 'فشل الحذف', description: e.message, variant: 'destructive' })
     } finally {
@@ -671,16 +786,146 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
     }
   }
 
-  const dataFields = useMemo(() => {
-    if (!submission.data || typeof submission.data !== 'object') return []
-    return Object.entries(submission.data as Record<string, unknown>).map(([key, val]) => ({
-      key,
-      value: typeof val === 'object' ? JSON.stringify(val) : String(val ?? ''),
-      isBoolean: typeof val === 'boolean',
-      isNumber: typeof val === 'number',
-      boolVal: val === true,
-    }))
-  }, [submission.data])
+  const renderEditField = (f: SchemaField) => {
+    if (!EDITABLE_TYPES.includes(f.type)) return null
+    if (!isConditionMet(f.show_if, editValues)) return null
+    const v = editValues[f.key]
+    const label = f.label_ar || f.key
+    return (
+      <div key={f.key}>
+        <Label className="text-xs font-medium">
+          {label} {f.required && <span className="text-destructive">*</span>}
+          {f.show_if && <span className="text-[10px] text-muted-foreground"> (شرطي)</span>}
+        </Label>
+        <div className="mt-1">
+          {f.type === 'textarea' ? (
+            <textarea
+              value={String(v ?? '')}
+              onChange={(e) => setVal(f.key, e.target.value)}
+              className="w-full h-20 p-2 text-xs border rounded-lg bg-muted/30 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder={label}
+            />
+          ) : f.type === 'yesno' ? (
+            <div className="flex gap-1.5">
+              {[true, false].map(bv => (
+                <button
+                  key={String(bv)}
+                  type="button"
+                  onClick={() => setVal(f.key, bv)}
+                  className={cn(
+                    'px-3 h-7 rounded-md text-xs font-medium border transition-colors',
+                    v === bv
+                      ? bv ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-red-600 text-white border-red-600'
+                      : 'bg-background border-input hover:bg-muted/40'
+                  )}
+                >
+                  {bv ? 'نعم ✓' : 'لا ✗'}
+                </button>
+              ))}
+            </div>
+          ) : f.type === 'select' ? (
+            <Select value={v ? String(v) : '__none__'} onValueChange={(val) => setVal(f.key, val === '__none__' ? '' : val)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={label} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">—</SelectItem>
+                {(f.options || []).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : f.type === 'multiselect' ? (
+            <div className="flex flex-wrap gap-1.5">
+              {(f.options || []).map(o => {
+                const arr = Array.isArray(v) ? v as string[] : []
+                const on = arr.includes(o)
+                return (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => setVal(f.key, on ? arr.filter(x => x !== o) : [...arr, o])}
+                    className={cn(
+                      'px-2.5 h-7 rounded-md text-[11px] border transition-colors',
+                      on ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input hover:bg-muted/40'
+                    )}
+                  >
+                    {on ? '✓ ' : ''}{o}
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <Input
+              type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : f.type === 'email' ? 'email' : 'text'}
+              value={String(v ?? '')}
+              onChange={(e) => setVal(f.key, e.target.value)}
+              className="h-8 text-xs"
+              dir={f.type === 'number' || f.type === 'phone' || f.type === 'email' ? 'ltr' : undefined}
+              inputMode={f.type === 'phone' ? 'tel' : undefined}
+              placeholder={label}
+            />
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderViewFields = () => {
+    if (detailQuery.isLoading) {
+      return <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="w-full h-8" />)}</div>
+    }
+    if (detailQuery.isError) {
+      return (
+        <div className="text-center py-3">
+          <p className="text-xs text-destructive mb-2">تعذر تحميل بيانات الإرسالية</p>
+          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => detailQuery.refetch()}>
+            <RefreshCw className="w-3 h-3" /> إعادة المحاولة
+          </Button>
+        </div>
+      )
+    }
+    const hasAny = sections.some(s => (s.fields || []).some(f => dataObj[f.key] !== undefined && dataObj[f.key] !== null)) || extraKeys.length > 0
+    if (!hasAny) return <p className="text-xs text-muted-foreground text-center py-4">لا توجد بيانات</p>
+    return (
+      <div className="space-y-3 max-h-[320px] overflow-y-auto pl-1">
+        {sections.map((sec, si) => {
+          const visible = (sec.fields || []).filter(f => dataObj[f.key] !== undefined && dataObj[f.key] !== null)
+          if (visible.length === 0) return null
+          return (
+            <div key={si}>
+              <p className="text-[10px] font-bold text-muted-foreground mb-1.5 sticky top-0 bg-background/95 py-0.5">
+                {sec.title_ar || sec.title || `قسم ${si + 1}`}
+              </p>
+              <div className="space-y-1">
+                {visible.map(f => (
+                  <div key={f.key} className="flex items-start gap-2 text-xs py-1 border-b last:border-0">
+                    <span className="font-medium text-muted-foreground min-w-[110px] shrink-0">{f.label_ar || f.key}</span>
+                    <span className={cn(
+                      'break-all',
+                      f.type === 'yesno' && (dataObj[f.key] === true ? 'text-emerald-600 font-medium' : dataObj[f.key] === false ? 'text-red-600 font-medium' : ''),
+                      f.type === 'number' && 'text-blue-600 font-mono'
+                    )}>
+                      {f.type === 'yesno' ? YESNO_LABEL(dataObj[f.key]) : fieldDisplayValue(f, dataObj[f.key])}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+        {extraKeys.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold text-muted-foreground mb-1.5">حقول إضافية</p>
+            {extraKeys.map(k => (
+              <div key={k} className="flex items-start gap-2 text-xs py-1 border-b last:border-0">
+                <span className="font-medium text-muted-foreground min-w-[110px] shrink-0">{k}</span>
+                <span className="break-all font-mono">{fieldDisplayValue({ key: k, type: 'text' }, dataObj[k])}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const statusNow = (detail?.status || submission.status) as SubmissionStatus
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -692,32 +937,28 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
               {editMode ? 'تعديل الإرسالية' : 'تفاصيل الإرسالية'}
             </div>
             {canEdit && !editMode && (
-              <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => {
-                setEditData(JSON.stringify(submission.data, null, 2))
-                setEditNotes(submission.notes || '')
-                setEditMode(true)
-              }}>
+              <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={startEdit}>
                 <Edit className="w-3 h-3" /> تعديل
               </Button>
             )}
           </DialogTitle>
+          <DialogDescription className="text-xs">
+            {formRow.data?.title_ar || submission.forms?.title_ar || '—'}
+            {sections.length > 0 && ` — ${allSchemaFields.length} حقل`}
+          </DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto px-6 space-y-4 pb-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 bg-muted/30 rounded-lg">
-              <p className="text-[10px] text-muted-foreground mb-0.5">النموذج</p>
-              <p className="text-xs font-medium">{submission.forms?.title_ar || '—'}</p>
-            </div>
-            <div className="p-3 bg-muted/30 rounded-lg">
-              <p className="text-[10px] text-muted-foreground mb-0.5">الحالة</p>
-              <Badge className={cn('text-[10px]', STATUS_COLORS[submission.status as SubmissionStatus])}>
-                {STATUS_LABELS[submission.status as SubmissionStatus]}
-              </Badge>
-            </div>
-            <div className="p-3 bg-muted/30 rounded-lg">
               <p className="text-[10px] text-muted-foreground mb-0.5">المُرسل</p>
               <p className="text-xs font-medium">{submission.profiles?.full_name || '—'}</p>
               <p className="text-[10px] text-muted-foreground" dir="ltr">{submission.profiles?.email}</p>
+            </div>
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <p className="text-[10px] text-muted-foreground mb-0.5">الحالة</p>
+              <Badge className={cn('text-[10px]', STATUS_COLORS[statusNow])}>
+                {STATUS_LABELS[statusNow]}
+              </Badge>
             </div>
             <div className="p-3 bg-muted/30 rounded-lg">
               <p className="text-[10px] text-muted-foreground mb-0.5">التاريخ</p>
@@ -726,27 +967,13 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
             <div className="p-3 bg-muted/30 rounded-lg">
               <p className="text-[10px] text-muted-foreground mb-0.5">الجولة</p>
               <Badge variant="secondary" className="text-[10px]">
-                الجولة {(submission as any).campaign_round ?? 1}
+                الجولة {(detail as any)?.campaign_round ?? (submission as any).campaign_round ?? 1}
               </Badge>
             </div>
           </div>
 
-          {submission.notes && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
-              <p className="text-xs bg-muted p-3 rounded-lg">{submission.notes}</p>
-            </div>
-          )}
-
-          {submission.review_notes && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">ملاحظات المراجعة</p>
-              <p className="text-xs bg-amber-50 border border-amber-200/50 p-3 rounded-lg text-amber-800">{submission.review_notes}</p>
-            </div>
-          )}
-
           {editMode ? (
-            /* ─── Edit Mode ─── */
+            /* ─── Edit Mode — حقول حسب المخطط ─── */
             <div className="space-y-3">
               <div>
                 <Label className="text-xs font-medium">الملاحظات</Label>
@@ -757,19 +984,31 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
                   className="h-8 text-xs mt-1"
                 />
               </div>
-              <div>
-                <Label className="text-xs font-medium">البيانات (JSON)</Label>
-                <textarea
-                  value={editData}
-                  onChange={(e) => setEditData(e.target.value)}
-                  className="w-full h-48 mt-1 p-3 text-xs font-mono border rounded-lg bg-muted/30 resize-y focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  dir="ltr"
-                  spellCheck={false}
-                />
-                <p className="text-[10px] text-muted-foreground mt-1">تعديل JSON مباشرة — كن حذراً عند التعديل</p>
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button size="sm" className="flex-1 gap-1.5" onClick={handleSaveEdit} disabled={saving}>
+              {sections.length > 0 ? (
+                <div className="space-y-3 max-h-[340px] overflow-y-auto pl-1">
+                  {sections.map((sec, si) => {
+                    const visible = (sec.fields || []).filter(f => EDITABLE_TYPES.includes(f.type) && isConditionMet(f.show_if, editValues))
+                    if (visible.length === 0) return null
+                    return (
+                      <div key={si} className="border rounded-lg p-3 space-y-2.5">
+                        <p className="text-[11px] font-bold text-muted-foreground">
+                          {sec.title_ar || sec.title || `قسم ${si + 1}`}
+                        </p>
+                        {visible.map(renderEditField)}
+                      </div>
+                    )
+                  })}
+                  <p className="text-[10px] text-muted-foreground">
+                    الحقول غير القابلة للتعديل (الموقع، الصور) والمفاتيح الإضافية تُحفظ كما هي.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-3 border rounded-lg">
+                  مخطط النموذج غير متاح — تعديل الحقول يتطلب مخططاً
+                </p>
+              )}
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" className="flex-1 gap-1.5" onClick={handleSaveEdit} disabled={saving || sections.length === 0}>
                   {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                   حفظ التعديلات
                 </Button>
@@ -777,30 +1016,11 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
               </div>
             </div>
           ) : (
-            /* ─── View Mode ─── */
-            <>
-              <div>
-                <p className="text-xs font-medium mb-2">البيانات ({dataFields.length} حقل)</p>
-                {dataFields.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-4">لا توجد بيانات</p>
-                ) : (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {dataFields.map((field) => (
-                      <div key={field.key} className="flex items-start gap-2 text-xs py-1.5 border-b last:border-0">
-                        <span className="font-medium text-muted-foreground min-w-[80px] shrink-0">{field.key}</span>
-                        <span className={cn(
-                          'font-mono break-all',
-                          field.isBoolean && (field.boolVal ? 'text-emerald-600' : 'text-red-600'),
-                          field.isNumber && 'text-blue-600'
-                        )}>
-                          {field.isBoolean ? (field.boolVal ? 'نعم ✓' : 'لا ✗') : field.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
+            /* ─── View Mode — حقول بعناوينها العربية ومقسمة ─── */
+            <div>
+              <p className="text-xs font-medium mb-2">البيانات ({allSchemaFields.length} حقل بالمخطط)</p>
+              {renderViewFields()}
+            </div>
           )}
 
           <div className="space-y-3 pt-3 border-t">
@@ -812,13 +1032,13 @@ function SubmissionDetailDialog({ submission, open, onOpenChange, onDeleted }: {
               className="h-8 text-xs"
             />
             <div className="flex gap-2">
-              {submission.status === 'draft' && (
+              {statusNow === 'draft' && (
                 <Button size="sm" className="flex-1 gap-1.5" onClick={() => handleStatusChange('submitted')} disabled={updateStatus.isPending}>
                   {updateStatus.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                   تحويل لمرسلة
                 </Button>
               )}
-              {submission.status === 'submitted' && (
+              {statusNow === 'submitted' && (
                 <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => handleStatusChange('draft')} disabled={updateStatus.isPending}>
                   {updateStatus.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
                   إرجاع لمسودة

@@ -42,6 +42,15 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
   String? _selectedGovId; // للمدير/المركزي فقط
   bool _exporting = false;
   String? _lastError;
+  String? _progress;
+
+  // ═══ FIX 2026-11: التصدير فشل سابقاً لأن جلب 10,000 صف دفعة واحدة
+  //  (النشاط التكاملي ≈ 2,153 صف × ~26kB JSONB ≈ 56MB) يتجاوز مهلة RPC
+  //  الداخلية (30 ثانية في ApiClient) ← فشل × 3 محاولات ← «فشل التصدير».
+  //  الحل: جلب على دفعات 200 صف (≈ 5MB لكل دفعة) حتى اكتمال الكل،
+  //  مع عرض تقدم حي في الزر.
+  static const int _pageSize = 200; // ≈ 5MB لكل دفعة — تحت المهلة بأمان
+  static const int _maxRows = 10000;
 
   // ─────────────────────────────────────────────────────────────────
   //  الصلاحيات
@@ -177,29 +186,43 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
   //  جلب الإرساليات — أونلاين أولاً ثم الكاش المحلي
   // ─────────────────────────────────────────────────────────────────
 
+  /// جلب الإرساليات على دفعات — كل دفعة 200 صف تحت مهلة RPC بأمان،
+  /// مع إزالة التكرار حسب id (الترتيب created_at DESC ثابت من الخادم).
   Future<List<Map<String, dynamic>>> _fetchSubmissions(
       Map<String, dynamic> form) async {
     final formId = form['id']?.toString();
-    List<Map<String, dynamic>> subs = [];
+    final db = ref.read(databaseServiceProvider);
+    final fetched = <String, Map<String, dynamic>>{}; // id → صف (بلا تكرار)
     bool networkFailed = false;
 
-    // 1) أونلاين — نفس مسار التقارير (RPC fetch_submissions، الصلاحيات من الخادم)
+    // 1) أونلاين — RPC fetch_submissions على دفعات (الصلاحيات من الخادم)
     try {
-      subs = await ref
-          .read(databaseServiceProvider)
-          .getSubmissions(
-            formId: formId,
-            governorateId: _scopeGovernorateId,
-            campaignRound: _effectiveRound,
-            limit: 10000,
-            lean: false,
-          )
-          .timeout(const Duration(seconds: 90));
+      for (int offset = 0; offset < _maxRows; offset += _pageSize) {
+        final page = await db.getSubmissions(
+          formId: formId,
+          governorateId: _scopeGovernorateId,
+          campaignRound: _effectiveRound,
+          limit: _pageSize,
+          offset: offset,
+          lean: false,
+        );
+        for (final row in page) {
+          final id = row['id']?.toString();
+          if (id == null) continue;
+          fetched[id] = row;
+        }
+        if (mounted) {
+          setState(
+              () => _progress = 'جاري جلب البيانات... ${fetched.length} صف');
+        }
+        if (page.length < _pageSize) break; // آخر صفحة
+      }
     } catch (_) {
       networkFailed = true;
+      // فشل منتصف التصفح → نُكمل بما تحقق (أفضل من لا شيء)
     }
 
-    if (subs.isNotEmpty) return subs;
+    if (fetched.isNotEmpty) return fetched.values.toList();
 
     // 2) أوفلاين — الكاش المحلي بنفس مفتاح submissionsProvider
     try {
@@ -226,7 +249,8 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
     } catch (_) {}
 
     if (networkFailed) {
-      throw Exception('تعذّر جلب البيانات من الشبكة ولا يوجد نسخة محلية مخزنة');
+      throw Exception(
+          'تعذّر جلب البيانات من الشبكة ولا توجد نسخة محلية — تحقق من اتصالك وأعد المحاولة');
     }
     return const [];
   }
@@ -240,6 +264,7 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
     setState(() {
       _exporting = true;
       _lastError = null;
+      _progress = null;
     });
     try {
       final fields = await _enrichedFields(form);
@@ -255,6 +280,7 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
         return;
       }
 
+      if (mounted) setState(() => _progress = 'جاري توليد ملف Excel...');
       final result = ExcelExportService.buildExportBytes(
         fields: fields,
         submissions: submissions,
@@ -283,7 +309,12 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
       setState(() => _lastError = msg);
       _snack('فشل التصدير: $msg', Colors.red);
     } finally {
-      if (mounted) setState(() => _exporting = false);
+      if (mounted) {
+        setState(() {
+          _exporting = false;
+          _progress = null;
+        });
+      }
     }
   }
 
@@ -453,7 +484,9 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
                                 strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.download_rounded, size: 20),
                     label: Text(
-                      _exporting ? 'جاري التصدير...' : 'تصدير Excel',
+                      _exporting
+                          ? (_progress ?? 'جاري التصدير...')
+                          : 'تصدير Excel',
                       style: const TextStyle(
                           fontFamily: 'Cairo',
                           fontSize: 14,

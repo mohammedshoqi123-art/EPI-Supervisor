@@ -189,6 +189,15 @@
     <div class="loading-subtitle">لبرنامج التحصين الصحي الموسع</div>
     <div class="loading-bar"><div class="loading-bar-fill"></div></div>
     <div class="loading-hint" id="loadProgress">جاري التحميل...</div>
+
+    <!-- ═══ Watchdog: slow/stalled load recovery ═══
+         لو بقي التحميل معلقاً (شبكة بطيئة أو ملف لم يُحمّل) يظهر هذا
+         التنبيه بدل الانتظار اللانهائي، مع زر إعادة محاولة فوري. -->
+    <div id="slowLoad" style="display:none; margin-top:22px; padding:14px 18px; border-radius:14px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25); max-width:340px;">
+      <div style="font-size:13px; font-weight:700; color:#fff; margin-bottom:6px;">التحميل يستغرق وقتاً أطول من المعتاد</div>
+      <div style="font-size:11px; color:rgba(255,255,255,0.8); line-height:1.6; margin-bottom:10px;">قد يكون الاتصال بطيئاً أو تعذّر تحميل أحد الملفات. أعد المحاولة أو تحقق من الإنترنت.</div>
+      <button onclick="location.reload(true)" style="background:#fff; color:#00695C; border:none; border-radius:10px; padding:9px 22px; font-weight:800; font-size:13px; cursor:pointer; font-family:inherit;">إعادة المحاولة الآن</button>
+    </div>
   </div>
 
   <!-- Error screen -->
@@ -263,6 +272,16 @@
       if (sem && sem.children.length > 0) return true;
       return false;
     }
+
+    // ═══ FIX 2026-11: Watchdog مبكر (45 ثانية) — لو التحميل ما زال معلقاً
+    // (شبكة بطيئة / تعارض Service Worker القديم) نُظهر تنبيهاً بزر إعادة
+    // محاولة فوري بدل انتظار المستخدم بلا أي إشارة حتى مهلة 120 ثانية. ═══
+    setTimeout(function() {
+      if (!hasFlutterRendered()) {
+        var slow = document.getElementById('slowLoad');
+        if (slow) slow.style.display = 'block';
+      }
+    }, 45000);
 
     // ═══ Loading timeout: 120 SECONDS (was 30s — doubled twice) ═══
     // Flutter Web with CanvasKit can take 60-90s on slow connections

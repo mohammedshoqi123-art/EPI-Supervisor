@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { supabase } from '@/lib/supabase'
 import { STATUS_LABELS, STATUS_COLORS, type SubmissionStatus, type FormSubmission } from '@/types/database'
+import { exportEnhancedExcel, type EnhancedExportColumn } from '@/lib/excel-export'
 import type { Form } from '@/types/database'
 
 export function FormDataDialog({ open, onOpenChange, form }: {
@@ -53,26 +54,140 @@ export function FormDataDialog({ open, onOpenChange, form }: {
   const handleExport = async () => {
     setExporting(true)
     try {
-      // ═══ FIX: Exclude 'data' column from export to prevent massive payload ═══
-      // data column contains base64 photos (~42KB/row avg) — export metadata only
-      let query = supabase.from('form_submissions').select('id, status, form_id, governorate_id, district_id, submitted_by, created_at, submitted_at, gps_lat, gps_lng, campaign_round, notes, photos, reviewed_by, reviewed_at, review_notes').eq('form_id', form.id).order('created_at', { ascending: false })
-      if (showRoundFilter && campaignRound) query = query.eq('campaign_round', campaignRound)
-      const { data: allData } = await query
-      if (!allData || allData.length === 0) { toast({ title: 'تنبيه', description: 'لا توجد بيانات للتصدير' }); return }
-      const headers = ['id', 'status', 'campaign_round', 'governorate_id', 'district_id', 'created_at', 'submitted_at', 'gps_lat', 'gps_lng', 'notes', 'data']
-      const rows = allData.map(row => headers.map(h => {
-        let val = row[h]
-        if (h === 'data') val = JSON.stringify(val || {})
-        else if (val === null || val === undefined) val = ''
-        return `"${String(val).replace(/"/g, '""')}"`
-      }).join(','))
-      const csv = [headers.join(','), ...rows].join('\n')
-      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url
-      a.download = `${form.title_ar}_export_${new Date().toISOString().slice(0, 10)}${showRoundFilter && campaignRound ? `_round${campaignRound}` : ''}.csv`
-      a.click(); URL.revokeObjectURL(url)
-      toast({ title: 'تم التصدير', description: `تم تصدير ${allData.length} سجل` })
+      // ═══ REWRITE 2026-11: التصدير القديم كان CSV بأعمدة تقنية غير مفهومة
+      // (governorate_id كـ UUID + عمود data كـ JSON خام فارغ {}). الإصدار
+      // الجديد: Excel عربي واضح — أعمدة وصفية بالأسماء (لا UUIDs) + كل
+      // حقول الاستمارة بأسمائها العربية وقيمها المفهومة (نعم/لا، القائمة،
+      // أسماء المراجع). الجلب على دفعات 1000 لتجنّب انقطاع الاستجابة الكبيرة.
+      const PAGE = 1000
+      const selectCols = 'id, status, campaign_round, created_at, gps_lat, gps_lng, notes, photos, data, governorates(name_ar), districts(name_ar), profiles(full_name)'
+      const all: Record<string, any>[] = []
+      for (let from = 0; from < 50000; from += PAGE) {
+        let q = supabase.from('form_submissions').select(selectCols).eq('form_id', form.id).order('created_at', { ascending: false }).range(from, from + PAGE - 1)
+        if (showRoundFilter && campaignRound) q = q.eq('campaign_round', campaignRound)
+        const { data: chunk, error } = await q
+        if (error) throw error
+        if (!chunk || chunk.length === 0) break
+        all.push(...(chunk as Record<string, any>[]))
+        if (chunk.length < PAGE) break
+      }
+      if (all.length === 0) { toast({ title: 'تنبيه', description: 'لا توجد بيانات للتصدير' }); return }
+
+      // خرائط أسماء المراجع (ID → اسم عربي) لحقول المحافظة/المديرية/المرفق
+      const [govRes, distRes, facRes] = await Promise.all([
+        supabase.from('governorates').select('id, name_ar'),
+        supabase.from('districts').select('id, name_ar'),
+        supabase.from('health_facilities').select('id, name_ar'),
+      ])
+      const toMap = (r: { data: any[] | null } | undefined) =>
+        new Map<string, string>(((r?.data || []) as any[]).map((x: any) => [x.id, x.name_ar]))
+      const govMap = toMap(govRes as any), distMap = toMap(distRes as any), facMap = toMap(facRes as any)
+
+      // حقول الاستمارة من المخطط (sections الجديد أو fields القديم) — بلا صور/GPS
+      const schema = (form.schema || {}) as Record<string, any>
+      let fields: Record<string, any>[] = []
+      if (Array.isArray(schema.sections) && schema.sections.length > 0) {
+        schema.sections.forEach((sec: Record<string, any>) => {
+          ;((sec?.fields || []) as Record<string, any>[]).forEach(f => fields.push(f))
+        })
+      } else if (Array.isArray(schema.fields)) {
+        fields = schema.fields as Record<string, any>[]
+      }
+      fields = fields.filter((f: Record<string, any>) => f?.key && f?.type !== 'photo' && f?.type !== 'gps')
+
+      // تحويل قيمة الحقل إلى نص مفهوم (نفس منطق تطبيق الموبايل)
+      const coerce = (f: Record<string, any>, v: unknown): unknown => {
+        if (v === null || v === undefined || v === '') return ''
+        switch (f.type) {
+          case 'yesno': {
+            if (typeof v === 'boolean') return v ? 'نعم' : 'لا'
+            const s = String(v).trim().toLowerCase()
+            if (['yes', 'true', '1', 'نعم'].includes(s)) return 'نعم'
+            if (['no', 'false', '0', 'لا'].includes(s)) return 'لا'
+            return String(v)
+          }
+          case 'number': { const n = Number(v); return Number.isNaN(n) ? String(v) : n }
+          case 'multiselect': return Array.isArray(v) ? v.join('، ') : String(v)
+          case 'governorate': return govMap.get(String(v)) ?? String(v)
+          case 'district': return distMap.get(String(v)) ?? String(v)
+          case 'health_facility': return facMap.get(String(v)) ?? String(v)
+          case 'date': return String(v).slice(0, 10)
+          case 'datetime':
+          case 'time': {
+            const d = new Date(String(v))
+            return isNaN(d.getTime()) ? String(v)
+              : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+          }
+          default:
+            if (typeof v === 'object') return JSON.stringify(v)
+            return String(v)
+        }
+      }
+
+      const STATUS_AR: Record<string, string> = {
+        submitted: 'مرسلة', draft: 'مسودة', approved: 'معتمدة', rejected: 'مرفوضة',
+      }
+      const fmtDate = (iso: string) => {
+        const d = new Date(iso)
+        return isNaN(d.getTime()) ? '' :
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+      }
+
+      // كل عمول له مفتاح فريد — والعنوان عربي مفهوم
+      const fieldCols = fields.map(f => ({ header: String(f.label_ar || f.key), key: `f_${f.key}`, width: 18 }))
+      const columns: EnhancedExportColumn[] = [
+        { header: '#', key: 'idx', width: 6, align: 'center' },
+        { header: 'الحالة', key: 'status', width: 12 },
+        { header: 'الجولة', key: 'round', width: 8, align: 'center' },
+        { header: 'المُرسِل', key: 'sender', width: 20 },
+        { header: 'المحافظة', key: 'gov', width: 15 },
+        { header: 'المديرية', key: 'dist', width: 15 },
+        { header: 'تاريخ الإرسال', key: 'date', width: 17 },
+        { header: 'خط العرض', key: 'lat', width: 10 },
+        { header: 'خط الطول', key: 'lng', width: 10 },
+        { header: 'عدد الصور', key: 'photos', width: 9, align: 'center' },
+        { header: 'ملاحظات', key: 'notes', width: 24 },
+        ...fieldCols,
+      ]
+
+      const rows = all.map((sub, i) => {
+        const data = (sub.data || {}) as Record<string, unknown>
+        const row: Record<string, unknown> = {
+          idx: i + 1,
+          status: STATUS_AR[sub.status] || String(sub.status || ''),
+          round: sub.campaign_round ?? '',
+          sender: sub.profiles?.full_name || '—',
+          gov: sub.governorates?.name_ar || govMap.get(sub.governorate_id) || '',
+          dist: sub.districts?.name_ar || distMap.get(sub.district_id) || '',
+          date: fmtDate(sub.created_at),
+          lat: sub.gps_lat ?? '',
+          lng: sub.gps_lng ?? '',
+          photos: Array.isArray(sub.photos) ? sub.photos.length : 0,
+          notes: sub.notes || '',
+        }
+        fields.forEach(f => { row[`f_${f.key}`] = coerce(f, data[f.key]) })
+        return row
+      })
+
+      const safeSheet = (form.title_ar || 'بيانات النموذج').replace(/[\\/:*?[\]]/g, ' ').slice(0, 28)
+      exportEnhancedExcel({
+        sheetName: safeSheet,
+        title: `بيانات: ${form.title_ar}${showRoundFilter && campaignRound ? ` — الجولة ${campaignRound}` : ''}`,
+        subtitle: `${rows.length} إرسالية — تم التصدير ${new Date().toLocaleString('ar-EG')}`,
+        columns,
+        data: rows,
+        fileName: `${(form.title_ar || 'form').replace(/\s+/g, '_')}_بيانات_${new Date().toISOString().slice(0, 10)}`,
+        conditionalRules: [{
+          column: 'status',
+          conditions: [
+            { match: 'مرسلة', fillColor: 'D5F5E3', fontColor: '27AE60', bold: true },
+            { match: 'مسودة', fillColor: 'FEF9E7', fontColor: 'F39C12', bold: true },
+            { match: 'مرفوضة', fillColor: 'FADBD8', fontColor: 'C0392B', bold: true },
+          ],
+        }],
+        showTotal: false,
+      })
+      toast({ title: 'تم التصدير', description: `تم تصدير ${rows.length} سجل إلى ملف Excel واضح` })
     } catch (e: any) { toast({ title: 'خطأ', description: e.message, variant: 'destructive' }) }
     finally { setExporting(false) }
   }

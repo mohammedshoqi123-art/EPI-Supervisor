@@ -36,10 +36,10 @@ const BUCKET = 'form-exports'
 // قد يصل فيها 272KB للصف الواحد! لذلك: نستشعر متوسط حجم الصف أولاً ثم
 // نحسب عدد صفوف الصفحة بحيث لا تتجاوز الصفحة ~1.5MB، ونجلب الصفحات
 // بالتوازي (8 مرة واحدة) مع تقسيم تلقائي عند أي انتهاء مهلة.
-const PAGE_TARGET_BYTES = 1_500_000   // ~1.5MB لكل استعلام (آمن تحت 8s)
-const PAGE_MIN = 4                    // أدنى عدد صفوف في الصفحة
+const PAGE_TARGET_BYTES = 1_000_000   // ~1.5MB لكل استعلام (آمن تحت 8s)
+const PAGE_MIN = 2                    // أدنى عدد صفوف في الصفحة
 const PAGE_MAX = 60                   // أقصى عدد صفوف في الصفحة
-const FETCH_CONCURRENCY = 4           // صفحات تُجلب بالتوازي في كل موجة
+const FETCH_CONCURRENCY = 3           // صفحات تُجلب بالتوازي في كل موجة
 const PROBE_ROWS = 5                  // صفوف استشعار الحجم
 
 // ── CORS (مطابق لمنطق _shared/cors.ts: fail-closed عبر ALLOWED_ORIGINS) ──
@@ -581,14 +581,14 @@ serve(async (req: Request) => {
         return await fetchPage(limit, offset)
       } catch (wErr) {
         const msg = (wErr as Error).message ?? ''
-        if (!isTimeoutErr(msg) || depth >= 2 || limit <= PAGE_MIN) throw wErr
+        if (!isTimeoutErr(msg) || depth >= 3 || limit <= PAGE_MIN) throw wErr
+        // التجزئة تُنفَّذ تسلسلياً — لا نُضاعف الحمل على قاعدة البيانات
         const sub = Math.max(PAGE_MIN, Math.floor(limit / 4))
-        const parts: Promise<Record<string, unknown>[]>[] = []
+        const res: Record<string, unknown>[] = []
         for (let o = offset; o < offset + limit; o += sub) {
-          parts.push(fetchWindow(o, Math.min(sub, offset + limit - o), depth + 1))
+          res.push(...(await fetchWindow(o, Math.min(sub, offset + limit - o), depth + 1)))
         }
-        const res = await Promise.all(parts)
-        return res.flat()
+        return res
       }
     }
 

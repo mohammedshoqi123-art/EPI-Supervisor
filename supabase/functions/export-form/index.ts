@@ -39,7 +39,7 @@ const BUCKET = 'form-exports'
 const PAGE_TARGET_BYTES = 1_500_000   // ~1.5MB لكل استعلام (آمن تحت 8s)
 const PAGE_MIN = 4                    // أدنى عدد صفوف في الصفحة
 const PAGE_MAX = 60                   // أقصى عدد صفوف في الصفحة
-const FETCH_CONCURRENCY = 8           // صفحات تُجلب بالتوازي في كل موجة
+const FETCH_CONCURRENCY = 4           // صفحات تُجلب بالتوازي في كل موجة
 const PROBE_ROWS = 5                  // صفوف استشعار الحجم
 
 // ── CORS (مطابق لمنطق _shared/cors.ts: fail-closed عبر ALLOWED_ORIGINS) ──
@@ -560,19 +560,28 @@ serve(async (req: Request) => {
       p_governorate_id: governorateId,
       p_campaign_round: campaignRound,
     }
+    const isTimeoutErr = (m: string) => /statement timeout|canceling statement/i.test(m)
     const fetchPage = async (limit: number, offset: number): Promise<Record<string, unknown>[]> => {
-      const { data: page, error: rpcErr } = await userClient.rpc('fetch_submissions', {
-        ...rpcArgs, p_limit: limit, p_offset: offset,
-      })
-      if (rpcErr) throw new Error(rpcErr.message)
-      return (page ?? []) as Record<string, unknown>[]
+      let lastMsg = ''
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data: page, error: rpcErr } = await userClient.rpc('fetch_submissions', {
+          ...rpcArgs, p_limit: limit, p_offset: offset,
+        })
+        if (!rpcErr) return (page ?? []) as Record<string, unknown>[]
+        lastMsg = rpcErr.message
+        // انتهاء المهلة لا يُصلحه إعادة المحاولة بنفس الحجم — يُترك للتجزئة
+        if (isTimeoutErr(lastMsg)) break
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
+      }
+      throw new Error(lastMsg)
     }
     // عند انتهاء مهلة أي نافذة: تُقسَّم إلى 4 أجزاء ويُعاد المحاولة (عمق حتى 2)
     const fetchWindow = async (offset: number, limit: number, depth = 0): Promise<Record<string, unknown>[]> => {
       try {
         return await fetchPage(limit, offset)
       } catch (wErr) {
-        if (depth >= 2 || limit <= PAGE_MIN) throw wErr
+        const msg = (wErr as Error).message ?? ''
+        if (!isTimeoutErr(msg) || depth >= 2 || limit <= PAGE_MIN) throw wErr
         const sub = Math.max(PAGE_MIN, Math.floor(limit / 4))
         const parts: Promise<Record<string, unknown>[]>[] = []
         for (let o = offset; o < offset + limit; o += sub) {
@@ -629,18 +638,23 @@ serve(async (req: Request) => {
     }
 
     collect(probe)
-    let endFound = false
-    for (let waveStart = pageSize; waveStart < MAX_ROWS && !endFound; waveStart += FETCH_CONCURRENCY * pageSize) {
-      const offsets: number[] = []
-      for (let i = 0; i < FETCH_CONCURRENCY; i++) {
-        const o = waveStart + i * pageSize
-        if (o < MAX_ROWS) offsets.push(o)
+    try {
+      let endFound = false
+      for (let waveStart = pageSize; waveStart < MAX_ROWS && !endFound; waveStart += FETCH_CONCURRENCY * pageSize) {
+        const offsets: number[] = []
+        for (let i = 0; i < FETCH_CONCURRENCY; i++) {
+          const o = waveStart + i * pageSize
+          if (o < MAX_ROWS) offsets.push(o)
+        }
+        const waveResults = await Promise.all(offsets.map((o) => fetchWindow(o, pageSize)))
+        for (const arr of waveResults) {
+          collect(arr)
+          if (arr.length < pageSize) { endFound = true; break }
+        }
       }
-      const waveResults = await Promise.all(offsets.map((o) => fetchWindow(o, pageSize)))
-      for (const arr of waveResults) {
-        collect(arr)
-        if (arr.length < pageSize) { endFound = true; break }
-      }
+    } catch (fErr) {
+      console.error('export-form fetch error:', fErr)
+      return jsonResponse({ error: `تعذّر جلب البيانات: ${(fErr as Error).message}` }, 400, origin)
     }
 
     if (rows.length === 0) {

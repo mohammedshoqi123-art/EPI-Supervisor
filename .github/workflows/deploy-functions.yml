@@ -36,9 +36,15 @@ jobs:
             func_name=$(basename "$func_dir")
             if [ "$func_name" != "_shared" ]; then
               echo "Deploying $func_name..."
-              supabase functions deploy "$func_name" --no-verify-jwt || echo "⚠️ Failed to deploy $func_name"
+              supabase functions deploy "$func_name" --no-verify-jwt || { echo "❌ Failed to deploy $func_name"; echo "$func_name" >> /tmp/deploy_failures; }
             fi
           done
+        # never swallow deploy failures
+        if [ -f /tmp/deploy_failures ]; then
+          echo "❌ Failed functions: $(cat /tmp/deploy_failures | tr '\n' ' ')"
+          exit 1
+        fi
+        echo "✅ All functions deployed"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 

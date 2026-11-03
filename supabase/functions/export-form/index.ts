@@ -27,9 +27,20 @@ import { zipSync, strToU8 } from 'npm:fflate@0.8.2'
  */
 
 const MAX_ROWS = 20000
-const PAGE_SIZE = 50
 const URL_TTL = 3600
 const BUCKET = 'form-exports'
+
+// ═══ صفحة البيانات ═══
+// "authenticated" في قاعدة البيانات عليها statement_timeout=8s — لذلك كل
+// استعلام يجب أن ينتهي تحت 8 ثوانٍ. الاستمارات الصورية (base64 داخل data)
+// قد يصل فيها 272KB للصف الواحد! لذلك: نستشعر متوسط حجم الصف أولاً ثم
+// نحسب عدد صفوف الصفحة بحيث لا تتجاوز الصفحة ~1.5MB، ونجلب الصفحات
+// بالتوازي (8 مرة واحدة) مع تقسيم تلقائي عند أي انتهاء مهلة.
+const PAGE_TARGET_BYTES = 1_500_000   // ~1.5MB لكل استعلام (آمن تحت 8s)
+const PAGE_MIN = 4                    // أدنى عدد صفوف في الصفحة
+const PAGE_MAX = 60                   // أقصى عدد صفوف في الصفحة
+const FETCH_CONCURRENCY = 8           // صفحات تُجلب بالتوازي في كل موجة
+const PROBE_ROWS = 5                  // صفوف استشعار الحجم
 
 // ── CORS (مطابق لمنطق _shared/cors.ts: fail-closed عبر ALLOWED_ORIGINS) ──
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
@@ -542,16 +553,50 @@ serve(async (req: Request) => {
     const rows: (string | number)[][] = []
     const seen = new Set<string>()
 
-    for (let offset = 0; offset < MAX_ROWS; offset += PAGE_SIZE) {
+    // ─── جلب الصفوف: استشعار حجم الصف ثم موجات متوازية مع تقسيم تلقائي ───
+    // القيد: statement_timeout=8s لدور authenticated — كل استعلام < 8s.
+    const rpcArgs = {
+      p_form_id: formId,
+      p_governorate_id: governorateId,
+      p_campaign_round: campaignRound,
+    }
+    const fetchPage = async (limit: number, offset: number): Promise<Record<string, unknown>[]> => {
       const { data: page, error: rpcErr } = await userClient.rpc('fetch_submissions', {
-        p_form_id: formId,
-        p_governorate_id: governorateId,
-        p_campaign_round: campaignRound,
-        p_limit: PAGE_SIZE,
-        p_offset: offset,
+        ...rpcArgs, p_limit: limit, p_offset: offset,
       })
-      if (rpcErr) return jsonResponse({ error: `تعذّر جلب البيانات: ${rpcErr.message}` }, 400, origin)
-      const arr = (page ?? []) as Record<string, unknown>[]
+      if (rpcErr) throw new Error(rpcErr.message)
+      return (page ?? []) as Record<string, unknown>[]
+    }
+    // عند انتهاء مهلة أي نافذة: تُقسَّم إلى 4 أجزاء ويُعاد المحاولة (عمق حتى 2)
+    const fetchWindow = async (offset: number, limit: number, depth = 0): Promise<Record<string, unknown>[]> => {
+      try {
+        return await fetchPage(limit, offset)
+      } catch (wErr) {
+        if (depth >= 2 || limit <= PAGE_MIN) throw wErr
+        const sub = Math.max(PAGE_MIN, Math.floor(limit / 4))
+        const parts: Promise<Record<string, unknown>[]>[] = []
+        for (let o = offset; o < offset + limit; o += sub) {
+          parts.push(fetchWindow(o, Math.min(sub, offset + limit - o), depth + 1))
+        }
+        const res = await Promise.all(parts)
+        return res.flat()
+      }
+    }
+
+    let probe: Record<string, unknown>[]
+    try {
+      probe = await fetchPage(PROBE_ROWS, 0)
+    } catch (pErr) {
+      return jsonResponse({ error: `تعذّر جلب البيانات: ${(pErr as Error).message}` }, 400, origin)
+    }
+    if (probe.length === 0) {
+      return jsonResponse({ url: null, row_count: 0, message: 'لا توجد بيانات للتصدير في نطاق صلاحياتك' }, 200, origin)
+    }
+    const probeBytes = probe.reduce((a, r) => a + JSON.stringify(r ?? {}).length, 0)
+    const avgRowBytes = Math.max(256, probeBytes / probe.length)
+    const pageSize = Math.max(PAGE_MIN, Math.min(PAGE_MAX, Math.floor(PAGE_TARGET_BYTES / avgRowBytes)))
+
+    const collect = (arr: Record<string, unknown>[]) => {
       for (const sub of arr) {
         const id = String(sub['id'] ?? '')
         if (!id || seen.has(id)) continue
@@ -581,7 +626,21 @@ serve(async (req: Request) => {
         for (const f of fields) row.push(coerce(f, data[f.key], data, refs))
         rows.push(row)
       }
-      if (arr.length < PAGE_SIZE) break
+    }
+
+    collect(probe)
+    let endFound = false
+    for (let waveStart = pageSize; waveStart < MAX_ROWS && !endFound; waveStart += FETCH_CONCURRENCY * pageSize) {
+      const offsets: number[] = []
+      for (let i = 0; i < FETCH_CONCURRENCY; i++) {
+        const o = waveStart + i * pageSize
+        if (o < MAX_ROWS) offsets.push(o)
+      }
+      const waveResults = await Promise.all(offsets.map((o) => fetchWindow(o, pageSize)))
+      for (const arr of waveResults) {
+        collect(arr)
+        if (arr.length < pageSize) { endFound = true; break }
+      }
     }
 
     if (rows.length === 0) {

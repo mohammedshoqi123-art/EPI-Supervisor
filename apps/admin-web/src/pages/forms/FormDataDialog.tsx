@@ -54,21 +54,61 @@ export function FormDataDialog({ open, onOpenChange, form }: {
   const handleExport = async () => {
     setExporting(true)
     try {
-      // ═══ REWRITE 2026-11: التصدير القديم كان CSV بأعمدة تقنية غير مفهومة
-      // (governorate_id كـ UUID + عمود data كـ JSON خام فارغ {}). الإصدار
-      // الجديد: Excel عربي واضح — أعمدة وصفية بالأسماء (لا UUIDs) + كل
-      // حقول الاستمارة بأسمائها العربية وقيمها المفهومة (نعم/لا، القائمة،
-      // أسماء المراجع). الجلب على دفعات 1000 لتجنّب انقطاع الاستجابة الكبيرة.
-      const PAGE = 1000
+      // ═══ الخطوة 1 — التصدير عبر الخادم (export-form Edge Function) ═══
+      // الاستمارات الكبيرة (صور base64 داخل data ≈ 272KB/صف، أو آلاف الصفوف)
+      // كانت تفشل هنا: جلبها للمتصفح يتجاوز مهلة/حجم الاستجابة. الخادم يبني
+      // الملف كاملاً ويعيد رابطاً موقّعاً — التحميل يبقى صغيراً مهما كانت البيانات.
+      try {
+        const { data: sData, error: sErr } = await supabase.functions.invoke('export-form', {
+          body: {
+            form_id: form.id,
+            ...(govFilter !== 'all' ? { governorate_id: govFilter } : {}),
+            ...(showRoundFilter && campaignRound ? { campaign_round: campaignRound } : {}),
+          },
+        })
+        if (!sErr && sData?.url) {
+          const a = document.createElement('a')
+          a.href = sData.url as string
+          a.target = '_blank'
+          a.rel = 'noopener'
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
+          toast({ title: 'تم التصدير', description: `الخادم صدّر ${sData.row_count ?? ''} سجل — بدأ التحميل` })
+          return
+        }
+        if (sData && (sData as any).url === null && (sData as any).row_count === 0) {
+          toast({ title: 'تنبيه', description: 'لا توجد بيانات للتصدير' })
+          return
+        }
+        console.warn('[export] server path failed — falling back to browser export:', (sErr as any)?.message)
+      } catch (srvE) {
+        console.warn('[export] server path unavailable — falling back:', srvE)
+      }
+
+      // ═══ الخطوة 2 — fallback محلي: Excel عربي واضح مبني في المتصفح ═══
+      // (تصدير القديم كان CSV بأعمدة تقنية غير مفهومة. أعمدة وصفية بالأسماء
+      // لا UUIDs + قيم مفهومة: نعم/لا، القائمة، أسماء المراجع). الجلب على
+      // دفعات 100 صف مع 3 محاولات لكل دفعة لتجنّب انقطاع الاستجابات الكبيرة.
+      const PAGE = 100
       const selectCols = 'id, status, campaign_round, created_at, gps_lat, gps_lng, notes, photos, data, governorates(name_ar), districts(name_ar), profiles(full_name)'
       const all: Record<string, any>[] = []
+      const fetchChunk = async (from: number): Promise<Record<string, any>[]> => {
+        let lastErr: unknown = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          let q = supabase.from('form_submissions').select(selectCols).eq('form_id', form.id).order('created_at', { ascending: false }).range(from, from + PAGE - 1)
+          if (showRoundFilter && campaignRound) q = q.eq('campaign_round', campaignRound)
+          const { data: chunk, error } = await q
+          if (!error) return (chunk ?? []) as Record<string, any>[]
+          lastErr = error
+          await new Promise(r => setTimeout(r, 800 * (attempt + 1)))
+        }
+        throw lastErr
+      }
       for (let from = 0; from < 50000; from += PAGE) {
-        let q = supabase.from('form_submissions').select(selectCols).eq('form_id', form.id).order('created_at', { ascending: false }).range(from, from + PAGE - 1)
-        if (showRoundFilter && campaignRound) q = q.eq('campaign_round', campaignRound)
-        const { data: chunk, error } = await q
-        if (error) throw error
+        const chunk = await fetchChunk(from)
         if (!chunk || chunk.length === 0) break
-        all.push(...(chunk as Record<string, any>[]))
+        all.push(...chunk)
         if (chunk.length < PAGE) break
       }
       if (all.length === 0) { toast({ title: 'تنبيه', description: 'لا توجد بيانات للتصدير' }); return }
@@ -96,8 +136,15 @@ export function FormDataDialog({ open, onOpenChange, form }: {
       fields = fields.filter((f: Record<string, any>) => f?.key && f?.type !== 'photo' && f?.type !== 'gps')
 
       // تحويل قيمة الحقل إلى نص مفهوم (نفس منطق تطبيق الموبايل)
+      // تنظيف القيم: إزالة صور base64 المخزّنة داخل data واقتطاع النصوص الطويلة
+      const stripBase64 = (s: string): string =>
+        /^data:image\//i.test(s) || /^\/9j\//.test(s) || /^iVBORw0KGgo/.test(s) ? '' : s
       const coerce = (f: Record<string, any>, v: unknown): unknown => {
         if (v === null || v === undefined || v === '') return ''
+        if (typeof v === 'string') {
+          if (stripBase64(v) === '') return ''
+          if (v.length > 8000) v = v.slice(0, 8000) + '…'
+        }
         switch (f.type) {
           case 'yesno': {
             if (typeof v === 'boolean') return v ? 'نعم' : 'لا'

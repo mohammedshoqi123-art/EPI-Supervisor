@@ -13,15 +13,21 @@
 //  يُجلب ويُولَّد ويُشارك مباشرة. لا معاينة تُحمّل البيانات عند فتح التبويب.
 //
 //  الموثوقية:
-//    • الجلب أونلاين عبر getSubmissions (RPC) — مهلة 90 ثانية.
-//    • عند فشل الشبكة: fallback تلقائي إلى الكاش المحلي (نفس مفتاح
-//      submissionsProvider) أو أي كاش submissions_* مطابق للنموذج.
+//    • المسار الأساسي: التصدير عبر الخادم (Edge Function export-form) —
+//      الخادم يبني الملف كاملاً ويعيد رابطاً موقّعاً؛ ينجح مع الاستمارات
+//      الضخمة (صور base64 داخل data ≈ 272KB/صف، أو آلاف الصفوف) لأن ما
+//      يصل للموبايل ملف صغير مهما كان حجم البيانات في قاعدة البيانات.
+//    • عند فشل الخادم (أو انقطاع الشبكة): fallback محلي — جلب على دفعات
+//      عبر getSubmissions (RPC) بحجم دفعة تتميّع تلقائياً (200←50←10) عند
+//      تجاوز المهلة، ثم الكاش المحلي المطابق للنموذج كحل أخير.
 //    • كل خطأ يظهر كرسالة واضحة مع بقاء زر التصدير جاهزاً لإعادة المحاولة.
 // ═══════════════════════════════════════════════════════════════════════════
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -44,13 +50,13 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
   String? _lastError;
   String? _progress;
 
-  // ═══ FIX 2026-11: التصدير فشل سابقاً لأن جلب 10,000 صف دفعة واحدة
-  //  (النشاط التكاملي ≈ 2,153 صف × ~26kB JSONB ≈ 56MB) يتجاوز مهلة RPC
-  //  الداخلية (30 ثانية في ApiClient) ← فشل × 3 محاولات ← «فشل التصدير».
-  //  الحل: جلب على دفعات 200 صف (≈ 5MB لكل دفعة) حتى اكتمال الكل،
-  //  مع عرض تقدم حي في الزر.
-  static const int _pageSize = 200; // ≈ 5MB لكل دفعة — تحت المهلة بأمان
+  // ═══ FIX 2026-11: الاستمارات الضخمة (صور base64 داخل data ≈ 272KB/صف،
+  //  أو النشاط التكاملي 2,153 صف × ~26kB ≈ 56MB) تُصدَّر الآن عبر الخادم
+  //  أولاً (_serverExport). هذا الحجم من الدفعات يبقى احتياطياً محلياً فقط،
+  //  ويتميّع تلقائياً (200←50←10) إذا تجاوزت دفعة مهلة الـRPC.
+  static const int _pageSize = 200;
   static const int _maxRows = 10000;
+  static const String _fnExport = 'export-form';
 
   // ─────────────────────────────────────────────────────────────────
   //  الصلاحيات
@@ -186,8 +192,67 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
   //  جلب الإرساليات — أونلاين أولاً ثم الكاش المحلي
   // ─────────────────────────────────────────────────────────────────
 
-  /// جلب الإرساليات على دفعات — كل دفعة 200 صف تحت مهلة RPC بأمان،
-  /// مع إزالة التكرار حسب id (الترتيب created_at DESC ثابت من الخادم).
+  /// التصدير عبر الخادم (Edge Function export-form): الخادم يجلب البيانات
+  /// وينظّف صور base64 ويبني ملف Excel ويُرجع رابطاً موقّعاً. يعيد true
+  /// إذا نجح المسار (تمت المشاركة)، وfalse للرجوع للمسار المحلي.
+  Future<bool> _serverExport(Map<String, dynamic> form) async {
+    try {
+      final token = SupabaseConfig.client.auth.currentSession?.accessToken;
+      if (token == null || SupabaseConfig.url.isEmpty) return false;
+
+      if (mounted) setState(() => _progress = 'جاري التصدير عبر الخادم...');
+      final resp = await http
+          .post(
+            Uri.parse('${SupabaseConfig.url}/functions/v1/$_fnExport'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'apikey': SupabaseConfig.anonKey,
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(<String, dynamic>{
+              'form_id': form['id']?.toString(),
+              if (_scopeGovernorateId != null)
+                'governorate_id': _scopeGovernorateId,
+              if (_effectiveRound != null) 'campaign_round': _effectiveRound,
+            }),
+          )
+          .timeout(const Duration(seconds: 300));
+      if (resp.statusCode != 200) return false;
+
+      final data = jsonDecode(utf8.decode(resp.bodyBytes));
+      final url = data['url'] as String?;
+      final rowCount = data['row_count'] ?? 0;
+      if (url == null || url.toString().isEmpty) {
+        if (rowCount == 0) {
+          _snack('لا توجد بيانات للتصدير في نطاق صلاحياتك', Colors.orange);
+        }
+        return false;
+      }
+
+      if (mounted) setState(() => _progress = 'جاري تحميل الملف...');
+      final fileResp =
+          await http.get(Uri.parse(url.toString())).timeout(const Duration(seconds: 180));
+      if (fileResp.statusCode != 200 || fileResp.bodyBytes.isEmpty) return false;
+
+      final dir = await getTemporaryDirectory();
+      final safeName = ((data['file_name'] as String?) ?? 'تصدير_بيانات.xlsx')
+          .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final file = File('${dir.path}/$safeName');
+      await file.writeAsBytes(fileResp.bodyBytes);
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(file.path)],
+        text: 'تصدير بيانات: ${form['title_ar'] ?? ''} ($rowCount إرسالية)',
+      ));
+      return true;
+    } catch (e) {
+      debugPrint('[DataExportTab] server export failed: $e');
+      return false;
+    }
+  }
+
+  /// جلب الإرساليات على دفعات — حجم الدفعة يتميّع تلقائياً (200←50←10) عند
+  /// تجاوز مهلة RPC (صفوف base64 ضخمة)، مع إزالة التكرار حسب id
+  /// (الترتيب created_at DESC ثابت من الخادم).
   Future<List<Map<String, dynamic>>> _fetchSubmissions(
       Map<String, dynamic> form) async {
     final formId = form['id']?.toString();
@@ -197,25 +262,38 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
 
     // 1) أونلاين — RPC fetch_submissions على دفعات (الصلاحيات من الخادم)
     try {
-      for (int offset = 0; offset < _maxRows; offset += _pageSize) {
-        final page = await db.getSubmissions(
-          formId: formId,
-          governorateId: _scopeGovernorateId,
-          campaignRound: _effectiveRound,
-          limit: _pageSize,
-          offset: offset,
-          lean: false,
-        );
+      int pageSize = _pageSize;
+      int offset = 0;
+      while (offset < _maxRows) {
+        List<Map<String, dynamic>> page;
+        try {
+          page = await db.getSubmissions(
+            formId: formId,
+            governorateId: _scopeGovernorateId,
+            campaignRound: _effectiveRound,
+            limit: pageSize,
+            offset: offset,
+            lean: false,
+          );
+        } catch (_) {
+          // صفوف ضخمة قد تتجاوز مهلة الـRPC — صغّر الدفعة وأعد نفس الـoffset
+          if (pageSize > 10) {
+            pageSize = pageSize > 50 ? 50 : 10;
+            continue;
+          }
+          rethrow;
+        }
         for (final row in page) {
           final id = row['id']?.toString();
           if (id == null) continue;
           fetched[id] = row;
         }
+        offset += page.length;
         if (mounted) {
           setState(
               () => _progress = 'جاري جلب البيانات... ${fetched.length} صف');
         }
-        if (page.length < _pageSize) break; // آخر صفحة
+        if (page.length < pageSize) break; // آخر صفحة
       }
     } catch (_) {
       networkFailed = true;
@@ -267,6 +345,10 @@ class _DataExportTabState extends ConsumerState<DataExportTab> {
       _progress = null;
     });
     try {
+      // ═══ المسار الأساسي: التصدير عبر الخادم — ينجح مع الاستمارات الضخمة ═══
+      if (await _serverExport(form)) return;
+
+      // ═══ المسار الاحتياطي المحلي (أوفلاين/فشل الخادم) ═══
       final fields = await _enrichedFields(form);
       if (fields.isEmpty) {
         _snack('لا توجد حقول قابلة للتصدير في هذا النموذج', Colors.orange);

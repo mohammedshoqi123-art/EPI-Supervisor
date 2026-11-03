@@ -1066,8 +1066,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     return result ?? <String, dynamic>{};
   }
 
-  /// تقرير حملة الحصبة الشامل — يجمع الاستمارات الثلاث في تقرير واحد
-  /// (الإشراف + العينات العشوائية + الجاهزية)
+  /// تقرير حملة الحصبة الشامل — يجمع الاستمارات الأربع في تقرير واحد
+  /// (الإشراف + العينات العشوائية + الجاهزية + إشراف مخيمات النازحين)
   Future<void> _generateMeaslesComprehensiveReport({String format = 'pdf'}) async {
     if (!mounted) return;
     try {
@@ -1075,6 +1075,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         {'id': FormIds.measlesSupervision, 'name': 'الإشراف'},
         {'id': FormIds.measlesSurvey, 'name': 'العينات العشوائية'},
         {'id': FormIds.measlesReadiness, 'name': 'الجاهزية'},
+        {'id': FormIds.measlesCampsSupervision, 'name': 'مخيمات النازحين'},
       ];
 
       final mergedFields = <Map<String, dynamic>>[];
@@ -1102,7 +1103,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         'dynamic_analytics': {
           'form_id': 'measles_campaign_all',
           'form_title':
-              'التقرير الشامل لحملة الحصبة (الإشراف + العينات العشوائية + الجاهزية)',
+              'التقرير الشامل لحملة الحصبة (الإشراف + العينات العشوائية + الجاهزية + مخيمات النازحين)',
           'total_submissions': totalSubmissions,
           'fields': mergedFields,
         },

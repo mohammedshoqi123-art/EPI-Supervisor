@@ -217,7 +217,7 @@ class _DynamicReportsTabState extends ConsumerState<DynamicReportsTab> {
                   _GeneralReportCard(
                     icon: Icons.medical_services_rounded,
                     label: 'تقرير الحصبة الشامل',
-                    subtitle: 'الاستمارات الثلاث معاً',
+                    subtitle: 'الاستمارات الأربع معاً',
                     color: const Color(0xFFD81B60),
                     onTap: () => widget.onGenerate?.call(
                         'measles_full', 'pdf', '30'),

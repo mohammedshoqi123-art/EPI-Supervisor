@@ -27,6 +27,10 @@ class OfflineDataCache {
   final OfflineManager _offline;
   final EncryptionService _encryption;
 
+  /// Expose the underlying OfflineManager — used by UI retry loops on cold
+  /// start (e.g. formsProvider DAY-2 retry calls reloadCacheFromDisk()).
+  OfflineManager get offlineManager => _offline;
+
   // In-memory cache for fastest access (LRU-style)
   final Map<String, _CacheEntry> _memoryCache = {};
   /// ═══ PERFORMANCE: 200 entries (was 100) — reduces Hive reads for frequently accessed data ═══

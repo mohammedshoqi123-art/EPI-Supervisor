@@ -43,6 +43,39 @@ class OfflineManager {
   /// Set to false if encryption init times out — prevents silent data loss
   bool _encryptionAvailable = true;
 
+  // ═══════════════════════════════════════════════════════════════════
+  // ═══ FIX DAY-2 (2026-11): «النماذج لا تختفي أبداً بالاوفلاين» ═══
+  //
+  // سلسلة دفاع ضد اختفاء الكاش عند الإقلاع البارد (اليوم الثاني):
+  //  1. _cacheLoadFailed   — البلوب الموجود غير قابل للفك؟ نمنع أي كتابة فوقه
+  //                          (الجلسة تعمل بالذاكرة فقط، والبلوب يبقى سليماً
+  //                          على القرص ليفكّ في الإقلاع التالي الصحيح).
+  //  2. cache_bak          — نسخة أخير-معروف-أنها-صالحة من بلوب الكاش
+  //                          للرجوع إليها عند تلف الكتابة الأخيرة.
+  //  3. _encryptJson()     — لا تشفير بمفتاح غير مثبّت: fallback إلى JSON عادي
+  //                          بدلاً من مفتاح عشوائي يُنتج بيانات تضيع بعد
+  //                          إعادة التشغيل.
+  //  4. cacheRestored      — حلقة شفاء خلفية: إذا فشل تثبيت مفتاح التشفير
+  //                          عند الإقلاع نعيد المحاولة ونعيد تحميل الكاش من
+  //                          القرص ونبلّغ المستمعين (providers) لتحديث الشاشات.
+  // ═══════════════════════════════════════════════════════════════════
+  bool _cacheLoadFailed = false;
+
+  /// True when the on-disk cache blob exists but could not be decrypted/parsed
+  /// this session. While true, [cacheData]/[clearCache]/[removeCacheKey] refuse
+  /// to touch the raw blob so a healthy launch can read it again.
+  bool get cacheLoadFailed => _cacheLoadFailed;
+
+  DateTime? _lastBakAt;
+  final _cacheRestoredController = StreamController<bool>.broadcast();
+
+  /// Emits `true` when encryption recovered after a failed init and the cache
+  /// was reloaded from disk. UI providers should re-read cached data.
+  Stream<bool> get cacheRestored => _cacheRestoredController.stream;
+
+  /// Whether cached data is actually readable right now (key pinned + loaded).
+  bool get encryptionReady => _encryptionAvailable && EncryptionService.hasPinnedKey;
+
   // ═══ FIX: Use late-initialized connectivity status, default to true ═══
   bool _isOnline = true;
   bool get isOnline => _isOnline;
@@ -76,64 +109,7 @@ class OfflineManager {
     }
 
     try {
-      try {
-        _box = await Hive.openBox<String>(_boxName).timeout(
-          const Duration(seconds: 3), // ═══ FIX: 3s (was 5s) — faster startup ═══
-          onTimeout: () {
-            throw TimeoutException('Hive box open timed out');
-          },
-        );
-      } catch (e) {
-        // ═══ FIX ME3: Hive corruption recovery ═══
-        // If box open fails (corrupted file from power loss, etc.),
-        // backup corrupted file for diagnostics, then delete and retry.
-        if (kDebugMode) {
-          debugPrint('[OfflineManager] Box open failed, attempting recovery: $e');
-        }
-        try {
-          // ═══ IMPROVEMENT: Backup corrupted file before deleting ═══
-          // This allows post-mortem diagnostics of data corruption.
-          // ═══ FIX: Use path_provider instead of _box?.path (which is null when open fails) ═══
-          try {
-            final appDir = await getApplicationDocumentsDirectory().timeout(
-              const Duration(seconds: 3),
-              onTimeout: () => throw TimeoutException('path_provider timeout'),
-            );
-            // Hive stores boxes as .hive files in the app documents directory
-            final boxPath = '${appDir.path}/$_boxName.hive';
-            final boxFile = File(boxPath);
-            if (await boxFile.exists()) {
-              final backupPath = '$boxPath.corrupted.${DateTime.now().millisecondsSinceEpoch}';
-              await boxFile.copy(backupPath);
-              if (kDebugMode) {
-                debugPrint('[OfflineManager] Corrupted box backed up to: $backupPath');
-              }
-            }
-          } catch (backupError) {
-            if (kDebugMode) {
-              debugPrint('[OfflineManager] Could not backup corrupted box: $backupError');
-            }
-          }
-          await Hive.deleteBoxFromDisk(_boxName);
-        } catch (_) {}
-
-        await Hive.initFlutter().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () {
-            if (kDebugMode) print('Hive.initFlutter timed out');
-            throw TimeoutException('Hive initialization timed out');
-          },
-        );
-        _box = await Hive.openBox<String>(_boxName).timeout(
-          const Duration(seconds: 5),
-          onTimeout: () {
-            throw TimeoutException('Hive box open timed out after recovery');
-          },
-        );
-        if (kDebugMode) {
-          debugPrint('[OfflineManager] ✅ Recovered from Hive corruption (data reset)');
-        }
-      }
+      _box = await _openBoxOrRecover();
     } catch (e) {
       if (kDebugMode) print('[OfflineManager] Init failed: $e');
       rethrow;
@@ -153,37 +129,42 @@ class OfflineManager {
     // PBKDF2 (600k iterations) runs ONCE here, in a BACKGROUND ISOLATE
     // so the UI thread is not blocked. Then all encrypt/decrypt use the
     // pinned key = <1ms per operation.
+    //
+    // ═══ FIX DAY-2: never crash init on encryption failure — degrade to
+    // plain-storage + background heal loop. (Previously a failed init was
+    // followed by a throwaway random key that made every cached blob
+    // unreadable and got written back over the good data.)
     if (!EncryptionService.isInitialized) {
-      await EncryptionService.initialize(
-        encryptionKey: const String.fromEnvironment('ENCRYPTION_KEY', defaultValue: ''),
-        saltSource: () {
-          final saltStr = _box?.get(EncryptionService.saltStorageKey);
-          if (saltStr == null) return null;
-          return Uint8List.fromList(base64Decode(saltStr));
-        },
-        onSaltCreated: (salt) async {
-          // ⚠️ FIX NEW-1: await salt storage — prevent data loss on crash
-          // Previously: fire-and-forget → if app crashes before write completes,
-          // salt is lost → new salt on restart → all encrypted data unreadable.
-          // Now: await ensures salt is persisted before continuing.
-          await _box?.put(EncryptionService.saltStorageKey, base64Encode(salt));
-        },
-      ).timeout(
-        const Duration(seconds: 8),
-        onTimeout: () {
-          // ═══ FIX M-3: Mark encryption as failed instead of silent continue ═══
-          // Previously: 'continuing without' → _ephemeralKey used → random key →
-          //   data encrypted with unreproducible key → silent data loss on restart
-          // Now: set flag so saveDraft can warn user or skip encryption
-          debugPrint('[OfflineManager] ⚠️ Encryption init timed out — marking as unavailable');
-          _encryptionAvailable = false;
-        },
-      );
+      try {
+        await EncryptionService.initialize(
+          encryptionKey: const String.fromEnvironment('ENCRYPTION_KEY', defaultValue: ''),
+          saltSource: _readEncryptionSalt,
+          onSaltCreated: _persistEncryptionSalt,
+        ).timeout(
+          const Duration(seconds: 8),
+          onTimeout: () {
+            // ═══ FIX M-3 + DAY-2: mark unavailable, heal in background ═══
+            debugPrint('[OfflineManager] ⚠️ Encryption init timed out — marking as unavailable (background heal started)');
+            _encryptionAvailable = false;
+          },
+        );
+      } catch (e) {
+        debugPrint('[OfflineManager] ⚠️ Encryption init failed — plain-storage fallback + background heal: $e');
+        _encryptionAvailable = false;
+      }
+      if (!_encryptionAvailable) {
+        _startEncryptionHealLoop();
+      }
     }
-
-    // ═══ FIX M-3b: Removed dead code ═══
-    // Previously: second encryption init attempt that never executes because
-    // _encryptionAvailable is already false when init times out.
+    // ═══ FIX DAY-2b: the outer 8s timeout may fire while the PBKDF2 isolate
+    // is still running — the key often gets pinned moments later (the isolate
+    // is not cancelled). Re-check once before finishing init.
+    if (!_encryptionAvailable && EncryptionService.hasPinnedKey) {
+      _encryptionAvailable = true;
+      debugPrint('[OfflineManager] ✅ Encryption key pinned after timeout — reloading cache');
+      reloadCacheFromDisk();
+      _getCache(); // warm the memory cache with the now-decrypted blob
+    }
 
     // ═══ PROPOSAL 2: Migrate old blob drafts to sharded storage ═══
     await _migrateDraftsToSharded();
@@ -207,6 +188,159 @@ class OfflineManager {
       debugPrint(
         '[OfflineManager] Initialized. Pending items: ${_getQueue().length}',
       );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ═══ FIX DAY-2: non-destructive Hive open + encryption heal ═══════════
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /// Open the Hive box without ever wiping data on TIMEOUT.
+  ///
+  /// ═══ FIX DAY-2: the old recovery treated a 3s open timeout the same as
+  /// corruption and called Hive.deleteBoxFromDisk — destroying cache, drafts
+  /// AND the sync queue. A cold start the morning after (slow disk, app not
+  /// yet cached by the OS) routinely exceeds 3s → «النماذج اختفت كلها».
+  /// Now: timeouts are retried with longer budgets and NEVER destructive.
+  /// Only a genuine open error (corrupt file) triggers the backup+recreate
+  /// path, which still keeps a diagnostic backup first.
+  Future<Box<String>> _openBoxOrRecover() async {
+    Object? lastError;
+
+    // Phase 1 — normal open + generous timeout retries (NEVER destructive)
+    const attemptBudgets = [3, 8, 15];
+    for (var i = 0; i < attemptBudgets.length; i++) {
+      try {
+        return await Hive.openBox<String>(_boxName).timeout(
+          Duration(seconds: attemptBudgets[i]),
+          onTimeout: () => throw TimeoutException(
+              'Hive box open timed out (attempt ${i + 1}/${attemptBudgets.length})'),
+        );
+      } catch (e) {
+        lastError = e;
+        if (e is TimeoutException) {
+          if (kDebugMode) {
+            debugPrint('[OfflineManager] Box open slow (${attemptBudgets[i]}s) — retrying, data preserved');
+          }
+          continue; // slow I/O — retry, never wipe
+        }
+        break; // real error — go to corruption recovery
+      }
+    }
+    if (lastError is TimeoutException) {
+      // Still timing out after 26s total — degraded mode, data preserved.
+      // The provider-level heal will invalidate providers when init finishes.
+      throw lastError;
+    }
+
+    // Phase 2 — genuine corruption recovery (backup → delete → recreate)
+    if (kDebugMode) {
+      debugPrint('[OfflineManager] Box open failed, attempting recovery: $lastError');
+    }
+    try {
+      try {
+        final appDir = await getApplicationDocumentsDirectory().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => throw TimeoutException('path_provider timeout'),
+        );
+        // Hive stores boxes as .hive files in the app documents directory
+        final boxPath = '${appDir.path}/$_boxName.hive';
+        final boxFile = File(boxPath);
+        if (await boxFile.exists()) {
+          final backupPath = '$boxPath.corrupted.${DateTime.now().millisecondsSinceEpoch}';
+          await boxFile.copy(backupPath);
+          if (kDebugMode) {
+            debugPrint('[OfflineManager] Corrupted box backed up to: $backupPath');
+          }
+        }
+      } catch (backupError) {
+        if (kDebugMode) {
+          debugPrint('[OfflineManager] Could not backup corrupted box: $backupError');
+        }
+      }
+      await Hive.deleteBoxFromDisk(_boxName);
+    } catch (_) {}
+
+    await Hive.initFlutter().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        if (kDebugMode) print('Hive.initFlutter timed out');
+        throw TimeoutException('Hive initialization timed out');
+      },
+    );
+    final box = await Hive.openBox<String>(_boxName).timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        throw TimeoutException('Hive box open timed out after recovery');
+      },
+    );
+    if (kDebugMode) {
+      debugPrint('[OfflineManager] ✅ Recovered from Hive corruption (data reset)');
+    }
+    return box;
+  }
+
+  /// Read the persisted PBKDF2 salt (null = first launch).
+  Uint8List? _readEncryptionSalt() {
+    final saltStr = _box?.get(EncryptionService.saltStorageKey);
+    if (saltStr == null) return null;
+    return Uint8List.fromList(base64Decode(saltStr));
+  }
+
+  /// Persist the PBKDF2 salt.
+  /// ═══ FIX DAY-2c: refuse to continue with an UNPERSISTED salt — a salt that
+  /// exists only in memory produces a key that can never be reproduced after
+  /// restart, making every blob written with it unreadable.
+  Future<void> _persistEncryptionSalt(Uint8List salt) async {
+    final box = _safeBox;
+    if (box == null) {
+      throw StateError(
+          '[OfflineManager] Cannot persist encryption salt — box not open. Refusing to derive a key from an unpersisted salt.');
+    }
+    // ⚠️ FIX NEW-1: await salt storage — prevent data loss on crash.
+    await box.put(EncryptionService.saltStorageKey, base64Encode(salt));
+  }
+
+  /// Background heal loop for encryption init failures/timeouts.
+  /// Retries with growing delays; on success re-reads the cache from disk
+  /// with the real key and notifies listeners so the UI refreshes.
+  bool _healLoopRunning = false;
+  void _startEncryptionHealLoop() {
+    if (_healLoopRunning) return;
+    _healLoopRunning = true;
+    unawaited(() async {
+      try {
+        for (var attempt = 1; attempt <= 5; attempt++) {
+          await Future<void>.delayed(Duration(seconds: 10 * attempt)); // 10/20/30/40/50s
+          if (_encryptionAvailable || _cacheRestoredController.isClosed) return;
+          try {
+            if (!EncryptionService.isInitialized) {
+              await EncryptionService.initialize(
+                encryptionKey: const String.fromEnvironment('ENCRYPTION_KEY', defaultValue: ''),
+                saltSource: _readEncryptionSalt,
+                onSaltCreated: _persistEncryptionSalt,
+              ).timeout(const Duration(seconds: 20));
+            }
+            _encryptionAvailable = true;
+          } catch (_) {
+            continue; // try again next round
+          }
+          if (_encryptionAvailable) {
+            debugPrint('[OfflineManager] ✅ Encryption healed (attempt $attempt) — reloading cache from disk');
+            reloadCacheFromDisk();
+            _getCache(); // eagerly decrypt with the real key
+            if (!_cacheRestoredController.isClosed) {
+              _cacheRestoredController.add(true);
+            }
+            return;
+          }
+        }
+        if (kDebugMode) {
+          debugPrint('[OfflineManager] Encryption heal loop exhausted — staying in plain-storage mode');
+        }
+      } finally {
+        _healLoopRunning = false;
+      }
+    }());
   }
 
   // ═══ FIX: Serialize write operations to prevent race conditions ═══
@@ -258,7 +392,7 @@ class OfflineManager {
       }
 
       if (recovered > 0) {
-        final encrypted = _encryption.encrypt(jsonEncode(queue));
+        final encrypted = _encryptJson(jsonEncode(queue));
         await _safeBox?.put(_syncQueueKey, encrypted);
         if (kDebugMode)
           debugPrint('[OfflineManager] Recovered $recovered stuck syncing items');
@@ -297,7 +431,7 @@ class OfflineManager {
       }
 
       // ═══ O(1): Encrypt single item + append to index ═══
-      final encrypted = _encryption.encrypt(jsonEncode(submission));
+      final encrypted = _encryptJson(jsonEncode(submission));
       await _safeBox?.put('sync_queue/$offlineId', encrypted);
 
       // Update index
@@ -385,7 +519,7 @@ class OfflineManager {
       for (final item in items) {
         final id = item['offline_id'] as String? ?? _uuid.v4();
         item['offline_id'] = id;
-        final encrypted = _encryption.encrypt(jsonEncode(item));
+        final encrypted = _encryptJson(jsonEncode(item));
         await _safeBox?.put('sync_queue/$id', encrypted);
         index.add(id);
       }
@@ -406,7 +540,7 @@ class OfflineManager {
     for (final item in queue) {
       final id = item['offline_id'] as String? ?? _uuid.v4();
       item['offline_id'] = id;
-      final encrypted = _encryption.encrypt(jsonEncode(item));
+      final encrypted = _encryptJson(jsonEncode(item));
       await _safeBox?.put('sync_queue/$id', encrypted);
       newIndex.add(id);
     }
@@ -674,7 +808,7 @@ class OfflineManager {
         'detected_at': DateTime.now().toIso8601String(),
         'resolved': false,
       };
-      final encrypted = _encryption.encrypt(jsonEncode(conflicts));
+      final encrypted = _encryptJson(jsonEncode(conflicts));
       await _safeBox?.put(_conflictsKey, encrypted);
     } catch (e) {
       if (kDebugMode) print('Failed to save conflict: $e');
@@ -716,7 +850,7 @@ class OfflineManager {
       conflicts[offlineId]['resolution'] =
           useLocal ? 'local_wins' : 'server_wins';
       conflicts[offlineId]['resolved_at'] = DateTime.now().toIso8601String();
-      final encrypted = _encryption.encrypt(jsonEncode(conflicts));
+      final encrypted = _encryptJson(jsonEncode(conflicts));
       await _safeBox?.put(_conflictsKey, encrypted);
     }
   }
@@ -773,7 +907,7 @@ class OfflineManager {
           'failed_at': DateTime.now().toIso8601String(),
           'retry_count': item['retry_count'] ?? 0,
         };
-        final encrypted = _encryption.encrypt(jsonEncode(failed));
+        final encrypted = _encryptJson(jsonEncode(failed));
         await _safeBox?.put(_failedSubmissionsKey, encrypted);
         if (kDebugMode) debugPrint('[OfflineManager] Saved failed submission: $offlineId');
       } catch (e) {
@@ -816,7 +950,7 @@ class OfflineManager {
 
         // Remove from failed
         failed.remove(offlineId);
-        final encrypted = _encryption.encrypt(jsonEncode(failed));
+        final encrypted = _encryptJson(jsonEncode(failed));
         await _safeBox?.put(_failedSubmissionsKey, encrypted);
 
         _invalidatePendingCount();
@@ -864,7 +998,7 @@ class OfflineManager {
       try {
         final failed = _getFailedSubmissions();
         failed.remove(offlineId);
-        final encrypted = _encryption.encrypt(jsonEncode(failed));
+        final encrypted = _encryptJson(jsonEncode(failed));
         await _safeBox?.put(_failedSubmissionsKey, encrypted);
       } catch (e) {
         if (kDebugMode) debugPrint('[OfflineManager] Failed to delete failed submission: $e');
@@ -945,12 +1079,12 @@ class OfflineManager {
         final draftId = entry.key;
         final value = entry.value as Map<String, dynamic>;
         // Store each draft in its own key
-        await _box?.put('drafts/$draftId', _encryption.encrypt(jsonEncode(value)));
+        await _box?.put('drafts/$draftId', _encryptJson(jsonEncode(value)));
         draftIds.add(draftId);
       }
 
       // Store the index (unencrypted — just a list of IDs)
-      await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftIds)));
+      await _box?.put(_draftsIndexKey, _encryptJson(jsonEncode(draftIds)));
 
       // Delete old blob
       await _box?.delete(_draftsKey);
@@ -984,7 +1118,7 @@ class OfflineManager {
       // ═══ FIX D-3: plaintext fallback is now TAGGED + reported to the caller. ═══
       String encrypted;
       bool storedPlain = false;
-      if (!_encryptionAvailable) {
+      if (!_encryptionAvailable || !_encryption.isReady) {
         debugPrint('[OfflineManager] ⚠️ M-3: Encryption not available — saving as TAGGED plain JSON');
         draftData['_unencrypted'] = true;
         encrypted = jsonEncode(draftData);
@@ -1020,7 +1154,7 @@ class OfflineManager {
         index.add(draftId);
         // ═══ FIX: حفظ الـ index مع fallback ═══
         try {
-          await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(index)));
+          await _box?.put(_draftsIndexKey, _encryptJson(jsonEncode(index)));
         } catch (e) {
           // Fallback: plain JSON index
           debugPrint('[OfflineManager] Index encrypt failed — saving as plain JSON: $e');
@@ -1106,7 +1240,7 @@ class OfflineManager {
       if (plaintext == null) return null;
 
       // Re-encrypt with new format
-      final reEncrypted = _encryption.encrypt(plaintext);
+      final reEncrypted = _encryptJson(plaintext);
       await _box?.put('drafts/$draftId', reEncrypted);
 
       if (kDebugMode) debugPrint('[OfflineManager] ✅ Draft $draftId migrated to new format');
@@ -1185,7 +1319,7 @@ class OfflineManager {
     if (_box == null || !_box!.isOpen) return;
     final json = jsonEncode(items);
     try {
-      await _box?.put(_cloudBackupQueueKey, _encryption.encrypt(json));
+      await _box?.put(_cloudBackupQueueKey, _encryptJson(json));
     } catch (_) {
       try {
         await _box?.put(_cloudBackupQueueKey, json);
@@ -1249,7 +1383,7 @@ class OfflineManager {
         debugPrint('[OfflineManager] ⚠️ Index empty but found ${draftKeys.length} draft keys — rebuilding index');
         index = draftKeys;
         // Rebuild index for future fast reads
-        _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftKeys)));
+        _box!.put(_draftsIndexKey, _encryptJson(jsonEncode(draftKeys)));
       }
     }
 
@@ -1406,7 +1540,7 @@ class OfflineManager {
       debugPrint('[OfflineManager] ⚠️ Rebuilt drafts index from ${draftKeys.length} Hive keys');
       // حفظ الـ index المُعاد بناؤه (مشفر)
       try {
-        _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftKeys)));
+        _box!.put(_draftsIndexKey, _encryptJson(jsonEncode(draftKeys)));
       } catch (e) {
         debugPrint('[OfflineManager] Could not save rebuilt index: $e');
       }
@@ -1433,7 +1567,7 @@ class OfflineManager {
         index = [];
       }
       index.remove(draftId);
-      await _box?.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(index)));
+      await _box?.put(_draftsIndexKey, _encryptJson(jsonEncode(index)));
     });
   }
 
@@ -1458,6 +1592,19 @@ class OfflineManager {
   Future<void> cacheData(String key, Map<String, dynamic> data) async {
     return _withWriteLock(() async {
       final cache = _getCache();
+
+      // ═══ FIX DAY-2: the existing blob could not be decrypted this session
+      // (key unavailable). NEVER overwrite it — skipping persistence keeps
+      // yesterday's encrypted blob intact so the next healthy launch reads
+      // it again. In-session writes stay available via OfflineDataCache's
+      // memory layer. (Previously this path replaced the whole blob with a
+      // new one encrypted under a throwaway key — permanent data loss.)
+      if (_cacheLoadFailed) {
+        if (kDebugMode) {
+          debugPrint('[OfflineManager] ⚠️ DAY-2 GUARD: cache blob unreadable — keeping raw blob, skipping persistence for "$key"');
+        }
+        return;
+      }
 
       // ═══ FIX Storage: فحص حجم entry الواحد ═══
       final entryJson = jsonEncode(data);
@@ -1529,11 +1676,63 @@ class OfflineManager {
         }
       }
 
-      final encrypted = _encryption.encrypt(jsonEncode(cache));
+      final encrypted = _encryptJson(jsonEncode(cache));
+
+      // ═══ FIX DAY-2: snapshot last-known-good blob (throttled) — one
+      // generation of rollback if the upcoming write is truncated/corrupted.
+      await _snapshotCacheBackup();
+
       await _safeBox?.put(_cacheKey, encrypted);
       _cacheMemory = cache;
       _cacheRawSignature = null;
     });
+  }
+
+  /// ═══ FIX DAY-2: encrypt with the pinned key or store plain JSON —
+  /// never with a throwaway key. Plain JSON is readable by _getCache()'s
+  /// plain-parse fallback, so the round-trip always works.
+  String _encryptJson(String json) {
+    if (!_encryptionAvailable) return json;
+    try {
+      return _encryption.encrypt(json);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[OfflineManager] ⚠️ Encrypt failed — storing plain JSON instead: $e');
+      }
+      return json;
+    }
+  }
+
+  /// Decode a cache blob: encrypted first, plain JSON second. null = unreadable.
+  Map<String, dynamic>? _decodeCacheBlob(String raw) {
+    try {
+      final decrypted = _encryption.decrypt(raw);
+      return Map<String, dynamic>.from(jsonDecode(decrypted));
+    } catch (_) {
+      try {
+        return Map<String, dynamic>.from(jsonDecode(raw));
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  /// ═══ FIX DAY-2: last-known-good rollback copy of the cache blob.
+  /// Throttled to once per 10 minutes; only good (decodable) blobs are kept.
+  Future<void> _snapshotCacheBackup() async {
+    try {
+      final now = DateTime.now();
+      if (_lastBakAt != null && now.difference(_lastBakAt!) < const Duration(minutes: 10)) {
+        return;
+      }
+      final current = _safeBox?.get(_cacheKey);
+      if (current == null || current.isEmpty) return;
+      if (_decodeCacheBlob(current) == null) return; // never back up garbage
+      await _safeBox?.put('${_cacheKey}_bak', current);
+      _lastBakAt = now;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[OfflineManager] Cache backup snapshot failed: $e');
+    }
   }
 
   Map<String, dynamic> _getCache() {
@@ -1541,45 +1740,51 @@ class OfflineManager {
     if (_cacheMemory != null) return _cacheMemory!;
 
     final data = _safeBox?.get(_cacheKey);
-    if (data == null || data.isEmpty) return {};
+    Map<String, dynamic>? loaded;
 
-    // 1. Try decrypting with current key
-    try {
-      final decrypted = _encryption.decrypt(data);
-      final cache = Map<String, dynamic>.from(jsonDecode(decrypted));
-      _cacheMemory = cache; // Cache in memory
-      return cache;
-    } catch (decryptError) {
-      // 2. Decryption failed — try reading as plain JSON
-      //    (handles migration from unencrypted versions)
-      try {
-        final cache = Map<String, dynamic>.from(jsonDecode(data));
-        _cacheMemory = cache;
-        return cache;
-      } catch (_) {
-        // 3. Both failed — data is corrupted, key changed, OR old encryption format
-        // ⚠️ FIX L2: Backup corrupted cache before deleting
-        // Previously: deleted without backup → data lost forever
-        // Now: save to recovery key for potential later recovery
+    if (data != null && data.isNotEmpty) {
+      // 1. Try decrypting with current key (then plain JSON)
+      loaded = _decodeCacheBlob(data);
+
+      // 2. ═══ FIX DAY-2: last-known-good rollback via cache_bak ═══
+      // A truncated/corrupted final write no longer costs the whole cache —
+      // fall back to the previous good generation.
+      loaded ??= _tryDecodeBackupBlob();
+
+      if (loaded == null) {
+        // 3. Everything failed — corrupted, key changed, OR old format.
+        // ⚠️ FIX L2 + DAY-2: back the raw blob up for diagnostics, flag the
+        // session as load-failed (writes must NOT overwrite it), and keep the
+        // raw blob on disk — a healthy launch (key restored) may still read it.
         if (kDebugMode) {
           debugPrint(
-            '[OfflineManager] ⚠️ Cache corrupted or old format — backing up before clearing',
+            '[OfflineManager] ⚠️ Cache unreadable (decrypt + plain + bak failed) — backing up, keeping raw blob, DAY-2 guard ACTIVE',
           );
         }
         try {
-          // ═══ FIX M-5: synchronous operations to prevent data loss on crash ═══
-          // Previously: fire-and-forget — put and delete ran in parallel
-          // If app crashed before put completed, backup was lost
-          // Note: _getCache() is sync so we cannot await here.
-          // Hive operations are fast local writes — fire-and-forget is acceptable.
           _safeBox?.put('${_cacheKey}_corrupted_backup', data);
         } catch (_) {}
-        // FIX: لا تحذف الكاش — البيانات القديمة أفضل من لا شيء
-        // _safeBox?.delete(_cacheKey);
+        _cacheLoadFailed = true;
         _cacheMemory = null;
         return {};
       }
     }
+
+    // Readable (or empty) — clear the guard.
+    _cacheLoadFailed = false;
+    _cacheMemory = loaded ?? {};
+    return _cacheMemory!;
+  }
+
+  /// Try to decode the last-known-good backup blob (cache_bak).
+  Map<String, dynamic>? _tryDecodeBackupBlob() {
+    final bak = _safeBox?.get('${_cacheKey}_bak');
+    if (bak == null || bak.isEmpty) return null;
+    final decoded = _decodeCacheBlob(bak);
+    if (decoded != null && kDebugMode) {
+      debugPrint('[OfflineManager] ✅ Recovered cache from last-known-good backup (cache_bak)');
+    }
+    return decoded;
   }
 
   /// Invalidate memory cache — call when Hive data changes externally
@@ -1624,6 +1829,16 @@ class OfflineManager {
   }
 
   Future<void> clearCache() async {
+    // ═══ FIX DAY-2: if the blob is unreadable this session, DO NOTHING.
+    // Previously: _getCache() returned {} → preserved = {} → delete(_cacheKey)
+    // destroyed yesterday's good encrypted blob (key restored next launch →
+    // everything gone). Now: the raw blob stays on disk untouched.
+    if (_cacheLoadFailed) {
+      if (kDebugMode) {
+        debugPrint('[OfflineManager] ⚠️ DAY-2 GUARD: clearCache skipped — cache blob unreadable this session, raw blob preserved');
+      }
+      return;
+    }
     // ⚠️ FIX: Selective clear — preserve reference data (forms, governorates,
     // districts, facilities) so the app still works offline after cache clear.
     // Previously: deleted entire cache → forms disappeared → user couldn't fill
@@ -1638,7 +1853,7 @@ class OfflineManager {
       }
     }
     if (preserved.isNotEmpty) {
-      final encrypted = _encryption.encrypt(jsonEncode(preserved));
+      final encrypted = _encryptJson(jsonEncode(preserved));
       await _safeBox?.put(_cacheKey, encrypted);
       _cacheMemory = preserved;
     } else {
@@ -1654,9 +1869,16 @@ class OfflineManager {
   /// Used for force-refresh on pull-to-refresh.
   Future<void> removeCacheKey(String key) async {
     return _withWriteLock(() async {
+      // ═══ FIX DAY-2: unreadable blob → never rewrite/delete it.
+      if (_cacheLoadFailed) {
+        if (kDebugMode) {
+          debugPrint('[OfflineManager] ⚠️ DAY-2 GUARD: removeCacheKey("$key") skipped — raw blob preserved');
+        }
+        return;
+      }
       final cache = _getCache();
       cache.remove(key);
-      final encrypted = _encryption.encrypt(jsonEncode(cache));
+      final encrypted = _encryptJson(jsonEncode(cache));
       await _safeBox?.put(_cacheKey, encrypted);
       // Update memory cache
       _cacheMemory = cache;
@@ -1753,7 +1975,7 @@ class OfflineManager {
                 decrypted = migrated;
                 // Re-encrypt with new format for future use
                 try {
-                  final reEncrypted = _encryption.encrypt(migrated);
+                  final reEncrypted = _encryptJson(migrated);
                   await _box!.put('drafts/$draftId', reEncrypted);
                   if (kDebugMode) debugPrint('[OfflineManager] ✅ Draft $draftId migrated to new format');
                 } catch (_) {
@@ -1821,7 +2043,7 @@ class OfflineManager {
       }
       if (draftsToRemove.isNotEmpty) {
         try {
-          await _box!.put(_draftsIndexKey, _encryption.encrypt(jsonEncode(draftIndex)));
+          await _box!.put(_draftsIndexKey, _encryptJson(jsonEncode(draftIndex)));
         } catch (_) {
           await _box!.put(_draftsIndexKey, jsonEncode(draftIndex));
         }
@@ -1844,7 +2066,7 @@ class OfflineManager {
         removedCount++;
       }
       if (failedToRemove.isNotEmpty) {
-        final encrypted = _encryption.encrypt(jsonEncode(failed));
+        final encrypted = _encryptJson(jsonEncode(failed));
         await _safeBox?.put(_failedSubmissionsKey, encrypted);
       }
 
@@ -1869,7 +2091,7 @@ class OfflineManager {
         removedCount++;
       }
       if (cacheToRemove.isNotEmpty) {
-        final encrypted = _encryption.encrypt(jsonEncode(cache));
+        final encrypted = _encryptJson(jsonEncode(cache));
         await _safeBox?.put(_cacheKey, encrypted);
         _cacheMemory = cache;
       }
@@ -1934,7 +2156,7 @@ class OfflineManager {
               cache.remove(key);
             }
             if (keysToRemove.isNotEmpty) {
-              final encrypted = _encryption.encrypt(jsonEncode(cache));
+              final encrypted = _encryptJson(jsonEncode(cache));
               await _safeBox?.put(_cacheKey, encrypted);
               _cacheMemory = cache;
               _cacheRawSignature = null;
@@ -1983,9 +2205,18 @@ class OfflineManager {
     }
   }
 
+  /// Force the next cache read to hit Hive again (drops the memory copy).
+  /// Used after encryption heals, or by UI retry loops on cold start.
+  void reloadCacheFromDisk() {
+    _cacheMemory = null;
+    _cacheRawSignature = null;
+  }
+
+  /// Dispose — closes streams.
   void dispose() {
     _connectivityController.close();
     _pendingCountController.close();
+    _cacheRestoredController.close();
   }
 }
 

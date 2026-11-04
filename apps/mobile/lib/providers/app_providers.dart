@@ -51,13 +51,19 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
   // ═══ FIX: Hive Hardening — Auto-recovery on corruption ═══
   // سابقاً: init يفشل → degraded mode → مسودات غير متاحة
   // الآن: محاولة init → إذا فشل → حذف box التالف → إعادة init → استعادة من السحابة
+  var initCompletedInTime = false;
+  StreamSubscription? healSub;
+  final initFuture = manager.init();
+  // The late-completing future must never become an unhandled error.
+  initFuture.ignore();
   try {
-    await manager.init().timeout(
+    await initFuture.timeout(
       const Duration(seconds: 30),
       onTimeout: () {
-        debugPrint('[offlineManagerProvider] Hive init timeout — degraded mode');
+        debugPrint('[offlineManagerProvider] Hive init timeout — degraded mode (late-heal armed)');
       },
     );
+    initCompletedInTime = true;
   } catch (e) {
 
 
@@ -84,6 +90,7 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
           debugPrint('[offlineManagerProvider] Recovery init timeout');
         },
       );
+      initCompletedInTime = true;
       debugPrint('[offlineManagerProvider] ✅ Hive recovered successfully');
     } catch (recoveryError) {
       debugPrint('[offlineManagerProvider] ❌ Hive recovery failed: $recoveryError');
@@ -108,10 +115,52 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
     debugPrint('[offlineManagerProvider] Connectivity bridge failed: $e');
   }
 
-  ref.onDispose(() {
-    connSub?.cancel();
-    manager.dispose();
-  });
+  // ═══════════════════════════════════════════════════════════════════
+  // ═══ FIX DAY-2: heal paths that refresh the UI when the cache becomes
+  // readable again — «النماذج لا تختفي نهائياً» ═══
+  // ═══════════════════════════════════════════════════════════════════
+  var disposed = false;
+  try {
+    ref.onDispose(() {
+      disposed = true;
+      connSub?.cancel();
+      healSub?.cancel();
+      manager.dispose();
+    });
+  } catch (_) {
+    disposed = true; // provider container already torn down
+  }
+
+  void invalidateDataProviders(String reason) {
+    if (disposed) return;
+    debugPrint('[offlineManagerProvider] Refreshing data providers: $reason');
+    ref.invalidate(offlineDataCacheProvider);
+    ref.invalidate(formsProvider);
+    ref.invalidate(dashboardAnalyticsProvider);
+    ref.invalidate(governoratesProvider);
+  }
+
+  // (a) Late Hive init: if the 30s timeout fired while init was still
+  // running, providers built against a half-initialized manager stay empty.
+  // When init eventually completes, rebuild them.
+  if (!initCompletedInTime) {
+    unawaited(initFuture.whenComplete(() {
+      if (disposed) return;
+      invalidateDataProviders('late Hive init completed');
+    }));
+  }
+
+  // (b) Encryption heal: encryption init failed/timed out at startup and the
+  // background heal loop recovered the key → re-read the cache with the real
+  // key and refresh the screens (forms reappear automatically).
+  try {
+    healSub = manager.cacheRestored.listen((_) {
+      invalidateDataProviders('cache restored after encryption heal');
+    });
+  } catch (e) {
+    debugPrint('[offlineManagerProvider] cacheRestored listener failed: $e');
+  }
+
   return manager;
 });
 
@@ -484,10 +533,37 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final cache = await ref.watch(offlineDataCacheProvider.future);
   final campaignKey = 'forms_' + campaign.value;
 
+  List<Map<String, dynamic>>? readCachedForms() {
+    List<Map<String, dynamic>>? allForms;
+
+    // 1. Try campaign-specific cache (works online and offline)
+    try {
+      final forms = cache.getCachedDataList(campaignKey);
+      if (forms != null && forms.isNotEmpty) allForms = forms;
+    } catch (_) {}
+
+    // 2. Fallback: try forms_all cache (cached by sync service warmup)
+    if (allForms == null || allForms.isEmpty) {
+      try {
+        final fallback = cache.getCachedDataList('forms_all');
+        if (fallback != null && fallback.isNotEmpty) allForms = fallback;
+      } catch (_) {}
+    }
+
+    // 3. Fallback: try any forms_* key in persistent cache
+    if (allForms == null || allForms.isEmpty) {
+      try {
+        final anyForms = cache.findCachedListByPrefix('forms_');
+        if (anyForms != null && anyForms.isNotEmpty) allForms = anyForms;
+      } catch (_) {}
+    }
+
+    return (allForms != null && allForms.isNotEmpty) ? allForms : null;
+  }
+
   // OFFLINE-FIRST: Always try cache first, never lose forms
   List<Map<String, dynamic>>? allForms;
 
-  // 1. Try campaign-specific cache (works online and offline)
   try {
     allForms = await cache.getList(
       campaignKey,
@@ -495,21 +571,33 @@ final formsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
       maxAge: const Duration(hours: 24),
     );
   } catch (_) {}
-
-  // 2. Fallback: try forms_all cache (cached by sync service warmup)
   if (allForms == null || allForms.isEmpty) {
-    try {
-      final fallback = cache.getCachedDataList('forms_all');
-      if (fallback != null && fallback.isNotEmpty) allForms = fallback;
-    } catch (_) {}
+    allForms = readCachedForms();
   }
 
-  // 3. Fallback: try any forms_* key in persistent cache
-  if (allForms == null || allForms.isEmpty) {
-    try {
-      final anyForms = cache.findCachedListByPrefix('forms_');
-      if (anyForms != null && anyForms.isNotEmpty) allForms = anyForms;
-    } catch (_) {}
+  // ═══════════════════════════════════════════════════════════════════
+  // ═══ FIX DAY-2: cold-start retry — «النماذج ما تختفي أوفلاين» ═══
+  // On the second day (cold start) Hive box opening and encryption key
+  // pinning may still be settling when this provider first runs, and the
+  // memory cache is always empty after a restart. Instead of showing
+  // «لا توجد نماذج», wait briefly, force a re-read from disk, and try the
+  // fallbacks again. (Late init + encryption-heal invalidations cover the
+  // longer windows; this covers the first seconds.)
+  // ═══════════════════════════════════════════════════════════════════
+  if ((allForms == null || allForms.isEmpty) && !ConnectivityUtils.isOnline) {
+    final offline = cache.offlineManager;
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      try {
+        offline.reloadCacheFromDisk();
+      } catch (_) {}
+      final retried = readCachedForms();
+      if (retried != null) {
+        allForms = retried;
+        debugPrint('[formsProvider] DAY-2 retry $attempt: forms restored from disk (${retried.length})');
+        break;
+      }
+    }
   }
 
   if (allForms == null || allForms.isEmpty) {

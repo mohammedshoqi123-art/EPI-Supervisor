@@ -22,6 +22,23 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// - New format: [magic(4)="EPI2"][iv(12)][ciphertext+tag]
 /// - Old format: [salt(16)][iv(12)][ciphertext+tag]
 /// - decrypt() detects format by checking magic bytes.
+///
+/// ═══ FIX DAY-2 (2026-11): NO random ephemeral key — EVER ═══
+/// Previously: when the pinned key was unavailable (init timeout, secure
+/// storage failure), the _key getter silently derived an EPHEMERAL key from
+/// a RANDOM salt. encrypt() then "worked" but wrote data that could never
+/// be decrypted after restart, and cache writes overwrote good blobs with
+/// unreadable garbage — permanent data loss (forms disappeared offline).
+/// Now: encryption with an unpinned key THROWS. Callers must degrade
+/// gracefully (plain-JSON fallback / skip persistence).
+class EncryptionKeyUnavailableException implements Exception {
+  final String message;
+  const EncryptionKeyUnavailableException(
+      [this.message = 'Encryption key is not pinned yet — refusing to encrypt with a throwaway key']);
+  @override
+  String toString() => 'EncryptionKeyUnavailableException: $message';
+}
+
 class EncryptionService {
   static const String _envKey = String.fromEnvironment(
     'ENCRYPTION_KEY',
@@ -44,17 +61,42 @@ class EncryptionService {
   /// Salt storage key in Hive (salt is NOT secret — it's a derivation parameter)
   static const String saltStorageKey = '_encryption_salt_v2';
 
-  /// ═══ KEY GETTER — always uses pinned key if available ═══
-  enc.Key? _ephemeralKey;
+  /// ═══ KEY GETTER — pinned key, or a DETERMINISTIC fallback ═══
+  /// ═══ FIX DAY-2: never derive a throwaway key with a RANDOM salt ═══
+  /// Previously: fell back to an ephemeral key (random salt) → data written
+  /// with it was unreadable after restart → silent permanent data loss.
+  /// Now:
+  ///  - pinned key available → use it;
+  ///  - explicit key material available (dev --dart-define / test override)
+  ///    → deterministic fallback (fixed salt): self-consistent across
+  ///    sessions, so fallback-written data stays readable;
+  ///  - nothing available (production without key material) → THROW a typed
+  ///    exception so callers fall back to tagged plain storage / skip
+  ///    persistence instead of destroying good data.
+  enc.Key? _deterministicFallbackKey;
   enc.Key get _key {
-    if (_pinnedKey != null) return _pinnedKey!;
-    _ephemeralKey ??= enc.Key(
-      _deriveKeySync(utf8.encode(_activeKey), _generateRandomBytes(_saltLength)),
-    );
-    return _ephemeralKey!;
+    final pinned = _pinnedKey;
+    if (pinned != null) return pinned;
+    if (_activeKey.isNotEmpty) {
+      _deterministicFallbackKey ??= enc.Key(
+        _deriveKeySync(utf8.encode(_activeKey), _fallbackSalt),
+      );
+      return _deterministicFallbackKey!;
+    }
+    throw const EncryptionKeyUnavailableException();
   }
 
+  /// Fixed salt for the deterministic dev/test fallback — constant ON PURPOSE
+  /// so fallback-written data remains decryptable in later fallback sessions.
+  static final Uint8List _fallbackSalt = () {
+    final digest = sha256.convert(utf8.encode('EPI_FALLBACK_KEY_SALT_V1')).bytes;
+    return Uint8List.fromList(digest.sublist(0, _saltLength));
+  }();
+
   final String _activeKey;
+
+  /// Whether a real (pinned) key is available for encrypt/decrypt.
+  static bool get hasPinnedKey => _pinnedKey != null;
 
   /// ═══ Initialize — call ONCE at app startup (now async, offloads to isolate) ═══
   /// Derives the key using PBKDF2 (600k iterations) IN A BACKGROUND ISOLATE
@@ -165,22 +207,56 @@ class EncryptionService {
     }
 
     // 2. Check flutter_secure_storage (production)
-    try {
-      final storedKey = await _secureStorage.read(key: _secureStorageKey)
-          .timeout(const Duration(seconds: 5));
-      if (storedKey != null && storedKey.length >= 32) {
-        if (kDebugMode) {
-          debugPrint('[EncryptionService] Using stored secure key');
-        }
-        return storedKey;
+    // ═══ FIX DAY-2: retry reads — a transient Keystore failure (common right
+    // after device reboot / cold start) previously minted a BRAND-NEW key,
+    // which made every existing encrypted blob undecryptable → all cached
+    // forms disappeared offline on day 2. Now: retry, and only mint a new key
+    // when a read SUCCEEDS and returns null (genuine first launch).
+    Object? lastReadError;
+    const readDelays = [Duration(milliseconds: 200), Duration(milliseconds: 500), Duration(milliseconds: 1000)];
+    for (var attempt = 0; attempt < readDelays.length; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(readDelays[attempt - 1]);
       }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[EncryptionService] Secure storage read failed: $e');
+      try {
+        final storedKey = await _secureStorage.read(key: _secureStorageKey)
+            .timeout(const Duration(seconds: 5));
+        // A completed read (even null) means storage is healthy again —
+        // clear any earlier transient failure before deciding below.
+        lastReadError = null;
+        if (storedKey != null && storedKey.length >= 32) {
+          if (kDebugMode) {
+            debugPrint('[EncryptionService] Using stored secure key');
+          }
+          return storedKey;
+        }
+        if (storedKey != null) {
+          // Stored value exists but is too short — treat as missing and fall
+          // through to key generation (legitimate re-provision case).
+          if (kDebugMode) {
+            debugPrint('[EncryptionService] Stored key too short (${storedKey.length}) — regenerating');
+          }
+          break;
+        }
+        // null = genuinely first launch — mint a new key below
+        break;
+      } catch (e) {
+        lastReadError = e;
+        if (kDebugMode) {
+          debugPrint('[EncryptionService] Secure storage read failed (attempt ${attempt + 1}/3): $e');
+        }
       }
     }
+    if (lastReadError != null) {
+      // ═══ FIX DAY-2: NEVER mint a replacement key on read failure —
+      // that would orphan every existing encrypted blob.
+      throw StateError(
+        'Secure storage read failed after 3 attempts: $lastReadError. '
+        'Refusing to generate a new key (would make existing encrypted data unreadable).',
+      );
+    }
 
-    // 3. Generate new key and store it
+    // 3. Generate new key and store it (first launch only)
     final newKey = base64Encode(_generateRandomBytes(32));
     try {
       await _secureStorage.write(key: _secureStorageKey, value: newKey)
@@ -279,6 +355,11 @@ class EncryptionService {
       rethrow;
     }
   }
+
+  /// Whether encryption is currently usable (pinned key present).
+  /// Callers should check this BEFORE encrypting and fall back to tagged
+  /// plain storage when false — see OfflineManager._encryptJson.
+  bool get isReady => hasPinnedKey;
 
   // ═══════════════════════════════════════════════════════════════
   // DECRYPT — auto-detects format (new pinned-key vs old salt-based)

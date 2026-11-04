@@ -89,7 +89,7 @@ void main() {
       expect((day1Forms!['_list'] as List).length, 3);
 
       // ─── محاكاة إعادة تشغيل العملية (فقدان كل الذاكرة) ───
-      await day1.dispose();
+      day1.dispose();
       await Hive.close();
       EncryptionService.clearPinnedKey();
 
@@ -104,7 +104,7 @@ void main() {
       expect(restored, isNotNull,
           reason: 'النماذج المخزنة يجب ألا تختفي بعد إعادة التشغيل');
       expect((restored!['_list'] as List).length, 3);
-      await day2.dispose();
+      day2.dispose();
     });
 
     test('unreadable blob is NEVER overwritten by writes (DAY-2 guard)',
@@ -114,7 +114,7 @@ void main() {
       final day1 = OfflineManager(EncryptionService(overrideKey: _testKey));
       await day1.init();
       await day1.cacheData('forms_measles_campaign', {'_type': 'list', '_list': _forms('guard')});
-      await day1.dispose();
+      day1.dispose();
       await Hive.close();
       EncryptionService.clearPinnedKey();
 
@@ -145,7 +145,7 @@ void main() {
           reason: 'ممنوع منعاً باتاً الكتابة فوق بلوب كاش غير قابل للفك');
 
       // ─── اليوم الثالث: الجلسة تعود صحيحة → النماذج تعود كاملة ───
-      await day2.dispose();
+      day2.dispose();
       await Hive.close();
       EncryptionService.clearPinnedKey();
       await _pinKey();
@@ -157,7 +157,7 @@ void main() {
           reason: 'النماذج يجب أن تنجو من جلسة بمفتاح مفقود');
       expect((restored!['_list'] as List).length, 3);
       expect(day3.cacheLoadFailed, isFalse);
-      await day3.dispose();
+      day3.dispose();
     });
 
     test('cache_bak recovers the cache when the latest write is corrupted',
@@ -185,7 +185,7 @@ void main() {
       expect(forms, isNotNull,
           reason: 'البلوب الاحتياطي يجب أن يُستخدم عند تلف البلوب الرئيسي');
       expect((forms!['_list'] as List).length, 3);
-      await mgr.dispose();
+      mgr.dispose();
     });
 
     test('session with unavailable encryption writes readable plain JSON',
@@ -201,7 +201,7 @@ void main() {
       expect((sameSession!['_list'] as List).length, 3);
 
       // الجلسة التالية (بأي مفتاح) تقرأ JSON العادي عبر fallback القراءة
-      await mgr.dispose();
+      mgr.dispose();
       await Hive.close();
       EncryptionService.clearPinnedKey();
 
@@ -212,7 +212,7 @@ void main() {
       expect(restored, isNotNull,
           reason: 'JSON العادي المكتوب في جلسة معطوبة يجب أن يبقى مقروءاً');
       expect((restored!['_list'] as List).length, 3);
-      await next.dispose();
+      next.dispose();
     });
   });
 }

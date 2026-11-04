@@ -51,8 +51,6 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
   // ═══ FIX: Hive Hardening — Auto-recovery on corruption ═══
   // سابقاً: init يفشل → degraded mode → مسودات غير متاحة
   // الآن: محاولة init → إذا فشل → حذف box التالف → إعادة init → استعادة من السحابة
-  var initCompletedInTime = false;
-  StreamSubscription? healSub;
   final initFuture = manager.init();
   // The late-completing future must never become an unhandled error.
   initFuture.ignore();
@@ -60,10 +58,9 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
     await initFuture.timeout(
       const Duration(seconds: 30),
       onTimeout: () {
-        debugPrint('[offlineManagerProvider] Hive init timeout — degraded mode (late-heal armed)');
+        debugPrint('[offlineManagerProvider] Hive init timeout — degraded mode (heal watcher will refresh providers)');
       },
     );
-    initCompletedInTime = true;
   } catch (e) {
 
 
@@ -90,7 +87,6 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
           debugPrint('[offlineManagerProvider] Recovery init timeout');
         },
       );
-      initCompletedInTime = true;
       debugPrint('[offlineManagerProvider] ✅ Hive recovered successfully');
     } catch (recoveryError) {
       debugPrint('[offlineManagerProvider] ❌ Hive recovery failed: $recoveryError');
@@ -101,6 +97,9 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
   manager.updateConnectivity(ConnectivityUtils.isOnline);
 
   // ═══ FIX: Bridge ConnectivityUtils updates to OfflineManager ═══
+  // (heal invalidation lives in offlineHealWatcherProvider at the bottom of
+  // this file — referencing data providers here creates a top-level
+  // initializer cycle and breaks type inference for the whole file.)
   StreamSubscription? connSub;
   try {
     connSub = ConnectivityUtils.onConnectivityChanged.listen(
@@ -115,50 +114,13 @@ final offlineManagerProvider = FutureProvider<OfflineManager>((ref) async {
     debugPrint('[offlineManagerProvider] Connectivity bridge failed: $e');
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // ═══ FIX DAY-2: heal paths that refresh the UI when the cache becomes
-  // readable again — «النماذج لا تختفي نهائياً» ═══
-  // ═══════════════════════════════════════════════════════════════════
-  var disposed = false;
   try {
     ref.onDispose(() {
-      disposed = true;
       connSub?.cancel();
-      healSub?.cancel();
       manager.dispose();
     });
   } catch (_) {
-    disposed = true; // provider container already torn down
-  }
-
-  void invalidateDataProviders(String reason) {
-    if (disposed) return;
-    debugPrint('[offlineManagerProvider] Refreshing data providers: $reason');
-    ref.invalidate(offlineDataCacheProvider);
-    ref.invalidate(formsProvider);
-    ref.invalidate(dashboardAnalyticsProvider);
-    ref.invalidate(governoratesProvider);
-  }
-
-  // (a) Late Hive init: if the 30s timeout fired while init was still
-  // running, providers built against a half-initialized manager stay empty.
-  // When init eventually completes, rebuild them.
-  if (!initCompletedInTime) {
-    unawaited(initFuture.whenComplete(() {
-      if (disposed) return;
-      invalidateDataProviders('late Hive init completed');
-    }));
-  }
-
-  // (b) Encryption heal: encryption init failed/timed out at startup and the
-  // background heal loop recovered the key → re-read the cache with the real
-  // key and refresh the screens (forms reappear automatically).
-  try {
-    healSub = manager.cacheRestored.listen((_) {
-      invalidateDataProviders('cache restored after encryption heal');
-    });
-  } catch (e) {
-    debugPrint('[offlineManagerProvider] cacheRestored listener failed: $e');
+    // provider container already torn down
   }
 
   return manager;
@@ -1072,3 +1034,70 @@ class AIModelSelectionNotifier extends StateNotifier<AIModelSelection> {
     return 'groq';
   }
 }
+
+// ─── DAY-2 offline heal watcher ──────────────────────────────────────────────
+
+/// ═══ FIX DAY-2: refresh the data providers when the offline cache becomes
+/// readable again — «النماذج لا تختفي نهائياً بالاوفلاين».
+///
+/// Covers the two cold-start windows that used to leave the user with an
+/// empty forms screen on the second day:
+///  (a) Hive init finished LATE (after offlineManagerProvider's 30s timeout
+///      returned a half-initialized manager) — providers built against it
+///      resolved empty and stayed in that state;
+///  (b) encryption init failed/timed out at startup and the background heal
+///      loop recovered the key — the cache can now be decrypted from disk.
+///
+/// Declared AFTER all data providers (breaking the top-level initializer
+/// cycle) and activated by the root widget in main.dart.
+final offlineHealWatcherProvider = FutureProvider<void>((ref) async {
+  var disposed = false;
+  void markDisposed() => disposed = true;
+  try {
+    ref.onDispose(markDisposed);
+  } catch (_) {
+    return;
+  }
+
+  void refreshDataProviders(String reason) {
+    if (disposed) return;
+    debugPrint('[offlineHealWatcher] Refreshing data providers: $reason');
+    ref.invalidate(offlineDataCacheProvider);
+    ref.invalidate(formsProvider);
+    ref.invalidate(dashboardAnalyticsProvider);
+    ref.invalidate(governoratesProvider);
+  }
+
+  // Wait for the manager (init may take up to ~30s + recovery retry).
+  final OfflineManager manager;
+  try {
+    manager = await ref.watch(offlineManagerProvider.future);
+  } catch (_) {
+    return; // manager unavailable — nothing to watch
+  }
+
+  // (b) Encryption heal: the background heal loop re-pinned the key and the
+  // cache was reloaded from disk → screens can show the real data again.
+  try {
+    final sub = manager.cacheRestored.listen((_) {
+      refreshDataProviders('cache restored after encryption heal');
+    });
+    ref.onDispose(() => sub.cancel());
+  } catch (e) {
+    debugPrint('[offlineHealWatcher] cacheRestored listener failed: $e');
+  }
+
+  // (a) Late Hive init: if the 30s timeout returned a half-initialized
+  // manager, poll until init truly finishes, then rebuild the providers that
+  // resolved against it (empty forms/dashboard → real data).
+  if (!manager.isInitialized && !kIsWeb) {
+    for (var i = 0; i < 60 && !disposed; i++) {
+      await Future<void>.delayed(const Duration(seconds: 5));
+      if (disposed) return;
+      if (manager.isInitialized) {
+        refreshDataProviders('late Hive init completed');
+        return;
+      }
+    }
+  }
+});

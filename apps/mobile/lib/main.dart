@@ -532,6 +532,12 @@ class _EpiSupervisorAppState extends ConsumerState<EpiSupervisorApp>
 
   @override
   Widget build(BuildContext context) {
+    // ═══ FIX DAY-2: activate the offline heal watcher for the whole app
+    // lifetime — when Hive init completes late or the encryption key heals,
+    // data providers (forms, dashboard) are refreshed automatically so
+    // cached forms reappear instead of an empty screen.
+    ref.watch(offlineHealWatcherProvider);
+
     if (_checkingOnboarding) {
       return const MaterialApp(
         home: Scaffold(body: Center(child: CircularProgressIndicator())),
